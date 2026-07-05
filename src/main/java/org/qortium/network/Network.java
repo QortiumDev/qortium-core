@@ -10,6 +10,8 @@ import org.qortium.controller.arbitrary.ArbitraryDataFileListManager;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
+import org.qortium.data.network.KnownPeerDiagnostic;
+import org.qortium.data.network.KnownPeerDiagnostics;
 import org.qortium.data.network.PeerData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.network.message.*;
@@ -803,6 +805,19 @@ public class Network {
         return !ipNotInFixedList(address, fixedNetwork);
     }
 
+    private boolean isInitialPeer(PeerAddress address) {
+        for (String initialPeer : Settings.getInstance().getInitialPeers()) {
+            try {
+                if (address.equals(PeerAddress.fromString(initialPeer)))
+                    return true;
+            } catch (IllegalArgumentException e) {
+                LOGGER.debug("Ignoring invalid initialPeers entry '{}': {}", initialPeer, e.getMessage());
+            }
+        }
+
+        return false;
+    }
+
     public StatsSnapshot getStatsSnapshot() {
         StatsSnapshot snapshot = new StatsSnapshot();
         if (this.networkWorkerPool instanceof ThreadPoolExecutor) {
@@ -821,6 +836,148 @@ public class Network {
         synchronized (this.allKnownPeers) {
             return new ArrayList<>(this.allKnownPeers);
         }
+    }
+
+    public KnownPeerDiagnostics getKnownPeerDiagnostics(Long now) {
+        final Long diagnosticNow = now != null ? now : System.currentTimeMillis();
+
+        KnownPeerDiagnostics diagnostics = new KnownPeerDiagnostics(KnownPeerDiagnostics.Layer.CHAIN);
+        diagnostics.knownCount = this.getAllKnownPeers().size();
+        diagnostics.connectedCount = this.getImmutableConnectedPeers().size();
+        diagnostics.handshakedCount = this.getImmutableHandshakedPeers().size();
+        diagnostics.outboundHandshakedCount = this.getImmutableOutboundHandshakedPeers().size();
+        diagnostics.i2pSessionUp = this.getI2PChainDestination() != null;
+        diagnostics.allowedTransports = Settings.getInstance().getAllowedTransports().stream()
+                .map(Enum::name)
+                .collect(Collectors.toList());
+
+        List<KnownPeerDiagnostic> peerDiagnostics = this.getAllKnownPeers().stream()
+                .map(peerData -> buildKnownPeerDiagnostic(peerData, diagnosticNow))
+                .collect(Collectors.toList());
+
+        boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
+        boolean hasNormallyConnectablePeer = peerDiagnostics.stream().anyMatch(peer -> peer.reasons.isEmpty());
+        for (KnownPeerDiagnostic peerDiagnostic : peerDiagnostics) {
+            if (peerDiagnostic.reasons.isEmpty()) {
+                peerDiagnostic.connectable = true;
+            } else if (hasNoPeers && !hasNormallyConnectablePeer && peerDiagnostic.hasOnlyBackoffReason()) {
+                peerDiagnostic.connectable = true;
+                peerDiagnostic.isolationRetryCandidate = true;
+            }
+            diagnostics.addPeer(peerDiagnostic);
+        }
+
+        return diagnostics;
+    }
+
+    private KnownPeerDiagnostic buildKnownPeerDiagnostic(PeerData peerData, Long now) {
+        KnownPeerDiagnostic diagnostic = new KnownPeerDiagnostic(peerData);
+        PeerAddress peerAddress = peerData.getAddress();
+        Peer connectedPeer = findConnectedPeer(peerAddress);
+        Peer handshakedPeer = findHandshakedPeer(peerAddress);
+        Peer displayPeer = handshakedPeer != null ? handshakedPeer : connectedPeer;
+        CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress.toString());
+
+        if (cachedInfo != null)
+            diagnostic.nodeId = cachedInfo.nodeId;
+        if (displayPeer != null) {
+            diagnostic.outbound = displayPeer.isOutbound();
+            if (diagnostic.nodeId == null)
+                diagnostic.nodeId = displayPeer.getPeersNodeId();
+        }
+
+        diagnostic.connected = connectedPeer != null;
+        diagnostic.handshaked = handshakedPeer != null;
+
+        if (isFixedPeer(peerAddress))
+            diagnostic.tags.add(KnownPeerDiagnostic.Tag.FIXED_PEER);
+        if (isInitialPeer(peerAddress))
+            diagnostic.tags.add(KnownPeerDiagnostic.Tag.INITIAL_PEER);
+
+        if (hasRecentConnectFailure(peerData, now)) {
+            diagnostic.inBackoff = true;
+            diagnostic.backoffUntil = peerData.getLastAttempted() + getConnectFailureBackoff(peerData);
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.RECENT_CONNECT_FAILURE);
+        }
+
+        synchronized (this.selfPeers) {
+            if (isSelfPeer.test(peerData))
+                diagnostic.reasons.add(KnownPeerDiagnostic.Reason.SELF);
+        }
+
+        if (isLocalI2PPeer.test(peerData))
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.LOCAL_I2P_ADDRESS);
+        if (diagnostic.connected)
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.ALREADY_CONNECTED);
+        if (isConnectingI2PPeer.test(peerData))
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.ALREADY_CONNECTING_I2P);
+        if (isI2PAlternativeForConnectedPeer.test(peerData))
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.I2P_ALTERNATIVE_ALREADY_CONNECTED);
+
+        if (!Settings.getInstance().isIPAllowed() && !peerAddress.isI2P())
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.TRANSPORT_NOT_ALLOWED);
+        if (!Settings.getInstance().isI2PEnabled() && peerAddress.isI2P())
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.TRANSPORT_NOT_ALLOWED);
+        if (peerAddress.isI2P() && this.getI2PChainDestination() == null)
+            diagnostic.reasons.add(KnownPeerDiagnostic.Reason.I2P_SESSION_DOWN);
+
+        if (cachedInfo != null) {
+            Peer existingPeer = findConnectedPeerByNodeId(cachedInfo.nodeId);
+            if (existingPeer != null && !existingPeer.getPeerData().getAddress().equals(peerAddress)
+                    && !allowsPreferredReplacement(existingPeer, peerData, cachedInfo.nodeId)) {
+                diagnostic.reasons.add(KnownPeerDiagnostic.Reason.ALREADY_CONNECTED_BY_NODE_ID);
+            }
+
+            if (!isFixedPeer(peerAddress) && hasRecentDirectionMismatch(cachedInfo.nodeId))
+                diagnostic.reasons.add(KnownPeerDiagnostic.Reason.DIRECTION_MISMATCH);
+        }
+
+        return diagnostic;
+    }
+
+    private Peer findConnectedPeer(PeerAddress peerAddress) {
+        return this.getImmutableConnectedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().equals(peerAddress))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Peer findHandshakedPeer(PeerAddress peerAddress) {
+        return this.getImmutableHandshakedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().equals(peerAddress))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Peer findConnectedPeerByNodeId(String nodeId) {
+        if (nodeId == null)
+            return null;
+
+        return this.getImmutableConnectedPeers().stream()
+                .filter(peer -> peer.getPeersNodeId() != null && peer.getPeersNodeId().equals(nodeId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean allowsPreferredReplacement(Peer existingPeer, PeerData peerData, String candidateNodeId) {
+        if (!Settings.getInstance().isI2PPreferred()
+                && existingPeer.getPeerData().getAddress().isI2P()
+                && !peerData.getAddress().isI2P()) {
+            return true;
+        }
+
+        String ourNodeId = this.getOurNodeId();
+        if (ourNodeId == null)
+            return false;
+
+        boolean weShouldBeOutbound = shouldBeOutboundTo(candidateNodeId, peerData.getAddress().getHost());
+        boolean outboundRecentlyFailed = hasRecentOutboundFailures(candidateNodeId, peerData.getAddress().getHost());
+        return PeerDirectionPolicy.shouldAttemptPreferredOutboundReplacement(existingPeer.isOutbound(),
+                weShouldBeOutbound, outboundRecentlyFailed);
+    }
+
+    private long getConnectFailureBackoff(PeerData peerData) {
+        return peerData.getAddress().isI2P() ? I2P_CONNECT_FAILURE_BACKOFF : CONNECT_FAILURE_BACKOFF;
     }
 
     public List<Peer> getImmutableConnectedPeers() {

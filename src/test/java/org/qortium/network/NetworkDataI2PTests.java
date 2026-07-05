@@ -4,6 +4,8 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortium.data.network.KnownPeerDiagnostic;
+import org.qortium.data.network.KnownPeerDiagnostics;
 import org.qortium.data.network.PeerData;
 import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.network.i2p.I2PStreamProvider;
@@ -197,6 +199,53 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
+	public void testDataPeerRetriesAfterConnectFailureBackoff() throws Exception {
+		long now = System.currentTimeMillis();
+		PeerData failedPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test");
+		failedPeerData.setLastAttempted(now - 3 * 60 * 1000L);
+		getMutableKnownPeers().add(failedPeerData);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals("198.51.100.10:24894", selectedPeer.getPeerData().getAddress().toString());
+		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testRecentDataPeerConnectFailureSkippedWhenNotIsolated() throws Exception {
+		long now = System.currentTimeMillis();
+		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.20:24894")), Peer.NETWORKDATA);
+		connectedPeer.setIsDataPeer(true);
+		NetworkData.getInstance().addConnectedPeer(connectedPeer);
+		NetworkData.getInstance().addHandshakedPeer(connectedPeer);
+		PeerData recentlyAttemptedPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test");
+		recentlyAttemptedPeerData.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeerData);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
+	public void testI2PDataPeerUsesLongerConnectFailureBackoff() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.20:24894")), Peer.NETWORKDATA);
+		connectedPeer.setIsDataPeer(true);
+		NetworkData.getInstance().addConnectedPeer(connectedPeer);
+		NetworkData.getInstance().addHandshakedPeer(connectedPeer);
+		PeerData recentlyAttemptedI2PPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		// 3 minutes is outside the normal 2 minute TCP backoff, but still inside the 15 minute I2P backoff.
+		recentlyAttemptedI2PPeer.setLastAttempted(now - 3 * 60 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedI2PPeer);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
 	public void testI2PStartupRetriesUseFreshSamSessionIds() throws Exception {
 		String firstSessionId = invokeNextI2PDataSessionId();
 		String secondSessionId = invokeNextI2PDataSessionId();
@@ -204,6 +253,26 @@ public class NetworkDataI2PTests extends Common {
 		assertTrue(firstSessionId.startsWith("qortium-data-"));
 		assertTrue(secondSessionId.startsWith("qortium-data-"));
 		assertFalse(firstSessionId.equals(secondSessionId));
+	}
+
+	@Test
+	public void testNoConnectableDataPeersWarningIncludesDiagnosticSummary() {
+		KnownPeerDiagnostics diagnostics = new KnownPeerDiagnostics(KnownPeerDiagnostics.Layer.DATA);
+		diagnostics.knownCount = 3;
+		diagnostics.connectedCount = 0;
+		diagnostics.handshakedCount = 0;
+		diagnostics.connectableCount = 0;
+		diagnostics.backoffCount = 2;
+		diagnostics.i2pSessionUp = false;
+		diagnostics.qdnFallbackCandidateCount = 1;
+		diagnostics.reasonCounts.put(KnownPeerDiagnostic.Reason.RECENT_CONNECT_FAILURE, 2);
+		diagnostics.reasonCounts.put(KnownPeerDiagnostic.Reason.I2P_SESSION_DOWN, 1);
+
+		String warning = NetworkData.formatNoConnectableDataPeersWarning(diagnostics);
+
+		assertEquals("Isolated node: No connectable data peers found "
+				+ "(known=3, connected=0, handshaked=0, connectable=0, backoff=2, i2pSessionUp=false, "
+				+ "qdnFallbackCandidates=1, recentConnectFailure=2, i2pSessionDown=1)", warning);
 	}
 
 	@Test

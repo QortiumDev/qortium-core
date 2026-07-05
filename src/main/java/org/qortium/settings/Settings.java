@@ -983,6 +983,7 @@ public class Settings {
 		INTEGER,
 		LONG,
 		STRING,
+		PEER_VERSION,
 		AUTO_UPDATE_MODE,
 		STRING_ARRAY,
 		STRING_MAP,
@@ -1062,6 +1063,10 @@ public class Settings {
 		settings.put("listenDataPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("maxPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("maxDataPeers", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("minOutboundPeers", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("minBlockchainPeers", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("minPeerVersion", new WritableSetting(WritableSettingType.PEER_VERSION, true));
+		settings.put("allowConnectionsWithOlderPeerVersions", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("hsqldbCacheRows", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("hsqldbCacheSize", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pSamHost", new WritableSetting(WritableSettingType.STRING, true));
@@ -1081,6 +1086,7 @@ public class Settings {
 		settings.put("devProxyEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("devProxyUnsafeEvalEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("tradebotSystrayEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("chatMessageRetentionPeriod", new WritableSetting(WritableSettingType.LONG, false));
 
 		return Collections.unmodifiableMap(settings);
 	}
@@ -1433,6 +1439,9 @@ public class Settings {
 					throw new IllegalArgumentException("Setting must be a string: " + settingName);
 				return value;
 
+			case PEER_VERSION:
+				return validatePeerVersionSetting(settingName, value);
+
 			case AUTO_UPDATE_MODE:
 				if (!(value instanceof String))
 					throw new IllegalArgumentException("Setting must be an auto-update mode name: " + settingName);
@@ -1504,6 +1513,33 @@ public class Settings {
 			throw new IllegalArgumentException("Setting must be an integer: " + settingName);
 
 		throw new IllegalArgumentException("Setting must be an integer: " + settingName);
+	}
+
+	private static String validatePeerVersionSetting(String settingName, Object value) {
+		if (!(value instanceof String))
+			throw new IllegalArgumentException("Setting must be a peer version string: " + settingName);
+
+		String version = ((String) value).trim();
+		String[] parts = version.split("\\.", -1);
+		if (parts.length != 3)
+			throw new IllegalArgumentException("Setting must be a semantic peer version: " + settingName);
+
+		for (String part : parts) {
+			if (!part.matches("\\d+"))
+				throw new IllegalArgumentException("Setting must be a semantic peer version: " + settingName);
+
+			long number;
+			try {
+				number = Long.parseLong(part);
+			} catch (NumberFormatException e) {
+				throw new IllegalArgumentException("Setting peer version component is out of range: " + settingName, e);
+			}
+
+			if (number > Short.MAX_VALUE)
+				throw new IllegalArgumentException("Setting peer version component is out of range: " + settingName);
+		}
+
+		return version;
 	}
 
 	private static void validateStringArraySetting(String settingName, Object value) {
@@ -1594,6 +1630,20 @@ public class Settings {
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
 			throwValidationError("minBlockchainPeers must be at least 1");
+
+		if (this.minOutboundPeers < 0)
+			throwValidationError("minOutboundPeers must be at least 0");
+
+		if (this.minBlockchainPeers > this.maxPeers && !singleNodeTestnet)
+			throwValidationError("minBlockchainPeers must not be greater than maxPeers");
+
+		if (this.minOutboundPeers > this.maxPeers)
+			throwValidationError("minOutboundPeers must not be greater than maxPeers");
+
+		this.minPeerVersion = validatePeerVersionSetting("minPeerVersion", this.minPeerVersion);
+
+		if (this.chatMessageRetentionPeriod < 1)
+			throwValidationError("chatMessageRetentionPeriod must be at least 1 millisecond");
 
 		if (this.topOnly)
 			throwValidationError("topOnly mode is no longer supported");

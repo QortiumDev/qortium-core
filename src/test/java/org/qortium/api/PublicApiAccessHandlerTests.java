@@ -41,6 +41,8 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/peers/known", this.settings));
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/peers/data/known", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"2001:db8::1", "GET", "/admin/status", this.settings));
 	}
 
@@ -81,6 +83,10 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/peers", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/peers/known/diagnostics", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/peers/data/known/diagnostics", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/admin/info", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/lists/followedQdn", this.settings));
@@ -96,6 +102,8 @@ public class PublicApiAccessHandlerTests extends Common {
 				"203.0.113.10", "POST", "/admin/status", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "DELETE", "/peers/known", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "DELETE", "/peers/data/known", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "POST", "/arbitrary/WEBSITE/QortiumHome", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
@@ -154,6 +162,8 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"127.0.0.1", "DELETE", "/peers/known", this.settings));
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"127.0.0.1", "DELETE", "/peers/data/known", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"127.0.0.1", "GET", "/admin/settings", this.settings));
 	}
 
@@ -173,6 +183,7 @@ public class PublicApiAccessHandlerTests extends Common {
 		FieldUtils.writeField(this.settings, "publicApiPaths", new String[] {
 				"GET /admin/status",
 				"GET /peers/known",
+				"GET /peers/data/known",
 				"GET /arbitrary/*",
 				"GET /render/*",
 				"GET /names/*",
@@ -191,6 +202,8 @@ public class PublicApiAccessHandlerTests extends Common {
 				settingsJson.getLong("publicQdnPublishMaxSize") == 104857600L);
 		assertTrue(settingsPath + " should allow public render reads",
 				jsonArrayContains(publicApiPaths, "GET /render/*"));
+		assertTrue(settingsPath + " should allow public known data peer reads",
+				jsonArrayContains(publicApiPaths, "GET /peers/data/known"));
 		assertTrue(settingsPath + " should allow keyless public chat builds",
 				jsonArrayContains(publicApiPaths, "POST /chat/public/build"));
 		assertTrue(settingsPath + " should allow keyless public QDN publish/delete builds",

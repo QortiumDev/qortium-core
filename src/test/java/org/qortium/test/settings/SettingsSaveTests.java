@@ -115,13 +115,15 @@ public class SettingsSaveTests extends Common {
 		Settings.fileInstance(settingsPath.toString());
 
 		Settings.SettingsUpdateResult result = Settings.updateAndSave(
-				"{\"listenPort\":25000,\"listenDataPort\":25001,\"maxPeers\":40,\"maxDataPeers\":80,\"hsqldbCacheRows\":60000,\"hsqldbCacheSize\":131072,\"maxStorageCapacity\":1234567890123}");
+				"{\"listenPort\":25000,\"listenDataPort\":25001,\"maxPeers\":40,\"maxDataPeers\":80,\"minOutboundPeers\":12,\"minBlockchainPeers\":4,\"hsqldbCacheRows\":60000,\"hsqldbCacheSize\":131072,\"maxStorageCapacity\":1234567890123}");
 
 		assertTrue(result.saved);
 		assertTrue(result.updated.contains("listenPort"));
 		assertTrue(result.updated.contains("listenDataPort"));
 		assertTrue(result.updated.contains("maxPeers"));
 		assertTrue(result.updated.contains("maxDataPeers"));
+		assertTrue(result.updated.contains("minOutboundPeers"));
+		assertTrue(result.updated.contains("minBlockchainPeers"));
 		assertTrue(result.updated.contains("hsqldbCacheRows"));
 		assertTrue(result.updated.contains("hsqldbCacheSize"));
 		assertTrue(result.updated.contains("maxStorageCapacity"));
@@ -129,14 +131,19 @@ public class SettingsSaveTests extends Common {
 		assertTrue(result.restartRequired.contains("listenDataPort"));
 		assertTrue(result.restartRequired.contains("maxPeers"));
 		assertTrue(result.restartRequired.contains("maxDataPeers"));
+		assertTrue(result.restartRequired.contains("minOutboundPeers"));
+		assertFalse(result.restartRequired.contains("minBlockchainPeers"));
 		assertTrue(result.restartRequired.contains("hsqldbCacheRows"));
 		assertTrue(result.restartRequired.contains("hsqldbCacheSize"));
+		assertTrue(result.applied.contains("minBlockchainPeers"));
 		assertTrue(result.applied.contains("maxStorageCapacity"));
 
 		assertEquals(25000, Settings.getInstance().getListenPort());
 		assertEquals(25001, Settings.getInstance().getQDNListenPort());
 		assertEquals(40, Settings.getInstance().getMaxPeers());
 		assertEquals(80, Settings.getInstance().getMaxDataPeers());
+		assertEquals(12, Settings.getInstance().getMinOutboundPeers());
+		assertEquals(4, Settings.getInstance().getMinBlockchainPeers());
 		assertEquals(60000, Settings.getInstance().getHsqldbCacheRows());
 		assertEquals(131072, Settings.getInstance().getHsqldbCacheSize());
 		assertEquals(Long.valueOf(1234567890123L), Settings.getInstance().getMaxStorageCapacity());
@@ -147,6 +154,8 @@ public class SettingsSaveTests extends Common {
 		assertEquals(25001, ((Number) savedSettings.get("listenDataPort")).intValue());
 		assertEquals(40, ((Number) savedSettings.get("maxPeers")).intValue());
 		assertEquals(80, ((Number) savedSettings.get("maxDataPeers")).intValue());
+		assertEquals(12, ((Number) savedSettings.get("minOutboundPeers")).intValue());
+		assertEquals(4, ((Number) savedSettings.get("minBlockchainPeers")).intValue());
 		assertEquals(60000, ((Number) savedSettings.get("hsqldbCacheRows")).intValue());
 		assertEquals(131072, ((Number) savedSettings.get("hsqldbCacheSize")).intValue());
 		assertEquals(1234567890123L, ((Number) savedSettings.get("maxStorageCapacity")).longValue());
@@ -167,6 +176,33 @@ public class SettingsSaveTests extends Common {
 
 		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
 		assertEquals(AutoUpdateMode.CHECK_ONLY, Settings.getInstance().getAutoUpdateMode());
+	}
+
+	@Test
+	public void testPeerPolicyAndChatRetentionSettingsAreSaved() throws Exception {
+		Path settingsPath = createSettingsFile("{\"minPeerVersion\":\"1.2.3\",\"allowConnectionsWithOlderPeerVersions\":false}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave(
+				"{\"minPeerVersion\":\"1.3.0\",\"allowConnectionsWithOlderPeerVersions\":true,\"chatMessageRetentionPeriod\":172800000}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("minPeerVersion"));
+		assertTrue(result.updated.contains("allowConnectionsWithOlderPeerVersions"));
+		assertTrue(result.updated.contains("chatMessageRetentionPeriod"));
+		assertTrue(result.restartRequired.contains("minPeerVersion"));
+		assertTrue(result.restartRequired.contains("allowConnectionsWithOlderPeerVersions"));
+		assertFalse(result.restartRequired.contains("chatMessageRetentionPeriod"));
+		assertTrue(result.applied.contains("chatMessageRetentionPeriod"));
+
+		assertEquals("1.3.0", Settings.getInstance().getMinPeerVersion());
+		assertTrue(Settings.getInstance().getAllowConnectionsWithOlderPeerVersions());
+		assertEquals(172800000L, Settings.getInstance().getChatMessageRetentionPeriod());
+
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals("1.3.0", savedSettings.get("minPeerVersion"));
+		assertEquals(Boolean.TRUE, savedSettings.get("allowConnectionsWithOlderPeerVersions"));
+		assertEquals(172800000L, ((Number) savedSettings.get("chatMessageRetentionPeriod")).longValue());
 	}
 
 	@Test
@@ -288,8 +324,17 @@ public class SettingsSaveTests extends Common {
 				"{\"listenDataPort\":65536}",
 				"{\"maxPeers\":0}",
 				"{\"maxDataPeers\":0}",
+				"{\"minOutboundPeers\":-1}",
+				"{\"minOutboundPeers\":33}",
+				"{\"minBlockchainPeers\":0}",
+				"{\"minBlockchainPeers\":33}",
 				"{\"maxStorageCapacity\":0}",
-				"{\"maxStorageCapacity\":123.5}"
+				"{\"maxStorageCapacity\":123.5}",
+				"{\"minPeerVersion\":\"1.2\"}",
+				"{\"minPeerVersion\":\"1.2.bad\"}",
+				"{\"minPeerVersion\":\"1.2.32768\"}",
+				"{\"chatMessageRetentionPeriod\":0}",
+				"{\"chatMessageRetentionPeriod\":123.5}"
 		}) {
 			try {
 				Settings.updateAndSave(badPatch);
@@ -613,6 +658,16 @@ public class SettingsSaveTests extends Common {
 		assertTrue(metadata.writable.get("hsqldbCacheRows").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheSize").type);
 		assertTrue(metadata.writable.get("hsqldbCacheSize").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("minOutboundPeers").type);
+		assertTrue(metadata.writable.get("minOutboundPeers").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("minBlockchainPeers").type);
+		assertFalse(metadata.writable.get("minBlockchainPeers").restartRequired);
+		assertEquals("PEER_VERSION", metadata.writable.get("minPeerVersion").type);
+		assertTrue(metadata.writable.get("minPeerVersion").restartRequired);
+		assertEquals("BOOLEAN", metadata.writable.get("allowConnectionsWithOlderPeerVersions").type);
+		assertTrue(metadata.writable.get("allowConnectionsWithOlderPeerVersions").restartRequired);
+		assertEquals("LONG", metadata.writable.get("chatMessageRetentionPeriod").type);
+		assertFalse(metadata.writable.get("chatMessageRetentionPeriod").restartRequired);
 		assertEquals("STORAGE_POLICY", metadata.writable.get("storagePolicy").type);
 		assertFalse(metadata.writable.get("storagePolicy").restartRequired);
 		assertTrue(metadata.pendingRestart.isEmpty());
