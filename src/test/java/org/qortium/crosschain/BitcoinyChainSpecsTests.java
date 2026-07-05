@@ -36,6 +36,16 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testBitcoinDefaultSpendFeePerByte() {
+		Bitcoiny bitcoin = ForeignBlockchainRegistry.fromStringRequired("BITCOIN").getBitcoinyInstance();
+		Bitcoiny litecoin = ForeignBlockchainRegistry.fromStringRequired("LITECOIN").getBitcoinyInstance();
+
+		assertEquals(20L, bitcoin.getSpendFeePerByte(null));
+		assertEquals(7L, bitcoin.getSpendFeePerByte(7L));
+		assertEquals(Math.max(1L, litecoin.getFeePerKb().value / 1000L), litecoin.getSpendFeePerByte(null));
+	}
+
+	@Test
 	public void testRegisteredBitcoinyChainManifest() {
 		for (ChainManifest expected : List.of(
 				new ChainManifest("BITCOIN", "BTC", BitcoinyChainSpecs.BITCOIN_SLIP44_COIN_TYPE, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", Set.of(BitcoinyChainSpecs.MAIN, BitcoinyChainSpecs.TEST3, BitcoinyChainSpecs.TEST4, BitcoinyChainSpecs.REGTEST), 0, 5, 128, 0x0488B21E, 0x0488ADE4),
@@ -588,6 +598,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals("nc", namecoinMainNetParams.getSegwitAddressHrp());
 		assertEquals(0x0488B21E, namecoinMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, namecoinMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.valueOf(100_000L), BitcoinyChainSpecs.NAMECOIN.getConfig().getDefaultFeePerKb());
 		assertTrue(BitcoinyChainSpecs.NAMECOIN.hasSpendableOutputScriptFilter());
 		assertTrue(BitcoinyChainSpecs.NAMECOIN.isSpendableOutputScript(BitcoinyScript.p2pkhScript(new byte[20])));
 		assertFalse(BitcoinyChainSpecs.NAMECOIN.isSpendableOutputScript(buildNameNewScript(BitcoinyScript.p2pkhScript(new byte[20]))));

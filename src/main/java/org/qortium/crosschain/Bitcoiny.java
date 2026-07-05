@@ -500,7 +500,11 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	}
 
 	public void broadcastTransaction(BitcoinySignedTransaction transaction) throws ForeignBlockchainException {
-		this.blockchainProvider.broadcastTransaction(transaction.getRawTransaction());
+		this.blockchainProvider.broadcastTransaction(transaction.getRawTransaction(), transaction.getTxHash());
+	}
+
+	public long getSpendFeePerByte(Long feePerByte) {
+		return feePerByte != null ? feePerByte : Math.max(1L, getFeePerKb().value / 1000L);
 	}
 
 	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
@@ -513,6 +517,68 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 
 	public BitcoinySignedTransaction buildSpendMultipleTransaction(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
 		return LegacyTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
+	}
+
+	public BitcoinySignedTransaction buildSpendMaxTransaction(String xprv58, String recipient, Long feePerByte) {
+		return LegacyTransactionBuilder.buildSpendMax(this, xprv58, recipient, feePerByte);
+	}
+
+	public BitcoinySpendPreview buildSpendPreview(String xprv58, String recipient, long amount, Long feePerByte) throws ForeignBlockchainException {
+		long resolvedFeePerByte = getSpendFeePerByte(feePerByte);
+		BitcoinySignedTransaction signedTransaction = buildSpendTransaction(xprv58, recipient, amount, resolvedFeePerByte);
+		return buildSpendPreview(signedTransaction, amount, false, resolvedFeePerByte);
+	}
+
+	public BitcoinySpendPreview buildSpendMaxPreview(String xprv58, String recipient, Long feePerByte) throws ForeignBlockchainException {
+		long resolvedFeePerByte = getSpendFeePerByte(feePerByte);
+		BitcoinySignedTransaction signedTransaction = buildSpendMaxTransaction(xprv58, recipient, resolvedFeePerByte);
+		return buildSpendPreview(signedTransaction, null, true, resolvedFeePerByte);
+	}
+
+	private BitcoinySpendPreview buildSpendPreview(BitcoinySignedTransaction signedTransaction, Long amount, boolean sendMax,
+			long resolvedFeePerByte) throws ForeignBlockchainException {
+		if (signedTransaction == null)
+			return null;
+
+		byte[] rawTransaction = signedTransaction.getRawTransaction();
+		BitcoinyTransaction transaction = deserializeRawTransaction(signedTransaction.getTxHash(), rawTransaction);
+		long inputAmount = signedTransaction.getInputAmount() != null
+				? signedTransaction.getInputAmount()
+				: resolveInputAmount(transaction);
+		long outputAmount = signedTransaction.getOutputAmount() != null
+				? signedTransaction.getOutputAmount()
+				: transaction.totalAmount;
+		long fee = inputAmount - outputAmount;
+
+		if (fee < 0)
+			throw new ForeignBlockchainException("Prepared transaction has negative fee");
+
+		int inputCount = signedTransaction.getInputCount() != null ? signedTransaction.getInputCount() : transaction.inputs.size();
+		int outputCount = signedTransaction.getOutputCount() != null ? signedTransaction.getOutputCount() : transaction.outputs.size();
+		long previewAmount = amount != null ? amount : outputAmount;
+
+		return new BitcoinySpendPreview(previewAmount, sendMax, resolvedFeePerByte, fee, inputAmount, outputAmount, transaction.size,
+				inputCount, outputCount, signedTransaction.getTxHash(), rawTransaction);
+	}
+
+	public String broadcastRawTransaction(byte[] rawTransaction) throws ForeignBlockchainException {
+		BitcoinyTransaction transaction = deserializeRawTransaction(rawTransaction);
+		this.blockchainProvider.broadcastTransaction(rawTransaction, transaction.txHash);
+		return transaction.txHash;
+	}
+
+	private long resolveInputAmount(BitcoinyTransaction transaction) throws ForeignBlockchainException {
+		long inputAmount = 0L;
+
+		for (BitcoinyTransaction.Input input : transaction.inputs) {
+			List<BitcoinyTransaction.Output> outputs = getOutputs(HashCode.fromString(input.outputTxHash).asBytes());
+			if (input.outputVout < 0 || input.outputVout >= outputs.size())
+				throw new ForeignBlockchainException(String.format("Unable to resolve input %s:%d", input.outputTxHash, input.outputVout));
+
+			inputAmount = Math.addExact(inputAmount, outputs.get(input.outputVout).value);
+		}
+
+		return inputAmount;
 	}
 
 	public BitcoinySignedTransaction buildHtlcRedeemTransaction(Coin redeemAmount, ECKey redeemKey,

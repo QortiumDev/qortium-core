@@ -19,6 +19,9 @@ public class BitcoinySendRequest {
 	@XmlJavaTypeAdapter(value = org.qortium.api.AmountTypeAdapter.class)
 	public long amount;
 
+	@Schema(description = "Send the maximum spendable wallet balance to the recipient after subtracting the transaction fee")
+	public Boolean sendMax;
+
 	@Schema(description = "Transaction fee per byte (optional)", example = "0.00000100", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortium.api.AmountTypeAdapter.class)
 	public Long feePerByte;

@@ -14,6 +14,7 @@ import org.qortium.crosschain.BitcoinyBlockchainProvider;
 import org.qortium.crosschain.BitcoinyHTLC;
 import org.qortium.crosschain.BitcoinyScript;
 import org.qortium.crosschain.BitcoinySignedTransaction;
+import org.qortium.crosschain.BitcoinySpendPreview;
 import org.qortium.crosschain.BitcoinyTransaction;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.TransactionHash;
@@ -36,7 +37,7 @@ import static org.junit.Assert.*;
 public abstract class BitcoinyTests extends Common {
 
 	private static final String RUN_LIVE_CROSSCHAIN_TESTS_PROPERTY = "qortium.runLiveCrosschainTests";
-	private static final long MOCK_UTXO_VALUE = 100_000_000L;
+	private static final long MOCK_UTXO_VALUE = 200_000_000L;
 	private static final byte[] EXPECTED_HTLC_SECRET = "This string is exactly 32 bytes!".getBytes();
 	private static final int HTLC_LOCK_TIME = 1_700_000_000;
 
@@ -189,6 +190,61 @@ public abstract class BitcoinyTests extends Common {
 		assertFalse(transaction.inputs.isEmpty());
 		assertTrue(transaction.outputs.stream().anyMatch(output -> output.value == 1000L));
 		assertTrue(transaction.outputs.stream().anyMatch(output -> output.value == 2000L));
+	}
+
+	@Test
+	public void testBuildSpendPreviewAndBroadcastPreparedTransaction() throws ForeignBlockchainException {
+		assumeTrue(supportsSpendTransactionTests());
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
+		String recipient = getSpendRecipient(mockBitcoiny);
+		long amount = 1000L;
+		long feePerByte = 7L;
+
+		BitcoinySpendPreview preview = mockBitcoiny.buildSpendPreview(getDeterministicKey58(), recipient, amount, feePerByte);
+
+		assertNotNull(preview);
+		assertEquals(amount, preview.getAmount());
+		assertFalse(preview.isSendMax());
+		assertEquals(feePerByte, preview.getFeePerByte());
+		assertTrue(preview.getFee() > 0);
+		assertEquals(preview.getFee(), preview.getInputAmount() - preview.getOutputAmount());
+		assertTrue(preview.getTransactionSize() > 0);
+		assertTrue(preview.getInputCount() > 0);
+		assertTrue(preview.getOutputCount() > 0);
+		assertNotNull(preview.getTxHash());
+		assertTrue(preview.getRawTransaction().length > 0);
+
+		String broadcastTxHash = mockBitcoiny.broadcastRawTransaction(preview.getRawTransaction());
+		MockBitcoinyBlockchainProvider blockchainProvider = (MockBitcoinyBlockchainProvider) mockBitcoiny.getBlockchainProvider();
+
+		assertEquals(preview.getTxHash(), broadcastTxHash);
+		assertEquals(1, blockchainProvider.getBroadcastTransactions().size());
+		assertArrayEquals(preview.getRawTransaction(), blockchainProvider.getBroadcastTransactions().get(0));
+	}
+
+	@Test
+	public void testBuildSpendMaxPreview() throws ForeignBlockchainException {
+		assumeTrue(supportsSpendTransactionTests());
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
+		String recipient = getSpendRecipient(mockBitcoiny);
+		long feePerByte = 7L;
+		long walletBalance = getMockWalletBalance(mockBitcoiny);
+
+		BitcoinySpendPreview preview = mockBitcoiny.buildSpendMaxPreview(getDeterministicKey58(), recipient, feePerByte);
+
+		assertNotNull(preview);
+		assertTrue(preview.isSendMax());
+		assertEquals(feePerByte, preview.getFeePerByte());
+		assertTrue(preview.getFee() > 0);
+		assertEquals(walletBalance, preview.getInputAmount());
+		assertEquals(preview.getFee(), preview.getInputAmount() - preview.getOutputAmount());
+		assertEquals(preview.getInputAmount() - preview.getFee(), preview.getAmount());
+		assertEquals(preview.getAmount(), preview.getOutputAmount());
+		assertEquals(1, preview.getOutputCount());
+
+		BitcoinyTransaction transaction = mockBitcoiny.deserializeRawTransaction(preview.getTxHash(), preview.getRawTransaction());
+		assertEquals(1, transaction.outputs.size());
+		assertEquals(preview.getAmount(), transaction.outputs.get(0).value);
 	}
 
 	@Test

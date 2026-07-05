@@ -46,7 +46,7 @@ final class LegacyTransactionBuilder {
 			List<SpendCandidate> spendCandidates = spendCandidates(bitcoiny, xprv58);
 			long selectedTotal = 0L;
 			List<Input> selectedInputs = new ArrayList<>();
-			long feeRate = feePerByte != null ? feePerByte : Math.max(1L, bitcoiny.getFeePerKb().value / 1000L);
+			long feeRate = bitcoiny.getSpendFeePerByte(feePerByte);
 			long minChange = bitcoiny.getMinNonDustOutput().value;
 
 			for (SpendCandidate candidate : spendCandidates) {
@@ -70,14 +70,43 @@ final class LegacyTransactionBuilder {
 			if (change >= minChange)
 				outputs.add(new Output(change, BitcoinyScript.p2pkhScript(selectedInputs.get(0).publicKeyHash)));
 
-			return buildSignedTransaction(bitcoiny, selectedInputs, outputs, 0L);
+			long outputTotal = outputs.stream().mapToLong(output -> output.amount).sum();
+			return buildSignedTransaction(bitcoiny, selectedInputs, outputs, 0L, selectedTotal, outputTotal, fee);
 		} catch (ForeignBlockchainException | RuntimeException e) {
 			Bitcoiny.LOGGER.warn("Unable to build legacy spend transaction: {}", e.getMessage());
 			return null;
 		}
 	}
 
-	private static BitcoinySignedTransaction buildSignedTransaction(Bitcoiny bitcoiny, List<Input> inputs, List<Output> outputs, long lockTime) {
+	static BitcoinySignedTransaction buildSpendMax(Bitcoiny bitcoiny, String xprv58, String recipient, Long feePerByte) {
+		try {
+			List<SpendCandidate> spendCandidates = spendCandidates(bitcoiny, xprv58);
+			if (spendCandidates.isEmpty())
+				return null;
+
+			List<Input> selectedInputs = new ArrayList<>(spendCandidates.size());
+			long selectedTotal = 0L;
+			for (SpendCandidate candidate : spendCandidates) {
+				selectedInputs.add(Input.p2pkh(candidate.output, candidate.key, NO_LOCKTIME_SEQUENCE));
+				selectedTotal = Math.addExact(selectedTotal, candidate.output.value);
+			}
+
+			long feeRate = bitcoiny.getSpendFeePerByte(feePerByte);
+			long fee = Math.multiplyExact(feeRate, estimateSize(selectedInputs.size(), 1));
+			long amount = selectedTotal - fee;
+			if (amount < bitcoiny.getMinNonDustOutput().value)
+				return null;
+
+			List<Output> outputs = List.of(new Output(amount, BitcoinyScript.scriptPubKey(bitcoiny.getNetworkParameters(), recipient)));
+			return buildSignedTransaction(bitcoiny, selectedInputs, outputs, 0L, selectedTotal, amount, fee);
+		} catch (ForeignBlockchainException | RuntimeException e) {
+			Bitcoiny.LOGGER.warn("Unable to build legacy send-max transaction: {}", e.getMessage());
+			return null;
+		}
+	}
+
+	private static BitcoinySignedTransaction buildSignedTransaction(Bitcoiny bitcoiny, List<Input> inputs, List<Output> outputs, long lockTime,
+			long inputAmount, long outputAmount, long feeAmount) {
 		validateUnsignedInt(lockTime, "lockTime");
 
 		Integer configuredVersion = bitcoiny.getSpendTransactionVersion();
@@ -89,7 +118,7 @@ final class LegacyTransactionBuilder {
 		}
 
 		byte[] rawTransaction = serialize(version, inputs, outputs, lockTime, -1);
-		return BitcoinySignedTransaction.fromRaw(rawTransaction);
+		return BitcoinySignedTransaction.fromRaw(rawTransaction, inputAmount, outputAmount, feeAmount, inputs.size(), outputs.size());
 	}
 
 	private static byte[] signatureHash(int version, List<Input> inputs, List<Output> outputs, long lockTime, int inputIndex) {

@@ -420,7 +420,7 @@ public final class BitcoinyChainSpecs {
 			.mainnet(() -> DASH_MAIN_NET_PARAMS, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", 10_000L, "dash")
 			.build();
 
-	public static final BitcoinyChainSpec NAMECOIN = spec("NAMECOIN", NAMECOIN_SLIP44_COIN_TYPE, "Namecoin", NAMECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+	public static final BitcoinyChainSpec NAMECOIN = spec("NAMECOIN", NAMECOIN_SLIP44_COIN_TYPE, "Namecoin", NAMECOIN_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
 			.mainnet(() -> NAMECOIN_MAIN_NET_PARAMS, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", 10_000L, "nmc")
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isNamecoinNameOutputScript(scriptPubKey))
 			.build();
