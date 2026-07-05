@@ -3024,6 +3024,7 @@ public String finalizeUpload(
 
 			try {
 				rawOut = response.getOutputStream();
+				response.setHeader("X-Content-Type-Options", "nosniff");
 
 				if (encoding != null && "base64".equalsIgnoreCase(encoding)) {
 					// If base64 encoding is requested, override content type

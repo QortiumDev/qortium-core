@@ -31,6 +31,8 @@ import org.qortium.utils.Base58;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Proxy;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -38,9 +40,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.WriteListener;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -441,6 +452,52 @@ public class ArbitraryApiTests extends ApiCommon {
 		assertEquals("application/octet-stream", getRawDownloadContentType(null));
 	}
 
+	@Test
+	public void testGetDownloadResponseUsesNoSniffHeaderForRawContent() throws Exception {
+		String name = "qdn-nosniff-raw";
+		registerName(name);
+		publishTestResource(name, null);
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class);
+			DownloadExchange exchange = new DownloadExchange();
+			exchange.requestHeaders.put("X-API-KEY", ApiCommon.TEST_API_KEY);
+			FieldUtils.writeField(resource, "request", exchange.request, true);
+			FieldUtils.writeField(resource, "response", exchange.response, true);
+			FieldUtils.writeField(resource, "context", exchange.context, true);
+
+			resource.get(Service.APP, name, null, null, false, false, 5, false, null);
+
+			assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testGetDownloadResponseUsesNoSniffHeaderForBase64Encoding() throws Exception {
+		String name = "qdn-nosniff-base64";
+		registerName(name);
+		publishTestResource(name, null);
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class);
+			DownloadExchange exchange = new DownloadExchange();
+			exchange.requestHeaders.put("X-API-KEY", ApiCommon.TEST_API_KEY);
+			FieldUtils.writeField(resource, "request", exchange.request, true);
+			FieldUtils.writeField(resource, "response", exchange.response, true);
+			FieldUtils.writeField(resource, "context", exchange.context, true);
+
+			resource.get(Service.APP, name, null, "base64", false, false, 5, false, null);
+
+			assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
 	private static long[] parseHttpRange(String rangeHeader, long fileSize) throws Exception {
 		Method method = ArbitraryResource.class.getDeclaredMethod("parseHttpRangeHeader", String.class, long.class);
 		method.setAccessible(true);
@@ -451,6 +508,131 @@ public class ArbitraryApiTests extends ApiCommon {
 		Method method = ArbitraryResource.class.getDeclaredMethod("getRawDownloadContentType", String.class);
 		method.setAccessible(true);
 		return (String) method.invoke(null, mimeType);
+	}
+
+	private static class DownloadExchange {
+		private final Map<String, String> requestHeaders = new LinkedHashMap<>();
+		private final Map<String, String> responseHeaders = new LinkedHashMap<>();
+		private final CapturingServletOutputStream outputStream = new CapturingServletOutputStream();
+		private final HttpServletRequest request;
+		private final HttpServletResponse response;
+		private final ServletContext context;
+		private boolean responseCommitted;
+
+		private DownloadExchange() {
+			this.request = (HttpServletRequest) Proxy.newProxyInstance(
+					ArbitraryApiTests.class.getClassLoader(),
+					new Class[] { HttpServletRequest.class },
+					(proxy, method, args) -> {
+						switch (method.getName()) {
+							case "getMethod":
+								return "GET";
+							case "getHeaderNames":
+								return Collections.enumeration(this.requestHeaders.keySet());
+							case "getHeader":
+								return this.requestHeaders.get((String) args[0]);
+							case "getQueryString":
+								return null;
+							case "getParameter":
+								return null;
+							case "getLocale":
+								return Locale.getDefault();
+							case "getRequestURI":
+								return "";
+							case "toString":
+								return "ArbitraryApiTestRequest";
+							default:
+								return defaultValue(method.getReturnType());
+						}
+					});
+
+			this.response = (HttpServletResponse) Proxy.newProxyInstance(
+					ArbitraryApiTests.class.getClassLoader(),
+					new Class[] { HttpServletResponse.class },
+					(proxy, method, args) -> {
+						switch (method.getName()) {
+							case "setHeader":
+								this.responseHeaders.put((String) args[0], (String) args[1]);
+								return null;
+							case "addHeader":
+								this.responseHeaders.put((String) args[0], (String) args[1]);
+								return null;
+							case "setContentType":
+								this.responseHeaders.put("Content-Type", (String) args[0]);
+								return null;
+							case "setContentLength":
+								return null;
+							case "setContentLengthLong":
+								return null;
+							case "setStatus":
+								this.responseCommitted = true;
+								return null;
+							case "getOutputStream":
+								return this.outputStream;
+							case "getWriter":
+								return new PrintWriter(this.outputStream.outputStream, true);
+							case "isCommitted":
+								return this.responseCommitted;
+							case "toString":
+								return "ArbitraryApiTestResponse";
+							default:
+								return defaultValue(method.getReturnType());
+						}
+					});
+
+			this.context = (ServletContext) Proxy.newProxyInstance(
+					ArbitraryApiTests.class.getClassLoader(),
+					new Class[] { ServletContext.class },
+					(proxy, method, args) -> {
+						switch (method.getName()) {
+							case "getMimeType":
+								return null;
+							default:
+								return defaultValue(method.getReturnType());
+						}
+					});
+		}
+
+		private String getResponseHeader(String headerName) {
+			for (Map.Entry<String, String> entry : this.responseHeaders.entrySet()) {
+				if (entry.getKey().equalsIgnoreCase(headerName))
+					return entry.getValue();
+			}
+
+			return null;
+		}
+	}
+
+	private static class CapturingServletOutputStream extends ServletOutputStream {
+
+		private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+		@Override
+		public void write(int b) {
+			this.outputStream.write(b);
+		}
+
+		@Override
+		public boolean isReady() {
+			return true;
+		}
+
+		@Override
+		public void setWriteListener(WriteListener writeListener) {
+		}
+	}
+
+	private static Object defaultValue(Class<?> returnType) {
+		if (returnType == boolean.class)
+			return false;
+
+		if (returnType == int.class)
+			return 0;
+
+		if (returnType == long.class)
+			return 0L;
+
+		return null;
 	}
 
 	private static void copyUploadChunk(String chunkData, Path chunkFile, long maxTotalSize) throws Exception {
