@@ -49,6 +49,18 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	}
 
 	@Override
+	public long getSpendFeePerByte(Long feePerByte) {
+		if (feePerByte != null)
+			return feePerByte;
+
+		Long defaultSpendFeePerByte = this.spec.getDefaultSpendFeePerByte();
+		if (defaultSpendFeePerByte != null)
+			return defaultSpendFeePerByte;
+
+		return super.getSpendFeePerByte(null);
+	}
+
+	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT
@@ -67,11 +79,7 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
 
-		Long defaultSpendFeePerByte = this.spec.getDefaultSpendFeePerByte();
-		if (defaultSpendFeePerByte != null)
-			return buildSpend(xprv58, recipient, amount, defaultSpendFeePerByte);
-
-		return super.buildSpend(xprv58, recipient, amount);
+		return buildSpend(xprv58, recipient, amount, null);
 	}
 
 	@Override
@@ -100,6 +108,23 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 			return BitcoinCashTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
 
 		return super.buildSpendTransaction(xprv58, recipient, amount, feePerByte);
+	}
+
+	@Override
+	public BitcoinySignedTransaction buildSpendMaxTransaction(String xprv58, String recipient, Long feePerByte) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return SaplingTransparentTransactionBuilder.buildSpendMax(this, xprv58, recipient, feePerByte);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
+			return ZcashTransparentTransactionBuilder.buildSpendMax(this, xprv58, recipient, feePerByte);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+			return TimestampedLegacyTransactionBuilder.buildSpendMax(this, xprv58, recipient, feePerByte);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
+			return BitcoinCashTransactionBuilder.buildSpendMax(this, xprv58, recipient, feePerByte);
+
+		return super.buildSpendMaxTransaction(xprv58, recipient, feePerByte);
 	}
 
 	@Override

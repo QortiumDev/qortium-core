@@ -52,7 +52,7 @@ final class SaplingTransparentTransactionBuilder {
 			List<SpendCandidate> spendCandidates = spendCandidates(bitcoiny, xprv58);
 			long selectedTotal = 0L;
 			List<Input> selectedInputs = new ArrayList<>();
-			long feeRate = feePerByte != null ? feePerByte : Math.max(1L, bitcoiny.getFeePerKb().value / 1000L);
+			long feeRate = bitcoiny.getSpendFeePerByte(feePerByte);
 			long minChange = bitcoiny.getMinNonDustOutput().value;
 
 			for (SpendCandidate candidate : spendCandidates) {
@@ -79,6 +79,33 @@ final class SaplingTransparentTransactionBuilder {
 			return buildSignedTransaction(bitcoiny, selectedInputs, outputs, 0L);
 		} catch (ForeignBlockchainException | RuntimeException e) {
 			Bitcoiny.LOGGER.warn("Unable to build Sapling-transparent spend transaction: {}", e.getMessage());
+			return null;
+		}
+	}
+
+	static BitcoinySignedTransaction buildSpendMax(Bitcoiny bitcoiny, String xprv58, String recipient, Long feePerByte) {
+		try {
+			List<SpendCandidate> spendCandidates = spendCandidates(bitcoiny, xprv58);
+			if (spendCandidates.isEmpty())
+				return null;
+
+			List<Input> selectedInputs = new ArrayList<>(spendCandidates.size());
+			long selectedTotal = 0L;
+			for (SpendCandidate candidate : spendCandidates) {
+				selectedInputs.add(Input.p2pkh(candidate.output, candidate.key, NO_LOCKTIME_SEQUENCE));
+				selectedTotal = Math.addExact(selectedTotal, candidate.output.value);
+			}
+
+			long feeRate = bitcoiny.getSpendFeePerByte(feePerByte);
+			long fee = Math.multiplyExact(feeRate, estimateSize(selectedInputs.size(), 1));
+			long amount = selectedTotal - fee;
+			if (amount < bitcoiny.getMinNonDustOutput().value)
+				return null;
+
+			List<Output> outputs = List.of(new Output(amount, BitcoinyScript.scriptPubKey(bitcoiny.getNetworkParameters(), recipient)));
+			return buildSignedTransaction(bitcoiny, selectedInputs, outputs, 0L);
+		} catch (ForeignBlockchainException | RuntimeException e) {
+			Bitcoiny.LOGGER.warn("Unable to build Sapling-transparent send-max transaction: {}", e.getMessage());
 			return null;
 		}
 	}

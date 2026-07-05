@@ -64,6 +64,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	public static final String EXPECTED_GENESIS_ERROR = "EXPECTED GENESIS ERROR";
 	private static final long IDLE_DISCONNECT_MS = 2 * 60 * 1000L;
 	private static final long ACQUIRE_SERVER_TIMEOUT_MS = 3000L;
+	private static final int MAX_BROADCAST_ATTEMPTS = 3;
 
 	// Multi-server height corroboration: cross-check the chain tip across connected servers so a single
 	// malicious/lagging server cannot skew height-based refund/locktime decisions.
@@ -755,11 +756,84 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 */
 	@Override
 	public void broadcastTransaction(byte[] transactionBytes) throws ForeignBlockchainException {
-		Object rawBroadcastResult = this.rpc("blockchain.transaction.broadcast", HashCode.fromBytes(transactionBytes).toString()).getResponse();
+		broadcastTransaction(transactionBytes, null);
+	}
 
-		// We're expecting a simple string that is the transaction hash
-		if (!(rawBroadcastResult instanceof String))
-			throw new ForeignBlockchainException.NetworkException("Unexpected response from ElectrumX blockchain.transaction.broadcast RPC");
+	@Override
+	public void broadcastTransaction(byte[] transactionBytes, String expectedTxHash) throws ForeignBlockchainException {
+		String rawTransactionHex = HashCode.fromBytes(transactionBytes).toString();
+		int broadcastAttempts = Math.max(1, Math.min(MAX_BROADCAST_ATTEMPTS, Math.max(this.maximumConnections, this.getKnownServerCount())));
+		ForeignBlockchainException lastException = null;
+
+		for (int attempt = 1; attempt <= broadcastAttempts; ++attempt) {
+			try {
+				ElectrumServerResponse serverResponse = this.rpc("blockchain.transaction.broadcast", rawTransactionHex);
+				Object rawBroadcastResult = serverResponse.getResponse();
+
+				// We're expecting a simple string that is the transaction hash
+				if (!(rawBroadcastResult instanceof String))
+					throw new ForeignBlockchainException.NetworkException("Unexpected response from ElectrumX blockchain.transaction.broadcast RPC",
+							serverResponse.getElectrumServer().getServer());
+
+				String broadcastTxHash = (String) rawBroadcastResult;
+				if (expectedTxHash != null && !expectedTxHash.equalsIgnoreCase(broadcastTxHash))
+					throw new ForeignBlockchainException.NetworkException(String.format(
+							"ElectrumX blockchain.transaction.broadcast returned tx hash %s but expected %s",
+							broadcastTxHash, expectedTxHash), serverResponse.getElectrumServer().getServer());
+
+				LOGGER.info("{} ElectrumX broadcast accepted tx {} via {}",
+						this.getCurrencyCodeForLogging(), broadcastTxHash, serverResponse.getElectrumServer().getServer());
+				return;
+			} catch (ForeignBlockchainException.NetworkException e) {
+				lastException = e;
+				Object server = e.getServer();
+				LOGGER.warn("{} ElectrumX broadcast failed for tx {} via {} (attempt {}/{}): {}",
+						this.getCurrencyCodeForLogging(), expectedTxHashForLogging(expectedTxHash), server == null ? "unknown server" : server,
+						attempt, broadcastAttempts, safeLogMessage(e));
+
+				closeMatchingConnection(server, "ElectrumX broadcast failed: " + safeLogMessage(e));
+			} catch (ForeignBlockchainException e) {
+				lastException = e;
+				LOGGER.warn("{} ElectrumX broadcast failed for tx {} (attempt {}/{}): {}",
+						this.getCurrencyCodeForLogging(), expectedTxHashForLogging(expectedTxHash), attempt, broadcastAttempts, safeLogMessage(e));
+			}
+		}
+
+		String message = lastException == null ? "ElectrumX broadcast failed" : lastException.getMessage();
+		if (message == null || message.trim().isEmpty())
+			message = "ElectrumX broadcast failed";
+
+		throw new ForeignBlockchainException.NetworkException(String.format("%s broadcast failed for tx %s: %s",
+				this.getCurrencyCodeForLogging(), expectedTxHashForLogging(expectedTxHash), message));
+	}
+
+	private String expectedTxHashForLogging(String expectedTxHash) {
+		return expectedTxHash == null ? "unknown" : expectedTxHash;
+	}
+
+	private String safeLogMessage(Exception e) {
+		String message = e.getMessage();
+		if (message == null || message.trim().isEmpty())
+			return e.getClass().getSimpleName();
+
+		return message.replaceAll("\\b[0-9a-fA-F]{128,}\\b", "[hex omitted]");
+	}
+
+	private void closeMatchingConnection(Object serverObject, String reason) {
+		if (!(serverObject instanceof ChainableServer))
+			return;
+
+		ChainableServer chainableServer = (ChainableServer) serverObject;
+		synchronized (this.connections) {
+			for (ElectrumServer electrumServer : new HashSet<>(this.connections)) {
+				if (!chainableServer.equals(electrumServer.getServer()))
+					continue;
+
+				this.connections.remove(electrumServer);
+				this.availableConnections.remove(electrumServer);
+				electrumServer.closeServer(this.getClass().getSimpleName(), reason);
+			}
+		}
 	}
 
 	 // Class utility methods for status
@@ -1097,7 +1171,12 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 			while(response == null) {
 
-				response = connectedRpc(electrumServer, method, params);
+				try {
+					response = connectedRpc(electrumServer, method, params);
+				} catch (ForeignBlockchainException e) {
+					releaseServer(electrumServer);
+					throw e;
+				}
 
 				// If we have more servers and this one replied slowly, try another
 				if (!this.availableConnections.isEmpty()) {
