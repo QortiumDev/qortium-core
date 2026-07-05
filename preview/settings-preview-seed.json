@@ -39,7 +39,7 @@
   "exportPath": "qortium-backup-preview",
   "dataPath": "data-preview",
   "blockchainConfig": "previewchain.json",
-  "minBlockchainPeers": 3,
+  "minBlockchainPeers": 1,
   "minOutboundPeers": 2,
   "maxPeers": 32,
   "maxDataPeers": 32,
@@ -56,6 +56,7 @@
   "publicApiPaths": [
     "GET /admin/status",
     "GET /peers/known",
+    "GET /peers/data/known",
     "GET /arbitrary/*",
     "GET /render/*",
     "GET /names/*",

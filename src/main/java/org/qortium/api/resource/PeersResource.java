@@ -21,6 +21,7 @@ import org.qortium.controller.Controller;
 import org.qortium.controller.Synchronizer;
 import org.qortium.controller.Synchronizer.SynchronizationResult;
 import org.qortium.data.block.BlockSummaryData;
+import org.qortium.data.network.KnownPeerDiagnostics;
 import org.qortium.data.network.PeerData;
 import org.qortium.network.Network;
 import org.qortium.network.NetworkData;
@@ -95,6 +96,28 @@ public class PeersResource {
 	}
 
 	@GET
+	@Path("/known/diagnostics")
+	@Operation(
+		summary = "Fetch diagnostics for all known chain peers",
+		responses = {
+			@ApiResponse(
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = KnownPeerDiagnostics.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.REPOSITORY_ISSUE
+	})
+	public KnownPeerDiagnostics getKnownPeerDiagnostics() {
+		return Network.getInstance().getKnownPeerDiagnostics(NTP.getTime());
+	}
+
+	@GET
 	@Path("/data")
 	@Operation(
 			summary = "Fetch list of peers on the Data Network",
@@ -113,6 +136,52 @@ public class PeersResource {
 	)
 	public List<ConnectedDataPeer> getDataPeers() {
 		return NetworkData.getInstance().getImmutableConnectedPeers().stream().map(ConnectedDataPeer::new).collect(Collectors.toList());
+	}
+
+	@GET
+	@Path("/data/known")
+	@Operation(
+		summary = "Fetch list of all known Data Network peers",
+		responses = {
+			@ApiResponse(
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = PeerData.class
+						)
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.REPOSITORY_ISSUE
+	})
+	public List<PeerData> getKnownDataPeers() {
+		return NetworkData.getInstance().getAllKnownPeers();
+	}
+
+	@GET
+	@Path("/data/known/diagnostics")
+	@Operation(
+		summary = "Fetch diagnostics for all known Data Network peers",
+		responses = {
+			@ApiResponse(
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = KnownPeerDiagnostics.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.REPOSITORY_ISSUE
+	})
+	public KnownPeerDiagnostics getKnownDataPeerDiagnostics() {
+		return NetworkData.getInstance().getKnownPeerDiagnostics(NTP.getTime());
 	}
 
 	@POST

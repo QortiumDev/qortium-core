@@ -103,6 +103,16 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(true, metadata.writable.get("maxPeers").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("maxDataPeers").type);
 		assertEquals(true, metadata.writable.get("maxDataPeers").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("minOutboundPeers").type);
+		assertEquals(true, metadata.writable.get("minOutboundPeers").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("minBlockchainPeers").type);
+		assertEquals(false, metadata.writable.get("minBlockchainPeers").restartRequired);
+		assertEquals("PEER_VERSION", metadata.writable.get("minPeerVersion").type);
+		assertEquals(true, metadata.writable.get("minPeerVersion").restartRequired);
+		assertEquals("BOOLEAN", metadata.writable.get("allowConnectionsWithOlderPeerVersions").type);
+		assertEquals(true, metadata.writable.get("allowConnectionsWithOlderPeerVersions").restartRequired);
+		assertEquals("LONG", metadata.writable.get("chatMessageRetentionPeriod").type);
+		assertEquals(false, metadata.writable.get("chatMessageRetentionPeriod").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheRows").type);
 		assertEquals(true, metadata.writable.get("hsqldbCacheRows").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheSize").type);
