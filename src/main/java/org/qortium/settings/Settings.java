@@ -521,6 +521,12 @@ public class Settings {
 	/** Maximum decoded public QDN publish-builder upload size, in bytes */
 	private long publicQdnPublishMaxSize = 100L * 1024L * 1024L;
 
+	/** Maximum public QDN publish-builder chunk size, in bytes */
+	private long publicQdnPublishChunkMaxSize = 8L * 1024L * 1024L;
+
+	/** Maximum concurrent public QDN chunk uploads per IP and resource */
+	private int publicQdnPublishChunkSessionLimit = 4;
+
 	/** The local hour in the day to perform a full scan of the data directory size. */
 	private int dataStorageSizeCalculationHour = 23;
 
@@ -1077,6 +1083,8 @@ public class Settings {
 		settings.put("recordPeerExchange", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
 		settings.put("maxStorageCapacity", new WritableSetting(WritableSettingType.LONG, false));
+		settings.put("publicQdnPublishChunkMaxSize", new WritableSetting(WritableSettingType.LONG, false));
+		settings.put("publicQdnPublishChunkSessionLimit", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("qdnPushOnPublishEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("publicDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -1707,6 +1715,12 @@ public class Settings {
 
 		if (this.publicQdnPublishMaxSize < 1)
 			throwValidationError("publicQdnPublishMaxSize must be at least 1 byte");
+
+		if (this.publicQdnPublishChunkMaxSize < 1)
+			throwValidationError("publicQdnPublishChunkMaxSize must be at least 1 byte");
+
+		if (this.publicQdnPublishChunkSessionLimit < 1)
+			throwValidationError("publicQdnPublishChunkSessionLimit must be at least 1");
 
 		if (this.maxStorageCapacity != null && this.maxStorageCapacity < 1)
 			throwValidationError("maxStorageCapacity must be at least 1 byte");
@@ -2635,6 +2649,14 @@ public class Settings {
 
 	public long getPublicQdnPublishMaxSize() {
 		return this.publicQdnPublishMaxSize;
+	}
+
+	public long getPublicQdnPublishChunkMaxSize() {
+		return this.publicQdnPublishChunkMaxSize;
+	}
+
+	public int getPublicQdnPublishChunkSessionLimit() {
+		return this.publicQdnPublishChunkSessionLimit;
 	}
 
 	public int getDataStorageSizeCalculationHour() {

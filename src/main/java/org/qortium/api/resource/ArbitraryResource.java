@@ -104,6 +104,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
@@ -125,6 +127,8 @@ public class ArbitraryResource {
 	private static final String RAW_DOWNLOAD_FALLBACK_CONTENT_TYPE = "application/octet-stream";
 	private static final Set<String> RAW_DOWNLOAD_EXECUTABLE_MIME_TYPES = Set.of("text/html", "application/xhtml+xml");
 	private static final String UPLOAD_CHUNK_TOO_LARGE_RESPONSE = "Upload chunk too large";
+	private static final int UPLOAD_COPY_BUFFER_SIZE = 64 * 1024;
+	private static final ConcurrentHashMap<String, AtomicInteger> PUBLIC_CHUNK_UPLOAD_COUNTS = new ConcurrentHashMap<>();
 
 	@Context HttpServletRequest request;
 	@Context HttpServletResponse response;
@@ -1520,6 +1524,10 @@ public class ArbitraryResource {
 	}
 
 	static void copyUploadChunk(InputStream chunkStream, java.nio.file.Path chunkFile, long maxTotalSize) throws IOException, UploadChunkTooLargeException {
+		copyUploadChunk(chunkStream, chunkFile, maxTotalSize, null);
+	}
+
+	static void copyUploadChunk(InputStream chunkStream, java.nio.file.Path chunkFile, long maxTotalSize, Long maxChunkSize) throws IOException, UploadChunkTooLargeException {
 		if (chunkStream == null) {
 			throw new IOException("Missing chunk data");
 		}
@@ -1536,12 +1544,15 @@ public class ArbitraryResource {
 
 		java.nio.file.Path tempChunkFile = Files.createTempFile(chunkDirectory, ".chunk-upload-", ".tmp");
 		try (OutputStream out = Files.newOutputStream(tempChunkFile, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-			byte[] buffer = new byte[65536];
+			byte[] buffer = new byte[UPLOAD_COPY_BUFFER_SIZE];
 			long copiedSize = 0;
 			int bytesRead;
 			while ((bytesRead = chunkStream.read(buffer)) != -1) {
 				if (existingSize + copiedSize + bytesRead > maxTotalSize) {
 					throw new UploadChunkTooLargeException(maxTotalSize);
+				}
+				if (maxChunkSize != null && copiedSize + bytesRead > maxChunkSize) {
+					throw new UploadChunkTooLargeException(maxChunkSize);
 				}
 
 				out.write(buffer, 0, bytesRead);
@@ -1611,23 +1622,103 @@ public class ArbitraryResource {
 											@PathParam("name") String name,
 											@FormDataParam("chunk") InputStream chunkStream,
 											@FormDataParam("index") int index) {
-		Security.checkApiCallAllowed(request);
+		return this.uploadChunkInternal(serviceString, name, null, chunkStream, index, true, ArbitraryDataFile.MAX_FILE_SIZE, null, false);
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/chunk")
+	@Consumes(MediaType.MULTIPART_FORM_DATA)
+	@Operation(
+    summary = "Upload a public file chunk to be later assembled into a complete arbitrary resource (no identifier)",
+    requestBody = @RequestBody(
+        required = true,
+        content = @Content(
+            mediaType = MediaType.MULTIPART_FORM_DATA,
+            schema = @Schema(
+                implementation = Object.class
+            )
+        )
+    ),
+    responses = {
+        @ApiResponse(
+            description = "Chunk uploaded successfully",
+            responseCode = "200"
+        ),
+        @ApiResponse(
+            description = "Error writing chunk",
+            responseCode = "500"
+        )
+    }
+)
+	public Response uploadChunkNoIdentifierPublic(@PathParam("service") String serviceString,
+												  @PathParam("name") String name,
+												  @FormDataParam("chunk") InputStream chunkStream,
+												  @FormDataParam("index") int index) {
+		return this.uploadChunkInternal(serviceString, name, null, chunkStream, index, false,
+				Settings.getInstance().getPublicQdnPublishMaxSize(),
+				Settings.getInstance().getPublicQdnPublishChunkMaxSize(), true);
+	}
+
+	private Response uploadChunkInternal(String serviceString, String name, String identifier, InputStream chunkStream, int index,
+										 boolean checkApiKey, long maxTotalSize, Long maxChunkSize, boolean limitPublicConcurrency) {
+		if (checkApiKey) {
+			Security.checkApiCallAllowed(request);
+		}
+
+		String uploadKey = null;
+		if (limitPublicConcurrency) {
+			uploadKey = publicChunkUploadKey(serviceString, name);
+			if (!acquirePublicChunkUploadSlot(uploadKey)) {
+				return Response.status(429).entity("Too many concurrent public chunk uploads").build();
+			}
+		}
 
 		try {
-			java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, null);
+			java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, identifier);
 			Files.createDirectories(tempDir);
 
 			java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
-			copyUploadChunk(chunkStream, chunkFile);
+			copyUploadChunk(chunkStream, chunkFile, maxTotalSize, maxChunkSize);
 
 			return Response.ok("Chunk " + index + " received").build();
 		} catch (UploadChunkTooLargeException e) {
-			LOGGER.warn("Rejected oversized upload chunk {} for service '{}' and name '{}'", index, serviceString, name);
+			LOGGER.warn("Rejected oversized upload chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier);
 			return Response.status(413).entity(UPLOAD_CHUNK_TOO_LARGE_RESPONSE).build();
 		} catch (IOException e) {
-			LOGGER.error("Failed to write chunk {} for service '{}' and name '{}'", index, serviceString, name, e);
+			LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
 			return Response.serverError().entity("Failed to write chunk").build();
+		} finally {
+			if (uploadKey != null) {
+				releasePublicChunkUploadSlot(uploadKey);
+			}
 		}
+	}
+
+	private String publicChunkUploadKey(String serviceString, String name) {
+		String remoteAddress = this.request != null ? this.request.getRemoteAddr() : null;
+		if (remoteAddress == null || remoteAddress.isBlank()) {
+			remoteAddress = "unknown";
+		}
+
+		return remoteAddress + "|" + serviceString + "|" + name;
+	}
+
+	private static boolean acquirePublicChunkUploadSlot(String uploadKey) {
+		int limit = Settings.getInstance().getPublicQdnPublishChunkSessionLimit();
+		AtomicInteger counter = PUBLIC_CHUNK_UPLOAD_COUNTS.computeIfAbsent(uploadKey, key -> new AtomicInteger());
+		while (true) {
+			int current = counter.get();
+			if (current >= limit) {
+				return false;
+			}
+			if (counter.compareAndSet(current, current + 1)) {
+				return true;
+			}
+		}
+	}
+
+	private static void releasePublicChunkUploadSlot(String uploadKey) {
+		PUBLIC_CHUNK_UPLOAD_COUNTS.computeIfPresent(uploadKey, (key, counter) -> counter.decrementAndGet() <= 0 ? null : counter);
 	}
 
 @POST
@@ -1801,23 +1892,42 @@ public String finalizeUploadNoIdentifier(
 								@PathParam("identifier") String identifier,
 								@FormDataParam("chunk") InputStream chunkStream,
 								@FormDataParam("index") int index) {
-		Security.checkApiCallAllowed(request);
+		return this.uploadChunkInternal(serviceString, name, identifier, chunkStream, index, true, ArbitraryDataFile.MAX_FILE_SIZE, null, false);
+	}
 
-		try {
-			java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, identifier);
-			Files.createDirectories(tempDir);
-
-			java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
-			copyUploadChunk(chunkStream, chunkFile);
-
-			return Response.ok("Chunk " + index + " received").build();
-		} catch (UploadChunkTooLargeException e) {
-			LOGGER.warn("Rejected oversized upload chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier);
-			return Response.status(413).entity(UPLOAD_CHUNK_TOO_LARGE_RESPONSE).build();
-		} catch (IOException e) {
-			LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
-			return Response.serverError().entity("Failed to write chunk").build();
-		}
+@POST
+@Path("/public/{service}/{name}/{identifier}/chunk")
+@Consumes(MediaType.MULTIPART_FORM_DATA)
+@Operation(
+    summary = "Upload a public file chunk to be later assembled into a complete arbitrary resource",
+    requestBody = @RequestBody(
+        required = true,
+        content = @Content(
+            mediaType = MediaType.MULTIPART_FORM_DATA,
+            schema = @Schema(
+                implementation = Object.class
+            )
+        )
+    ),
+    responses = {
+        @ApiResponse(
+            description = "Chunk uploaded successfully",
+            responseCode = "200"
+        ),
+        @ApiResponse(
+            description = "Error writing chunk",
+            responseCode = "500"
+        )
+    }
+)
+	public Response uploadChunkPublic(@PathParam("service") String serviceString,
+									  @PathParam("name") String name,
+									  @PathParam("identifier") String identifier,
+									  @FormDataParam("chunk") InputStream chunkStream,
+									  @FormDataParam("index") int index) {
+		return this.uploadChunkInternal(serviceString, name, identifier, chunkStream, index, false,
+				Settings.getInstance().getPublicQdnPublishMaxSize(),
+				Settings.getInstance().getPublicQdnPublishChunkMaxSize(), true);
 	}
 
 @POST
@@ -1963,6 +2073,342 @@ public String finalizeUpload(
     }
 }
 
+
+
+
+	@POST
+	@Path("/public/{service}/{name}/finalize")
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+    summary = "Finalize a public chunked upload (no identifier) and build a raw, unsigned, ARBITRARY transaction",
+    responses = {
+        @ApiResponse(
+            description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+            content = @Content(mediaType = MediaType.TEXT_PLAIN)
+        )
+    }
+)
+	public String finalizeUploadNoIdentifierPublic(
+			@PathParam("service") String serviceString,
+			@PathParam("name") String name,
+			@QueryParam("title") String title,
+			@QueryParam("description") String description,
+			@QueryParam("tags") List<String> tags,
+			@QueryParam("category") Category category,
+			@QueryParam("filename") String filename,
+			@QueryParam("fee") Long fee,
+			@QueryParam("entryPoint") String entryPoint,
+			@QueryParam("preview") Boolean preview,
+			@QueryParam("isZip") Boolean isZip) {
+		return this.finalizeChunkedUpload(serviceString, name, null, title, description, tags, category, filename,
+				fee, entryPoint, false, isZip, Settings.getInstance().getPublicQdnPublishMaxSize());
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/{identifier}/finalize")
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+    summary = "Finalize a public chunked upload and build a raw, unsigned, ARBITRARY transaction",
+    responses = {
+        @ApiResponse(
+            description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+            content = @Content(mediaType = MediaType.TEXT_PLAIN)
+        )
+    }
+)
+	public String finalizeUploadPublic(
+			@PathParam("service") String serviceString,
+			@PathParam("name") String name,
+			@PathParam("identifier") String identifier,
+			@QueryParam("title") String title,
+			@QueryParam("description") String description,
+			@QueryParam("tags") List<String> tags,
+			@QueryParam("category") Category category,
+			@QueryParam("filename") String filename,
+			@QueryParam("fee") Long fee,
+			@QueryParam("entryPoint") String entryPoint,
+			@QueryParam("preview") Boolean preview,
+			@QueryParam("isZip") Boolean isZip) {
+		return this.finalizeChunkedUpload(serviceString, name, identifier, title, description, tags, category, filename,
+				fee, entryPoint, false, isZip, Settings.getInstance().getPublicQdnPublishMaxSize());
+	}
+
+	private String finalizeChunkedUpload(String serviceString, String name, String identifier, String title,
+										 String description, List<String> tags, Category category, String filename,
+										 Long fee, String entryPoint, Boolean preview, Boolean isZip, Long maxUploadSize) {
+		java.nio.file.Path tempDir = null;
+		java.nio.file.Path chunkDir = null;
+
+		try {
+			chunkDir = resolveUploadChunkDirectory(serviceString, name, identifier);
+
+			if (!Files.exists(chunkDir) || !Files.isDirectory(chunkDir)) {
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
+			}
+
+			tempDir = Files.createTempDirectory("qdn-");
+			java.nio.file.Path tempFile = resolveUploadTempFile(tempDir, filename);
+
+			try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+				byte[] buffer = new byte[UPLOAD_COPY_BUFFER_SIZE];
+				long copiedSize = 0L;
+				for (java.nio.file.Path chunk : listUploadChunkFiles(chunkDir)) {
+					try (InputStream in = Files.newInputStream(chunk)) {
+						int bytesRead;
+						while ((bytesRead = in.read(buffer)) != -1) {
+							if (maxUploadSize != null && copiedSize + bytesRead > maxUploadSize) {
+								throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
+										String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+							}
+							out.write(buffer, 0, bytesRead);
+							copiedSize += bytesRead;
+						}
+					}
+				}
+			}
+
+			String uploadFilename = determineUploadFilename(tempFile, filename);
+			boolean isZipBoolean = Boolean.TRUE.equals(isZip);
+
+			return this.upload(Service.valueOf(serviceString), name, identifier, tempFile.toString(), null, null,
+					isZipBoolean, fee, uploadFilename, title, description, tags, category, entryPoint, preview,
+					maxUploadSize);
+		} catch (IOException e) {
+			LOGGER.error("Failed to merge chunks for service='{}', name='{}', identifier='{}'", serviceString, name, identifier, e);
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, "Failed to merge chunks: " + e.getMessage());
+		} finally {
+			if (tempDir != null) {
+				try {
+					ArbitraryTransactionUtils.deleteDirectory(tempDir.toFile());
+				} catch (IOException e) {
+					LOGGER.warn("Failed to delete temp directory: {}", tempDir, e);
+				} catch (Exception e) {
+					LOGGER.error(e.getMessage(), e);
+				}
+			}
+
+			if (chunkDir != null) {
+				try {
+					ArbitraryTransactionUtils.deleteDirectory(chunkDir.toFile());
+				} catch (IOException e) {
+					LOGGER.warn("Failed to delete chunk directory: {}", chunkDir, e);
+				} catch (Exception e) {
+					LOGGER.error(e.getMessage(), e);
+				}
+			}
+		}
+	}
+
+	private static String determineUploadFilename(java.nio.file.Path tempFile, String filename) {
+		String detectedExtension = "";
+		String uploadFilename = null;
+		boolean extensionIsValid = false;
+
+		if (filename != null && !filename.isBlank()) {
+			int lastDot = filename.lastIndexOf('.');
+			if (lastDot > 0 && lastDot < filename.length() - 1) {
+				extensionIsValid = true;
+				uploadFilename = filename;
+			}
+		}
+
+		if (!extensionIsValid) {
+			Tika tika = new Tika();
+			try {
+				String mimeType = tika.detect(tempFile.toFile());
+				MimeTypes allTypes = MimeTypes.getDefaultMimeTypes();
+				org.apache.tika.mime.MimeType mime = allTypes.forName(mimeType);
+				detectedExtension = mime.getExtension();
+			} catch (IOException | MimeTypeException e) {
+				LOGGER.warn("Could not determine file extension for upload file: {}", tempFile, e);
+			}
+
+			if (filename != null && !filename.isBlank()) {
+				int lastDot = filename.lastIndexOf('.');
+				String baseName = (lastDot > 0) ? filename.substring(0, lastDot) : filename;
+				uploadFilename = baseName + (detectedExtension != null ? detectedExtension : "");
+			} else {
+				uploadFilename = "qdn-" + NTP.getTime() + (detectedExtension != null ? detectedExtension : "");
+			}
+		}
+
+		return uploadFilename;
+	}
+
+
+
+	// Upload raw streamed data
+
+	@POST
+	@Path("/{service}/{name}/upload")
+	@Consumes(MediaType.APPLICATION_OCTET_STREAM)
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+			summary = "Build raw, unsigned, ARBITRARY transaction, based on streamed uploaded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "binary")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(mediaType = MediaType.TEXT_PLAIN)
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String postUpload(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+							 @PathParam("service") String serviceString,
+							 @PathParam("name") String name,
+							 @QueryParam("title") String title,
+							 @QueryParam("description") String description,
+							 @QueryParam("tags") List<String> tags,
+							 @QueryParam("category") Category category,
+							 @QueryParam("filename") String filename,
+							 @QueryParam("fee") Long fee,
+							 @QueryParam("entryPoint") String entryPoint,
+							 @QueryParam("preview") Boolean preview,
+							 @QueryParam("isZip") Boolean isZip,
+							 InputStream uploadStream) {
+		Security.checkApiCallAllowed(request);
+		return this.uploadStream(Service.valueOf(serviceString), name, null, filename, Boolean.TRUE.equals(isZip),
+				fee, title, description, tags, category, entryPoint, preview, uploadStream, null);
+	}
+
+	@POST
+	@Path("/{service}/{name}/{identifier}/upload")
+	@Consumes(MediaType.APPLICATION_OCTET_STREAM)
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+			summary = "Build raw, unsigned, ARBITRARY transaction, based on streamed uploaded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "binary")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(mediaType = MediaType.TEXT_PLAIN)
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String postUpload(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+							 @PathParam("service") String serviceString,
+							 @PathParam("name") String name,
+							 @PathParam("identifier") String identifier,
+							 @QueryParam("title") String title,
+							 @QueryParam("description") String description,
+							 @QueryParam("tags") List<String> tags,
+							 @QueryParam("category") Category category,
+							 @QueryParam("filename") String filename,
+							 @QueryParam("fee") Long fee,
+							 @QueryParam("entryPoint") String entryPoint,
+							 @QueryParam("preview") Boolean preview,
+							 @QueryParam("isZip") Boolean isZip,
+							 InputStream uploadStream) {
+		Security.checkApiCallAllowed(request);
+		return this.uploadStream(Service.valueOf(serviceString), name, identifier, filename, Boolean.TRUE.equals(isZip),
+				fee, title, description, tags, category, entryPoint, preview, uploadStream, null);
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/upload")
+	@Consumes(MediaType.APPLICATION_OCTET_STREAM)
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on streamed uploaded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "binary")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(mediaType = MediaType.TEXT_PLAIN)
+					)
+			}
+	)
+	public String postUploadPublic(@PathParam("service") String serviceString,
+								   @PathParam("name") String name,
+								   @QueryParam("title") String title,
+								   @QueryParam("description") String description,
+								   @QueryParam("tags") List<String> tags,
+								   @QueryParam("category") Category category,
+								   @QueryParam("filename") String filename,
+								   @QueryParam("fee") Long fee,
+								   @QueryParam("entryPoint") String entryPoint,
+								   @QueryParam("preview") Boolean preview,
+								   @QueryParam("isZip") Boolean isZip,
+								   InputStream uploadStream) {
+		return this.uploadStream(Service.valueOf(serviceString), name, null, filename, Boolean.TRUE.equals(isZip),
+				fee, title, description, tags, category, entryPoint, false, uploadStream,
+				Settings.getInstance().getPublicQdnPublishMaxSize());
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/{identifier}/upload")
+	@Consumes(MediaType.APPLICATION_OCTET_STREAM)
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on streamed uploaded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "binary")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(mediaType = MediaType.TEXT_PLAIN)
+					)
+			}
+	)
+	public String postUploadPublic(@PathParam("service") String serviceString,
+								   @PathParam("name") String name,
+								   @PathParam("identifier") String identifier,
+								   @QueryParam("title") String title,
+								   @QueryParam("description") String description,
+								   @QueryParam("tags") List<String> tags,
+								   @QueryParam("category") Category category,
+								   @QueryParam("filename") String filename,
+								   @QueryParam("fee") Long fee,
+								   @QueryParam("entryPoint") String entryPoint,
+								   @QueryParam("preview") Boolean preview,
+								   @QueryParam("isZip") Boolean isZip,
+								   InputStream uploadStream) {
+		return this.uploadStream(Service.valueOf(serviceString), name, identifier, filename, Boolean.TRUE.equals(isZip),
+				fee, title, description, tags, category, entryPoint, false, uploadStream,
+				Settings.getInstance().getPublicQdnPublishMaxSize());
+	}
+
+	private String uploadStream(Service service, String name, String identifier, String filename, boolean zipped,
+								Long fee, String title, String description, List<String> tags, Category category,
+								String entryPoint, Boolean preview, InputStream uploadStream, Long maxUploadSize) {
+		if (uploadStream == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		try (UploadStaging uploadStaging = new UploadStaging()) {
+			java.nio.file.Path tempFile = uploadStaging.stageStream(uploadStream, filename, maxUploadSize);
+			return this.upload(service, name, identifier, tempFile.toString(), null, null, zipped, fee,
+					filename, title, description, tags, category, entryPoint, preview, maxUploadSize);
+		} catch (IOException e) {
+			LOGGER.info("Exception when staging streamed upload: ", e);
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
+		}
+	}
 
 
 
@@ -2564,6 +3010,98 @@ public String finalizeUpload(
 				title, description, tags, category, entryPoint, preview, null);
 	}
 
+	private class UploadStaging implements AutoCloseable {
+
+		private final List<java.nio.file.Path> stagedPaths = new ArrayList<>();
+
+		private java.nio.file.Path createTempDirectory() throws IOException {
+			java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
+			tempDirectory.toFile().deleteOnExit();
+			this.stagedPaths.add(tempDirectory);
+			return tempDirectory;
+		}
+
+		private java.nio.file.Path stageString(String string, String filename, Long maxUploadSize) throws IOException {
+			enforceUploadSize(string.getBytes(StandardCharsets.UTF_8).length, maxUploadSize);
+			java.nio.file.Path tempFile = this.resolveStagedFile(filename);
+			try (BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
+				writer.write(string);
+				writer.newLine();
+			}
+			return tempFile;
+		}
+
+		private java.nio.file.Path stageBase64(String base64, String filename, Long maxUploadSize) throws IOException {
+			enforceBase64UploadSize(base64, maxUploadSize);
+			java.nio.file.Path tempFile = this.resolveStagedFile(filename);
+			byte[] decoded = decodeBase64Upload(base64);
+			enforceUploadSize(decoded.length, maxUploadSize);
+			Files.write(tempFile, decoded);
+			return tempFile;
+		}
+
+		private java.nio.file.Path stageStream(InputStream uploadStream, String filename, Long maxUploadSize) throws IOException {
+			java.nio.file.Path tempFile = this.resolveStagedFile(filename);
+			try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+				byte[] buffer = new byte[UPLOAD_COPY_BUFFER_SIZE];
+				long copiedSize = 0L;
+				int bytesRead;
+				while ((bytesRead = uploadStream.read(buffer)) != -1) {
+					if (maxUploadSize != null && copiedSize + bytesRead > maxUploadSize) {
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
+								String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+					}
+					out.write(buffer, 0, bytesRead);
+					copiedSize += bytesRead;
+				}
+			}
+			return tempFile;
+		}
+
+		private java.nio.file.Path stageUnzip(String sourcePath, Long maxUploadSize) throws IOException {
+			java.nio.file.Path tempDirectory = this.createTempDirectory();
+			LOGGER.info("Unzipping...");
+			unzipUpload(sourcePath, tempDirectory, maxUploadSize);
+
+			java.nio.file.Path unzippedPath = tempDirectory;
+			if (tempDirectory.toFile().isDirectory()) {
+				String[] files = tempDirectory.toFile().list((parent, child) -> !child.startsWith("_"));
+				if (files != null && files.length == 1) {
+					unzippedPath = Paths.get(tempDirectory.toString(), files[0]);
+				}
+			}
+			return unzippedPath;
+		}
+
+		private java.nio.file.Path resolveStagedFile(String filename) throws IOException {
+			String uploadFilename = filename;
+			if (uploadFilename == null || uploadFilename.isBlank()) {
+				uploadFilename = String.format("qdn-%d", NTP.getTime());
+			}
+
+			java.nio.file.Path tempDirectory = this.createTempDirectory();
+			java.nio.file.Path tempFile = resolveUploadTempFile(tempDirectory, uploadFilename);
+			tempFile.toFile().deleteOnExit();
+			return tempFile;
+		}
+
+		@Override
+		public void close() {
+			for (int i = this.stagedPaths.size() - 1; i >= 0; --i) {
+				java.nio.file.Path stagedPath = this.stagedPaths.get(i);
+				try {
+					if (Files.isDirectory(stagedPath)) {
+						ArbitraryTransactionUtils.deleteDirectory(stagedPath.toFile());
+					} else {
+						Files.deleteIfExists(stagedPath);
+					}
+				} catch (IOException e) {
+					LOGGER.info("Unable to clean up upload staging path {}: {}", stagedPath, e.getMessage());
+				}
+			}
+		}
+	}
+
 	private String upload(Service service, String name, String identifier,
 						  String path, String string, String base64, boolean zipped, Long fee, String filename,
 						  String title, String description, List<String> tags, Category category,
@@ -2592,91 +3130,54 @@ public String finalizeUpload(
 			byte[] publicKey = accountData.getPublicKey();
 			String publicKey58 = Base58.encode(publicKey);
 
-			if (path == null) {
-				// See if we have a string instead
-				if (string != null) {
-					if (filename == null || filename.isBlank()) {
-						// Use current time as filename
-						filename = String.format("qdn-%d", NTP.getTime());
+			try (UploadStaging uploadStaging = new UploadStaging()) {
+				if (path == null) {
+					// See if we have a string instead
+					if (string != null) {
+						path = uploadStaging.stageString(string, filename, maxUploadSize).toString();
 					}
-						enforceUploadSize(string.getBytes(StandardCharsets.UTF_8).length, maxUploadSize);
-						java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
-						File tempFile = resolveUploadTempFile(tempDirectory, filename).toFile();
-						tempFile.deleteOnExit();
-						try (BufferedWriter writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
-							writer.write(string);
-							writer.newLine();
+					// ... or base64 encoded raw data
+					else if (base64 != null) {
+						path = uploadStaging.stageBase64(base64, filename, maxUploadSize).toString();
 					}
-					path = tempFile.toPath().toString();
-				}
-				// ... or base64 encoded raw data
-				else if (base64 != null) {
-					if (filename == null || filename.isBlank()) {
-						// Use current time as filename
-						filename = String.format("qdn-%d", NTP.getTime());
-					}
-						enforceBase64UploadSize(base64, maxUploadSize);
-						java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
-						File tempFile = resolveUploadTempFile(tempDirectory, filename).toFile();
-						tempFile.deleteOnExit();
-						byte[] decoded = decodeBase64Upload(base64);
-						enforceUploadSize(decoded.length, maxUploadSize);
-						Files.write(tempFile.toPath(), decoded);
-						path = tempFile.toPath().toString();
-				}
-				else {
-					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Missing path or data string");
-				}
-			}
-
-			enforceUploadPathSize(Paths.get(path), maxUploadSize);
-
-			if (zipped) {
-				// Unzip the file
-				java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
-				tempDirectory.toFile().deleteOnExit();
-				LOGGER.info("Unzipping...");
-				unzipUpload(path, tempDirectory, maxUploadSize);
-				path = tempDirectory.toString();
-
-				// Handle directories slightly differently to files
-				if (tempDirectory.toFile().isDirectory()) {
-					// The actual data will be in a randomly-named subfolder of tempDirectory
-					// Remove hidden folders, i.e. starting with "_", as some systems can add them, e.g. "__MACOSX"
-					String[] files = tempDirectory.toFile().list((parent, child) -> !child.startsWith("_"));
-					if (files != null && files.length == 1) { // Single directory or file only
-						path = Paths.get(tempDirectory.toString(), files[0]).toString();
+					else {
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Missing path or data string");
 					}
 				}
 
 				enforceUploadPathSize(Paths.get(path), maxUploadSize);
-			}
 
-			// Finish here if user has requested a preview
-			if (preview != null && preview) {
-				return this.preview(path, service);
-			}
+				if (zipped) {
+					path = uploadStaging.stageUnzip(path, maxUploadSize).toString();
+					enforceUploadPathSize(Paths.get(path), maxUploadSize);
+				}
 
-			// Default to zero fee if not specified
-			if (fee == null) {
-				fee = 0L;
-			}
+				// Finish here if user has requested a preview
+				if (preview != null && preview) {
+					return this.preview(path, service);
+				}
 
-			try {
-				ArbitraryDataTransactionBuilder transactionBuilder = new ArbitraryDataTransactionBuilder(
-						repository, publicKey58, fee, Paths.get(path), name, null, service, identifier,
-						title, description, tags, category, entryPoint
-				);
+				// Default to zero fee if not specified
+				if (fee == null) {
+					fee = 0L;
+				}
 
-				transactionBuilder.build();
+				try {
+					ArbitraryDataTransactionBuilder transactionBuilder = new ArbitraryDataTransactionBuilder(
+							repository, publicKey58, fee, Paths.get(path), name, null, service, identifier,
+							title, description, tags, category, entryPoint
+					);
 
-				// Don't compute nonce - this is done by the client (or via POST /arbitrary/compute)
-				ArbitraryTransactionData transactionData = transactionBuilder.getArbitraryTransactionData();
-				return Base58.encode(ArbitraryTransactionTransformer.toBytes(transactionData));
+					transactionBuilder.build();
 
-			} catch (DataException | TransformationException | IllegalStateException e) {
-				LOGGER.info("Unable to upload data: {}", e.getMessage());
-				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, e.getMessage());
+					// Don't compute nonce - this is done by the client (or via POST /arbitrary/compute)
+					ArbitraryTransactionData transactionData = transactionBuilder.getArbitraryTransactionData();
+					return Base58.encode(ArbitraryTransactionTransformer.toBytes(transactionData));
+
+				} catch (DataException | TransformationException | IllegalStateException e) {
+					LOGGER.info("Unable to upload data: {}", e.getMessage());
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, e.getMessage());
+				}
 			}
 
 		} catch (ApiException e) {

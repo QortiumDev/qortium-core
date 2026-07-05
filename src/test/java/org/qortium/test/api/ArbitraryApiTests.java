@@ -12,6 +12,7 @@ import org.qortium.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.Controller;
+import org.qortium.controller.arbitrary.ArbitraryDataCleanupManager;
 import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
 import org.qortium.data.transaction.RegisterNameTransactionData;
 import org.qortium.data.transaction.TransactionData;
@@ -39,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -52,6 +54,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -138,6 +141,24 @@ public class ArbitraryApiTests extends ApiCommon {
 
 	private static String base64(byte[] content) {
 		return Base64.getEncoder().encodeToString(content);
+	}
+
+	private static ByteArrayInputStream stream(String content) {
+		return stream(content.getBytes(StandardCharsets.UTF_8));
+	}
+
+	private static ByteArrayInputStream stream(byte[] content) {
+		return new ByteArrayInputStream(content);
+	}
+
+	private static byte[] zipWebsite(String html) throws IOException {
+		ByteArrayOutputStream zipBytes = new ByteArrayOutputStream();
+		try (ZipOutputStream zip = new ZipOutputStream(zipBytes)) {
+			zip.putNextEntry(new ZipEntry("index.html"));
+			zip.write(html.getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+		return zipBytes.toByteArray();
 	}
 
 	@Test
@@ -277,6 +298,104 @@ public class ArbitraryApiTests extends ApiCommon {
 				() -> this.arbitraryResource.postZippedDataPublic(
 						"APP", name, "public-zip", null, null, null, null, 0L, null,
 						base64(zipBytes.toByteArray())));
+	}
+
+	@Test
+	public void testStreamedQdnPublishBuildEndpointsReturnUnsignedTransactions() throws Exception {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource privateResource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			String privateRawName = "private-qdn-stream-raw-test";
+			registerName(privateRawName);
+			String privateRawTransaction = privateResource.postUpload(ApiCommon.TEST_API_KEY,
+					"APP", privateRawName, null, null, null, null, "index.html", 0L,
+					null, false, false, stream("<html>private raw</html>"));
+			assertUnsignedArbitraryTransaction(privateRawTransaction);
+
+			String privateZipName = "private-qdn-stream-zip-test";
+			registerName(privateZipName);
+			String privateZipTransaction = privateResource.postUpload(ApiCommon.TEST_API_KEY,
+					"APP", privateZipName, null, null, null, null, "site.zip", 0L,
+					null, false, true, stream(zipWebsite("<html>private zip</html>")));
+			assertUnsignedArbitraryTransaction(privateZipTransaction);
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+
+		String publicRawName = "public-qdn-stream-raw-test";
+		registerName(publicRawName);
+		String publicRawTransaction = this.arbitraryResource.postUploadPublic(
+				"APP", publicRawName, null, null, null, null, "index.html", 0L,
+				null, false, false, stream("<html>public raw</html>"));
+		assertUnsignedArbitraryTransaction(publicRawTransaction);
+
+		String publicZipName = "public-qdn-stream-zip-test";
+		registerName(publicZipName);
+		String publicZipTransaction = this.arbitraryResource.postUploadPublic(
+				"APP", publicZipName, null, null, null, null, "site.zip", 0L,
+				null, false, true, stream(zipWebsite("<html>public zip</html>")));
+		assertUnsignedArbitraryTransaction(publicZipTransaction);
+	}
+
+	@Test
+	public void testPublicStreamedQdnPublishRejectsOversizedPayloadWhileCopying() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "publicQdnPublishMaxSize", 8L, true);
+
+		String name = "public-qdn-stream-size-test";
+		registerName(name);
+
+		assertApiError(ApiError.INVALID_DATA,
+				() -> this.arbitraryResource.postUploadPublic(
+						"APP", name, null, null, null, null, "index.html", 0L,
+						null, false, false, stream("0123456789")));
+	}
+
+	@Test
+	public void testPublicChunkFinalizeReturnsUnsignedTransaction() throws Exception {
+		String name = "public-qdn-chunk-test";
+		registerName(name);
+
+		Response firstChunk = this.arbitraryResource.uploadChunkNoIdentifierPublic(
+				"APP", name, stream("<html>chunk"), 0);
+		Response secondChunk = this.arbitraryResource.uploadChunkNoIdentifierPublic(
+				"APP", name, stream("ed</html>"), 1);
+		assertEquals(200, firstChunk.getStatus());
+		assertEquals(200, secondChunk.getStatus());
+
+		String transaction = this.arbitraryResource.finalizeUploadNoIdentifierPublic(
+				"APP", name, null, null, null, null, "index.html", 0L, null, false, false);
+		assertUnsignedArbitraryTransaction(transaction);
+	}
+
+	@Test
+	public void testStaleUploadTempReaperDeletesOldChunksOnly() throws Exception {
+		long now = System.currentTimeMillis() + 2 * 60 * 60 * 1000L;
+		Path staleChunkDirectory = Paths.get("uploads-temp", "APP", "stale-reaper-test", "old");
+		Path activeChunkDirectory = Paths.get("uploads-temp", "APP", "stale-reaper-test", "active");
+
+		try {
+			Files.createDirectories(staleChunkDirectory);
+			Files.createDirectories(activeChunkDirectory);
+			Path staleChunk = staleChunkDirectory.resolve("chunk_0");
+			Path activeChunk = activeChunkDirectory.resolve("chunk_0");
+			Files.writeString(staleChunk, "old", StandardCharsets.UTF_8);
+			Files.writeString(activeChunk, "active", StandardCharsets.UTF_8);
+
+			FileTime oldTime = FileTime.fromMillis(now - 60 * 60 * 1000L);
+			FileTime activeTime = FileTime.fromMillis(now);
+			Files.setLastModifiedTime(staleChunk, oldTime);
+			Files.setLastModifiedTime(staleChunkDirectory, oldTime);
+			Files.setLastModifiedTime(activeChunk, activeTime);
+			Files.setLastModifiedTime(activeChunkDirectory, activeTime);
+
+			ArbitraryDataCleanupManager.getInstance().cleanupUploadsTempDirectory(now, 30 * 60 * 1000L);
+
+			assertFalse(Files.exists(staleChunkDirectory));
+			assertTrue(Files.exists(activeChunkDirectory));
+		} finally {
+			FileUtils.deleteDirectory(Paths.get("uploads-temp", "APP", "stale-reaper-test").toFile());
+		}
 	}
 
 	@Test
