@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +41,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 	private static final List<TransactionType> ARBITRARY_TX_TYPE = Arrays.asList(TransactionType.ARBITRARY);
 	private static final String QDN_RAW_DATA_PREFIX = "qdnRawData";
 	private static final String QDN_TEMP_DIRECTORY_PREFIX = "qdn-";
+	private static final String UPLOADS_TEMP_DIRECTORY = "uploads-temp";
 
 	private static ArbitraryDataCleanupManager instance;
 
@@ -52,6 +54,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 	 * being used by other parts of the system.
 	 */
 	private static final long STALE_FILE_TIMEOUT = 60*60*1000L; // 1 hour
+	private static final long STALE_UPLOAD_TEMP_TIMEOUT = 30*60*1000L; // 30 minutes
 
 	/**
 	 * The number of chunks to delete in a batch when over the capacity limit.
@@ -125,6 +128,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 				// cleanup system temp directory
 				cleanupSystemTempDirectory(now, STALE_FILE_TIMEOUT);
+				cleanupUploadsTempDirectory(now);
 
 				// Wait until storage capacity has been calculated
 				if (!storageManager.isStorageCapacityCalculated()) {
@@ -584,6 +588,63 @@ public class ArbitraryDataCleanupManager extends Thread {
 		} catch (IOException e) {
 			LOGGER.warn("Unable to delete temp files: {}", systemTmpDirectory);
 		}
+	}
+
+	public void cleanupUploadsTempDirectory(long now) {
+		cleanupUploadsTempDirectory(now, STALE_UPLOAD_TEMP_TIMEOUT);
+	}
+
+	public void cleanupUploadsTempDirectory(long now, long minAge) {
+		Path uploadsTempDirectory = Paths.get(UPLOADS_TEMP_DIRECTORY);
+		if (!Files.isDirectory(uploadsTempDirectory)) {
+			return;
+		}
+
+		try (java.util.stream.Stream<Path> paths = Files.walk(uploadsTempDirectory)) {
+			List<Path> directories = paths
+					.filter(path -> !path.equals(uploadsTempDirectory))
+					.filter(Files::isDirectory)
+					.sorted((left, right) -> Integer.compare(right.getNameCount(), left.getNameCount()))
+					.collect(Collectors.toList());
+
+			for (Path directory : directories) {
+				if (isStopping) {
+					return;
+				}
+				if (!Files.isDirectory(directory)) {
+					continue;
+				}
+				if (!isUploadsTempDirectoryStale(directory, now, minAge)) {
+					continue;
+				}
+
+				LOGGER.info("Deleting stale upload temp directory: {}", directory);
+				try {
+					ArbitraryTransactionUtils.deleteDirectory(directory.toFile());
+				} catch (IOException e) {
+					LOGGER.warn("Failed to delete stale upload temp directory: {}", directory, e);
+				}
+			}
+		} catch (IOException e) {
+			LOGGER.warn("Unable to scan upload temp directory: {}", uploadsTempDirectory, e);
+		}
+	}
+
+	private boolean isUploadsTempDirectoryStale(Path directory, long now, long minAge) {
+		try (java.util.stream.Stream<Path> paths = Files.walk(directory)) {
+			for (Path path : paths.collect(Collectors.toList())) {
+				BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+				long ageSinceCreated = now - attributes.creationTime().toMillis();
+				long ageSinceModified = now - attributes.lastModifiedTime().toMillis();
+				if (ageSinceCreated <= minAge || ageSinceModified <= minAge) {
+					return false;
+				}
+			}
+		} catch (IOException e) {
+			return false;
+		}
+
+		return true;
 	}
 
 	private void cleanupReaderCache(Long now) {

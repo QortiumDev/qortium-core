@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-05 - qdn: add streamed arbitrary upload endpoints
+
+Adds QDN publish-builder routes that accept raw streamed uploads, including
+public keyless routes for clients that cannot safely send large base64 request
+bodies. Public publishing now also has chunk-upload mirrors with stricter
+public size controls, a per-client in-flight limit, and cleanup for abandoned
+chunk sessions. The shared publish staging path now owns and removes the temp
+files and unzip folders it creates, so failed validation or transaction
+building is less likely to leave upload artifacts behind.
+
 ### 2026-07-03 - release: move Core to 1.3.0
 
 Bumps the project version from 1.2.3 to 1.3.0, the version the node now reports

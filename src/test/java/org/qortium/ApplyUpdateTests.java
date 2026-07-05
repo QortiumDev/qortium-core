@@ -61,12 +61,15 @@ public class ApplyUpdateTests {
 		Path tempDir = Files.createTempDirectory("qortium-apply-update-test");
 		Path realJar = tempDir.resolve(AutoUpdate.JAR_FILENAME);
 		Path newJar = tempDir.resolve(AutoUpdate.NEW_JAR_FILENAME);
+		Path tempJar = tempDir.resolve(AutoUpdate.JAR_FILENAME + ".part");
 
 		Files.writeString(realJar, "old jar", StandardCharsets.UTF_8);
 		Files.writeString(newJar, "new jar", StandardCharsets.UTF_8);
 
 		assertTrue(ApplyUpdate.replaceJar(tempDir));
 		assertEquals("new jar", Files.readString(realJar, StandardCharsets.UTF_8));
+		assertTrue(Files.exists(newJar));
+		assertFalse(Files.exists(tempJar));
 	}
 
 	@Test

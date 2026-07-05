@@ -163,6 +163,7 @@ public class ApplyUpdate {
 		// Assuming current working directory contains the JAR files
 		Path realJar = workingDirectory.resolve(JAR_FILENAME);
 		Path newJar = workingDirectory.resolve(NEW_JAR_FILENAME);
+		Path tempJar = workingDirectory.resolve(JAR_FILENAME + ".part");
 
 		if (!Files.exists(newJar)) {
 			LOGGER.warn(() -> String.format("Replacement JAR '%s' not found?", newJar));
@@ -174,11 +175,25 @@ public class ApplyUpdate {
 			LOGGER.info(() -> String.format("Attempt #%d out of %d to replace JAR", attemptForLogging + 1, MAX_ATTEMPTS));
 
 			try {
-				Files.copy(newJar, realJar, StandardCopyOption.REPLACE_EXISTING);
+				Files.copy(newJar, tempJar, StandardCopyOption.REPLACE_EXISTING);
+
+				try {
+					Files.move(tempJar, realJar, StandardCopyOption.ATOMIC_MOVE);
+				} catch (java.nio.file.AtomicMoveNotSupportedException e) {
+					Files.move(tempJar, realJar, StandardCopyOption.REPLACE_EXISTING);
+				} catch (IOException e) {
+					Files.copy(newJar, realJar, StandardCopyOption.REPLACE_EXISTING);
+					Files.deleteIfExists(tempJar);
+				}
+
 				LOGGER.info(() -> String.format("Replaced JAR '%s' with '%s'", realJar, newJar));
 				return true;
 			} catch (IOException e) {
 				LOGGER.info(() -> String.format("Unable to replace JAR: %s", e.getMessage()));
+				try {
+					Files.deleteIfExists(tempJar);
+				} catch (IOException ignored) {
+				}
 
 				// Try again
 			}

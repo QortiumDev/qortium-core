@@ -617,7 +617,7 @@ public class HSQLDBRepository implements Repository {
 
 	@Override
 	public void backup(boolean quick, String name, Long timeout) throws DataException, TimeoutException {
-		if (name == null || !name.matches("[a-zA-Z0-9_-]+"))
+		if (!isValidBackupName(name))
 			throw new DataException("Invalid backup name: must be non-null and contain only alphanumeric, underscore, or hyphen characters");
 
 		// Wait for other transactions to drain without holding write lock, so they can commit/rollback
@@ -672,7 +672,7 @@ public class HSQLDBRepository implements Repository {
 			// Actually create backup
 			try (Statement stmt = this.connection.createStatement()) {
 				LOGGER.info("Backing up repository...");
-				stmt.execute(String.format("BACKUP DATABASE TO '%s/' BLOCKING AS FILES", name));
+				stmt.execute(buildBackupSql(name));
 				LOGGER.info("Backup completed");
 			} catch (SQLException e) {
 				throw new DataException("Unable to backup repository");
@@ -680,6 +680,15 @@ public class HSQLDBRepository implements Repository {
 		} finally {
 			CHECKPOINT_GATE.writeLock().unlock();
 		}
+	}
+
+	private static boolean isValidBackupName(String name) {
+		return name != null && name.matches("[a-zA-Z0-9_-]+");
+	}
+
+	private static String buildBackupSql(String name) {
+		// HSQLDB BACKUP DATABASE does not support bind variables, so we must build a single SQL string after validating name via isValidBackupName().
+		return "BACKUP DATABASE TO '" + name + "/' BLOCKING AS FILES";
 	}
 
 	@Override
