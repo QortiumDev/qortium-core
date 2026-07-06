@@ -103,17 +103,19 @@ public class AccountRatingsResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.PUBLIC_KEY_NOT_FOUND, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
 	public List<AccountRatingData> getAccountRatings(
-			@Parameter(description = "Optional target account public key in Base58") @QueryParam("target") String targetPublicKey58,
-			@Parameter(description = "Optional rater account public key in Base58") @QueryParam("rater") String raterPublicKey58,
+			@Parameter(description = "Optional target account address or public key") @QueryParam("target") String targetPublicKey58,
+			@Parameter(description = "Optional rater account address or public key") @QueryParam("rater") String raterPublicKey58,
 			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
 			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
 			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
 			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			byte[] targetPublicKey = parseOptionalPublicKey(targetPublicKey58);
-			byte[] raterPublicKey = parseOptionalPublicKey(raterPublicKey58);
+			byte[] targetPublicKey = PublicKeyOrAddressResolver.parseOptionalPublicKeyOrAddress(repository, request,
+					targetPublicKey58);
+			byte[] raterPublicKey = PublicKeyOrAddressResolver.parseOptionalPublicKeyOrAddress(repository, request,
+					raterPublicKey58);
 			AccountRatingCategory category = parseOptionalCategory(categoryName);
 
 			return repository.getAccountRatingRepository().getRatings(targetPublicKey, raterPublicKey, category, limit, offset, reverse);
@@ -143,12 +145,12 @@ public class AccountRatingsResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.PUBLIC_KEY_NOT_FOUND, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
 	public AccountRatingSummaryData getAccountRatingSummary(
-			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58,
+			@Parameter(description = "Target account address or public key") @QueryParam("target") String targetPublicKey58,
 			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
+			byte[] targetPublicKey = PublicKeyOrAddressResolver.parseKnownPublicKeyOrAddress(repository, request, targetPublicKey58);
 			String targetAddress = Crypto.toAddress(targetPublicKey);
 			AccountRatingCategory category = parseOptionalCategory(categoryName);
 
