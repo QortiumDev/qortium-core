@@ -13,6 +13,7 @@ import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiException;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.data.rating.ResourceRatingData;
 import org.qortium.data.rating.ResourceRatingSummaryData;
 import org.qortium.data.transaction.RateResourceTransactionData;
 import org.qortium.rating.ResourceRating;
@@ -110,6 +111,43 @@ public class ResourceRatingsResource {
 				return ResourceRatingSummaryData.empty(target.service, target.displayName, target.identifierKey);
 
 			return summary;
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/rating")
+	@Operation(
+			summary = "Get one resource rating by rater",
+			responses = {
+					@ApiResponse(
+							description = "resource rating",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = ResourceRatingData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.PUBLIC_KEY_NOT_FOUND, ApiError.REPOSITORY_ISSUE})
+	public ResourceRatingData getResourceRating(
+			@Parameter(description = "QDN service") @QueryParam("service") String serviceName,
+			@Parameter(description = "QDN resource name") @QueryParam("name") String name,
+			@Parameter(description = "QDN resource identifier") @QueryParam("identifier") String identifier,
+			@Parameter(description = "Rater account address or public key") @QueryParam("rater") String rater) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ResourceRating.Target target = requireExistingTarget(repository, serviceName, name, identifier);
+			byte[] raterPublicKey = PublicKeyOrAddressResolver.parseRequiredPublicKeyOrAddress(repository, request, rater);
+
+			ResourceRatingData ratingData = repository.getResourceRatingRepository()
+					.getRating(target.service, target.nameKey, target.identifierKey, raterPublicKey);
+			if (ratingData == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.PUBLIC_KEY_NOT_FOUND);
+
+			return ratingData;
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {

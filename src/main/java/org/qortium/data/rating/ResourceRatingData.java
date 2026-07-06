@@ -1,6 +1,7 @@
 package org.qortium.data.rating;
 
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.crypto.Crypto;
 
 public class ResourceRatingData {
 
@@ -8,14 +9,21 @@ public class ResourceRatingData {
 	private final String nameKey;
 	private final String name;
 	private final String identifier;
+	private final String raterAddress;
 	private final byte[] raterPublicKey;
 	private final int rating;
 
 	public ResourceRatingData(Service service, String nameKey, String name, String identifier, byte[] raterPublicKey, int rating) {
+		this(service, nameKey, name, identifier, Crypto.toAddress(raterPublicKey), raterPublicKey, rating);
+	}
+
+	public ResourceRatingData(Service service, String nameKey, String name, String identifier, String raterAddress,
+			byte[] raterPublicKey, int rating) {
 		this.service = service;
 		this.nameKey = nameKey;
 		this.name = name;
 		this.identifier = identifier;
+		this.raterAddress = raterAddress;
 		this.raterPublicKey = raterPublicKey;
 		this.rating = rating;
 	}
@@ -38,6 +46,10 @@ public class ResourceRatingData {
 
 	public byte[] getRaterPublicKey() {
 		return this.raterPublicKey;
+	}
+
+	public String getRaterAddress() {
+		return this.raterAddress;
 	}
 
 	public int getRating() {
