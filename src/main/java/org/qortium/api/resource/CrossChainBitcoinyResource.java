@@ -41,7 +41,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
 
-@Path("/crosschain/{blockchain}")
+@Path("/crosschain/{blockchain: " + CrossChainPathPatterns.BITCOINY_BLOCKCHAIN_SEGMENT + "}")
 @Tag(name = "Cross-Chain (Bitcoiny)")
 public class CrossChainBitcoinyResource {
 
