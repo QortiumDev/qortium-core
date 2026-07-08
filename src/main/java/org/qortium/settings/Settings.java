@@ -138,6 +138,8 @@ public class Settings {
 	private boolean publicApiWhitelistEnabled = false;
 	private String[] publicApiWhitelist = new String[0];
 	private String[] publicApiPaths = new String[0];
+	/** Whether a request carrying the node's API key bypasses the IP/path API access rules. */
+	private boolean apiKeyRemoteAccessEnabled = true;
 
 	/** Storage location for API key file (Nov 2021 onwards) */
 	private String apiKeyPath = System.getProperty("user.dir");
@@ -1927,6 +1929,10 @@ public class Settings {
 
 	public String[] getPublicApiPaths() {
 		return this.publicApiPaths != null ? this.publicApiPaths : new String[0];
+	}
+
+	public boolean isApiKeyRemoteAccessEnabled() {
+		return this.apiKeyRemoteAccessEnabled;
 	}
 
 	public boolean isApiRestricted() {

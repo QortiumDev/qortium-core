@@ -49,6 +49,14 @@ A request from a non-local client must pass **both** gates.
   `src/main/java/org/qortium/api/ApiService.java:267`.
 - Logic:
   - If the remote IP matches `apiWhitelist` (localhost by default) → allowed (full access).
+  - Else if the request carries the node's own API key in `X-API-KEY` and
+    `apiKeyRemoteAccessEnabled` (default `true`) → allowed (full access). This is
+    the **node-owner remote access** path: an operator who knows their node's API
+    key can use it from any IP without whitelisting that IP. Constant-time
+    compare; endpoint-level key checks still run afterwards. Does **not** weaken
+    the "never send an API key to a *foreign* node" rule — this is for a node the
+    caller owns. Note the API port is plain HTTP, so prefer an SSH tunnel/VPN
+    when the path crosses untrusted networks.
   - Else if `publicApiWhitelistEnabled == false` → **403** (deny all foreign access).
   - Else allowed **only if** the IP matches `publicApiWhitelist` **and** the
     request's `METHOD /path` matches an entry in `publicApiPaths`
@@ -69,6 +77,7 @@ Settings backing this gate (`src/main/java/org/qortium/settings/Settings.java`):
 | `publicApiWhitelistEnabled` | `false` (133) | must be `true` to serve any foreign traffic |
 | `publicApiWhitelist` | `[]` (134) | preview uses `0.0.0.0/0`, `::/0` |
 | `publicApiPaths` | `[]` (135) | the per-call allowlist |
+| `apiKeyRemoteAccessEnabled` | `true` | node's own API key bypasses the IP/path gate; file-only (not PATCH-writable) |
 
 Getters at `Settings.java:1666-1675`.
 
