@@ -2170,18 +2170,33 @@ public class Network {
             return;
         }
 
-	// Find peers that have reached their maximum connection age, and disconnect them
-	// Exception: never disconnect fixed peers (prevents unnecessary churn on bootstrap nodes)
-	List<Peer> peersToDisconnect = this.getImmutableConnectedPeers().stream()
-			.filter(peer -> !peer.isSyncInProgress())
-			.filter(peer -> !isFixedPeer(peer.getPeerData().getAddress()))
-			.filter(peer -> peer.hasReachedMaxConnectionAge())
-			.collect(Collectors.toList());
+        // Find peers that have reached their maximum connection age, and disconnect them
+        // Exception: never disconnect fixed peers (prevents unnecessary churn on bootstrap nodes)
+        List<Peer> agedPeers = this.getImmutableConnectedPeers().stream()
+                .filter(peer -> !peer.isSyncInProgress())
+                .filter(peer -> !isFixedPeer(peer.getPeerData().getAddress()))
+                .filter(peer -> peer.hasReachedMaxConnectionAge())
+                .sorted(Comparator.comparingLong(Peer::getConnectionAge).reversed())
+                .collect(Collectors.toList());
 
-        if (peersToDisconnect != null && !peersToDisconnect.isEmpty()) {
-            for (Peer peer : peersToDisconnect) {
-                LOGGER.debug("Forcing disconnection of peer {} because connection age ({} ms) " +
-                        "has reached the maximum ({} ms)", peer, peer.getConnectionAge(), peer.getMaxConnectionAge());
+        if (!agedPeers.isEmpty()) {
+            int handshakedCount = this.getImmutableHandshakedPeers().size();
+            int minBlockchainPeers = Settings.getInstance().getMinBlockchainPeers();
+
+            if (handshakedCount <= minBlockchainPeers) {
+                // Low-peer node: keep aged connections rather than dropping peers we may not
+                // be able to replace (especially inbound peers, which we can't re-establish)
+                LOGGER.debug("Preserving {} aged peer(s): only {} handshaked peer(s), at or below minBlockchainPeers ({})",
+                        agedPeers.size(), handshakedCount, minBlockchainPeers);
+            } else {
+                // Disconnect at most one aged peer per check so shuffling never mass-evicts,
+                // even when many connections age out at the same time
+                Peer peer = agedPeers.get(0);
+                LOGGER.debug("Forcing disconnection of peer {} ({}, {}) because connection age ({} ms) " +
+                        "has reached the maximum ({} ms); handshaked peers: {}",
+                        peer, peer.isOutbound() ? "outbound" : "inbound",
+                        peer.getPeerData().getAddress().isI2P() ? "I2P" : "IP",
+                        peer.getConnectionAge(), peer.getMaxConnectionAge(), handshakedCount);
                 peer.disconnect("Connection age too old");
             }
         }

@@ -277,6 +277,8 @@ public class Settings {
 	private int maxPeers = 32;
 	/** Number of slots to reserve for QDN data transfers */
 	private int maxDataPeers = 64;
+	/** Minimum number of data peer connections to preserve; age-based disconnects are skipped at or below this */
+	private int minDataPeers = 3;
 	/** Maximum number of threads for network engine. */
 	private int maxNetworkThreadPoolSize = 512;
 	/** Maximum number of threads for network proof-of-work compute, used during handshaking. */
@@ -2113,6 +2115,10 @@ public class Settings {
 
 	public int getMaxDataPeers() {
 		return this.maxDataPeers;
+	}
+
+	public int getMinDataPeers() {
+		return this.minDataPeers;
 	}
 
 	/** @return the configured transports in preference order (never null/empty; defaults to [IP, I2P]). */

@@ -437,14 +437,21 @@ public class Peer {
             return;
         }
 
+        // Data connections are short-lived by design - they exist to transfer QDN data
+        if (this.isDataPeer() || this.peerType == Peer.NETWORKDATA) {
+            this.maxConnectionAge = Settings.getInstance().getMaxDataPeerConnectionTime() * 1000L;
+            LOGGER.debug("[{}] Using max data peer connection age for peer {}: {}ms", this.peerConnectionId, this, this.maxConnectionAge);
+            return;
+        }
+
         // Retrieve the min and max connection time from the settings, and calculate the range
         final int minPeerConnectionTime = Settings.getInstance().getMinPeerConnectionTime();
         final int maxPeerConnectionTime = Settings.getInstance().getMaxPeerConnectionTime();
         final int peerConnectionTimeRange = maxPeerConnectionTime - minPeerConnectionTime;
 
-        // Generate a random number between the min and the max
+        // Pick a random age within the range so peers don't all expire at once,
+        // which would cause synchronized connection churn across the network
         Random random = new Random();
-        // @ToDo : what the helly???  random age? MAx is default - 6 hrs in settings
         this.maxConnectionAge = (random.nextInt(peerConnectionTimeRange) + minPeerConnectionTime) * 1000L;
         LOGGER.debug("[{}] Generated max connection age for peer {}. Min: {}s, max: {}s, range: {}s, random max: {}ms", this.peerConnectionId, this, minPeerConnectionTime, maxPeerConnectionTime, peerConnectionTimeRange, this.maxConnectionAge);
 

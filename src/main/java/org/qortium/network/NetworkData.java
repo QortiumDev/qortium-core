@@ -2222,15 +2222,30 @@ public class NetworkData {
         }
 
         // Find peers that have reached their maximum connection age, and disconnect them
-        List<Peer> peersToDisconnect = this.getImmutableConnectedPeers().stream()
+        List<Peer> agedPeers = this.getImmutableConnectedPeers().stream()
                 .filter(peer -> !peer.isSyncInProgress())
                 .filter(peer -> peer.hasReachedMaxConnectionAge())
+                .sorted(Comparator.comparingLong(Peer::getConnectionAge).reversed())
                 .collect(Collectors.toList());
 
-        if (peersToDisconnect != null && !peersToDisconnect.isEmpty()) {
-            for (Peer peer : peersToDisconnect) {
-                LOGGER.debug("Forcing disconnection of peer {} because connection age ({} ms) " +
-                        "has reached the maximum ({} ms)", peer, peer.getConnectionAge(), peer.getMaxConnectionAge());
+        if (!agedPeers.isEmpty()) {
+            int handshakedCount = this.getImmutableHandshakedPeers().size();
+            int minDataPeers = Settings.getInstance().getMinDataPeers();
+
+            if (handshakedCount <= minDataPeers) {
+                // Low-peer node: keep aged data connections rather than dropping peers we may
+                // not be able to replace, which would hurt QDN availability
+                LOGGER.debug("Preserving {} aged data peer(s): only {} handshaked data peer(s), at or below minDataPeers ({})",
+                        agedPeers.size(), handshakedCount, minDataPeers);
+            } else {
+                // Disconnect at most one aged peer per check so shuffling never mass-evicts,
+                // even when many connections age out at the same time
+                Peer peer = agedPeers.get(0);
+                LOGGER.debug("Forcing disconnection of data peer {} ({}, {}) because connection age ({} ms) " +
+                        "has reached the maximum ({} ms); handshaked data peers: {}",
+                        peer, peer.isOutbound() ? "outbound" : "inbound",
+                        peer.getPeerData().getAddress().isI2P() ? "I2P" : "IP",
+                        peer.getConnectionAge(), peer.getMaxConnectionAge(), handshakedCount);
                 peer.disconnect("Connection age too old");
             }
         }
@@ -3419,12 +3434,14 @@ public class NetworkData {
 
         for (Peer peer : stuckWritePeers) {
             String stuckInfo = peer.getStuckWriteInfo();
-            LOGGER.warn("Disconnecting peer {} with stuck write: {}", 
+            LOGGER.warn("Disconnecting peer {} with stuck write: {}",
                     peer.getPeerData().getAddress(), stuckInfo);
             peer.disconnect("write stuck: " + stuckInfo);
         }
 
-
+        // Disconnect peers that have exceeded their maximum connection age
+        // (also cleans up stale outbound failure records)
+        this.checkLongestConnection(now);
 
         // Prune 'old' peers from if we are over the count
         // getImmutableHandshakedPeers().size() works fine as PeerList has a size() method.
