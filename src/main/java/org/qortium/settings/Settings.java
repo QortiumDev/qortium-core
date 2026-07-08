@@ -1073,6 +1073,7 @@ public class Settings {
 		settings.put("maxDataPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("minOutboundPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("minBlockchainPeers", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("minDataPeers", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("minPeerVersion", new WritableSetting(WritableSettingType.PEER_VERSION, true));
 		settings.put("allowConnectionsWithOlderPeerVersions", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("hsqldbCacheRows", new WritableSetting(WritableSettingType.INTEGER, true));
@@ -1702,6 +1703,12 @@ public class Settings {
 
 		if (this.maxDataPeers < 1)
 			throwValidationError("maxDataPeers must be at least 1");
+
+		if (this.minDataPeers < 1)
+			throwValidationError("minDataPeers must be at least 1");
+
+		if (this.minDataPeers > this.maxDataPeers)
+			throwValidationError("minDataPeers must not be greater than maxDataPeers");
 
 		if (this.i2pSamHost == null || this.i2pSamHost.trim().isEmpty())
 			throwValidationError("i2pSamHost must not be blank");
