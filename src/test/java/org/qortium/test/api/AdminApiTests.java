@@ -107,6 +107,8 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(true, metadata.writable.get("minOutboundPeers").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("minBlockchainPeers").type);
 		assertEquals(false, metadata.writable.get("minBlockchainPeers").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("minDataPeers").type);
+		assertEquals(false, metadata.writable.get("minDataPeers").restartRequired);
 		assertEquals("PEER_VERSION", metadata.writable.get("minPeerVersion").type);
 		assertEquals(true, metadata.writable.get("minPeerVersion").restartRequired);
 		assertEquals("BOOLEAN", metadata.writable.get("allowConnectionsWithOlderPeerVersions").type);

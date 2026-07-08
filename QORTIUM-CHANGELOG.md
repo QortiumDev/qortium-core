@@ -34,6 +34,59 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-08 - release: move Core to 1.3.1
+
+Bumps the project version from 1.3.0 to 1.3.1, the version the node reports to
+peers and in its API (the build version becomes `1.3.1` plus the commit). This
+is a Previewnet patch release for the post-1.3.0 fixes and settings polish:
+rating read APIs that accept addresses, the `/crosschain` route fix, Log4j
+2.26.1, low-peer age-drop protection, and API-writable `minDataPeers`.
+Previewnet `minPeerVersion` defaults stay on the 1.3.0 line because this patch
+does not introduce a new peer-compatibility gate.
+
+### 2026-07-08 - settings: expose minDataPeers as writable
+
+Adds `minDataPeers` to the API-writable settings metadata so Home, Node, and
+trusted local tooling can tune the data-peer preservation threshold through the
+same `/admin/settings` patch flow used for related node settings. The value is
+validated as an integer from 1 through `maxDataPeers`, applies at runtime
+without requiring restart, and remains the threshold used by the data-network
+age-drop guard.
+
+### 2026-07-08 - network: gate age-based peer drops on low-peer nodes
+
+Protects low-peer nodes from losing their few working connections just because
+those connections aged out. Chain peer age drops now stop at or below
+`minBlockchainPeers`, data peer age drops now stop at or below `minDataPeers`,
+and both paths drop at most one aged peer per check instead of mass-evicting a
+batch of long-lived peers. The data network now actually runs its age-drop path,
+which also restores cleanup of stale outbound-failure records, and data peers
+again use the shorter `maxDataPeerConnectionTime` window instead of inheriting
+the chain peer 2-6 hour window.
+
+### 2026-07-07 - api: fix template root shadowing crosschain endpoints
+
+Fixes the JAX-RS route selection bug where the templated
+`/crosschain/{blockchain}` resource could shadow literal crosschain endpoints
+such as `/crosschain/blockchains`, `/crosschain/tradeoffers`, and
+`/crosschain/price/{blockchain}`. The blockchain path segment now rejects the
+reserved literal endpoint names, letting those requests reach the intended
+resource while still accepting real Bitcoiny chain names.
+
+### 2026-07-06 - build(deps): bump Log4j to 2.26.1
+
+Updates the Log4j runtime dependencies from 2.26.0 to 2.26.1. This is a
+dependency maintenance update only; no Core behavior or Previewnet protocol
+rules change with it.
+
+### 2026-07-06 - core: add rating read endpoints with address support
+
+Adds a read-only resource rating lookup endpoint for fetching one rater's
+rating of a QDN resource, and lets account-rating read filters accept account
+addresses as well as Base58 public keys. Resource rating responses now include
+the rater address derived from the public key, so clients can display the
+address without doing an extra lookup.
+
 ### 2026-07-05 - qdn: add streamed arbitrary upload endpoints
 
 Adds QDN publish-builder routes that accept raw streamed uploads, including
