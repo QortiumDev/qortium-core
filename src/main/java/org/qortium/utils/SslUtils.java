@@ -127,7 +127,8 @@ public class SslUtils {
         X500Name subject = new X500Name(LOCAL_SERVER_SUBJECT);
         BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
         Date notBefore = new Date();
-        Date notAfter = new Date(System.currentTimeMillis() + (365 * 24 * 60 * 60 * 1000));
+        // 365L: int arithmetic overflows here, silently producing ~17-day certificates
+        Date notAfter = new Date(System.currentTimeMillis() + (365L * 24 * 60 * 60 * 1000));
 
         JcaX509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
                 new X500Name(LOCAL_CA_SUBJECT),
@@ -164,12 +165,15 @@ public class SslUtils {
         }
 
         // IP Entries
-        // Always add loopback explicitly
+        // Always add loopback explicitly (IPv4 and IPv6)
         altNames.add(new GeneralName(GeneralName.iPAddress, "127.0.0.1"));
-        
+        altNames.add(new GeneralName(GeneralName.iPAddress, "::1"));
+
         // Discover and add all local network interface IPs
         Set<String> addedIps = new HashSet<>();
         addedIps.add("127.0.0.1"); // Track loopback to avoid duplicates
+        addedIps.add("::1");
+        addedIps.add("0:0:0:0:0:0:0:1"); // Expanded form reported by some interfaces
         
         try {
             Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();

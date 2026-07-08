@@ -110,8 +110,9 @@ public class AdminResource {
 			// Generate new SSL certificate
 			SslUtils.generateSsl();
 			
-			// Restart API service in a background thread to apply the new certificate
-			// This allows the current request to complete before the restart happens
+			// Restart SSL-serving services in a background thread to apply the new
+			// certificate. This allows the current request to complete before the
+			// restart happens.
 			new Thread(() -> {
 				try {
 					// Give the response time to be sent back to the client
@@ -129,8 +130,32 @@ public class AdminResource {
 				} catch (Exception e) {
 					LOGGER.error("Failed to restart API service after certificate generation. API may be down. Restart the node to recover: {}", e.getMessage(), e);
 				}
+
+				// Gateway and domain map serve the same keystore; restart them too so
+				// they don't keep serving the old certificate until the next node restart.
+				if (Settings.getInstance().isGatewayEnabled()) {
+					try {
+						LOGGER.info("Restarting gateway service to apply new SSL certificate...");
+						GatewayService gatewayService = GatewayService.getInstance();
+						gatewayService.stop();
+						gatewayService.start();
+					} catch (Exception e) {
+						LOGGER.error("Failed to restart gateway service after certificate generation: {}", e.getMessage(), e);
+					}
+				}
+
+				if (Settings.getInstance().isDomainMapEnabled()) {
+					try {
+						LOGGER.info("Restarting domain map service to apply new SSL certificate...");
+						DomainMapService domainMapService = DomainMapService.getInstance();
+						domainMapService.stop();
+						domainMapService.start();
+					} catch (Exception e) {
+						LOGGER.error("Failed to restart domain map service after certificate generation: {}", e.getMessage(), e);
+					}
+				}
 			}, "SSL-Cert-Restart").start();
-			
+
 			return "CA and server certificate created successfully. API service will restart in a moment to apply the new certificate.";
 		} catch (Exception e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA, e);
