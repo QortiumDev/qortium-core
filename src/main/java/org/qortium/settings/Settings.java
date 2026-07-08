@@ -520,6 +520,12 @@ public class Settings {
 	/** Maximum total size of hosted data, in bytes. Unlimited if null */
 	private Long maxStorageCapacity = null;
 
+	/** Maximum authenticated QDN publish-builder upload size, in bytes. Anything
+	 * above ArbitraryDataFile.MAX_FILE_SIZE (2 GiB) fails validation later anyway,
+	 * so capping at that by default rejects doomed uploads before they are fully
+	 * staged to disk. */
+	private long qdnPublishMaxSize = 2L * 1024L * 1024L * 1024L;
+
 	/** Maximum decoded public QDN publish-builder upload size, in bytes */
 	private long publicQdnPublishMaxSize = 100L * 1024L * 1024L;
 
@@ -2658,6 +2664,10 @@ public class Settings {
 
 	public Long getMaxStorageCapacity() {
 		return this.maxStorageCapacity;
+	}
+
+	public long getQdnPublishMaxSize() {
+		return this.qdnPublishMaxSize;
 	}
 
 	public long getPublicQdnPublishMaxSize() {

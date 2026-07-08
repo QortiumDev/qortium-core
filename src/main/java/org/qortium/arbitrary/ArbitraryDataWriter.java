@@ -107,6 +107,7 @@ public class ArbitraryDataWriter {
     }
 
     public void save() throws IOException, DataException, InterruptedException, MissingDataException {
+        boolean success = false;
         try {
             this.preExecute();
             this.validateService();
@@ -115,12 +116,34 @@ public class ArbitraryDataWriter {
             this.process();
             this.compress();
             this.encrypt();
+            this.validateEncryptedSize();
             this.split();
             this.createMetadataFile();
             this.validate();
+            success = true;
 
         } finally {
             this.postExecute();
+            if (!success) {
+                // split()/createMetadataFile() write pre-broadcast chunks into
+                // data/_misc, which nothing else deletes on a failed save — the
+                // transaction builder never sees this writer's ArbitraryDataFile
+                // when save() throws. Without this, every rejected publish
+                // orphans up to the full resource size on disk.
+                this.cleanupDataFile();
+            }
+        }
+    }
+
+    private void cleanupDataFile() {
+        if (this.arbitraryDataFile == null) {
+            return;
+        }
+
+        try {
+            this.arbitraryDataFile.deleteAll(true);
+        } catch (Exception e) {
+            LOGGER.warn("Unable to clean up arbitrary data file after failed save: {}", e.getMessage());
         }
     }
 
@@ -373,6 +396,17 @@ public class ArbitraryDataWriter {
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException | NoSuchPaddingException
                 | BadPaddingException | IllegalBlockSizeException | IOException | InvalidKeyException e) {
             throw new DataException(String.format("Unable to encrypt file %s: %s", this.filePath, e.getMessage()));
+        }
+    }
+
+    private void validateEncryptedSize() throws IOException, DataException {
+        // The final payload size is known once compression + encryption are done,
+        // so reject an over-limit resource here — before split() writes its chunks
+        // to data/_misc. isValid() re-checks this after splitting as a backstop.
+        long encryptedSize = Files.size(this.filePath);
+        if (encryptedSize > ArbitraryDataFile.MAX_FILE_SIZE) {
+            throw new DataException(String.format("Resource is too large after compression and encryption: %d bytes (max size: %d bytes)",
+                    encryptedSize, ArbitraryDataFile.MAX_FILE_SIZE));
         }
     }
 
