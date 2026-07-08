@@ -8,8 +8,11 @@ import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.InetAddressPattern;
 import org.qortium.settings.Settings;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Locale;
 
 public class PublicApiAccessHandler extends Handler.Wrapper {
@@ -24,10 +27,14 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 
 	@Override
 	public boolean handle(Request request, Response response, Callback callback) throws Exception {
+		String passedApiKey = request.getHeaders().get(Security.API_KEY_HEADER);
+
 		if (!isRequestAllowed(
 				Request.getRemoteAddr(request),
 				request.getMethod(),
 				request.getHttpURI().getPath(),
+				passedApiKey,
+				passedApiKey == null || passedApiKey.isBlank() ? null : getNodeApiKey(),
 				Settings.getInstance())) {
 			Response.writeError(request, response, callback, HttpStatus.FORBIDDEN_403);
 			return true;
@@ -37,7 +44,17 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 	}
 
 	public static boolean isRequestAllowed(String remoteAddress, String method, String path, Settings settings) {
+		return isRequestAllowed(remoteAddress, method, path, null, null, settings);
+	}
+
+	public static boolean isRequestAllowed(String remoteAddress, String method, String path,
+			String passedApiKey, String nodeApiKey, Settings settings) {
 		if (matchesAny(remoteAddress, settings.getApiWhitelist()))
+			return true;
+
+		// The node's API key authenticates the node owner, so let it bypass the IP/path
+		// rules; endpoint-level key checks still run afterwards.
+		if (settings.isApiKeyRemoteAccessEnabled() && matchesApiKey(passedApiKey, nodeApiKey))
 			return true;
 
 		if (!settings.isPublicApiWhitelistEnabled())
@@ -45,6 +62,32 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 
 		return matchesAny(remoteAddress, settings.getPublicApiWhitelist())
 				&& matchesPublicPath(method, path, settings.getPublicApiPaths());
+	}
+
+	private static boolean matchesApiKey(String passedApiKey, String nodeApiKey) {
+		if (passedApiKey == null || passedApiKey.isBlank() || nodeApiKey == null || nodeApiKey.isBlank())
+			return false;
+
+		return MessageDigest.isEqual(
+				nodeApiKey.getBytes(StandardCharsets.UTF_8),
+				passedApiKey.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/** The node's generated API key, or null when none has been generated yet. */
+	private static String getNodeApiKey() {
+		ApiKey apiKey = ApiService.getInstance().getApiKey();
+
+		if (apiKey == null) {
+			try {
+				apiKey = new ApiKey();
+			} catch (IOException e) {
+				// Couldn't load an API key, so there is nothing to match against.
+				return null;
+			}
+			ApiService.getInstance().setApiKey(apiKey);
+		}
+
+		return apiKey.generated() ? apiKey.toString() : null;
 	}
 
 	private static boolean matchesAny(String remoteAddress, String[] patterns) {

@@ -156,6 +156,78 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
+	public void testValidApiKeyAllowsRemoteRequestsToAnyEndpoint() {
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				"node-api-key", "node-api-key", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/admin/settings",
+				"node-api-key", "node-api-key", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"2001:db8::1", "POST", "/arbitrary/APP/QortiumHome/base64",
+				"node-api-key", "node-api-key", this.settings));
+	}
+
+	@Test
+	public void testMissingOrWrongApiKeyDoesNotAllowRemoteRequests() {
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				null, "node-api-key", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				"", "node-api-key", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				"wrong-api-key", "node-api-key", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				"node-api-key", "node-api-key-longer", this.settings));
+	}
+
+	@Test
+	public void testApiKeyIsNotMatchedWhenNodeKeyIsAbsent() {
+		// A node without a generated key must never treat a passed key as valid,
+		// including the degenerate blank-equals-blank case.
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/admin/settings",
+				"anything", null, this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/admin/settings",
+				"", "", this.settings));
+	}
+
+	@Test
+	public void testApiKeyRemoteAccessCanBeDisabled() throws Exception {
+		FieldUtils.writeField(this.settings, "apiKeyRemoteAccessEnabled", false, true);
+
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				"node-api-key", "node-api-key", this.settings));
+		// Loopback requests are still allowed via the regular API whitelist.
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"127.0.0.1", "GET", "/admin/settings",
+				"node-api-key", "node-api-key", this.settings));
+	}
+
+	@Test
+	public void testPublicPathsStillApplyAlongsideApiKeyRemoteAccess() throws Exception {
+		enablePublicApi();
+
+		// Public read paths stay open without any key ...
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/render/APP/QortiumHomeTest",
+				null, "node-api-key", this.settings));
+		// ... a wrong key doesn't take them away ...
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/render/APP/QortiumHomeTest",
+				"wrong-api-key", "node-api-key", this.settings));
+		// ... and a wrong key still can't reach restricted paths.
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test",
+				"wrong-api-key", "node-api-key", this.settings));
+	}
+
+	@Test
 	public void testFullApiWhitelistTakesPrecedenceOverPublicPaths() throws Exception {
 		enablePublicApi();
 
