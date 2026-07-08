@@ -190,6 +190,16 @@ public class FilesystemUtils {
         FilesystemUtils.safeDeleteEmptyParentDirectories(parentPath);
     }
 
+    /**
+     * Staging area for in-progress chunked API uploads. Lives under the node's
+     * temp data path so it is machine-independent (not working-directory
+     * relative), covered by pathInsideDataOrTempPath() cleanup guards, and swept
+     * by ArbitraryDataCleanupManager.
+     */
+    public static Path getUploadsTempPath() {
+        return Paths.get(Settings.getInstance().getTempDataPath(), "uploads-temp");
+    }
+
     public static boolean pathInsideDataOrTempPath(Path path) {
         if (path == null) {
             return false;

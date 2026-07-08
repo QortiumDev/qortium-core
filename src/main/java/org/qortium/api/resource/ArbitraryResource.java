@@ -22,6 +22,7 @@ import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.DecoderException;
 import org.qortium.api.*;
 import org.qortium.crypto.AES;
+import org.qortium.api.model.ArbitraryPublishLimits;
 import org.qortium.api.model.FileProperties;
 import org.qortium.api.model.PeerCountInfo;
 import org.qortium.api.model.PeerInfo;
@@ -1423,6 +1424,34 @@ public class ArbitraryResource {
 
 
 	@GET
+	@Path("/limits")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Effective QDN publish size limits, so clients can pre-flight a file or folder before uploading",
+		responses = {
+			@ApiResponse(
+				description = "publish limits",
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ArbitraryPublishLimits.class))
+			)
+		}
+	)
+	public ArbitraryPublishLimits getPublishLimits() {
+		Settings settings = Settings.getInstance();
+
+		ArbitraryPublishLimits limits = new ArbitraryPublishLimits();
+		limits.maxFileSize = ArbitraryDataFile.MAX_FILE_SIZE;
+		limits.publishMaxSize = settings.getQdnPublishMaxSize();
+		limits.publicPublishMaxSize = settings.getPublicQdnPublishMaxSize();
+		limits.publicPublishChunkMaxSize = settings.getPublicQdnPublishChunkMaxSize();
+		limits.publicPublishChunkSessionLimit = settings.getPublicQdnPublishChunkSessionLimit();
+		limits.serviceLimits = Arrays.stream(Service.values())
+				.map(service -> new ArbitraryPublishLimits.ServiceLimit(service.name(), service.getMaxSize()))
+				.collect(Collectors.toList());
+
+		return limits;
+	}
+
+	@GET
 	@Path("/check/tmp")
 	@Produces(MediaType.TEXT_PLAIN)
 	@Operation(
@@ -1442,7 +1471,7 @@ public class ArbitraryResource {
 					.entity("Missing or invalid totalSize parameter").build();
 		}
 
-		File uploadDir = new File("uploads-temp");
+		File uploadDir = FilesystemUtils.getUploadsTempPath().toFile();
 		if (!uploadDir.exists()) {
 			uploadDir.mkdirs(); // ensure the folder exists
 		}
@@ -1458,7 +1487,7 @@ public class ArbitraryResource {
 	}
 
 	static java.nio.file.Path resolveUploadChunkDirectory(String serviceString, String name, String identifier) throws IOException {
-		java.nio.file.Path uploadsDirectory = Paths.get("uploads-temp");
+		java.nio.file.Path uploadsDirectory = FilesystemUtils.getUploadsTempPath();
 		java.nio.file.Path serviceDirectory = FilesystemUtils.resolveFileNameInsideBase(uploadsDirectory, serviceString);
 		java.nio.file.Path nameDirectory = FilesystemUtils.resolveFileNameInsideBase(serviceDirectory, name);
 		if (identifier == null) {
@@ -1622,7 +1651,7 @@ public class ArbitraryResource {
 											@PathParam("name") String name,
 											@FormDataParam("chunk") InputStream chunkStream,
 											@FormDataParam("index") int index) {
-		return this.uploadChunkInternal(serviceString, name, null, chunkStream, index, true, ArbitraryDataFile.MAX_FILE_SIZE, null, false);
+		return this.uploadChunkInternal(serviceString, name, null, chunkStream, index, true, Settings.getInstance().getQdnPublishMaxSize(), null, false);
 	}
 
 	@POST
@@ -1721,6 +1750,61 @@ public class ArbitraryResource {
 		PUBLIC_CHUNK_UPLOAD_COUNTS.computeIfPresent(uploadKey, (key, counter) -> counter.decrementAndGet() <= 0 ? null : counter);
 	}
 
+	@DELETE
+	@Path("/{service}/{name}/chunks")
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+		summary = "Abort a chunked upload (no identifier) and delete its staged chunks immediately",
+		responses = {
+			@ApiResponse(description = "Upload session cleared", responseCode = "200"),
+			@ApiResponse(description = "Error deleting staged chunks", responseCode = "500")
+		}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public Response abortChunkedUploadNoIdentifier(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+												   @PathParam("service") String serviceString,
+												   @PathParam("name") String name) {
+		return this.abortChunkedUpload(serviceString, name, null);
+	}
+
+	@DELETE
+	@Path("/{service}/{name}/{identifier}/chunks")
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+		summary = "Abort a chunked upload and delete its staged chunks immediately",
+		responses = {
+			@ApiResponse(description = "Upload session cleared", responseCode = "200"),
+			@ApiResponse(description = "Error deleting staged chunks", responseCode = "500")
+		}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public Response abortChunkedUpload(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+									   @PathParam("service") String serviceString,
+									   @PathParam("name") String name,
+									   @PathParam("identifier") String identifier) {
+		return this.abortChunkedUpload(serviceString, name, identifier);
+	}
+
+	// Lets clients that cancel or deny a publish clear the staged chunks
+	// immediately instead of waiting for the 30-minute stale sweep. Requires the
+	// API key even for sessions started via the public chunk endpoints, so a
+	// remote caller cannot delete someone else's in-progress upload.
+	private Response abortChunkedUpload(String serviceString, String name, String identifier) {
+		Security.checkApiCallAllowed(request);
+
+		try {
+			java.nio.file.Path chunkDirectory = resolveUploadChunkDirectory(serviceString, name, identifier);
+			if (Files.isDirectory(chunkDirectory)) {
+				ArbitraryTransactionUtils.deleteDirectory(chunkDirectory.toFile());
+			}
+
+			return Response.ok("Upload session cleared").build();
+		} catch (IOException e) {
+			LOGGER.warn("Failed to delete chunk directory for service='{}', name='{}', identifier='{}'", serviceString, name, identifier, e);
+			return Response.serverError().entity("Failed to delete upload session").build();
+		}
+	}
+
 @POST
 @Path("/{service}/{name}/finalize")
 @Produces(MediaType.TEXT_PLAIN)
@@ -1760,7 +1844,7 @@ public String finalizeUploadNoIdentifier(
 	            throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
 	        }
 
-	        tempDir = Files.createTempDirectory("qdn-");
+	        tempDir = createUploadStagingDirectory();
 			tempFile = resolveUploadTempFile(tempDir, filename);
 
 	        try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -1892,7 +1976,7 @@ public String finalizeUploadNoIdentifier(
 								@PathParam("identifier") String identifier,
 								@FormDataParam("chunk") InputStream chunkStream,
 								@FormDataParam("index") int index) {
-		return this.uploadChunkInternal(serviceString, name, identifier, chunkStream, index, true, ArbitraryDataFile.MAX_FILE_SIZE, null, false);
+		return this.uploadChunkInternal(serviceString, name, identifier, chunkStream, index, true, Settings.getInstance().getQdnPublishMaxSize(), null, false);
 	}
 
 @POST
@@ -1970,7 +2054,7 @@ public String finalizeUpload(
 	            throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
 	        }
 
-	        tempDir = Files.createTempDirectory("qdn-");
+	        tempDir = createUploadStagingDirectory();
 			tempFile = resolveUploadTempFile(tempDir, filename);
 
 
@@ -2146,7 +2230,7 @@ public String finalizeUpload(
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
 			}
 
-			tempDir = Files.createTempDirectory("qdn-");
+			tempDir = createUploadStagingDirectory();
 			java.nio.file.Path tempFile = resolveUploadTempFile(tempDir, filename);
 
 			try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -2158,7 +2242,7 @@ public String finalizeUpload(
 						while ((bytesRead = in.read(buffer)) != -1) {
 							if (maxUploadSize != null && copiedSize + bytesRead > maxUploadSize) {
 								throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
-										String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+										String.format("QDN publish data exceeds the %d byte publish limit.", maxUploadSize));
 							}
 							out.write(buffer, 0, bytesRead);
 							copiedSize += bytesRead;
@@ -2275,7 +2359,8 @@ public String finalizeUpload(
 							 InputStream uploadStream) {
 		Security.checkApiCallAllowed(request);
 		return this.uploadStream(Service.valueOf(serviceString), name, null, filename, Boolean.TRUE.equals(isZip),
-				fee, title, description, tags, category, entryPoint, preview, uploadStream, null);
+				fee, title, description, tags, category, entryPoint, preview, uploadStream,
+				Settings.getInstance().getQdnPublishMaxSize());
 	}
 
 	@POST
@@ -2315,7 +2400,8 @@ public String finalizeUpload(
 							 InputStream uploadStream) {
 		Security.checkApiCallAllowed(request);
 		return this.uploadStream(Service.valueOf(serviceString), name, identifier, filename, Boolean.TRUE.equals(isZip),
-				fee, title, description, tags, category, entryPoint, preview, uploadStream, null);
+				fee, title, description, tags, category, entryPoint, preview, uploadStream,
+				Settings.getInstance().getQdnPublishMaxSize());
 	}
 
 	@POST
@@ -2398,6 +2484,13 @@ public String finalizeUpload(
 								String entryPoint, Boolean preview, InputStream uploadStream, Long maxUploadSize) {
 		if (uploadStream == null) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		// Fast-fail on the declared size before copying anything to disk; the
+		// staging copy still enforces the cap for chunked/undeclared bodies.
+		if (maxUploadSize != null && request != null && request.getContentLengthLong() > maxUploadSize) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
+					String.format("QDN publish data exceeds the %d byte publish limit.", maxUploadSize));
 		}
 
 		try (UploadStaging uploadStaging = new UploadStaging()) {
@@ -3006,8 +3099,25 @@ public String finalizeUpload(
 						  String path, String string, String base64, boolean zipped, Long fee, String filename,
 						  String title, String description, List<String> tags, Category category,
 						  String entryPoint, Boolean preview) {
+		// Authenticated publishes get the configurable node-wide cap (2 GiB by
+		// default, matching ArbitraryDataFile.MAX_FILE_SIZE) so a doomed oversized
+		// upload is rejected before it is fully staged to disk, instead of only
+		// failing validation after staging/splitting.
 		return this.upload(service, name, identifier, path, string, base64, zipped, fee, filename,
-				title, description, tags, category, entryPoint, preview, null);
+				title, description, tags, category, entryPoint, preview, Settings.getInstance().getQdnPublishMaxSize());
+	}
+
+	/**
+	 * Create a fresh staging directory under the node's temp data path (not
+	 * java.io.tmpdir): the pathInsideDataOrTempPath() cleanup guards then apply,
+	 * the data writer deletes consumed inputs, and ArbitraryDataCleanupManager
+	 * sweeps anything a crash leaves behind — deleteOnExit only ever ran on a
+	 * clean JVM exit, which is why staging used to survive until node shutdown.
+	 */
+	static java.nio.file.Path createUploadStagingDirectory() throws IOException {
+		java.nio.file.Path stagingBase = Paths.get(Settings.getInstance().getTempDataPath(), "staging");
+		Files.createDirectories(stagingBase);
+		return Files.createTempDirectory(stagingBase, "qdn-");
 	}
 
 	private class UploadStaging implements AutoCloseable {
@@ -3015,8 +3125,7 @@ public String finalizeUpload(
 		private final List<java.nio.file.Path> stagedPaths = new ArrayList<>();
 
 		private java.nio.file.Path createTempDirectory() throws IOException {
-			java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
-			tempDirectory.toFile().deleteOnExit();
+			java.nio.file.Path tempDirectory = createUploadStagingDirectory();
 			this.stagedPaths.add(tempDirectory);
 			return tempDirectory;
 		}
@@ -3049,7 +3158,7 @@ public String finalizeUpload(
 				while ((bytesRead = uploadStream.read(buffer)) != -1) {
 					if (maxUploadSize != null && copiedSize + bytesRead > maxUploadSize) {
 						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
-								String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+								String.format("QDN publish data exceeds the %d byte publish limit.", maxUploadSize));
 					}
 					out.write(buffer, 0, bytesRead);
 					copiedSize += bytesRead;
@@ -3080,9 +3189,7 @@ public String finalizeUpload(
 			}
 
 			java.nio.file.Path tempDirectory = this.createTempDirectory();
-			java.nio.file.Path tempFile = resolveUploadTempFile(tempDirectory, uploadFilename);
-			tempFile.toFile().deleteOnExit();
-			return tempFile;
+			return resolveUploadTempFile(tempDirectory, uploadFilename);
 		}
 
 		@Override
@@ -3256,7 +3363,7 @@ public String finalizeUpload(
 		} catch (IOException e) {
 			if (maxUploadSize != null && "ZIP extracted data exceeds the maximum allowed size".equals(e.getMessage())) {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
-						String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+						String.format("QDN publish data exceeds the %d byte publish limit.", maxUploadSize));
 			}
 			throw e;
 		}
@@ -3265,7 +3372,7 @@ public String finalizeUpload(
 	private void enforceUploadSize(long size, Long maxUploadSize) {
 		if (maxUploadSize != null && size > maxUploadSize) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
-					String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+					String.format("QDN publish data exceeds the %d byte publish limit.", maxUploadSize));
 		}
 	}
 

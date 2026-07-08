@@ -57,6 +57,22 @@ public class ArbitraryDataCleanupManager extends Thread {
 	private static final long STALE_UPLOAD_TEMP_TIMEOUT = 30*60*1000L; // 30 minutes
 
 	/**
+	 * How long a file may sit in data/_misc before it is treated as an orphan.
+	 * _misc only holds pre-broadcast chunks; once the transaction is broadcast they
+	 * are relocated under the signature (ArbitraryTransactionUtils.checkAndRelocateMiscFiles),
+	 * so anything still here long after creation belongs to a publish that was
+	 * rejected or never signed/broadcast.
+	 */
+	private static final long STALE_MISC_TIMEOUT = 24*60*60*1000L; // 24 hours
+
+	/**
+	 * Grace period for the startup uploads-temp sweep. No chunk-upload session can
+	 * survive a restart, so everything older than this small race-avoidance window
+	 * is stale at startup.
+	 */
+	private static final long STARTUP_UPLOAD_TEMP_TIMEOUT = 60*1000L; // 1 minute
+
+	/**
 	 * The number of chunks to delete in a batch when over the capacity limit.
 	 * Storage limits are re-checked after each batch, and there could be a significant
 	 * delay between the processing of each batch as it only occurs after a complete
@@ -65,12 +81,6 @@ public class ArbitraryDataCleanupManager extends Thread {
 	private static final int CHUNK_DELETION_BATCH_SIZE = 10;
 
 	private static final long TRANSACTION_LIST_REFRESH_INTERVAL = 6 * 60 * 60 * 1000L; // 6 hours
-
-
-	/*
-	TODO:
-	- Delete files from the _misc folder once they reach a certain age
-	 */
 
 
 	private ArbitraryDataCleanupManager() {
@@ -108,6 +118,14 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 		Set<ArbitraryTransactionDataHashWrapper> processedTransactions = new HashSet<>();
 
+		// Startup sweep: staging left by a crashed/killed session survives on disk
+		// (deleteOnExit never ran), and no upload session can span a restart. Use
+		// the wall clock — file timestamps come from it, and NTP may not have
+		// synced yet this early.
+		long startupNow = System.currentTimeMillis();
+		cleanupUploadsTempDirectory(startupNow, STARTUP_UPLOAD_TEMP_TIMEOUT);
+		cleanupSystemTempDirectory(startupNow, STALE_FILE_TIMEOUT);
+
 		try {
 			while (!isStopping) {
 				Thread.sleep(30000);
@@ -129,6 +147,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 				// cleanup system temp directory
 				cleanupSystemTempDirectory(now, STALE_FILE_TIMEOUT);
 				cleanupUploadsTempDirectory(now);
+				cleanupMiscDirectory(now);
 
 				// Wait until storage capacity has been calculated
 				if (!storageManager.isStorageCapacityCalculated()) {
@@ -590,12 +609,62 @@ public class ArbitraryDataCleanupManager extends Thread {
 		}
 	}
 
+	/**
+	 * Delete stale pre-broadcast files from data/_misc. Rejected or abandoned
+	 * publishes leave their chunks here with no other cleanup path.
+	 */
+	public void cleanupMiscDirectory(long now) {
+		Path miscDirectory = Paths.get(Settings.getInstance().getDataPath(), "_misc");
+		if (!Files.isDirectory(miscDirectory)) {
+			return;
+		}
+
+		try (java.util.stream.Stream<Path> paths = Files.walk(miscDirectory)) {
+			List<Path> staleFiles = paths
+					.filter(Files::isRegularFile)
+					.filter(path -> {
+						try {
+							BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+							long ageSinceCreated = now - attributes.creationTime().toMillis();
+							long ageSinceModified = now - attributes.lastModifiedTime().toMillis();
+							return ageSinceCreated > STALE_MISC_TIMEOUT && ageSinceModified > STALE_MISC_TIMEOUT;
+						} catch (IOException e) {
+							return false;
+						}
+					})
+					.collect(Collectors.toList());
+
+			for (Path staleFile : staleFiles) {
+				if (isStopping) {
+					return;
+				}
+
+				LOGGER.info("Deleting stale pre-broadcast file: {}", staleFile);
+				try {
+					Files.deleteIfExists(staleFile);
+					FilesystemUtils.safeDeleteEmptyParentDirectories(staleFile);
+				} catch (IOException e) {
+					LOGGER.warn("Failed to delete stale pre-broadcast file: {}", staleFile, e);
+				}
+			}
+		} catch (IOException e) {
+			LOGGER.warn("Unable to scan misc directory: {}", miscDirectory, e);
+		}
+	}
+
 	public void cleanupUploadsTempDirectory(long now) {
 		cleanupUploadsTempDirectory(now, STALE_UPLOAD_TEMP_TIMEOUT);
 	}
 
 	public void cleanupUploadsTempDirectory(long now, long minAge) {
-		Path uploadsTempDirectory = Paths.get(UPLOADS_TEMP_DIRECTORY);
+		// The current location lives under the node's temp data path; the plain
+		// relative path is the legacy (working-directory dependent) location that
+		// older versions wrote to — keep sweeping it so upgrades don't strand it.
+		cleanupUploadsTempDirectory(FilesystemUtils.getUploadsTempPath(), now, minAge);
+		cleanupUploadsTempDirectory(Paths.get(UPLOADS_TEMP_DIRECTORY), now, minAge);
+	}
+
+	private void cleanupUploadsTempDirectory(Path uploadsTempDirectory, long now, long minAge) {
 		if (!Files.isDirectory(uploadsTempDirectory)) {
 			return;
 		}
@@ -765,6 +834,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 		this.cleanupTempDirectory("diff",  now, STALE_FILE_TIMEOUT);
 		this.cleanupTempDirectory("join",  now, STALE_FILE_TIMEOUT);
 		this.cleanupTempDirectory("merge",  now, STALE_FILE_TIMEOUT);
+		this.cleanupTempDirectory("staging",  now, STALE_FILE_TIMEOUT);
 		this.cleanupTempDirectory("writer",  now, STALE_FILE_TIMEOUT);
 
 		// Built resources are served out of the "reader" directory so these
