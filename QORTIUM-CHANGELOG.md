@@ -34,6 +34,27 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-09 - qdn: fix single-file publish regression from staging relocation
+
+Fixes the v1.3.2 bug where publishing any single file larger than the small
+on-chain data limit (avatars, images, blog posts) failed with API error 115,
+"Parameter 'directory' is not a directory". The post-compression cleanup
+assumed staged publish inputs were always directories; after the 1.3.2 staging
+relocation they can be single files, which are now deleted as files. Includes
+a regression test that reproduces the reported failure, and inlines the
+path-containment guard at the delete site so static analysis can verify the
+cleanup stays inside the node's data and temp directories.
+
+### 2026-07-09 - release: move Core to 1.3.3
+
+Bumps the project version from 1.3.2 to 1.3.3, the version the node reports to
+peers and in its API (the build version becomes `1.3.3` plus the commit). This
+is a Previewnet patch release for the single post-1.3.2 fix: the QDN
+single-file publish regression introduced by the 1.3.2 staging relocation,
+which blocked avatar, image, and blog-post publishes for updated nodes.
+Previewnet `minPeerVersion` defaults stay on the 1.3.0 line because this patch
+does not introduce a new peer-compatibility gate.
+
 ### 2026-07-08 - settings: expose QDN publish limits and API-key access flag
 
 Makes the new QDN publish-size limits and the API-key remote-access bypass flag
