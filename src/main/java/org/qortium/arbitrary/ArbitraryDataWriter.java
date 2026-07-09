@@ -364,14 +364,18 @@ public class ArbitraryDataWriter {
                 }
                 // FUTURE: other compression types
 
-                // Delete the input path
-                if (FilesystemUtils.pathInsideDataOrTempPath(this.filePath)) {
-                    if (Files.isDirectory(this.filePath)) {
-                        File directory = new File(this.filePath.toString());
-                        FileUtils.deleteDirectory(directory);
+                // Delete the input path. The normalize + prefix check is inlined
+                // (equivalent to pathInsideDataOrTempPath) so the guard on this
+                // user-influenced path is visible to static analysis.
+                Path dataPath = Paths.get(Settings.getInstance().getDataPath()).toAbsolutePath().normalize();
+                Path tempDataPath = Paths.get(Settings.getInstance().getTempDataPath()).toAbsolutePath().normalize();
+                Path inputPath = this.filePath.toAbsolutePath().normalize();
+                if (inputPath.startsWith(dataPath) || inputPath.startsWith(tempDataPath)) {
+                    if (Files.isDirectory(inputPath)) {
+                        FileUtils.deleteDirectory(inputPath.toFile());
                     }
                     else {
-                        Files.deleteIfExists(this.filePath);
+                        Files.deleteIfExists(inputPath);
                     }
                 }
                 // Replace filePath pointer with the zipped file path
