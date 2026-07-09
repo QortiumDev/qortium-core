@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-08 - release: move Core to 1.3.2
+
+Bumps the project version from 1.3.1 to 1.3.2, the version the node reports to
+peers and in its API (the build version becomes `1.3.2` plus the commit). This
+is a Previewnet patch release for the post-1.3.1 fixes: QDN publish staging and
+disk-cleanup hardening, the node API key's local bypass for the public
+IP/path access gate, and generated SSL certificates that last longer and cover
+all services created by `createca`. Previewnet `minPeerVersion` defaults stay
+on the 1.3.0 line because this patch does not introduce a new
+peer-compatibility gate.
+
 ### 2026-07-08 - release: move Core to 1.3.1
 
 Bumps the project version from 1.3.0 to 1.3.1, the version the node reports to
