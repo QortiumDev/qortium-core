@@ -364,10 +364,15 @@ public class ArbitraryDataWriter {
                 }
                 // FUTURE: other compression types
 
-                // Delete the input directory
+                // Delete the input path
                 if (FilesystemUtils.pathInsideDataOrTempPath(this.filePath)) {
-                    File directory = new File(this.filePath.toString());
-                    FileUtils.deleteDirectory(directory);
+                    if (Files.isDirectory(this.filePath)) {
+                        File directory = new File(this.filePath.toString());
+                        FileUtils.deleteDirectory(directory);
+                    }
+                    else {
+                        Files.deleteIfExists(this.filePath);
+                    }
                 }
                 // Replace filePath pointer with the zipped file path
                 this.filePath = this.compressedPath;
