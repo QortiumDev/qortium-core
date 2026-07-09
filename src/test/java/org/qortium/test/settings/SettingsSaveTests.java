@@ -167,6 +167,45 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testApiAccessAndQdnPublishLimitSettingsAreSaved() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave(
+				"{\"apiKeyRemoteAccessEnabled\":false,\"qdnPublishMaxSize\":2097152,\"publicQdnPublishMaxSize\":1048576,\"publicQdnPublishChunkMaxSize\":262144,\"publicQdnPublishChunkSessionLimit\":3}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("apiKeyRemoteAccessEnabled"));
+		assertTrue(result.updated.contains("qdnPublishMaxSize"));
+		assertTrue(result.updated.contains("publicQdnPublishMaxSize"));
+		assertTrue(result.updated.contains("publicQdnPublishChunkMaxSize"));
+		assertTrue(result.updated.contains("publicQdnPublishChunkSessionLimit"));
+		assertFalse(result.restartRequired.contains("apiKeyRemoteAccessEnabled"));
+		assertFalse(result.restartRequired.contains("qdnPublishMaxSize"));
+		assertFalse(result.restartRequired.contains("publicQdnPublishMaxSize"));
+		assertFalse(result.restartRequired.contains("publicQdnPublishChunkMaxSize"));
+		assertFalse(result.restartRequired.contains("publicQdnPublishChunkSessionLimit"));
+		assertTrue(result.applied.contains("apiKeyRemoteAccessEnabled"));
+		assertTrue(result.applied.contains("qdnPublishMaxSize"));
+		assertTrue(result.applied.contains("publicQdnPublishMaxSize"));
+		assertTrue(result.applied.contains("publicQdnPublishChunkMaxSize"));
+		assertTrue(result.applied.contains("publicQdnPublishChunkSessionLimit"));
+
+		assertFalse(Settings.getInstance().isApiKeyRemoteAccessEnabled());
+		assertEquals(2097152L, Settings.getInstance().getQdnPublishMaxSize());
+		assertEquals(1048576L, Settings.getInstance().getPublicQdnPublishMaxSize());
+		assertEquals(262144L, Settings.getInstance().getPublicQdnPublishChunkMaxSize());
+		assertEquals(3, Settings.getInstance().getPublicQdnPublishChunkSessionLimit());
+
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals(Boolean.FALSE, savedSettings.get("apiKeyRemoteAccessEnabled"));
+		assertEquals(2097152L, ((Number) savedSettings.get("qdnPublishMaxSize")).longValue());
+		assertEquals(1048576L, ((Number) savedSettings.get("publicQdnPublishMaxSize")).longValue());
+		assertEquals(262144L, ((Number) savedSettings.get("publicQdnPublishChunkMaxSize")).longValue());
+		assertEquals(3, ((Number) savedSettings.get("publicQdnPublishChunkSessionLimit")).intValue());
+	}
+
+	@Test
 	public void testAutoUpdateEnabledSettingIsRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\"}");
 		Settings.fileInstance(settingsPath.toString());
@@ -335,6 +374,10 @@ public class SettingsSaveTests extends Common {
 				"{\"minBlockchainPeers\":33}",
 				"{\"minDataPeers\":0}",
 				"{\"minDataPeers\":65}",
+				"{\"qdnPublishMaxSize\":0}",
+				"{\"publicQdnPublishMaxSize\":0}",
+				"{\"publicQdnPublishChunkMaxSize\":0}",
+				"{\"publicQdnPublishChunkSessionLimit\":0}",
 				"{\"maxStorageCapacity\":0}",
 				"{\"maxStorageCapacity\":123.5}",
 				"{\"minPeerVersion\":\"1.2\"}",
@@ -671,6 +714,8 @@ public class SettingsSaveTests extends Common {
 		assertFalse(metadata.writable.get("minBlockchainPeers").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("minDataPeers").type);
 		assertFalse(metadata.writable.get("minDataPeers").restartRequired);
+		assertEquals("BOOLEAN", metadata.writable.get("apiKeyRemoteAccessEnabled").type);
+		assertFalse(metadata.writable.get("apiKeyRemoteAccessEnabled").restartRequired);
 		assertEquals("PEER_VERSION", metadata.writable.get("minPeerVersion").type);
 		assertTrue(metadata.writable.get("minPeerVersion").restartRequired);
 		assertEquals("BOOLEAN", metadata.writable.get("allowConnectionsWithOlderPeerVersions").type);
@@ -679,6 +724,14 @@ public class SettingsSaveTests extends Common {
 		assertFalse(metadata.writable.get("chatMessageRetentionPeriod").restartRequired);
 		assertEquals("STORAGE_POLICY", metadata.writable.get("storagePolicy").type);
 		assertFalse(metadata.writable.get("storagePolicy").restartRequired);
+		assertEquals("LONG", metadata.writable.get("qdnPublishMaxSize").type);
+		assertFalse(metadata.writable.get("qdnPublishMaxSize").restartRequired);
+		assertEquals("LONG", metadata.writable.get("publicQdnPublishMaxSize").type);
+		assertFalse(metadata.writable.get("publicQdnPublishMaxSize").restartRequired);
+		assertEquals("LONG", metadata.writable.get("publicQdnPublishChunkMaxSize").type);
+		assertFalse(metadata.writable.get("publicQdnPublishChunkMaxSize").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("publicQdnPublishChunkSessionLimit").type);
+		assertFalse(metadata.writable.get("publicQdnPublishChunkSessionLimit").restartRequired);
 		assertTrue(metadata.pendingRestart.isEmpty());
 		assertFalse(metadata.fileDiffersFromRuntime);
 		assertTrue(metadata.fileChanged.isEmpty());

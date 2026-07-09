@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-08 - settings: expose QDN publish limits and API-key access flag
+
+Makes the new QDN publish-size limits and the API-key remote-access bypass flag
+writable through the node settings API. Operators and trusted local tooling can
+now tune authenticated and public publish caps, public chunk-upload caps, public
+chunk-session limits, and whether the node API key bypasses public IP/path API
+access rules without editing `settings.json` by hand. These settings apply at
+runtime and are reported through the settings metadata endpoint.
+
 ### 2026-07-08 - release: move Core to 1.3.2
 
 Bumps the project version from 1.3.1 to 1.3.2, the version the node reports to

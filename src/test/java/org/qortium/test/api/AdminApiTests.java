@@ -109,6 +109,8 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(false, metadata.writable.get("minBlockchainPeers").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("minDataPeers").type);
 		assertEquals(false, metadata.writable.get("minDataPeers").restartRequired);
+		assertEquals("BOOLEAN", metadata.writable.get("apiKeyRemoteAccessEnabled").type);
+		assertEquals(false, metadata.writable.get("apiKeyRemoteAccessEnabled").restartRequired);
 		assertEquals("PEER_VERSION", metadata.writable.get("minPeerVersion").type);
 		assertEquals(true, metadata.writable.get("minPeerVersion").restartRequired);
 		assertEquals("BOOLEAN", metadata.writable.get("allowConnectionsWithOlderPeerVersions").type);
@@ -119,6 +121,14 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(true, metadata.writable.get("hsqldbCacheRows").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheSize").type);
 		assertEquals(true, metadata.writable.get("hsqldbCacheSize").restartRequired);
+		assertEquals("LONG", metadata.writable.get("qdnPublishMaxSize").type);
+		assertEquals(false, metadata.writable.get("qdnPublishMaxSize").restartRequired);
+		assertEquals("LONG", metadata.writable.get("publicQdnPublishMaxSize").type);
+		assertEquals(false, metadata.writable.get("publicQdnPublishMaxSize").restartRequired);
+		assertEquals("LONG", metadata.writable.get("publicQdnPublishChunkMaxSize").type);
+		assertEquals(false, metadata.writable.get("publicQdnPublishChunkMaxSize").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("publicQdnPublishChunkSessionLimit").type);
+		assertEquals(false, metadata.writable.get("publicQdnPublishChunkSessionLimit").restartRequired);
 		assertTrue(metadata.pendingRestart.isEmpty());
 	}
 

@@ -1082,6 +1082,7 @@ public class Settings {
 		settings.put("minOutboundPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("minBlockchainPeers", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("minDataPeers", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("apiKeyRemoteAccessEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("minPeerVersion", new WritableSetting(WritableSettingType.PEER_VERSION, true));
 		settings.put("allowConnectionsWithOlderPeerVersions", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("hsqldbCacheRows", new WritableSetting(WritableSettingType.INTEGER, true));
@@ -1094,6 +1095,8 @@ public class Settings {
 		settings.put("recordPeerExchange", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
 		settings.put("maxStorageCapacity", new WritableSetting(WritableSettingType.LONG, false));
+		settings.put("qdnPublishMaxSize", new WritableSetting(WritableSettingType.LONG, false));
+		settings.put("publicQdnPublishMaxSize", new WritableSetting(WritableSettingType.LONG, false));
 		settings.put("publicQdnPublishChunkMaxSize", new WritableSetting(WritableSettingType.LONG, false));
 		settings.put("publicQdnPublishChunkSessionLimit", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -1729,6 +1732,9 @@ public class Settings {
 
 		if (this.i2pDataKeyFile == null || this.i2pDataKeyFile.trim().isEmpty())
 			throwValidationError("i2pDataKeyFile must not be blank");
+
+		if (this.qdnPublishMaxSize < 1)
+			throwValidationError("qdnPublishMaxSize must be at least 1 byte");
 
 		if (this.publicQdnPublishMaxSize < 1)
 			throwValidationError("publicQdnPublishMaxSize must be at least 1 byte");
