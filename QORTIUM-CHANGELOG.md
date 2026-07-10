@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-10 - consensus: reschedule Previewnet batch block rewards to height 55000
+
+Batch block rewards were meant to switch on at Previewnet height 50,000, but
+they never did: the repository carried two copies of the Previewnet chain
+config, and the copy shipped inside the release zip (`preview/previewchain.json`)
+was missing the activation trigger that had been added to the canonical copy
+(`src/main/resources/previewchain.json`). Nodes load the external file from the
+zip in preference to the one bundled in the jar, so every node kept paying
+rewards (and counting blocks minted) one block at a time past 50,000. Because
+blocks past 50,000 were already minted under per-block rules, the activation
+cannot be applied retroactively; the trigger is rescheduled to height 55,000,
+which all nodes must be running this config before reaching. To stop the two
+copies drifting again, the duplicate under `preview/` is deleted and the
+release packaging now ships the canonical `src/main/resources` file, so the
+zip and the jar can never disagree. The old placeholder value inherited from
+Qortal (a top-level start height of 1,508,000) is removed from the Previewnet
+config at the same time, leaving the feature trigger as the single source of
+truth.
+
 ### 2026-07-09 - qdn: fix single-file publish regression from staging relocation
 
 Fixes the v1.3.2 bug where publishing any single file larger than the small
