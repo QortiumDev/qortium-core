@@ -5,7 +5,7 @@
     "LTC": "TEST4"
   },
   "restrictedApi": false,
-  "blockchainConfig": "preview/previewchain.json",
+  "blockchainConfig": "src/main/resources/previewchain.json",
   "exportPath": "qortium-backup-test",
   "bootstrap": false,
   "wipeUnconfirmedOnStart": false,

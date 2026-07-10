@@ -93,12 +93,16 @@ mkdir -p "${PACKAGE_ROOT}/preview"
 cp "${JAR_PATH}" "${PACKAGE_ROOT}/qortium.jar"
 cp "${SCRIPT_DIR}/TESTER-GUIDE.md" "${PACKAGE_ROOT}/README.md"
 
+# The chain config is consensus-critical and must always match the jar's bundled
+# resource, so copy it from src/main/resources rather than keeping a second copy
+# under preview/ (a stale duplicate once shipped with a wrong feature trigger).
+cp "${REPO_DIR}/src/main/resources/previewchain.json" "${PACKAGE_ROOT}/preview/previewchain.json"
+
 preview_files=(
 	"README.md"
 	"TESTER-GUIDE.md"
 	"OPERATOR-RUNBOOK.md"
 	"log4j2.properties"
-	"previewchain.json"
 	"settings-preview.json"
 	"settings-preview-seed.json"
 	"settings-preview-seed-netcup.json"
