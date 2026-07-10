@@ -16,8 +16,6 @@ import org.qortium.utils.Base58;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 public class PaymentTransaction extends Transaction {
 
@@ -74,9 +72,14 @@ public class PaymentTransaction extends Transaction {
 		// Wrap and delegate payment processing to Payment class.
 		new Payment(this.repository).process(this.paymentTransactionData.getSenderPublicKey(), getPaymentData());
 
-		// Fire PAYMENT_RECEIVED notification off the block-processing thread so it
-		// never adds latency to block commit. Values are captured before the async
-		// dispatch — no shared mutable state in the lambda.
+		if (!NotificationManager.isRecentEnoughToNotify(this.paymentTransactionData.getTimestamp()))
+			return;
+
+		if (!NotificationManager.getInstance().hasSubscriptions("PAYMENT_RECEIVED"))
+			return;
+
+		// Capture PAYMENT_RECEIVED data before handing it to NotificationManager's
+		// dedicated bounded dispatcher. This must never add latency to block commit.
 		final String sender    = Crypto.toAddress(this.paymentTransactionData.getCreatorPublicKey());
 		final String recipient = this.paymentTransactionData.getRecipient();
 		final String amount    = Amounts.prettyAmount(this.paymentTransactionData.getAmount());
@@ -89,14 +92,8 @@ public class PaymentTransaction extends Transaction {
 		data.put("amount", amount);
 		data.put("created", timestamp);
 		if (signature != null) data.put("signature", signature);
-		CompletableFuture.runAsync(() -> {
-			try {
-				NotificationManager.getInstance().processEvent(
-					new NotificationEvent("PAYMENT_RECEIVED", data, signature));
-			} catch (Exception e) {
-				// Never propagate — notification errors must not affect anything
-			}
-		});
+		NotificationManager.getInstance().dispatchEventAsync(
+				new NotificationEvent("PAYMENT_RECEIVED", data, signature));
 	}
 
 	@Override

@@ -32,6 +32,7 @@ import org.qortium.data.transaction.GroupKickTransactionData;
 import org.qortium.data.transaction.JoinGroupTransactionData;
 import org.qortium.data.transaction.LeaveGroupTransactionData;
 import org.qortium.data.transaction.TransactionData;
+import org.qortium.notification.NotificationManager;
 import org.qortium.repository.*;
 import org.qortium.settings.Settings;
 import org.qortium.transaction.AtTransaction;
@@ -1853,6 +1854,7 @@ public class Block {
 			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED) {
 				transaction.process();
 				trustInputsChanged |= doesTransactionChangeTrustInputs(transactionData, this.blockData.getHeight());
+				dispatchConfirmationNotification(transaction);
 			}
 
 			// Regardless of group-approval, update relevant creator info and fees.
@@ -1905,9 +1907,24 @@ public class Block {
 			transaction.processCreatorAccount();
 			transaction.process();
 			trustInputsChanged |= doesTransactionChangeTrustInputs(transactionData, this.blockData.getHeight());
+			dispatchConfirmationNotification(transaction);
 		}
 
 		return trustInputsChanged;
+	}
+
+	private void dispatchConfirmationNotification(Transaction transaction) {
+		if (!NotificationManager.isRecentEnoughToNotify(this.blockData.getTimestamp()))
+			return;
+
+		// A recent block can still be orphaned after notifying; clients re-query confirmation state.
+		// This residual reorg window is acceptable for v1 and matches PAYMENT_RECEIVED behavior.
+		try {
+			NotificationManager.getInstance().onTransactionConfirmed(transaction, this.blockData.getHeight(), this.blockData.getTimestamp());
+		} catch (Exception e) {
+			// Notification failures must never affect block processing or consensus state.
+			LOGGER.debug("Unable to dispatch TRANSACTION_CONFIRMED notification: {}", e.getMessage());
+		}
 	}
 
 	protected void freezeClosedPolls() throws DataException {

@@ -5,15 +5,31 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.ee8.websocket.api.Session;
 import org.eclipse.jetty.ee8.websocket.api.WriteCallback;
 
+import org.qortium.crypto.Crypto;
+import org.qortium.data.transaction.ChatTransactionData;
+import org.qortium.data.transaction.TransactionData;
+import org.qortium.repository.DataException;
+import org.qortium.transaction.Transaction;
 import org.qortium.utils.Base58;
+import org.qortium.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 /**
  * Central notification dispatch system.
@@ -43,8 +59,30 @@ public class NotificationManager {
 
     static final String WILDCARD = "*";
 
+    private static final Set<String> SUPPORTED_EVENTS = Set.of(
+            "RESOURCE_PUBLISHED", "PAYMENT_RECEIVED", "CHAT_MESSAGE", "TRANSACTION_CONFIRMED");
+    private static final Set<String> RESOURCE_PUBLISHED_FILTER_KEYS = Set.of("service", "name");
+    private static final Set<String> PAYMENT_RECEIVED_FILTER_KEYS = Set.of("sender", "recipient", "amount", "created", "signature");
+    private static final Set<String> CHAT_MESSAGE_FILTER_KEYS = Set.of("recipient", "sender", "txGroupId", "involving");
+    private static final Set<String> TRANSACTION_CONFIRMED_FILTER_KEYS = Set.of("signature", "address", "txType");
+
     /** Notifications for the same resource within this window are deduplicated per session. */
     private static final long DEDUP_WINDOW_MS = 5 * 60 * 1000L; // 5 minutes
+    /** Block-derived notifications are limited to recent blocks to avoid historical-sync floods. */
+    static final long NOTIFICATION_RECENCY_WINDOW_MS = 5 * 60 * 1000L; // 5 minutes
+    private static final int NOTIFICATION_DISPATCH_QUEUE_CAPACITY = 256;
+    private static final long DISPATCH_OVERLOAD_WARNING_INTERVAL_MS = 60 * 1000L;
+    private static volatile Supplier<Long> notificationTimeSupplier = NTP::getTime;
+
+    /**
+     * Isolates notification work from import/block-processing threads and from the JVM common pool.
+     * Rejection is handled by {@link #dispatchEventAsync(NotificationEvent)} so callers never block.
+     */
+    private static final ThreadPoolExecutor NOTIFICATION_DISPATCH_EXECUTOR = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(NOTIFICATION_DISPATCH_QUEUE_CAPACITY),
+            new NotificationDispatchThreadFactory());
+    private static final AtomicLong lastDispatchOverloadWarningTimestamp = new AtomicLong();
 
     private static NotificationManager instance;
 
@@ -78,6 +116,54 @@ public class NotificationManager {
             instance = new NotificationManager();
         }
         return instance;
+    }
+
+    /** Returns an error message for an invalid subscription, or {@code null} when it is valid. */
+    public static String validateSubscription(NotificationSubscription rule) {
+        String event = rule.getEvent();
+        if (event == null || event.isEmpty()) {
+            return "Subscription is missing an event";
+        }
+        if (!SUPPORTED_EVENTS.contains(event)) {
+            return "Unknown notification event: " + event;
+        }
+
+        Set<String> allowedKeys;
+        switch (event) {
+            case "RESOURCE_PUBLISHED":
+                allowedKeys = RESOURCE_PUBLISHED_FILTER_KEYS;
+                break;
+            case "PAYMENT_RECEIVED":
+                allowedKeys = PAYMENT_RECEIVED_FILTER_KEYS;
+                break;
+            case "CHAT_MESSAGE":
+                allowedKeys = CHAT_MESSAGE_FILTER_KEYS;
+                break;
+            case "TRANSACTION_CONFIRMED":
+                allowedKeys = TRANSACTION_CONFIRMED_FILTER_KEYS;
+                break;
+            default:
+                throw new IllegalStateException("Unsupported notification event: " + event);
+        }
+
+        Map<String, String> filters = rule.getFilters();
+        if (filters != null) {
+            for (String key : filters.keySet()) {
+                if (!allowedKeys.contains(key)) {
+                    return "Unknown filter key for " + event + ": " + key;
+                }
+            }
+        }
+
+        if ("CHAT_MESSAGE".equals(event) && (filters == null || filters.isEmpty())) {
+            return "CHAT_MESSAGE subscriptions require at least one filter";
+        }
+        if ("TRANSACTION_CONFIRMED".equals(event)
+                && (filters == null || (!filters.containsKey("signature") && !filters.containsKey("address")))) {
+            return "TRANSACTION_CONFIRMED subscriptions require a signature or address filter";
+        }
+
+        return null;
     }
 
     // -------------------------------------------------------------------------
@@ -190,6 +276,42 @@ public class NotificationManager {
         SessionSubscriptions subs = sessions.get(session);
         if (subs == null) return Collections.emptyList();
         return Collections.unmodifiableList(subs.subscriptions);
+    }
+
+    /** Returns whether an event currently has at least one indexed subscription. */
+    public boolean hasSubscriptions(String event) {
+        Map<String, Map<String, List<SubscriptionEntry>>> serviceMap = eventIndex.get(event);
+        if (serviceMap == null) {
+            return false;
+        }
+
+        for (Map<String, List<SubscriptionEntry>> nameMap : serviceMap.values()) {
+            for (List<SubscriptionEntry> entries : nameMap.values()) {
+                if (!entries.isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns whether a block-derived event is recent enough to notify clients.
+     * Old blocks processed during sync, reindex, or archive replay are suppressed; a node without
+     * synchronized NTP time also suppresses these notifications rather than guessing their age.
+     */
+    public static boolean isRecentEnoughToNotify(long timestampMs) {
+        Long now = notificationTimeSupplier.get();
+        return now != null && now - timestampMs <= NOTIFICATION_RECENCY_WINDOW_MS;
+    }
+
+    /** Minimal package-private clock seam for deterministic notification recency tests. */
+    static void setNotificationTimeSupplierForTesting(Supplier<Long> supplier) {
+        notificationTimeSupplier = supplier != null ? supplier : NTP::getTime;
+    }
+
+    static void resetNotificationTimeSupplierForTesting() {
+        notificationTimeSupplier = NTP::getTime;
     }
 
     /**
@@ -402,6 +524,104 @@ public class NotificationManager {
     // -------------------------------------------------------------------------
 
     /**
+     * Captures and dispatches a chat notification without blocking the chat importer thread.
+     * Message content is deliberately never included, including for plaintext chats.
+     */
+    public void onChatMessage(ChatTransactionData chatTransactionData) {
+        if (chatTransactionData == null || !hasSubscriptions("CHAT_MESSAGE")) {
+            return;
+        }
+
+        String signature = chatTransactionData.getSignature() != null
+                ? Base58.encode(chatTransactionData.getSignature()) : null;
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("sender", chatTransactionData.getSender());
+        if (chatTransactionData.getRecipient() != null) {
+            data.put("recipient", chatTransactionData.getRecipient());
+        }
+        data.put("txGroupId", chatTransactionData.getTxGroupId());
+        data.put("isText", chatTransactionData.getIsText());
+        data.put("isEncrypted", chatTransactionData.getIsEncrypted());
+        if (signature != null) {
+            data.put("signature", signature);
+        }
+        data.put("created", chatTransactionData.getTimestamp());
+
+        List<String> involvedAddresses = new ArrayList<>();
+        if (chatTransactionData.getSender() != null) {
+            involvedAddresses.add(chatTransactionData.getSender());
+        }
+        if (chatTransactionData.getRecipient() != null) {
+            involvedAddresses.add(chatTransactionData.getRecipient());
+        }
+
+        dispatchEventAsync(new NotificationEvent("CHAT_MESSAGE", data, signature, involvedAddresses));
+    }
+
+    /**
+     * Captures a confirmed transaction's notification data before dispatching asynchronously.
+     * A reorg may cause a transaction to be confirmed again after the five-minute dedup window.
+     * Called from the block-processing path. Its caller isolates notification failures so they
+     * cannot affect block processing or consensus state.
+     */
+    public void onTransactionConfirmed(Transaction transaction, int blockHeight, long blockTimestamp) {
+        if (!isRecentEnoughToNotify(blockTimestamp) || !hasSubscriptions("TRANSACTION_CONFIRMED")) {
+            return;
+        }
+
+        TransactionData transactionData = transaction.getTransactionData();
+        String signature = transactionData.getSignature() != null ? Base58.encode(transactionData.getSignature()) : null;
+        List<String> recipients;
+        List<String> involvedAddresses;
+        try {
+            recipients = new ArrayList<>(transaction.getRecipientAddresses());
+            involvedAddresses = new ArrayList<>(transaction.getInvolvedAddresses());
+        } catch (DataException e) {
+            LOGGER.debug("Unable to gather TRANSACTION_CONFIRMED notification data: {}", e.getMessage());
+            return;
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("type", transactionData.getType().name());
+        if (signature != null) {
+            data.put("signature", signature);
+        }
+        data.put("sender", Crypto.toAddress(transactionData.getCreatorPublicKey()));
+        data.put("recipients", recipients);
+        data.put("blockHeight", blockHeight);
+        data.put("created", transactionData.getTimestamp());
+
+        dispatchEventAsync(new NotificationEvent("TRANSACTION_CONFIRMED", data, signature, involvedAddresses));
+    }
+
+    /**
+     * Schedules generic notification work on the bounded, dedicated dispatcher.
+     * Overflow drops the event rather than delaying a block or transaction importer.
+     */
+    public void dispatchEventAsync(NotificationEvent event) {
+        try {
+            NOTIFICATION_DISPATCH_EXECUTOR.execute(() -> {
+                try {
+                    processEvent(event);
+                } catch (Exception e) {
+                    LOGGER.debug("Error dispatching {} notification: {}", event.getType(), e.getMessage());
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            logDispatchOverload();
+        }
+    }
+
+    private static void logDispatchOverload() {
+        long now = System.currentTimeMillis();
+        long previous = lastDispatchOverloadWarningTimestamp.get();
+        if (now - previous >= DISPATCH_OVERLOAD_WARNING_INTERVAL_MS
+                && lastDispatchOverloadWarningTimestamp.compareAndSet(previous, now)) {
+            LOGGER.warn("Notification dispatch overloaded, dropping notification events");
+        }
+    }
+
+    /**
      * Dispatches a generic event (keyed by {@code type} and carrying a simple
      * string-map {@code data}) to all matching subscriptions.
      */
@@ -417,8 +637,10 @@ public class NotificationManager {
         }
 
         long now = System.currentTimeMillis();
-        String eventService = event.getData().get("service");
-        String eventName    = event.getData().get("name");
+        Object eventServiceValue = event.getData().get("service");
+        Object eventNameValue = event.getData().get("name");
+        String eventService = eventServiceValue != null ? String.valueOf(eventServiceValue) : null;
+        String eventName = eventNameValue != null ? String.valueOf(eventNameValue) : null;
 
         List<String> serviceKeys = new ArrayList<>(2);
         if (eventService != null && !eventService.isEmpty()) {
@@ -441,7 +663,7 @@ public class NotificationManager {
                 if (entries == null) continue;
 
                 for (SubscriptionEntry entry : new ArrayList<>(entries)) {
-                    if (entry.session.isOpen() && matchesGeneric(entry.rule.getFilters(), event.getData())) {
+                    if (entry.session.isOpen() && matchesGeneric(entry.rule.getFilters(), event)) {
                         if (entry.rule.isExpired()) {
                             entries.remove(entry);
                             continue;
@@ -468,17 +690,48 @@ public class NotificationManager {
     // Filter matching — generic
     // -------------------------------------------------------------------------
 
-    private boolean matchesGeneric(Map<String, String> filters, Map<String, String> data) {
+    private boolean matchesGeneric(Map<String, String> filters, NotificationEvent event) {
         if (filters == null || filters.isEmpty()) {
             return true;
         }
         for (Map.Entry<String, String> filter : filters.entrySet()) {
-            String dataValue = data.get(filter.getKey());
-            if (dataValue == null || !dataValue.equalsIgnoreCase(filter.getValue())) {
+            if (!matchesFilter(event, filter.getKey(), filter.getValue())) {
                 return false;
             }
         }
         return true;
+    }
+
+    private boolean matchesFilter(NotificationEvent event, String key, String expectedValue) {
+        if ("CHAT_MESSAGE".equals(event.getType()) && "involving".equals(key)) {
+            return matchesAddress(event.getInvolvedAddresses(), expectedValue);
+        }
+        if ("CHAT_MESSAGE".equals(event.getType()) && "txGroupId".equals(key)
+                && event.getData().get("recipient") != null) {
+            return false;
+        }
+        if ("TRANSACTION_CONFIRMED".equals(event.getType()) && "address".equals(key)) {
+            return matchesAddress(event.getInvolvedAddresses(), expectedValue);
+        }
+
+        if ("TRANSACTION_CONFIRMED".equals(event.getType()) && "txType".equals(key)) {
+            key = "type";
+        }
+
+        Object dataValue = event.getData().get(key);
+        return dataValue != null && String.valueOf(dataValue).equalsIgnoreCase(expectedValue);
+    }
+
+    private boolean matchesAddress(List<String> addresses, String expectedAddress) {
+        if (addresses == null) {
+            return false;
+        }
+        for (String address : addresses) {
+            if (address != null && address.equalsIgnoreCase(expectedAddress)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // -------------------------------------------------------------------------
@@ -589,16 +842,22 @@ public class NotificationManager {
             sb.append(",\"data\":{");
 
             boolean first = true;
-            for (Map.Entry<String, String> entry : event.getData().entrySet()) {
+            for (Map.Entry<String, ?> entry : event.getData().entrySet()) {
                 if (!first) sb.append(",");
                 sb.append("\"").append(jsonEscape(entry.getKey())).append("\":");
-                sb.append("\"").append(jsonEscape(entry.getValue())).append("\"");
+                appendJsonValue(sb, entry.getValue());
                 first = false;
             }
             sb.append(",\"timestamp\":").append(System.currentTimeMillis());
 
             sb.append("}");
 
+            if (sub != null && sub.getAppService() != null) {
+                sb.append(",\"appService\":\"").append(jsonEscape(sub.getAppService())).append("\"");
+            }
+            if (sub != null && sub.getAppName() != null) {
+                sb.append(",\"appName\":\"").append(jsonEscape(sub.getAppName())).append("\"");
+            }
             if (sub != null && sub.getNotificationId() != null) {
                 sb.append(",\"notificationId\":\"").append(jsonEscape(sub.getNotificationId())).append("\"");
             }
@@ -871,6 +1130,25 @@ public class NotificationManager {
         return (v != null && !v.isEmpty()) ? v : WILDCARD;
     }
 
+    private static void appendJsonValue(StringBuilder sb, Object value) {
+        if (value == null) {
+            sb.append("null");
+        } else if (value instanceof Number || value instanceof Boolean) {
+            sb.append(value);
+        } else if (value instanceof Iterable<?>) {
+            sb.append("[");
+            boolean first = true;
+            for (Object item : (Iterable<?>) value) {
+                if (!first) sb.append(",");
+                appendJsonValue(sb, item);
+                first = false;
+            }
+            sb.append("]");
+        } else {
+            sb.append("\"").append(jsonEscape(String.valueOf(value))).append("\"");
+        }
+    }
+
     static String jsonEscape(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\")
@@ -915,5 +1193,16 @@ public class NotificationManager {
 
     public int getSessionCount() {
         return sessions.size();
+    }
+
+    private static final class NotificationDispatchThreadFactory implements ThreadFactory {
+        private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = new Thread(runnable, "notification-dispatch-" + this.threadNumber.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        }
     }
 }

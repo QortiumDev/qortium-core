@@ -2,6 +2,7 @@ package org.qortium.controller;
 
 import org.eclipse.jetty.ee8.websocket.api.Session;
 import org.qortium.data.transaction.ChatTransactionData;
+import org.qortium.notification.NotificationManager;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,6 +43,7 @@ public class ChatNotifier {
 	}
 
 	public void onNewChatTransaction(ChatTransactionData chatTransactionData) {
+		NotificationManager.getInstance().onChatMessage(chatTransactionData);
 		for (Listener listener : getAllListeners())
 			listener.notify(chatTransactionData);
 	}
