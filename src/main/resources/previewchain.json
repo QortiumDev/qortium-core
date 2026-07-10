@@ -95,6 +95,7 @@
 		"messageConfirmableDifficulty": 12,
 		"messageUnconfirmableDifficulty": 10
 	},
+	"blockRewardBatchStartHeight": 1508000,
 	"blockRewardBatchSize": 100,
 	"blockRewardBatchAccountsBlockCount": 10,
 	"mintingGroupIds": [

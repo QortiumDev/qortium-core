@@ -34,6 +34,27 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-10 - consensus: restore chain-config hash parity with the live network; release 1.3.5
+
+Fixes the v1.3.4 network partition. Nodes only peer with nodes whose chain
+config hashes to the same value, and that hash deliberately excludes the
+`featureTriggers` block so activation heights can be scheduled without
+splitting the network. v1.3.4 correctly moved the batch-rewards trigger into
+`featureTriggers` at height 55,000, but also deleted the legacy top-level
+start-height placeholder — a hashed field that had been kept, at its old
+value, precisely to keep the hash stable. The result was that v1.3.4 nodes
+rejected every existing node at the peer handshake (and vice versa), so the
+two updated seed servers were partitioned from the rest of Previewnet until
+they were rolled back to v1.3.3. This release restores the placeholder,
+returning the config hash to the exact value the live network advertises:
+v1.3.5 nodes peer normally with v1.3.3 nodes, batch rewards still activate at
+height 55,000 for updated nodes, and nodes that have not updated by then fork
+off at that height as intended. A new regression test pins the shipped
+Previewnet config's hash to the live network value, so any future edit to a
+hashed field fails the build and forces a deliberate, coordinated flag-day
+decision instead of an accidental one. The v1.3.4 release should not be
+installed and is marked as superseded.
+
 ### 2026-07-10 - release: move Core to 1.3.4
 
 Bumps the project version from 1.3.3 to 1.3.4, the version the node reports to

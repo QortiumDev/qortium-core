@@ -119,6 +119,21 @@ public class BlockChainConfigHashTests {
 		assertEquals(31000L, blockChain.getAssetOrderBoundsHeight());
 	}
 
+	/** The chain-config hash the live Previewnet network advertises in its peer handshake.
+	 * Peers whose hash differs are rejected at handshake, so a change to this value is a
+	 * network-wide flag day: every node must adopt the new config at once or be partitioned
+	 * (as happened with v1.3.4, which dropped a hashed legacy top-level field and could no
+	 * longer peer with the network). Schedule consensus changes via "featureTriggers" —
+	 * excluded from the hash — and only change this pin as a deliberate, coordinated cutover. */
+	private static final String LIVE_PREVIEWNET_CONFIG_HASH =
+			"8e655fc30e325d11ec44d350dd456ad80bff0a507935133edc3db5345e9253e5";
+
+	@Test
+	public void testShippedPreviewnetConfigHashMatchesLiveNetwork() throws Exception {
+		assertEquals(LIVE_PREVIEWNET_CONFIG_HASH,
+				BlockChain.computeChainConfigHash(readBundledConfig("previewchain.json")));
+	}
+
 	@Test
 	public void testOtherConfigChangesStillAffectHash() {
 		String firstConfig = "{"
@@ -143,6 +158,14 @@ public class BlockChainConfigHashTests {
 
 	private static String hash(String json) {
 		return BlockChain.computeChainConfigHash(json.getBytes(StandardCharsets.UTF_8));
+	}
+
+	private static byte[] readBundledConfig(String filename) throws java.io.IOException {
+		try (java.io.InputStream in = BlockChainConfigHashTests.class.getClassLoader().getResourceAsStream(filename)) {
+			if (in == null)
+				throw new IllegalStateException("Bundled chain config not found on classpath: " + filename);
+			return in.readAllBytes();
+		}
 	}
 
 	private static BlockChain unmarshal(String json) throws Exception {
