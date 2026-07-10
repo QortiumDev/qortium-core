@@ -1,5 +1,6 @@
 package org.qortium.notification;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,28 +15,38 @@ import java.util.Map;
 public class NotificationEvent {
 
     private final String type;
-    private final Map<String, String> data;
+    private final Map<String, ?> data;
     private final String dedupKey;
+    private final List<String> involvedAddresses;
 
-    public NotificationEvent(String type, Map<String, String> data) {
-        this(type, data, null);
+    public NotificationEvent(String type, Map<String, ?> data) {
+        this(type, data, null, null);
     }
 
-    public NotificationEvent(String type, Map<String, String> data, String dedupKey) {
+    public NotificationEvent(String type, Map<String, ?> data, String dedupKey) {
+        this(type, data, dedupKey, null);
+    }
+
+    public NotificationEvent(String type, Map<String, ?> data, String dedupKey, List<String> involvedAddresses) {
         this.type = type;
         this.data = data;
         this.dedupKey = dedupKey;
+        this.involvedAddresses = involvedAddresses;
     }
 
     public String getType() {
         return type;
     }
 
-    public Map<String, String> getData() {
+    public Map<String, ?> getData() {
         return data;
     }
 
     public String getDedupKey() {
         return dedupKey;
+    }
+
+    public List<String> getInvolvedAddresses() {
+        return involvedAddresses;
     }
 }

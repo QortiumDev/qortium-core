@@ -28,10 +28,18 @@ import java.util.Objects;
  *   "address": "Qxxxxxxxxx",
  *   "subscriptions": [
  *     { "event": "RESOURCE_PUBLISHED", "filters": { "service": "BLOG" } },
- *     { "event": "PAYMENT_RECEIVED",   "filters": { "recipient": "Qxxxxxxxxx" } }
+ *     { "event": "PAYMENT_RECEIVED",   "filters": { "recipient": "Qxxxxxxxxx" } },
+ *     { "event": "CHAT_MESSAGE",       "filters": { "involving": "Qxxxxxxxxx" } },
+ *     { "event": "TRANSACTION_CONFIRMED", "filters": { "address": "Qxxxxxxxxx" } }
  *   ]
  * }
  * </pre>
+ *
+ * <p>Event filters: {@code CHAT_MESSAGE} requires one or more of {@code recipient},
+ * {@code sender}, {@code txGroupId} (for group messages), or {@code involving}; notification data never includes
+ * message content. {@code TRANSACTION_CONFIRMED} requires {@code signature} or {@code address},
+ * and may additionally filter by {@code txType}. {@code PAYMENT_RECEIVED} accepts {@code sender},
+ * {@code recipient}, {@code amount}, {@code created}, and {@code signature}.
  *
  * <p>The server will push JSON notifications whenever matching events occur:
  *
@@ -111,6 +119,11 @@ public class NotificationsWebSocket extends ApiWebSocket {
                     for (NotificationSubscription rule : rules) {
                         if (rule.getNotificationId() == null || rule.getNotificationId().isEmpty()) {
                             sendError(session, "Every subscription must have a 'notificationId'");
+                            return;
+                        }
+                        String validationError = NotificationManager.validateSubscription(rule);
+                        if (validationError != null) {
+                            sendError(session, validationError);
                             return;
                         }
                     }
