@@ -1,5 +1,6 @@
 package org.qortium.notification;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -10,7 +11,7 @@ import java.util.Map;
  * <ul>
  *   <li>{@code RESOURCE_PUBLISHED} — use {@code resourceFilter} (a rich typed
  *       object mirroring QDN search parameters).</li>
- *   <li>All other events — use the generic {@code filters} string map.</li>
+ *   <li>All other events — use the generic {@code filters} map, with string values or arrays of strings.</li>
  * </ul>
  *
  * <p>Optional display hints ({@code message}, {@code image}, {@code link}) are
@@ -41,7 +42,7 @@ public class NotificationSubscription {
     private ResourcePublishedFilter resourceFilter;
 
     /** Generic key=value filter used for all other event types. */
-    private Map<String, String> filters;
+    private Map<String, Object> filters;
 
     /**
      * Optional localized display message echoed back in the notification.
@@ -89,12 +90,12 @@ public class NotificationSubscription {
         this.resourceFilter = resourceFilter;
     }
 
-    public Map<String, String> getFilters() {
+    public Map<String, Object> getFilters() {
         return filters;
     }
 
-    public void setFilters(Map<String, String> filters) {
-        this.filters = filters;
+    public void setFilters(Map<String, ?> filters) {
+        this.filters = filters == null ? null : new LinkedHashMap<>(filters);
     }
 
     public Map<String, String> getMessage() {
