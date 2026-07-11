@@ -86,7 +86,8 @@
 	"featureTriggers": {
 		"onlineAccountsSignatureV2Height": 32000,
 		"assetOrderBoundsHeight": 32000,
-		"blockRewardBatchStartHeight": 55000
+		"blockRewardBatchStartHeight": 55000,
+		"devGroupApprovalSplitHeight": 60000
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

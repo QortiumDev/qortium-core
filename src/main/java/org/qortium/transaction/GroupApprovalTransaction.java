@@ -63,7 +63,8 @@ public class GroupApprovalTransaction extends Transaction {
 		Account admin = getAdmin();
 
 		// Can't cast approval decision if not part of the group's current approval authority
-		if (!Group.canApprove(this.repository, pendingTransactionData.getTxGroupId(), admin.getAddress()))
+		int approvalHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+		if (!Group.canApprove(this.repository, pendingTransactionData.getTxGroupId(), admin.getAddress(), pendingTransactionData.getType(), approvalHeight))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		// Check creator has enough funds

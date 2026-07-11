@@ -1885,7 +1885,7 @@ public class Block {
 		for (TransactionData transactionData : approvalPendingTransactions) {
 			Transaction transaction = Transaction.fromData(this.repository, transactionData);
 
-			Boolean isApproved = transaction.getApprovalDecision();
+			Boolean isApproved = transaction.getApprovalDecision(this.blockData.getHeight());
 
 			if (isApproved == null)
 				continue; // approval threshold not yet met

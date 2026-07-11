@@ -10,6 +10,8 @@ import org.qortium.data.transaction.*;
 import org.qortium.repository.DataException;
 import org.qortium.repository.GroupRepository;
 import org.qortium.repository.Repository;
+import org.qortium.transaction.Transaction.TransactionType;
+import org.qortium.utils.Groups;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -83,7 +85,7 @@ public class Group {
 		return repository.getGroupRepository().countUsableGroupAdmins(groupId) > 0;
 	}
 
-	public static boolean canApprove(Repository repository, int groupId, String address) throws DataException {
+	public static boolean canApprove(Repository repository, int groupId, String address, TransactionType transactionType, int approvalHeight) throws DataException {
 		if (isNullOwner(address))
 			return false;
 
@@ -95,13 +97,29 @@ public class Group {
 		if (!isNullOwner(groupData.getOwner()))
 			return groupRepository.adminExists(groupId, address);
 
-		if (hasUsableAdmins(repository, groupId))
-			return groupRepository.usableAdminExists(groupId, address);
+		if (!hasUsableAdmins(repository, groupId))
+			return groupRepository.memberExists(groupId, address);
 
-		return groupRepository.memberExists(groupId, address);
+		if (usesMemberApprovalAuthorities(groupData, transactionType, approvalHeight))
+			return groupRepository.memberExists(groupId, address);
+
+		return groupRepository.usableAdminExists(groupId, address);
 	}
 
-	public static int countApprovalAuthorities(Repository repository, int groupId) throws DataException {
+	private static boolean usesMemberApprovalAuthorities(GroupData groupData, TransactionType transactionType, int approvalHeight) {
+		if (approvalHeight < BlockChain.getInstance().getDevGroupApprovalSplitHeight())
+			return false;
+
+		if (!isNullOwner(groupData.getOwner()))
+			return false;
+
+		if (!Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), approvalHeight).contains(groupData.getGroupId()))
+			return false;
+
+		return GroupApprovalCategory.fromTransactionType(transactionType) == GroupApprovalCategory.GOVERNANCE;
+	}
+
+	public static int countApprovalAuthorities(Repository repository, int groupId, TransactionType transactionType, int approvalHeight) throws DataException {
 		GroupRepository groupRepository = repository.getGroupRepository();
 		GroupData groupData = groupRepository.fromGroupId(groupId);
 		if (groupData == null)
@@ -113,10 +131,13 @@ public class Group {
 		}
 
 		int usableAdminCount = groupRepository.countUsableGroupAdmins(groupId);
-		if (usableAdminCount > 0)
-			return usableAdminCount;
+		if (usableAdminCount <= 0)
+			return groupRepository.countNonNullGroupMembers(groupId);
 
-		return groupRepository.countNonNullGroupMembers(groupId);
+		if (usesMemberApprovalAuthorities(groupData, transactionType, approvalHeight))
+			return groupRepository.countNonNullGroupMembers(groupId);
+
+		return usableAdminCount;
 	}
 
 	// Constructors

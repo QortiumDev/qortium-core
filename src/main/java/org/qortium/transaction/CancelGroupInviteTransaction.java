@@ -67,7 +67,8 @@ public class CancelGroupInviteTransaction extends Transaction {
 		Account admin = getAdmin();
 
 		// Check admin is part of the group's current management authority
-		if (!Group.canApprove(this.repository, groupId, admin.getAddress()))
+		int approvalHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+		if (!Group.canApprove(this.repository, groupId, admin.getAddress(), this.transactionData.getType(), approvalHeight))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		Account invitee = getInvitee();
