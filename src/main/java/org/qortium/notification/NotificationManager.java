@@ -6,10 +6,19 @@ import org.eclipse.jetty.ee8.websocket.api.Session;
 import org.eclipse.jetty.ee8.websocket.api.WriteCallback;
 
 import org.qortium.crypto.Crypto;
+import org.qortium.data.transaction.BuyNameTransactionData;
+import org.qortium.data.transaction.CancelSellNameTransactionData;
 import org.qortium.data.transaction.ChatTransactionData;
+import org.qortium.data.transaction.PaymentTransactionData;
+import org.qortium.data.transaction.RateAccountTransactionData;
+import org.qortium.data.transaction.RateResourceTransactionData;
+import org.qortium.data.transaction.RegisterNameTransactionData;
+import org.qortium.data.transaction.SellNameTransactionData;
 import org.qortium.data.transaction.TransactionData;
-import org.qortium.repository.DataException;
+import org.qortium.data.transaction.TransferAssetTransactionData;
+import org.qortium.data.transaction.UpdateNameTransactionData;
 import org.qortium.transaction.Transaction;
+import org.qortium.utils.Amounts;
 import org.qortium.utils.Base58;
 import org.qortium.utils.NTP;
 
@@ -146,11 +155,33 @@ public class NotificationManager {
                 throw new IllegalStateException("Unsupported notification event: " + event);
         }
 
-        Map<String, String> filters = rule.getFilters();
+        Map<String, Object> filters = rule.getFilters();
         if (filters != null) {
-            for (String key : filters.keySet()) {
+            for (Map.Entry<String, Object> filter : filters.entrySet()) {
+                String key = filter.getKey();
                 if (!allowedKeys.contains(key)) {
                     return "Unknown filter key for " + event + ": " + key;
+                }
+                if (filter.getValue() instanceof String) {
+                    continue;
+                }
+                if (!(filter.getValue() instanceof List<?>)) {
+                    return "Filter value for " + key + " must be a string or an array of strings";
+                }
+                // Legacy RESOURCE_PUBLISHED filters are matched purely via the service/name
+                // index buckets, which cannot express OR — use the typed resourceFilter instead.
+                if ("RESOURCE_PUBLISHED".equals(event)) {
+                    return "Filter arrays are not supported for RESOURCE_PUBLISHED; use resourceFilter instead";
+                }
+
+                List<?> values = (List<?>) filter.getValue();
+                if (values.isEmpty()) {
+                    return "Filter array for " + key + " must not be empty";
+                }
+                for (Object value : values) {
+                    if (!(value instanceof String) || ((String) value).trim().isEmpty()) {
+                        return "Filter array for " + key + " must contain only non-blank strings";
+                    }
                 }
             }
         }
@@ -569,29 +600,74 @@ public class NotificationManager {
             return;
         }
 
-        TransactionData transactionData = transaction.getTransactionData();
-        String signature = transactionData.getSignature() != null ? Base58.encode(transactionData.getSignature()) : null;
+        TransactionData transactionData;
+        String signature;
         List<String> recipients;
         List<String> involvedAddresses;
+        Map<String, Object> data;
         try {
+            transactionData = transaction.getTransactionData();
+            signature = transactionData.getSignature() != null ? Base58.encode(transactionData.getSignature()) : null;
             recipients = new ArrayList<>(transaction.getRecipientAddresses());
             involvedAddresses = new ArrayList<>(transaction.getInvolvedAddresses());
-        } catch (DataException e) {
+
+            data = new LinkedHashMap<>();
+            data.put("type", transactionData.getType().name());
+            if (signature != null) {
+                data.put("signature", signature);
+            }
+            data.put("sender", Crypto.toAddress(transactionData.getCreatorPublicKey()));
+            data.put("recipients", recipients);
+            data.put("blockHeight", blockHeight);
+            data.put("created", transactionData.getTimestamp());
+        } catch (Exception e) {
             LOGGER.debug("Unable to gather TRANSACTION_CONFIRMED notification data: {}", e.getMessage());
             return;
         }
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("type", transactionData.getType().name());
-        if (signature != null) {
-            data.put("signature", signature);
+        try {
+            addTransactionConfirmedExtras(transactionData, data);
+        } catch (Exception e) {
+            LOGGER.debug("Unable to gather TRANSACTION_CONFIRMED notification extras: {}", e.getMessage());
         }
-        data.put("sender", Crypto.toAddress(transactionData.getCreatorPublicKey()));
-        data.put("recipients", recipients);
-        data.put("blockHeight", blockHeight);
-        data.put("created", transactionData.getTimestamp());
 
         dispatchEventAsync(new NotificationEvent("TRANSACTION_CONFIRMED", data, signature, involvedAddresses));
+    }
+
+    private static void addTransactionConfirmedExtras(TransactionData transactionData, Map<String, Object> data) {
+        if (transactionData instanceof PaymentTransactionData) {
+            data.put("amount", Amounts.prettyAmount(((PaymentTransactionData) transactionData).getAmount()));
+        } else if (transactionData instanceof TransferAssetTransactionData) {
+            TransferAssetTransactionData transferAssetTransactionData = (TransferAssetTransactionData) transactionData;
+            data.put("amount", Amounts.prettyAmount(transferAssetTransactionData.getAmount()));
+            data.put("assetId", transferAssetTransactionData.getAssetId());
+        } else if (transactionData instanceof RateAccountTransactionData) {
+            data.put("rating", ((RateAccountTransactionData) transactionData).getRating());
+        } else if (transactionData instanceof RateResourceTransactionData) {
+            RateResourceTransactionData rateResourceTransactionData = (RateResourceTransactionData) transactionData;
+            data.put("rating", rateResourceTransactionData.getRating());
+            if (rateResourceTransactionData.getService() != null) {
+                data.put("service", rateResourceTransactionData.getService().name());
+            }
+            putNonBlank(data, "name", rateResourceTransactionData.getName());
+            putNonBlank(data, "identifier", rateResourceTransactionData.getIdentifier());
+        } else if (transactionData instanceof RegisterNameTransactionData) {
+            putNonBlank(data, "name", ((RegisterNameTransactionData) transactionData).getName());
+        } else if (transactionData instanceof BuyNameTransactionData) {
+            putNonBlank(data, "name", ((BuyNameTransactionData) transactionData).getName());
+        } else if (transactionData instanceof SellNameTransactionData) {
+            putNonBlank(data, "name", ((SellNameTransactionData) transactionData).getName());
+        } else if (transactionData instanceof UpdateNameTransactionData) {
+            putNonBlank(data, "name", ((UpdateNameTransactionData) transactionData).getName());
+        } else if (transactionData instanceof CancelSellNameTransactionData) {
+            putNonBlank(data, "name", ((CancelSellNameTransactionData) transactionData).getName());
+        }
+    }
+
+    private static void putNonBlank(Map<String, Object> data, String key, String value) {
+        if (value != null && !value.trim().isEmpty()) {
+            data.put(key, value);
+        }
     }
 
     /**
@@ -690,11 +766,11 @@ public class NotificationManager {
     // Filter matching — generic
     // -------------------------------------------------------------------------
 
-    private boolean matchesGeneric(Map<String, String> filters, NotificationEvent event) {
+    private boolean matchesGeneric(Map<String, Object> filters, NotificationEvent event) {
         if (filters == null || filters.isEmpty()) {
             return true;
         }
-        for (Map.Entry<String, String> filter : filters.entrySet()) {
+        for (Map.Entry<String, Object> filter : filters.entrySet()) {
             if (!matchesFilter(event, filter.getKey(), filter.getValue())) {
                 return false;
             }
@@ -702,7 +778,21 @@ public class NotificationManager {
         return true;
     }
 
-    private boolean matchesFilter(NotificationEvent event, String key, String expectedValue) {
+    private boolean matchesFilter(NotificationEvent event, String key, Object expectedValue) {
+        if (expectedValue instanceof String) {
+            return matchesFilterValue(event, key, (String) expectedValue);
+        }
+        if (expectedValue instanceof List<?>) {
+            for (Object value : (List<?>) expectedValue) {
+                if (value instanceof String && matchesFilterValue(event, key, (String) value)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesFilterValue(NotificationEvent event, String key, String expectedValue) {
         if ("CHAT_MESSAGE".equals(event.getType()) && "involving".equals(key)) {
             return matchesAddress(event.getInvolvedAddresses(), expectedValue);
         }
@@ -1019,26 +1109,36 @@ public class NotificationManager {
             List<long[]> timestamps, List<String> jsons) {
 
         long t0 = System.currentTimeMillis();
-        Map<String, String> filters = sub.getFilters();
+        Map<String, Object> filters = sub.getFilters();
         if (filters == null) return;
-        String recipient = filters.get("recipient");
-        if (recipient == null || recipient.isEmpty()) return;
+        Object recipientValue = filters.get("recipient");
+        List<String> recipients = new ArrayList<>();
+        if (recipientValue instanceof String && !((String) recipientValue).isEmpty()) {
+            recipients.add((String) recipientValue);
+        } else if (recipientValue instanceof List<?>) {
+            for (Object value : (List<?>) recipientValue) {
+                if (value instanceof String && !((String) value).isEmpty()) {
+                    recipients.add((String) value);
+                }
+            }
+        }
+        if (recipients.isEmpty()) return;
 
         try (org.qortium.repository.Repository repository =
                      org.qortium.repository.RepositoryManager.getRepository()) {
 
+            for (String recipient : recipients) {
+                List<String[]> payments =
+                        repository.getTransactionRepository()
+                                .getReceivedPaymentsForNotifications(recipient, after, paymentLimit);
 
-            List<String[]> payments =
-                    repository.getTransactionRepository()
-                            .getReceivedPaymentsForNotifications(recipient, after, paymentLimit);
-
-
-            for (String[] row : payments) {
-                // row: [sender, recipient, amountPretty, timestampMs, signature]
-                long ts = Long.parseLong(row[3]);
-                String sig = row.length > 4 ? row[4] : null;
-                timestamps.add(new long[]{ts});
-                jsons.add(buildPaymentHistoryJson(row[0], row[1], row[2], ts, sig, sub));
+                for (String[] row : payments) {
+                    // row: [sender, recipient, amountPretty, timestampMs, signature]
+                    long ts = Long.parseLong(row[3]);
+                    String sig = row.length > 4 ? row[4] : null;
+                    timestamps.add(new long[]{ts});
+                    jsons.add(buildPaymentHistoryJson(row[0], row[1], row[2], ts, sig, sub));
+                }
             }
         } catch (Exception e) {
             LOGGER.debug("Error fetching payment history: {}", e.getMessage());
@@ -1124,9 +1224,10 @@ public class NotificationManager {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private static String filterValue(Map<String, String> filters, String key) {
+    private static String filterValue(Map<String, Object> filters, String key) {
         if (filters == null) return WILDCARD;
-        String v = filters.get(key);
+        Object value = filters.get(key);
+        String v = value instanceof String ? (String) value : null;
         return (v != null && !v.isEmpty()) ? v : WILDCARD;
     }
 

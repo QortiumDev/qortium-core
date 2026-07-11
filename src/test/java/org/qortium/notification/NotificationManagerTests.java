@@ -5,6 +5,8 @@ import org.junit.After;
 import org.junit.Test;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.PaymentTransactionData;
+import org.qortium.data.transaction.RateAccountTransactionData;
+import org.qortium.data.transaction.RegisterNameTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.transaction.Transaction;
 import org.qortium.test.common.Common;
@@ -98,12 +100,49 @@ public class NotificationManagerTests extends Common {
     }
 
     @Test
+    public void testTransactionConfirmedArrayFiltersMatchAndReject() {
+        CapturingSession txTypeMatch = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("signature", "tx-signature", "txType", List.of("PAYMENT", "TRANSFER_ASSET")));
+        CapturingSession txTypeMiss = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("signature", "tx-signature", "txType", List.of("ARBITRARY", "MESSAGE")));
+        CapturingSession scalarMatch = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("signature", "tx-signature", "txType", "PAYMENT"));
+        CapturingSession singleValueArrayMatch = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("signature", "tx-signature", "txType", List.of("PAYMENT")));
+        CapturingSession combinedMatch = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("address", "sender", "txType", List.of("PAYMENT", "TRANSFER_ASSET")));
+        CapturingSession combinedMiss = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("address", "other", "txType", List.of("PAYMENT", "TRANSFER_ASSET")));
+        CapturingSession addressArrayMatch = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("address", List.of("other", "recipient")));
+
+        Map<String, Object> data = Map.of("type", "PAYMENT", "signature", "tx-signature", "sender", "sender",
+                "recipients", List.of("recipient"), "blockHeight", 99, "created", 123456L);
+        this.notificationManager.processEvent(new NotificationEvent(
+                "TRANSACTION_CONFIRMED", data, "tx-signature", Arrays.asList("sender", "recipient")));
+
+        assertNotificationCount(1, txTypeMatch, scalarMatch, singleValueArrayMatch, combinedMatch, addressArrayMatch);
+        assertNotificationCount(0, txTypeMiss, combinedMiss);
+    }
+
+    @Test
     public void testSubscriptionValidationRejectsUnknownEventsAndFilters() {
         assertValidationError(subscription("UNKNOWN", Map.of("recipient", "recipient")), "Unknown notification event");
         assertValidationError(subscription("CHAT_MESSAGE", Map.of()), "require at least one filter");
         assertValidationError(subscription("TRANSACTION_CONFIRMED", Map.of("txType", "PAYMENT")), "require a signature or address");
         assertValidationError(subscription("CHAT_MESSAGE", Map.of("content", "secret")), "Unknown filter key");
         assertNull(NotificationManager.validateSubscription(subscription("PAYMENT_RECEIVED", Map.of("recipient", "recipient"))));
+    }
+
+    @Test
+    public void testSubscriptionValidationRejectsInvalidFilterArrays() {
+        assertValidationError(subscription("CHAT_MESSAGE", Map.of("sender", List.of())), "must not be empty");
+        assertValidationError(subscription("CHAT_MESSAGE", Map.of("sender", Arrays.asList("sender", ""))),
+                "only non-blank strings");
+        assertValidationError(subscription("CHAT_MESSAGE", Map.of("sender", Arrays.asList("sender", 1))),
+                "only non-blank strings");
+        assertValidationError(subscription("RESOURCE_PUBLISHED", Map.of("service", List.of("APP", "WEBSITE"))),
+                "not supported for RESOURCE_PUBLISHED");
     }
 
     @Test
@@ -145,6 +184,33 @@ public class NotificationManagerTests extends Common {
     }
 
     @Test
+    public void testConfirmedTransactionPayloadIncludesTypeSpecificExtras() throws Exception {
+        CapturingSession paymentSession = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("address", "sender", "txType", "PAYMENT"));
+        CapturingSession nameSession = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("address", "sender", "txType", "REGISTER_NAME"));
+        CapturingSession ratingSession = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("address", "sender", "txType", "RATE_ACCOUNT"));
+        long now = 1_000_000L;
+        NotificationManager.setNotificationTimeSupplierForTesting(() -> now);
+
+        this.notificationManager.onTransactionConfirmed(new NotificationTestTransaction(
+                new PaymentTransactionData(baseTransactionData(), "recipient", 123456789L)), 99, now - 1L);
+        awaitNotificationCount(1, paymentSession);
+        assertTrue(paymentSession.notifications.get(0).contains("\"amount\":\"1.23456789\""));
+
+        this.notificationManager.onTransactionConfirmed(new NotificationTestTransaction(
+                new RegisterNameTransactionData(baseTransactionData(), "notification-name", "{}")), 99, now - 1L);
+        awaitNotificationCount(1, nameSession);
+        assertTrue(nameSession.notifications.get(0).contains("\"name\":\"notification-name\""));
+
+        this.notificationManager.onTransactionConfirmed(new NotificationTestTransaction(
+                new RateAccountTransactionData(baseTransactionData(), new byte[32], 4)), 99, now - 1L);
+        awaitNotificationCount(1, ratingSession);
+        assertTrue(ratingSession.notifications.get(0).contains("\"rating\":4"));
+    }
+
+    @Test
     public void testGenericNotificationEchoesAppName() {
         NotificationSubscription rule = subscription("CHAT_MESSAGE", Map.of("sender", "sender"));
         rule.setAppName("Home");
@@ -158,7 +224,7 @@ public class NotificationManagerTests extends Common {
         assertTrue(session.notifications.get(0).contains("\"appName\":\"Home\""));
     }
 
-    private CapturingSession subscribe(String event, Map<String, String> filters) {
+    private CapturingSession subscribe(String event, Map<String, ?> filters) {
         return subscribe(subscription(event, filters));
     }
 
@@ -170,7 +236,7 @@ public class NotificationManagerTests extends Common {
         return capturingSession;
     }
 
-    private static NotificationSubscription subscription(String event, Map<String, String> filters) {
+    private static NotificationSubscription subscription(String event, Map<String, ?> filters) {
         NotificationSubscription rule = new NotificationSubscription();
         rule.setEvent(event);
         rule.setNotificationId("notification-id");
@@ -198,12 +264,14 @@ public class NotificationManagerTests extends Common {
     }
 
     private static Transaction confirmedTransaction() {
+        return new NotificationTestTransaction(new PaymentTransactionData(baseTransactionData(), "recipient", 1L));
+    }
+
+    private static BaseTransactionData baseTransactionData() {
         byte[] creatorPublicKey = new byte[32];
         byte[] signature = new byte[64];
         signature[0] = 1;
-        BaseTransactionData baseTransactionData = new BaseTransactionData(
-                123456L, 0, creatorPublicKey, 0L, signature);
-        return new NotificationTestTransaction(new PaymentTransactionData(baseTransactionData, "recipient", 1L));
+        return new BaseTransactionData(123456L, 0, creatorPublicKey, 0L, signature);
     }
 
     private static class NotificationTestTransaction extends Transaction {

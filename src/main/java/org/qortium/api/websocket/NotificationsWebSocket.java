@@ -39,7 +39,8 @@ import java.util.Objects;
  * {@code sender}, {@code txGroupId} (for group messages), or {@code involving}; notification data never includes
  * message content. {@code TRANSACTION_CONFIRMED} requires {@code signature} or {@code address},
  * and may additionally filter by {@code txType}. {@code PAYMENT_RECEIVED} accepts {@code sender},
- * {@code recipient}, {@code amount}, {@code created}, and {@code signature}.
+ * {@code recipient}, {@code amount}, {@code created}, and {@code signature}. Generic filter values
+ * may be a string or a non-empty array of strings, matching any array value case-insensitively.
  *
  * <p>The server will push JSON notifications whenever matching events occur:
  *

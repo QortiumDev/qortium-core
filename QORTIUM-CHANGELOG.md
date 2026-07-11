@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-10 - notifications: multi-value generic filters and richer confirmed-tx payloads
+
+Two small API-only notification upgrades for the 1.4.0 line (no consensus
+impact). First, generic notification filters now accept a list of values as
+well as a single value — for example one subscription can watch for several
+transaction types at once — matching any listed value, while single values
+and existing subscriptions behave exactly as before (lists are rejected for
+`RESOURCE_PUBLISHED`, whose richer `resourceFilter` already covers that
+need). Second, confirmed-transaction notifications now include a little more
+useful metadata per type — payment and asset-transfer amounts, rating
+values, and the name involved in name transactions — so apps can show a
+meaningful notification without a follow-up query; no message content or
+private data is ever included.
+
 ### 2026-07-10 - consensus: split dev-group approval authority by transaction category; begin 1.4.0 prerelease
 
 Opens the 1.4.0 prerelease line and lands its first change: a governance
