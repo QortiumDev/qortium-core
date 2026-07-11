@@ -34,6 +34,30 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-10 - consensus: split dev-group approval authority by transaction category; begin 1.4.0 prerelease
+
+Opens the 1.4.0 prerelease line and lands its first change: a governance
+split for the development group, scheduled to activate at Previewnet height
+60,000. Today the null-owned DEV group has no admins, so every group-approval
+vote falls to all members — but under the old rules, appointing the first
+admins would silently hand admins *all* voting power, including the votes
+that add or remove admins. From the activation height, dev groups with
+admins split authority in two: the eight group-management transaction types
+(group settings, adding/removing admins, kicks, bans, unbans, invites and
+invite cancellations) are decided by all members, while everything else
+routed through the group for approval (auto-updates, chain-parameter
+updates, assets, and other endorsements) is decided by admins only. Any
+member may propose the member-decided actions, admins can never make
+themselves unremovable, and if the group ever has no admins again everything
+returns to all-member voting. Before the activation height — and for all
+ordinary groups — nothing changes. The full rationale and decision history
+live in `docs/design/dev-group-approval-split.md`, new tests cover the split
+and its activation boundary, and a stale test expectation for the QDN
+upload staging directory is also fixed. The activation height sits safely
+after the 55,000 batch-rewards flag-day and, like all `featureTriggers`
+entries, can be rescheduled without splitting peering; all nodes must run
+1.4.0 before height 60,000 once it ships.
+
 ### 2026-07-10 - consensus: restore chain-config hash parity with the live network; release 1.3.5
 
 Fixes the v1.3.4 network partition. Nodes only peer with nodes whose chain
