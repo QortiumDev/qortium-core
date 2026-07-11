@@ -122,7 +122,7 @@ public class NoNativeAssetBootstrapTests extends Common {
 	}
 
 	@Test
-	public void testNormalAssetIssuanceBeforeNativeAssetStartsAtOne() throws DataException {
+	public void testNormalAssetIssuanceBeforeNativeAssetFollowsGenesisTestAsset() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			bootstrapAliceMinter(repository);
 			assertNativeAssetAbsent(repository);
@@ -134,8 +134,8 @@ public class NoNativeAssetBootstrapTests extends Common {
 			TransactionUtils.signAndMint(repository, firstAssetTransactionData, alice);
 
 			AssetData firstAssetData = repository.getAssetRepository().fromAssetName("FIRST_NORMAL");
-			assertEquals(1L, (long) firstAssetData.getAssetId());
-			AccountUtils.assertBalance(repository, "alice", 1L, INITIAL_NATIVE_QUANTITY);
+			assertEquals(2L, (long) firstAssetData.getAssetId());
+			AccountUtils.assertBalance(repository, "alice", 2L, INITIAL_NATIVE_QUANTITY);
 			assertNativeAssetAbsent(repository);
 
 			IssueAssetTransactionData secondAssetTransactionData = buildIssueAssetTransactionData(repository,
@@ -143,8 +143,8 @@ public class NoNativeAssetBootstrapTests extends Common {
 			TransactionUtils.signAndMint(repository, secondAssetTransactionData, alice);
 
 			AssetData secondAssetData = repository.getAssetRepository().fromAssetName("SECOND_NORMAL");
-			assertEquals(2L, (long) secondAssetData.getAssetId());
-			AccountUtils.assertBalance(repository, "alice", 2L, INITIAL_NATIVE_QUANTITY);
+			assertEquals(3L, (long) secondAssetData.getAssetId());
+			AccountUtils.assertBalance(repository, "alice", 3L, INITIAL_NATIVE_QUANTITY);
 			assertNativeAssetAbsent(repository);
 		}
 	}
@@ -185,7 +185,7 @@ public class NoNativeAssetBootstrapTests extends Common {
 			TransactionUtils.signAndMint(repository, normalAssetTransactionData, alice);
 
 			AssetData normalAssetData = repository.getAssetRepository().fromAssetName("PRE_NATIVE_NORMAL");
-			assertEquals(1L, (long) normalAssetData.getAssetId());
+			assertEquals(2L, (long) normalAssetData.getAssetId());
 			assertNativeAssetAbsent(repository);
 
 			issueInitialNativeAsset(repository);
