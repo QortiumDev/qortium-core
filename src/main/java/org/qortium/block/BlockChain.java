@@ -60,6 +60,7 @@ public class BlockChain {
 	private static final String ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER = "onlineAccountsSignatureV2Height";
 	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
 	private static final String BLOCK_REWARD_BATCH_START_TRIGGER = "blockRewardBatchStartHeight";
+	private static final String DEV_GROUP_APPROVAL_SPLIT_TRIGGER = "devGroupApprovalSplitHeight";
 
 	// Properties
 
@@ -925,6 +926,10 @@ public class BlockChain {
 
 	public long getOnlineAccountsSignatureV2Height() {
 		return getFeatureTriggerHeight(ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER, this.onlineAccountsSignatureV2Height);
+	}
+
+	public long getDevGroupApprovalSplitHeight() {
+		return getFeatureTriggerHeight(DEV_GROUP_APPROVAL_SPLIT_TRIGGER);
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {

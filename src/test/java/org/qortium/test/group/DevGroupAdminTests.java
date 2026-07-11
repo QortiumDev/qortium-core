@@ -5,11 +5,14 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
+import org.qortium.arbitrary.misc.Service;
+import org.qortium.block.BlockChain;
 import org.qortium.data.group.GroupAdminData;
 import org.qortium.data.group.GroupApprovalData;
 import org.qortium.data.group.GroupData;
 import org.qortium.data.transaction.*;
 import org.qortium.group.Group;
+import org.qortium.group.GroupApprovalCategory;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -22,6 +25,8 @@ import org.qortium.test.common.transaction.TestTransaction;
 import org.qortium.transaction.Transaction;
 import org.qortium.transaction.Transaction.ValidationResult;
 
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -53,6 +58,7 @@ import static org.junit.Assert.*;
 public class DevGroupAdminTests extends Common {
 
 	private static final int DEV_GROUP_ID = 1;
+	private static final int DEV_GROUP_APPROVAL_SPLIT_HEIGHT = 1000;
 
 	public static final String ALICE = "alice";
 	public static final String BOB = "bob";
@@ -113,14 +119,16 @@ public class DevGroupAdminTests extends Common {
 			TransactionData updateGroupTransactionData = createUpdateGroupForGroupApproval(repository, alice, DEV_GROUP_ID, "Ignored stale approval");
 			GroupUtils.approveTransaction(repository, ALICE, updateGroupTransactionData.getSignature(), true);
 
-			GroupApprovalData approvalData = repository.getTransactionRepository().getApprovalData(updateGroupTransactionData.getSignature());
+			GroupApprovalData approvalData = repository.getTransactionRepository().getApprovalData(updateGroupTransactionData.getSignature(),
+					repository.getBlockRepository().getBlockchainHeight());
 			assertEquals(1, approvalData.approvingAdmins.size());
 
 			TransactionData removeAliceAsAdmin = removeGroupAdmin(repository, bob, DEV_GROUP_ID, alice.getAddress());
 			assertEquals(Transaction.ApprovalStatus.APPROVED, signForGroupApproval(repository, removeAliceAsAdmin, List.of(bob)));
 			assertFalse(isAdmin(repository, alice.getAddress(), DEV_GROUP_ID));
 
-			approvalData = repository.getTransactionRepository().getApprovalData(updateGroupTransactionData.getSignature());
+			approvalData = repository.getTransactionRepository().getApprovalData(updateGroupTransactionData.getSignature(),
+					repository.getBlockRepository().getBlockchainHeight());
 			assertEquals(0, approvalData.approvingAdmins.size());
 		}
 	}
@@ -736,6 +744,116 @@ public class DevGroupAdminTests extends Common {
 		}
 	}
 
+	@Test
+	public void testDevGroupApprovalSplit() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, ALICE);
+			PrivateKeyAccount bob = Common.getTestAccount(repository, BOB);
+			PrivateKeyAccount chloe = Common.getTestAccount(repository, CHLOE);
+			PrivateKeyAccount dilbert = Common.getTestAccount(repository, DILBERT);
+			PrivateKeyAccount nonMember = Common.getTestAccount(repository, "alice-reward-share");
+
+			assertEquals(DEV_GROUP_APPROVAL_SPLIT_HEIGHT, BlockChain.getInstance().getDevGroupApprovalSplitHeight());
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, bob.getAddress(), 3600, List.of(alice)));
+			assertEquals(ValidationResult.OK, joinGroup(repository, bob, DEV_GROUP_ID));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, chloe.getAddress(), 3600, List.of(alice)));
+			assertEquals(ValidationResult.OK, joinGroup(repository, chloe, DEV_GROUP_ID));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, dilbert.getAddress(), 3600, List.of(alice)));
+			assertEquals(ValidationResult.OK, joinGroup(repository, dilbert, DEV_GROUP_ID));
+
+			TransactionData addBobAsAdmin = addGroupAdmin(repository, alice, DEV_GROUP_ID, bob.getAddress());
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, addBobAsAdmin, List.of(alice)));
+
+			int nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			assertTrue(nextHeight < DEV_GROUP_APPROVAL_SPLIT_HEIGHT);
+			assertEquals(2, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.UPDATE_GROUP, nextHeight));
+			assertEquals(2, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.ARBITRARY, nextHeight));
+
+			TransactionData preTriggerUpdate = createUpdateGroupForGroupApproval(repository, chloe, DEV_GROUP_ID, "Pre-trigger admin approval");
+			assertEquals(ValidationResult.NOT_GROUP_ADMIN, groupApproval(repository, chloe, preTriggerUpdate, true));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, preTriggerUpdate, List.of(alice)));
+
+			mintToHeight(repository, DEV_GROUP_APPROVAL_SPLIT_HEIGHT - 2);
+			TransactionData boundaryUpdate = createUpdateGroupForGroupApproval(repository, chloe, DEV_GROUP_ID, "Post-trigger member approval");
+			assertEquals(DEV_GROUP_APPROVAL_SPLIT_HEIGHT - 1, repository.getBlockRepository().getBlockchainHeight());
+
+			nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			assertEquals(DEV_GROUP_APPROVAL_SPLIT_HEIGHT, nextHeight);
+			assertEquals(4, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.UPDATE_GROUP, nextHeight));
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					signForGroupApproval(repository, boundaryUpdate, List.of(chloe)));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, boundaryUpdate, List.of(dilbert)));
+
+			TransactionData operationsTransaction = createAutoUpdateTransaction(repository, chloe, DEV_GROUP_ID);
+			nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			assertEquals(2, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.ARBITRARY, nextHeight));
+			assertEquals(ValidationResult.NOT_GROUP_ADMIN, groupApproval(repository, chloe, operationsTransaction, true));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, operationsTransaction, List.of(alice)));
+
+			TransactionData governanceTransaction = createGroupKickForGroupApproval(repository, chloe, DEV_GROUP_ID,
+					dilbert.getAddress(), "member-decided kick");
+			nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			assertEquals(4, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.GROUP_KICK, nextHeight));
+			assertEquals(ValidationResult.NOT_GROUP_ADMIN, groupApproval(repository, nonMember, governanceTransaction, true));
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					signForGroupApproval(repository, governanceTransaction, List.of(alice)));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, governanceTransaction, List.of(chloe)));
+			assertFalse(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
+
+			TransactionData removeAliceAsAdmin = removeGroupAdmin(repository, chloe, DEV_GROUP_ID, alice.getAddress());
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					signForGroupApproval(repository, removeAliceAsAdmin, List.of(alice)));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, removeAliceAsAdmin, List.of(chloe)));
+
+			TransactionData removeBobAsAdmin = removeGroupAdmin(repository, chloe, DEV_GROUP_ID, bob.getAddress());
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					signForGroupApproval(repository, removeBobAsAdmin, List.of(bob)));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, removeBobAsAdmin, List.of(chloe)));
+			assertEquals(0, repository.getGroupRepository().countUsableGroupAdmins(DEV_GROUP_ID));
+
+			nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			assertEquals(3, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.ARBITRARY, nextHeight));
+			assertEquals(3, Group.countApprovalAuthorities(repository, DEV_GROUP_ID, Transaction.TransactionType.GROUP_KICK, nextHeight));
+
+			TransactionData fallbackOperationsTransaction = createAutoUpdateTransaction(repository, chloe, DEV_GROUP_ID);
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					signForGroupApproval(repository, fallbackOperationsTransaction, List.of(chloe)));
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, fallbackOperationsTransaction, List.of(alice)));
+		}
+	}
+
+	@Test
+	public void testDevGroupApprovalCategoryMapping() {
+		EnumSet<Transaction.TransactionType> governanceTypes = EnumSet.of(
+				Transaction.TransactionType.UPDATE_GROUP,
+				Transaction.TransactionType.ADD_GROUP_ADMIN,
+				Transaction.TransactionType.REMOVE_GROUP_ADMIN,
+				Transaction.TransactionType.GROUP_KICK,
+				Transaction.TransactionType.GROUP_BAN,
+				Transaction.TransactionType.CANCEL_GROUP_BAN,
+				Transaction.TransactionType.GROUP_INVITE,
+				Transaction.TransactionType.CANCEL_GROUP_INVITE);
+
+		for (Transaction.TransactionType transactionType : Transaction.TransactionType.values()) {
+			GroupApprovalCategory expectedCategory = governanceTypes.contains(transactionType)
+					? GroupApprovalCategory.GOVERNANCE
+					: GroupApprovalCategory.OPERATIONS;
+			assertEquals(expectedCategory, GroupApprovalCategory.fromTransactionType(transactionType));
+		}
+	}
+
 	private Transaction.ApprovalStatus signForGroupApproval(Repository repository, TransactionData data, List<PrivateKeyAccount> signers) throws DataException {
 
 		for (PrivateKeyAccount signer : signers) {
@@ -773,6 +891,25 @@ public class DevGroupAdminTests extends Common {
 				= new GroupApprovalTransactionData(baseTransactionData, transactionData.getSignature(), decision);
 
 		return TransactionUtils.signAndImport(repository, groupApprovalTransactionData, signer);
+	}
+
+	private static void mintToHeight(Repository repository, int height) throws DataException {
+		int blockCount = height - repository.getBlockRepository().getBlockchainHeight();
+		if (blockCount > 0)
+			BlockUtils.mintBlocks(repository, blockCount);
+	}
+
+	private static TransactionData createAutoUpdateTransaction(Repository repository, PrivateKeyAccount creator, int groupId) throws DataException {
+		BaseTransactionData baseTransactionData = TestTransaction.generateBase(creator, groupId);
+		int version = Transaction.getVersionByTimestamp(baseTransactionData.getTimestamp());
+		byte[] data = new byte[60];
+		ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData, version,
+				Service.AUTO_UPDATE.value, 0, data.length, null, null, ArbitraryTransactionData.Method.PUT,
+				null, ArbitraryTransactionData.Compression.NONE, data, ArbitraryTransactionData.DataType.RAW_DATA,
+				null, Collections.emptyList());
+
+		TransactionUtils.signAndMint(repository, transactionData, creator);
+		return transactionData;
 	}
 
 	private ValidationResult joinGroup(Repository repository, PrivateKeyAccount joiner, int groupId) throws DataException {

@@ -332,10 +332,11 @@ public interface TransactionRepository {
 	 * Returns list of latest approval decisions for given pending transaction signature.
 	 * 
 	 * @param pendingSignature
+	 * @param approvalHeight height at which approval authority is evaluated
 	 * @return
 	 * @throws DataException
 	 */
-	public GroupApprovalData getApprovalData(byte[] pendingSignature) throws DataException;
+	public GroupApprovalData getApprovalData(byte[] pendingSignature, int approvalHeight) throws DataException;
 
 	/**
 	 * Returns whether transaction is confirmed or not.

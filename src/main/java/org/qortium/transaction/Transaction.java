@@ -942,9 +942,9 @@ public abstract class Transaction {
 		}
 	}
 
-	public Boolean getApprovalDecision() throws DataException {
+	public Boolean getApprovalDecision(int approvalHeight) throws DataException {
 		// Grab latest decisions from repository
-		GroupApprovalData groupApprovalData = this.repository.getTransactionRepository().getApprovalData(this.transactionData.getSignature());
+		GroupApprovalData groupApprovalData = this.repository.getTransactionRepository().getApprovalData(this.transactionData.getSignature(), approvalHeight);
 		if (groupApprovalData == null)
 			return null;
 
@@ -954,11 +954,11 @@ public abstract class Transaction {
 		ApprovalThreshold approvalThreshold = groupData.getApprovalThreshold();
 
 		// Fetch total number of accounts currently allowed to approve this group's transactions
-		int totalAuthorities = Group.countApprovalAuthorities(repository, txGroupId);
+		int totalAuthorities = Group.countApprovalAuthorities(repository, txGroupId, this.transactionData.getType(), approvalHeight);
 		if (totalAuthorities <= 0)
 			return null;
 
-		int approvingAuthorities = countCurrentApprovalAuthorities(groupApprovalData.approvingAdmins, txGroupId);
+		int approvingAuthorities = countCurrentApprovalAuthorities(groupApprovalData.approvingAdmins, txGroupId, approvalHeight);
 
 		// Are there enough approvals?
 		if (approvalThreshold.meetsTheshold(approvingAuthorities, totalAuthorities))
@@ -968,12 +968,12 @@ public abstract class Transaction {
 		return null;
 	}
 
-	private int countCurrentApprovalAuthorities(List<byte[]> publicKeys, int groupId) throws DataException {
+	private int countCurrentApprovalAuthorities(List<byte[]> publicKeys, int groupId, int approvalHeight) throws DataException {
 		int count = 0;
 
 		for (byte[] publicKey : publicKeys) {
 			String address = Crypto.toAddress(publicKey);
-			if (Group.canApprove(this.repository, groupId, address))
+			if (Group.canApprove(this.repository, groupId, address, this.transactionData.getType(), approvalHeight))
 				++count;
 		}
 

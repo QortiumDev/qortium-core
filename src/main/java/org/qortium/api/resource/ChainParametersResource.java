@@ -1363,13 +1363,13 @@ public class ChainParametersResource {
 		if (groupData != null)
 			summary.approvalThreshold = groupData.getApprovalThreshold();
 
-		GroupApprovalData approvalData = repository.getTransactionRepository().getApprovalData(transactionData.getSignature());
+		GroupApprovalData approvalData = repository.getTransactionRepository().getApprovalData(transactionData.getSignature(), currentHeight);
 		if (approvalData != null) {
 			summary.approvalCount = approvalData.approvingAdmins.size();
 			summary.rejectionCount = approvalData.rejectingAdmins.size();
 		}
 
-		summary.approvalAuthorityCount = Group.countApprovalAuthorities(repository, transactionData.getTxGroupId());
+		summary.approvalAuthorityCount = Group.countApprovalAuthorities(repository, transactionData.getTxGroupId(), transactionData.getType(), currentHeight);
 		summary.effectiveNow = isEffectiveNow(repository, transactionData, currentHeight);
 
 		return summary;

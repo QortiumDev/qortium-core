@@ -1421,7 +1421,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	}
 
 	@Override
-	public GroupApprovalData getApprovalData(byte[] pendingSignature) throws DataException {
+	public GroupApprovalData getApprovalData(byte[] pendingSignature, int approvalHeight) throws DataException {
 		// Fetch latest approval data for pending transaction's signature
 		// NOT simply number of GROUP_APPROVAL transactions as some may record opposition, or changed opinions
 		// Also make sure that GROUP_APPROVAL transaction's signer still has approval authority for the group
@@ -1431,7 +1431,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 				+ "NATURAL JOIN Transactions WHERE pending_signature = ? AND block_height IS NOT NULL";
 
 		StringBuilder sql = new StringBuilder(1024);
-		sql.append("SELECT GAT.admin, GAT.approval, PendingTransactions.tx_group_id FROM (");
+		sql.append("SELECT GAT.admin, GAT.approval, PendingTransactions.tx_group_id, PendingTransactions.type FROM (");
 		sql.append(latestApprovalSql);
 		sql.append(") AS GAT LEFT OUTER JOIN (");
 		sql.append(latestApprovalSql);
@@ -1449,9 +1449,10 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 				byte[] adminPublicKey = resultSet.getBytes(1);
 				boolean approval = resultSet.getBoolean(2);
 				int txGroupId = resultSet.getInt(3);
+				TransactionType pendingTransactionType = TransactionType.valueOf(resultSet.getInt(4));
 
 				String adminAddress = Crypto.toAddress(adminPublicKey);
-				if (!Group.canApprove(this.repository, txGroupId, adminAddress))
+				if (!Group.canApprove(this.repository, txGroupId, adminAddress, pendingTransactionType, approvalHeight))
 					continue;
 
 				if (approval)

@@ -68,7 +68,8 @@ public class GroupInviteTransaction extends Transaction {
 		Account admin = getAdmin();
 
 		// Can't invite if not part of the group's current management authority
-		if (!Group.canApprove(this.repository, groupId, admin.getAddress()))
+		int approvalHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+		if (!Group.canApprove(this.repository, groupId, admin.getAddress(), this.transactionData.getType(), approvalHeight))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		Account invitee = getInvitee();
