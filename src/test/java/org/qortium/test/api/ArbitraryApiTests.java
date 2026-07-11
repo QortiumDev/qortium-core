@@ -28,6 +28,7 @@ import org.qortium.transaction.RegisterNameTransaction;
 import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Base58;
+import org.qortium.utils.FilesystemUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -483,7 +484,7 @@ public class ArbitraryApiTests extends ApiCommon {
 		Path path = (Path) method.invoke(null, "APP", "QortiumHomeTest", "qortium-chat");
 
 		assertEquals(
-				Paths.get("uploads-temp").toAbsolutePath().normalize().resolve("APP").resolve("QortiumHomeTest").resolve("qortium-chat"),
+				FilesystemUtils.getUploadsTempPath().toAbsolutePath().normalize().resolve("APP").resolve("QortiumHomeTest").resolve("qortium-chat"),
 				path
 		);
 	}
