@@ -61,6 +61,7 @@ public class BlockChain {
 	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
 	private static final String BLOCK_REWARD_BATCH_START_TRIGGER = "blockRewardBatchStartHeight";
 	private static final String DEV_GROUP_APPROVAL_SPLIT_TRIGGER = "devGroupApprovalSplitHeight";
+	private static final String DEPLOY_AT_WORKING_ASSET_TRIGGER = "deployAtWorkingAssetHeight";
 
 	// Properties
 
@@ -930,6 +931,11 @@ public class BlockChain {
 
 	public long getDevGroupApprovalSplitHeight() {
 		return getFeatureTriggerHeight(DEV_GROUP_APPROVAL_SPLIT_TRIGGER);
+	}
+
+	/** From this height, DEPLOY_AT with a non-native working asset no longer requires the native asset to exist for step fees. */
+	public long getDeployAtWorkingAssetHeight() {
+		return getFeatureTriggerHeight(DEPLOY_AT_WORKING_ASSET_TRIGGER);
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {

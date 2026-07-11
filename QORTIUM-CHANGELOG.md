@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-11 - consensus: allow asset-working AT deployment on chains without a native asset; release 1.4.1
+
+Deploying an AT (on-chain automated transaction) was impossible on Previewnet:
+deploy validation demanded that the native coin exist whenever the chain
+charges per-step AT fees, even though the runtime never charges those fees to
+an AT whose working balance is a non-native asset — and Previewnet has no
+native coin yet. From the new `deployAtWorkingAssetHeight` feature trigger
+(set to 60,000 on Previewnet, the same activation height as the 1.4.0
+approval split), that native-coin requirement is only applied when the
+deployment actually needs native funds (a paid fee or a native fee reserve).
+Behavior before the trigger height is unchanged, so updated and non-updated
+nodes agree until activation; nodes must update before height 60,000. This
+unblocks the first real asset-working ATs (starting with the CHIP faucet for
+the casino test app).
+
 ### 2026-07-10 - notifications: multi-value generic filters and richer confirmed-tx payloads
 
 Two small API-only notification upgrades for the 1.4.0 line (no consensus
