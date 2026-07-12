@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-12 - tests: guard REST entity serialization contracts
+
+Adds a broad regression guard for the REST API's JSON contract. The test
+discovers the resource classes registered with Jersey, collects every Qortium
+response type and request-body type exposed by their endpoints, and asks the
+same MOXy/JAXB layer used by the running node to build a serialization context
+for each one. A future API data class that is missing required serialization
+metadata or a usable constructor will now fail during tests instead of first
+appearing to users as an internal server error.
+
 ### 2026-07-12 - network: retry allowed I2P peers promptly after outages
 
 Fixes delayed peer recovery for nodes configured to use I2P only. After an
