@@ -3,15 +3,22 @@ package org.qortium.data.rating;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.crypto.Crypto;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+
+@XmlAccessorType(XmlAccessType.FIELD)
 public class ResourceRatingData {
 
-	private final Service service;
-	private final String nameKey;
-	private final String name;
-	private final String identifier;
-	private final String raterAddress;
-	private final byte[] raterPublicKey;
-	private final int rating;
+	private Service service;
+	private String nameKey;
+	private String name;
+	private String identifier;
+	private String raterAddress;
+	private byte[] raterPublicKey;
+	private int rating;
+
+	protected ResourceRatingData() {
+	}
 
 	public ResourceRatingData(Service service, String nameKey, String name, String identifier, byte[] raterPublicKey, int rating) {
 		this(service, nameKey, name, identifier, Crypto.toAddress(raterPublicKey), raterPublicKey, rating);

@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-12 - api: serialize personal resource rating responses; release 1.4.2
+
+Fixes resource-rating reads for people who have already rated an app or
+website. Core could find the saved rating, but its API response class was not
+configured for JSON serialization, so `/resource-ratings/rating` returned an
+internal server error instead of the rating. The response now follows the same
+serialization pattern as the other rating API data classes, and a regression
+test covers a real saved rating through the endpoint and JSON conversion. Core
+is bumped to 1.4.2 for this API-only patch; it does not change consensus rules
+or the Previewnet minimum peer version.
+
 ### 2026-07-11 - consensus: allow asset-working AT deployment on chains without a native asset; release 1.4.1
 
 Deploying an AT (on-chain automated transaction) was impossible on Previewnet:
