@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-12 - network: retry allowed I2P peers promptly after outages
+
+Fixes delayed peer recovery for nodes configured to use I2P only. After an
+internet interruption, failed I2P connections enter a normal backoff, but
+remembered direct-IP peers could keep the candidate list looking non-empty
+even though policy forbids dialing them. That prevented the isolated-node
+fast retry from selecting the I2P peers and left the node without chain peers
+until the full 15-minute I2P backoff expired. Chain and QDN/data peer selection
+now discard disallowed transports before making retry and fallback decisions.
+Regression tests reproduce the mixed known-peer state on both network layers.
+
 ### 2026-07-12 - api: serialize personal resource rating responses; release 1.4.2
 
 Fixes resource-rating reads for people who have already rated an app or

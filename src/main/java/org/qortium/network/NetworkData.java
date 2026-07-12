@@ -1311,6 +1311,12 @@ public class NetworkData {
         return preferredPeers.isEmpty() ? peers : preferredPeers;
     }
 
+    private boolean isTransportAllowed(PeerData peerData) {
+        return peerData.getAddress().isI2P()
+                ? Settings.getInstance().isI2PEnabled()
+                : Settings.getInstance().isIPAllowed();
+    }
+
     // private final Predicate<PeerData> isResolvedAsConnectedPeer = peerData -> {
     //     try {
     //         InetSocketAddress resolvedSocketAddress = peerData.getAddress().toSocketAddress();
@@ -1871,6 +1877,9 @@ public class NetworkData {
 
     private Peer getConnectablePeer(final Long now) throws InterruptedException {
         List<PeerData> peers = this.getAllKnownPeers();
+        // Apply policy before fallback/backoff decisions so unusable remembered transports cannot
+        // prevent an isolated node from retrying the peers it is actually allowed to dial.
+        peers.removeIf(peerData -> !isTransportAllowed(peerData));
             
         // Fallback: If NetworkData has no peers, try to get peers from Network
         // Only use peers that actually advertise QDN capability

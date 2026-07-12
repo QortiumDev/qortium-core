@@ -309,6 +309,23 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
+	public void testI2POnlyIsolatedChainRetriesBackoffPeerWhenKnownIPIsDisallowed() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+
+		PeerData recentlyAttemptedI2PPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedI2PPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedI2PPeer);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+		assertTrue(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
 	public void testPeersMessageIncludesI2PChainPeersWithoutDnsResolution() throws Exception {
 		PeerData i2pPeerData = new PeerData(PeerAddress.fromString(B32), 100L, "test");
 		Long now = NTP.getTime();
