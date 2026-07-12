@@ -34,6 +34,38 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-12 - tests: guard REST entity serialization contracts
+
+Adds a broad regression guard for the REST API's JSON contract. The test
+discovers the resource classes registered with Jersey, collects every Qortium
+response type and request-body type exposed by their endpoints, and asks the
+same MOXy/JAXB layer used by the running node to build a serialization context
+for each one. A future API data class that is missing required serialization
+metadata or a usable constructor will now fail during tests instead of first
+appearing to users as an internal server error.
+
+### 2026-07-12 - network: retry allowed I2P peers promptly after outages
+
+Fixes delayed peer recovery for nodes configured to use I2P only. After an
+internet interruption, failed I2P connections enter a normal backoff, but
+remembered direct-IP peers could keep the candidate list looking non-empty
+even though policy forbids dialing them. That prevented the isolated-node
+fast retry from selecting the I2P peers and left the node without chain peers
+until the full 15-minute I2P backoff expired. Chain and QDN/data peer selection
+now discard disallowed transports before making retry and fallback decisions.
+Regression tests reproduce the mixed known-peer state on both network layers.
+
+### 2026-07-12 - api: serialize personal resource rating responses; release 1.4.2
+
+Fixes resource-rating reads for people who have already rated an app or
+website. Core could find the saved rating, but its API response class was not
+configured for JSON serialization, so `/resource-ratings/rating` returned an
+internal server error instead of the rating. The response now follows the same
+serialization pattern as the other rating API data classes, and a regression
+test covers a real saved rating through the endpoint and JSON conversion. Core
+is bumped to 1.4.2 for this API-only patch; it does not change consensus rules
+or the Previewnet minimum peer version.
+
 ### 2026-07-11 - consensus: allow asset-working AT deployment on chains without a native asset; release 1.4.1
 
 Deploying an AT (on-chain automated transaction) was impossible on Previewnet:

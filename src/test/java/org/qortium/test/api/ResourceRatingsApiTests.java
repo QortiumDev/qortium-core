@@ -1,5 +1,7 @@
 package org.qortium.test.api;
 
+import org.eclipse.persistence.jaxb.JAXBContextFactory;
+import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
@@ -8,6 +10,7 @@ import org.qortium.api.resource.ResourceRatingsResource;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.block.BlockChain;
 import org.qortium.data.account.AccountTrustStatus;
+import org.qortium.data.rating.ResourceRatingData;
 import org.qortium.data.rating.ResourceRatingSummaryData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.BaseTransactionData;
@@ -27,6 +30,10 @@ import org.qortium.test.common.TransactionUtils;
 import org.qortium.test.common.transaction.TestTransaction;
 import org.qortium.utils.Base58;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import java.io.StringWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -34,6 +41,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class ResourceRatingsApiTests extends ApiCommon {
 
@@ -109,6 +117,29 @@ public class ResourceRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testRatingEndpointSerializesExistingRating() throws DataException, JAXBException {
+		TestAccount chloe;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			publishResource(repository, RESOURCE_NAME, Service.APP, null);
+			chloe = Common.getTestAccount(repository, "chloe");
+			TransactionUtils.signAndMint(repository, ratingData(chloe, 7), chloe);
+		}
+
+		ResourceRatingData rating = this.resourceRatingsResource.getResourceRating(
+				"APP", RESOURCE_NAME, null, chloe.getAddress());
+		assertEquals(Service.APP, rating.getService());
+		assertEquals(RESOURCE_NAME, rating.getName());
+		assertEquals(IDENTIFIER, rating.getIdentifier());
+		assertEquals(chloe.getAddress(), rating.getRaterAddress());
+		assertEquals(7, rating.getRating());
+
+		String json = marshalRating(rating);
+		assertTrue(json.contains("\"raterAddress\":\"" + chloe.getAddress() + "\""));
+		assertTrue(json.contains("\"rating\":7"));
+	}
+
+	@Test
 	public void testMissingResourceFailsSummary() {
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.resourceRatingsResource.getResourceRatingSummary("APP", "missing-resource", null));
@@ -116,6 +147,17 @@ public class ResourceRatingsApiTests extends ApiCommon {
 
 	private RateResourceTransactionData ratingData(PrivateKeyAccount rater, int rating) throws DataException {
 		return new RateResourceTransactionData(TestTransaction.generateBase(rater), Service.APP.value, RESOURCE_NAME, null, rating);
+	}
+
+	private static String marshalRating(ResourceRatingData rating) throws JAXBException {
+		JAXBContext context = JAXBContextFactory.createContext(new Class[] {ResourceRatingData.class}, null);
+		Marshaller marshaller = context.createMarshaller();
+		marshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/json");
+		marshaller.setProperty(MarshallerProperties.JSON_INCLUDE_ROOT, false);
+
+		StringWriter writer = new StringWriter();
+		marshaller.marshal(rating, writer);
+		return writer.toString();
 	}
 
 	private void publishResource(Repository repository, String name, Service service, String identifier) throws DataException {

@@ -1896,6 +1896,9 @@ public class Network {
     private Peer getConnectablePeer(final Long now) throws InterruptedException {
         // Find an address to connect to
         List<PeerData> peers = this.getAllKnownPeers();
+        // Apply policy before deciding whether isolation fallback is needed. Otherwise remembered
+        // peers on a disabled transport can hide the fact that every usable peer is in backoff.
+        peers.removeIf(peerData -> !isTransportAllowed(peerData));
 
         try (Repository repository = RepositoryManager.tryRepository()) {
             if (repository == null) {
@@ -2153,6 +2156,12 @@ public class Network {
             return !i2pPeers.isEmpty() ? i2pPeers : directPeers;
 
         return !directPeers.isEmpty() ? directPeers : i2pPeers;
+    }
+
+    private boolean isTransportAllowed(PeerData peerData) {
+        return peerData.getAddress().isI2P()
+                ? Settings.getInstance().isI2PEnabled()
+                : Settings.getInstance().isIPAllowed();
     }
 
     public Peer getPeerFromChannel(SocketChannel socketChannel) {
