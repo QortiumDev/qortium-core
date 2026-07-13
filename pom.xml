@@ -35,7 +35,7 @@
 		<hsqldb.version>2.7.4</hsqldb.version>
 		<icu4j.version>78.3</icu4j.version>
 		<java-diff-utils.version>4.17</java-diff-utils.version>
-		<jackson.version>2.22.0</jackson.version>
+		<jackson.version>2.22.1</jackson.version>
 		<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
 		<jacoco.minimum.branch.coverage>0.35</jacoco.minimum.branch.coverage>
 		<jacoco.minimum.instruction.coverage>0.50</jacoco.minimum.instruction.coverage>
