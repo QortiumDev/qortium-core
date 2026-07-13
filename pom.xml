@@ -16,7 +16,7 @@
 		<test.awt.headless>true</test.awt.headless>
 
 		<bitcoinj.version>0.17.1</bitcoinj.version>
-		<bouncycastle.version>1.84</bouncycastle.version>
+		<bouncycastle.version>1.85</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<ciyam-at.version>1b731d1</ciyam-at.version> <!-- QuickMythril/AT v1.4.3 fork point -->
 		<commons-net.version>3.13.0</commons-net.version>
