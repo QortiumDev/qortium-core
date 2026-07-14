@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-14 - build: reconcile July dependency updates
+
+Aligns the Jackson databind/core family on `2.22.1`, closing CVE-2026-54515.
+The temporary scanner ignore is retained only because current GitHub/OSV Maven
+metadata still flags the fixed version, and now documents that narrow reason so
+it can be removed as soon as the upstream metadata is corrected. Also records
+the tested Jetty `12.1.11`, gRPC `1.82.2`, Netty `4.2.16.Final`, and Bouncy
+Castle `1.85` maintenance updates that arrived in the same dependency batch.
+
 ### 2026-07-13 - api: keep the SSL keystore password out of settings responses
 
 Stops `GET /admin/settings` and the generated API schema from exposing the
