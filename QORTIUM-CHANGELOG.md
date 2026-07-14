@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-13 - api: keep the SSL keystore password out of settings responses
+
+Stops `GET /admin/settings` and the generated API schema from exposing the
+node's SSL keystore password. The setting remains fully supported in the local
+settings file and continues to be available to Core itself; this only removes
+the secret value from the aggregate API response used by operator interfaces.
+
 ### 2026-07-12 - tests: guard REST entity serialization contracts
 
 Adds a broad regression guard for the REST API's JSON contract. The test

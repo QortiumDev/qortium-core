@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.ApiError;
+import org.qortium.api.ApiRequest;
 import org.qortium.api.restricted.resource.AdminResource;
 import org.qortium.controller.BootstrapNode;
 import org.qortium.controller.RestartNode;
@@ -12,12 +13,14 @@ import org.qortium.settings.Settings;
 import org.qortium.test.common.ApiCommon;
 import org.qortium.test.common.Common;
 
+import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -130,6 +133,23 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals("INTEGER", metadata.writable.get("publicQdnPublishChunkSessionLimit").type);
 		assertEquals(false, metadata.writable.get("publicQdnPublishChunkSessionLimit").restartRequired);
 		assertTrue(metadata.pendingRestart.isEmpty());
+	}
+
+	@Test
+	public void testSettingsResponseOmitsSslKeystorePassword() throws Exception {
+		Path settingsPath = createWritableApiSettings(
+				"{\"sslKeystorePathname\":\"operator.jks\",\"sslKeystorePassword\":\"operator-secret\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		StringWriter writer = new StringWriter();
+		ApiRequest.marshall(writer, this.adminResource.settings());
+		String settingsJson = writer.toString();
+
+		assertTrue(settingsJson.contains("\"sslKeystorePathname\""));
+		assertTrue(settingsJson.contains("operator.jks"));
+		assertFalse(settingsJson.contains("\"sslKeystorePassword\""));
+		assertFalse(settingsJson.contains("operator-secret"));
+		assertEquals("operator-secret", Settings.getInstance().getSslKeystorePassword());
 	}
 
 	@Test
