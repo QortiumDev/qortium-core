@@ -26,6 +26,25 @@ file_args="$(awk '
 ' "${START_ARGS_FILE}" 2>/dev/null || true)"
 
 jvm_memory_args="${file_args:-${QORTIUM_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}}"
+
+# Compact object headers reduce per-object heap overhead. The flag only exists
+# on Java 25+, so append it at exec time based on the image's JVM — never into
+# the persisted start-arguments file, which outlives image upgrades and could
+# feed the flag to an older JVM (fatal at startup). Skipped when the operator
+# already configured it either way.
+java_major="$(java -version 2>&1 | awk -F '"' '/version/ { print $2; exit }' | awk -F. '{ if ($1 == "1") print $2; else print $1 }' || true)"
+case "${java_major:-}" in
+    ''|*[!0-9]*) java_major=0 ;;
+esac
+case "${jvm_memory_args}" in
+    *UseCompactObjectHeaders*) ;;
+    *)
+        if [ "${java_major}" -ge 25 ]; then
+            jvm_memory_args="${jvm_memory_args} -XX:+UseCompactObjectHeaders"
+        fi
+        ;;
+esac
+
 echo "Using JVM memory args from ${START_ARGS_FILE}: ${jvm_memory_args}"
 echo "Using settings file: ${SETTINGS_FILE}"
 if [ -f "${SETTINGS_FILE}" ]; then

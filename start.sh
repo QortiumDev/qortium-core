@@ -66,6 +66,13 @@ fi
 # or when API documentation is enabled.
 JVM_MEMORY_ARGS=("-XX:MaxRAMPercentage=50" "-XX:+UseG1GC" "-Xss1024k")
 
+# Compact object headers reduce per-object heap overhead. The flag only exists
+# on Java 25+; passing it to an older JVM aborts startup, so gate on the major
+# version detected above.
+if awk -v found="${version:-0}" 'BEGIN { exit !(found >= 25) }'; then
+	JVM_MEMORY_ARGS+=("-XX:+UseCompactObjectHeaders")
+fi
+
 nohup nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
 	"${JVM_MEMORY_ARGS[@]}" \

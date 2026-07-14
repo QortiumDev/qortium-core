@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-14 - launch: use compact object headers on Java 25+
+
+The start scripts (regular, preview, and Docker) now enable the Java 25
+memory-saving "compact object headers" feature automatically when the node is
+running on Java 25 or newer — typically reducing heap usage by 10–20% with no
+behavior change. Nodes on Java 17–24 are unaffected: the setting only exists
+on newer Java, so the scripts check the Java version first and never pass it
+to an older runtime (where it would prevent startup). Operator-provided JVM
+argument overrides are respected unchanged, and the Docker launcher applies
+the setting per run without writing it into the persisted arguments file.
+
 ### 2026-07-14 - build: reconcile July dependency updates
 
 Aligns the Jackson databind/core family on `2.22.1`, closing CVE-2026-54515.

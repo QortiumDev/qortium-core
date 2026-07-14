@@ -317,7 +317,15 @@ if [ -n "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE:-}" ]; then
 fi
 AUTO_UPDATE_MODE_EFFECTIVE="$(read_auto_update_mode "${SETTINGS_LOCAL}" || true)"
 
-JVM_MEMORY_ARGS_STRING="${QORTIUM_PREVIEW_JVM_MEMORY_ARGS:--XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k}"
+DEFAULT_JVM_MEMORY_ARGS="-XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k"
+# Compact object headers reduce per-object heap overhead. The flag only exists
+# on Java 25+; passing it to an older JVM aborts startup, so gate on the major
+# version detected above. An explicit QORTIUM_PREVIEW_JVM_MEMORY_ARGS override
+# still wins unchanged.
+if awk -v found="${version:-0}" 'BEGIN { exit !(found >= 25) }'; then
+	DEFAULT_JVM_MEMORY_ARGS="${DEFAULT_JVM_MEMORY_ARGS} -XX:+UseCompactObjectHeaders"
+fi
+JVM_MEMORY_ARGS_STRING="${QORTIUM_PREVIEW_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}"
 read -r -a JVM_MEMORY_ARGS <<< "${JVM_MEMORY_ARGS_STRING}"
 
 # Note: array expansions below use the ${arr[@]+"${arr[@]}"} guard so an empty array
