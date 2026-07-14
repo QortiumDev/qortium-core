@@ -42,11 +42,13 @@ import javax.xml.bind.annotation.XmlTransient;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import javax.xml.transform.stream.StreamSource;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
+import org.eclipse.persistence.oxm.annotations.XmlReadOnly;
 import org.qortium.block.BlockChain;
 import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
@@ -149,6 +151,8 @@ public class Settings {
 	private boolean apiDocumentationEnabled = false;
 	// Both of these need to be set for API to use SSL
 	private String sslKeystorePathname = "QortiumKeyStore.jks";
+	@XmlReadOnly
+	@Schema(hidden = true)
 	private String sslKeystorePassword = DEFAULT_SSL_KEYSTORE_PASSWORD;
 
 	// Domain mapping

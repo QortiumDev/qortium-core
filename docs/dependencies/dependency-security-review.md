@@ -85,8 +85,22 @@ requests get OSV comparison scanning, and the active branch gets a scheduled
 OSV scan.
 
 At this checkpoint, GitHub Dependabot alerts and GitHub code-scanning alerts are
-clear. The latest local Maven-resolved OSV scan also reports no issues, and the
-local Grype directory scan reports no vulnerabilities.
+clear. The latest local Maven-resolved OSV scan reports no unsuppressed issues,
+and the local Grype directory scan reports no vulnerabilities.
+
+Jackson's BOM and resolved databind/core family are now at `2.22.1`, which the
+GHSA-5jmj-h7xm-6q6v / CVE-2026-54515 advisory identifies as fixed. The CVE
+ignore remains only because `osv-scanner 2.3.8` still flags the fixed Maven
+artifact while the GitHub/OSV record lacks `first_patched_version` for this
+line. Remove the ignore as soon as the upstream metadata stops flagging
+`2.22.1`.
+
+The July 2026 maintenance batch also moves Jetty to `12.1.11`, gRPC to
+`1.82.2`, Netty to `4.2.16.Final`, and Bouncy Castle to `1.85`. Bouncy
+Castle's official download page and Maven Central identify `1.85` as the
+current release, although its GitHub `r1rv85` tag and finalized source release
+notes were still lagging at review time. Crypto, TLS, networking, packaging,
+and dependency-sensitive regression tests passed against the combined stack.
 
 Qortium now vendors its pinned `com.github.QuickMythril:AT:1b731d1` artifact in
 the tracked `lib/` Maven repository and has removed the remaining JitPack

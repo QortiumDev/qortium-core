@@ -88,8 +88,7 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
-				<!-- Align all Jackson artifacts; pulls jackson-databind/core/annotations
-				     up from vulnerable 2.21.x to match the 2.22.0 set (OSV-Scanner findings). -->
+				<!-- Align all Jackson artifacts through the BOM; 2.22.1 carries the fix for CVE-2026-54515. -->
 				<dependency>
 					<groupId>com.fasterxml.jackson</groupId>
 					<artifactId>jackson-bom</artifactId>
