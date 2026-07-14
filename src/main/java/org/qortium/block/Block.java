@@ -403,7 +403,11 @@ public class Block {
 		byte[] onlineAccountsSignatures = null;
 
 		if (isBatchRewardDistributionBlock(height)) {
-			// Batch reward distribution block - copy online accounts from recent block with highest online accounts count
+			// Batch reward distribution block - copy online accounts from recent block with highest online accounts count.
+			// The set could be recomputed from those blocks instead of embedded here, but the copy is kept deliberately:
+			// it makes each payout block self-auditing (the credited accounts are readable from the payout block itself),
+			// and processBlockRewards()/getExpandedAccounts() distribute to this block's own online accounts.
+			// Removing it would change block validity rules and therefore need its own feature trigger.
 
 			int firstBlock = height - BlockChain.getInstance().getBlockRewardBatchAccountsBlockCount();
 			int lastBlock = height - 1;
@@ -1183,7 +1187,8 @@ public class Block {
 			return ValidationResult.OK;
 		}
 
-		// If this is a batch reward distribution block, ensure that online accounts have been copied from the correct previous block
+		// If this is a batch reward distribution block, ensure that online accounts have been copied from the correct previous block.
+		// The embedded copy is deliberate redundancy so payout blocks are self-auditing; see isOnlineAccountsBlock() javadoc.
 		if (this.isBatchRewardDistributionBlock()) {
 			int firstBlock = this.getBlockData().getHeight() - BlockChain.getInstance().getBlockRewardBatchAccountsBlockCount();
 			int lastBlock = this.getBlockData().getHeight() - 1;
@@ -2382,6 +2387,18 @@ public class Block {
 
 	/**
 	 * Specifies whether online accounts are to be included in this block.
+	 * <p>
+	 * Note that once batch rewards are active this is true for
+	 * {@code blockRewardBatchAccountsBlockCount + 1} blocks per batch, not
+	 * {@code blockRewardBatchAccountsBlockCount}: the fresh accounts-gathering blocks
+	 * immediately before the distribution block, plus the distribution block itself.
+	 * The distribution block does NOT gather fresh accounts — it embeds a signature-less
+	 * copy of the counted set (the highest-count set among those gathering blocks) so
+	 * that anyone auditing a payout can read the credited accounts straight from the
+	 * distribution block instead of reconstructing the max-count comparison across the
+	 * gathering blocks. The copy is deliberate redundancy, not a bug; see the
+	 * {@code isBatchRewardDistributionBlock()} branches in {@code mint()} and
+	 * {@code areOnlineAccountsValid()}.
 	 *
 	 * @return true if online accounts should be included, false if they should be excluded.
 	 */
