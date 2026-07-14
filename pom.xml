@@ -16,7 +16,7 @@
 		<test.awt.headless>true</test.awt.headless>
 
 		<bitcoinj.version>0.17.1</bitcoinj.version>
-		<bouncycastle.version>1.84</bouncycastle.version>
+		<bouncycastle.version>1.85</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<ciyam-at.version>1b731d1</ciyam-at.version> <!-- QuickMythril/AT v1.4.3 fork point -->
 		<commons-net.version>3.13.0</commons-net.version>
@@ -28,21 +28,21 @@
 		<dbus-java.version>4.3.2</dbus-java.version>
 		<extendedset.version>0.12.3</extendedset.version>
 		<git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
-		<grpc.version>1.82.1</grpc.version>
+		<grpc.version>1.82.2</grpc.version>
 		<guava.version>33.6.0-jre</guava.version>
 		<hamcrest-library.version>2.2</hamcrest-library.version>
 		<homoglyph.version>1.2.1</homoglyph.version>
 		<hsqldb.version>2.7.4</hsqldb.version>
 		<icu4j.version>78.3</icu4j.version>
 		<java-diff-utils.version>4.17</java-diff-utils.version>
-		<jackson.version>2.22.0</jackson.version>
+		<jackson.version>2.22.1</jackson.version>
 		<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
 		<jacoco.minimum.branch.coverage>0.35</jacoco.minimum.branch.coverage>
 		<jacoco.minimum.instruction.coverage>0.50</jacoco.minimum.instruction.coverage>
 		<jacoco.minimum.line.coverage>0.48</jacoco.minimum.line.coverage>
 		<jaxb-runtime.version>2.3.9</jaxb-runtime.version>
 		<jersey.version>2.48</jersey.version>
-		<jetty.version>12.1.10</jetty.version>
+		<jetty.version>12.1.11</jetty.version>
 		<json-simple.version>1.1.1</json-simple.version>
 		<json.version>20251224</json.version>
 		<jsoup.version>1.22.2</jsoup.version>
@@ -60,7 +60,7 @@
 		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
 		<maven-install-plugin.version>3.1.4</maven-install-plugin.version>
 		<maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
-		<netty.version>4.2.15.Final</netty.version>
+		<netty.version>4.2.16.Final</netty.version>
 		<os-maven-plugin.version>1.7.1</os-maven-plugin.version>
 		<protobuf-maven-plugin.version>0.6.1</protobuf-maven-plugin.version>
 		<!-- Toolchain versions used for code generation -->
