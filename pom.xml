@@ -28,7 +28,7 @@
 		<dbus-java.version>4.3.2</dbus-java.version>
 		<extendedset.version>0.12.3</extendedset.version>
 		<git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
-		<grpc.version>1.82.1</grpc.version>
+		<grpc.version>1.82.2</grpc.version>
 		<guava.version>33.6.0-jre</guava.version>
 		<hamcrest-library.version>2.2</hamcrest-library.version>
 		<homoglyph.version>1.2.1</homoglyph.version>
