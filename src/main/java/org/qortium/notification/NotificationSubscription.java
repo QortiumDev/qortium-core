@@ -11,7 +11,8 @@ import java.util.Map;
  * <ul>
  *   <li>{@code RESOURCE_PUBLISHED} — use {@code resourceFilter} (a rich typed
  *       object mirroring QDN search parameters).</li>
- *   <li>All other events — use the generic {@code filters} map, with string values or arrays of strings.</li>
+ *   <li>{@code FOREIGN_PAYMENT_RECEIVED} — use scalar {@code coin} and {@code xpub} filters.</li>
+ *   <li>Other events — use the generic {@code filters} map, with string values or arrays of strings.</li>
  * </ul>
  *
  * <p>Optional display hints ({@code message}, {@code image}, {@code link}) are

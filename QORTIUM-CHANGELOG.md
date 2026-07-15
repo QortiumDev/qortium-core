@@ -34,6 +34,34 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-15 - notifications: push incoming foreign payments from ElectrumX
+
+Wallet apps can now receive session-scoped alerts for incoming payments on
+Core's ElectrumX-backed foreign chains. A watch-only public wallet key is kept
+in memory for the websocket session, expanded with the same receive/change and
+gap-limit rules as existing wallet history, and multiplexed through one
+separate reconnecting push connection per active coin. Existing deposits form
+the starting baseline; new incoming transactions include the coin, hash,
+receiving address, eight-decimal amount, confirmation count, and a required
+ElectrumX checkpoint for replay suppression. PirateChain remains excluded,
+private wallet keys are rejected, the last subscription tears the connection
+down, and bounded daemon workers keep foreign notifications isolated from
+block processing, trading, ordinary notification delivery, and existing
+synchronous ElectrumX calls. Per-session, node-wide, derivation, history,
+message, and raw-transaction ceilings reject or fail over abusive inputs;
+periodic pings detect blackholed servers; transient transaction-fetch failures
+remain retryable; and the notification-only chain instance can never become a
+disabled wallet's normal shared instance.
+
+### 2026-07-15 - notifications: add group-aware confirmed-transaction filters
+
+Apps can now watch confirmed group transactions by group ID without also naming
+an involved account. This makes join-request alerts practical for group admins,
+who are not transaction participants when somebody asks to join. Confirmed
+notifications for the group transaction family now carry their direct group ID,
+while the unrelated default-group setting keeps its existing meaning and is not
+included.
+
 ### 2026-07-15 - api: attest and throttle public writes; release 1.5.0
 
 Anonymous public-node writes now have layered availability protection without

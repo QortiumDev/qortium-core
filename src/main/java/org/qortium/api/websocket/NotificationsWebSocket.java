@@ -30,17 +30,21 @@ import java.util.Objects;
  *     { "event": "RESOURCE_PUBLISHED", "filters": { "service": "BLOG" } },
  *     { "event": "PAYMENT_RECEIVED",   "filters": { "recipient": "Qxxxxxxxxx" } },
  *     { "event": "CHAT_MESSAGE",       "filters": { "involving": "Qxxxxxxxxx" } },
- *     { "event": "TRANSACTION_CONFIRMED", "filters": { "address": "Qxxxxxxxxx" } }
+ *     { "event": "TRANSACTION_CONFIRMED", "filters": { "address": "Qxxxxxxxxx" } },
+ *     { "event": "TRANSACTION_CONFIRMED", "filters": { "txType": "JOIN_GROUP", "groupId": "123" } },
+ *     { "event": "FOREIGN_PAYMENT_RECEIVED", "filters": { "coin": "BTC", "xpub": "xpub..." } }
  *   ]
  * }
  * </pre>
  *
  * <p>Event filters: {@code CHAT_MESSAGE} requires one or more of {@code recipient},
  * {@code sender}, {@code txGroupId} (for group messages), or {@code involving}; notification data never includes
- * message content. {@code TRANSACTION_CONFIRMED} requires {@code signature} or {@code address},
+ * message content. {@code TRANSACTION_CONFIRMED} requires {@code signature}, {@code address}, or {@code groupId},
  * and may additionally filter by {@code txType}. {@code PAYMENT_RECEIVED} accepts {@code sender},
  * {@code recipient}, {@code amount}, {@code created}, and {@code signature}. Generic filter values
  * may be a string or a non-empty array of strings, matching any array value case-insensitively.
+ * {@code FOREIGN_PAYMENT_RECEIVED} requires exactly one ElectrumX-backed Bitcoiny {@code coin} and a
+ * parseable public extended key ({@code xpub}); its filters are scalar strings and PirateChain is excluded.
  *
  * <p>The server will push JSON notifications whenever matching events occur:
  *
@@ -128,7 +132,10 @@ public class NotificationsWebSocket extends ApiWebSocket {
                             return;
                         }
                     }
-                    NotificationManager.getInstance().mergeSubscriptions(session, rules);
+                    String updateError = NotificationManager.getInstance().mergeSubscriptions(session, rules);
+                    if (updateError != null) {
+                        sendError(session, updateError);
+                    }
                     break;
                 }
 
