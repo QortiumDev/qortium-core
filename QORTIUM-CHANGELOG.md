@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-15 - api: attest and throttle public writes; release 1.5.0
+
+Anonymous public-node writes now have layered availability protection without
+changing transaction validity: small builders and transaction submission have
+bounded request bodies, separate per-client token buckets, and separate global
+concurrency ceilings, while expensive QDN work has a tighter two-request global
+ceiling and a size allowance compatible with the existing public publish cap.
+Loopback/API-whitelisted callers and valid node-API-key requests keep their
+existing trusted behavior. The public QDN builder also gains a narrow
+content-addressed read endpoint for its pre-signature ciphertext and metadata;
+Home can rehash and decrypt those exact staged bytes, compare them with the
+user's selected source, and refuse to sign substituted content. The endpoint
+accepts only a canonical SHA-256 Base58 hash, serves only the unsigned `_misc`
+store, revalidates the file hash and size, and is covered by the same QDN
+limits. Core is advanced to 1.5.0 for this public-write security boundary; no
+consensus, database, chain-configuration, or peering behavior changes.
+Unsigned MemoryPoW builders also consistently accept the wire-format zero nonce
+placeholder that Home verifies and replaces with the computed nonce.
+
 ### 2026-07-15 - api: add public unsigned poll builders
 
 Public nodes can now advertise and build unsigned create, vote, and update poll

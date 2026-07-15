@@ -298,6 +298,10 @@ public class PublicApiAccessHandlerTests extends Common {
 				settingsJson.getBoolean("qdnAuthBypassEnabled"));
 		assertTrue(settingsPath + " should set the public QDN publish size guard",
 				settingsJson.getLong("publicQdnPublishMaxSize") == 104857600L);
+		assertTrue(settingsPath + " should bound public write bodies",
+				settingsJson.getLong("publicApiWriteMaxBodySize") == 262144L);
+		assertTrue(settingsPath + " should bound public QDN concurrency",
+				settingsJson.getInt("publicQdnApiMaxConcurrentRequests") == 2);
 		assertTrue(settingsPath + " should allow public render reads",
 				jsonArrayContains(publicApiPaths, "GET /render/*"));
 		assertTrue(settingsPath + " should allow public known data peer reads",

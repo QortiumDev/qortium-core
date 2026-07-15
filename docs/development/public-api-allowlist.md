@@ -267,9 +267,11 @@ Open-group chat send never exposes a key to the foreign node:
 - [x] **Public QDN publish size cap (done 2026-06-29):** public unsigned QDN
   publish builders enforce `publicQdnPublishMaxSize`, defaulting to 100 MiB,
   before building publish transactions.
-- [ ] **Abuse/rate-limiting:** opening publish/transaction submission to anonymous
-  public clients invites spam. Decide on PoW difficulty / rate limits before
-  enabling on the default node.
+- [x] **Abuse/rate-limiting (done 2026-07-15):** anonymous remote builders and
+  transaction submission now have bounded bodies, per-client token buckets,
+  and separate global concurrency ceilings. Expensive QDN work is held to two
+  concurrent requests. API-whitelisted and valid API-key callers bypass these
+  public limits.
 - [ ] **Version check:** confirm the shipped Android build and live nodes are both
   ≥ 2026-06-19 so existing open-group chat actually works for users.
 
@@ -306,12 +308,63 @@ change does not alter consensus, chain configuration, the database, or peering.
 
 ---
 
-## 10. Key references
+## 10. Public-write availability and QDN source attestation (Core 1.5.0)
+
+`PublicApiProtectionHandler` runs after the IP/path access decision and before
+Jersey. It affects only anonymous remote calls that reached the public
+allowlist; normal API-whitelisted callers and remote callers with the node's
+valid API key are exempt. Defaults are deliberately separated by workload:
+
+- lightweight chat, poll, and conversion builders: 256 KiB body, 120 requests
+  per minute per remote address with a burst of 30, and 16 active globally;
+- signed transaction processing: 256 KiB body, 240 per minute with a burst of
+  60, and 32 active globally;
+- public QDN build/staged-data work: the existing public publish size plus
+  encoding overhead, the builder token bucket, and two active globally.
+
+The settings are writable at runtime so seed operators can tune measured
+traffic without a restart. The limiter keys only the direct socket address; it
+does not trust client-supplied forwarding headers. Generous bursts reduce the
+impact on Tor/I2P users sharing an exit while the global ceilings still bound
+node work.
+
+Deployment check (2026-07-15): the public API ports on both the Regxa and
+Netcup preview seeds responded directly as Jetty 12.1.11, so Core sees the
+actual connecting client in the current topology. An operator who adds a
+reverse proxy must preserve that property: do not proxy every request over a
+trusted or loopback connection that bypasses Core's public-API gate, and do not
+expect Core to trust `X-Forwarded-For`. Either pass connections through without
+hiding their source addresses or enforce equivalent body, rate, and concurrency
+limits at the proxy edge.
+
+For QDN publish attestation, `GET /arbitrary/public/data/{hash58}` returns the
+exact pre-signature artifact whose SHA-256 is present as the transaction's
+`DATA_HASH` or `metadataHash`. It accepts only canonical Base58 encoding of 32
+bytes, derives the path internally, and serves only the unsigned `data/_misc`
+content-addressed store. Because that store is shared with authenticated build
+flows, the endpoint additionally requires a ten-minute, in-memory capability
+registered only when a public builder returns the corresponding hash. A restart
+or expiry requires rebuilding the unsigned transaction. Missing, unregistered,
+or non-regular files return 404, a stored hash mismatch returns 409, and
+successful responses are raw
+`application/octet-stream` bytes with `Content-Length` and `Cache-Control:
+no-store`. Signature-keyed QDN data is never exposed by this route.
+
+Home must still independently rehash the response, decrypt the ciphertext with
+the secret contained in the unsigned transaction, validate chunk metadata, and
+compare the reconstructed plaintext or ZIP tree with the user's selected source
+before signing.
+
+---
+
+## 11. Key references
 
 Core:
 - `src/main/java/org/qortium/api/PublicApiAccessHandler.java` — Gate 1.
-- `src/main/java/org/qortium/api/ApiService.java:267` — handler wiring.
-- `src/main/java/org/qortium/settings/Settings.java:130-135, 1666-1675` — settings.
+- `src/main/java/org/qortium/api/PublicApiProtectionHandler.java` — public write
+  body, rate, and concurrency bounds.
+- `src/main/java/org/qortium/api/ApiService.java` — handler wiring.
+- `src/main/java/org/qortium/settings/Settings.java` — operator-tunable limits.
 - `src/main/java/org/qortium/api/resource/ChatResource.java:1134` (`/public/build`),
   `:1182` (`/compute`), `:275-1010` (apiKey-gated `/private/*`).
 - `preview/settings-preview*.json` — the allowlist configs.

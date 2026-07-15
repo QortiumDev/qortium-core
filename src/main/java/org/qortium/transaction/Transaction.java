@@ -744,7 +744,10 @@ public abstract class Transaction {
 		if (!this.canUseMempowFeeAlternative())
 			return result;
 
-		return this.transactionData.getNonceOrNull() == null ? ValidationResult.OK : result;
+		Integer nonce = this.transactionData.getNonceOrNull();
+		// Wire formats with an always-present nonce use zero as the unsigned-build
+		// sentinel. Home attests that sentinel before computing the real MemoryPoW.
+		return nonce == null || nonce == 0 ? ValidationResult.OK : result;
 	}
 
 	/** Returns whether transaction's fee is valid. Might be overriden in transaction subclasses. */
