@@ -77,6 +77,9 @@
     "GET /crosschain/*/feerequired",
     "GET /crosschain/*/serverconnectionhistory",
     "POST /chat/public/build",
+    "POST /polls/public/create",
+    "POST /polls/public/vote",
+    "POST /polls/public/update",
     "POST /arbitrary/public/*",
     "POST /transactions/convert",
     "POST /transactions/process"

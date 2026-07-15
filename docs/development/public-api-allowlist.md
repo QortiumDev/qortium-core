@@ -1,7 +1,7 @@
 # Public API allowlist & QDN app access on the preview public network
 
-**Status:** research / design note — not yet implemented.
-**Last updated:** 2026-06-29.
+**Status:** implemented for chat/QDN; public poll builders implemented on a feature branch and pending release/deployment.
+**Last updated:** 2026-07-15.
 **Owner:** QuickMythril.
 
 This document captures the current behaviour of the Qortium public-API access
@@ -84,10 +84,13 @@ Getters at `Settings.java:1666-1675`.
 ### Gate 2 — Home shell, action layer: `qdn-app-actions.ts`
 
 - Single source of truth: `qortium-home/electron/qdn-app-actions.ts`.
-- `QDN_LOCAL_WRITE_ONLY_ACTIONS` (≈ lines 117-131) = writes that cannot run on a
+- `QDN_LOCAL_WRITE_ONLY_ACTIONS` = writes that cannot run on a
   public node: `QDN_WRITE_ACTIONS`, `QDN_GROUP_ACTIONS`, `QDN_NAME_ACTIONS`,
   `QDN_PAYMENT_ACTIONS`, `QDN_POLL_ACTIONS`, `QDN_TRUST_ACTIONS`,
   `QDN_LIST_ACTIONS`, `QDN_MINTING_ACTIONS`.
+- Poll actions therefore stay out of the static public list but are appended by
+  `SHOW_ACTIONS` after Home receives a compatible protocol-v1 response from
+  `GET /polls/public/capabilities`.
 - `QDN_PUBLIC_NODE_BRIDGE_ACTIONS` (≈ lines 135-137) = everything else.
 - `SEND_CHAT_MESSAGE` is **deliberately not** in the write-only set — its keyless
   open-group path signs locally and works against public nodes (comment, lines 120-121).
@@ -98,24 +101,25 @@ Getters at `Settings.java:1666-1675`.
   call behind `hasBridgeAction(...)` in `src/coreApi.ts`).
 
 **Implication:** to enable a new public capability we must update **both** gates —
-add the `METHOD /path` to `publicApiPaths` (Gate 1) **and** move/keep the action
-out of `QDN_LOCAL_WRITE_ONLY_ACTIONS` with a keyless local-signing implementation
-in Home (Gate 2).
+add the exact `METHOD /path` to `publicApiPaths` (Gate 1) and expose the action
+only when Home has a keyless local-signing implementation and any required
+capability negotiation succeeds (Gate 2).
 
 ---
 
 ## 3. Where the allowlist lives (config inventory) + the drift bug
 
-All under `qortium-core/preview/`. "POSTs" = the three chat-send entries
-`POST /chat/public/build`, `POST /transactions/convert`, `POST /transactions/process`.
+All under `qortium-core/preview/`. Public write support consists only of narrow
+unsigned builders plus transaction conversion/submission; signing and server-side
+MemoryPoW endpoints remain excluded.
 
-| Config file | Used by | GET reads | Chat-send POSTs | Publish |
-|---|---|---|---|---|
-| `settings-preview-seed.json` | seed VPS (apiRestricted) | ✅ | ✅ | ✅ unsigned builders only |
-| `settings-preview-seed-netcup.json` | seed VPS (netcup) | ✅ | ✅ | ✅ unsigned builders only |
-| `settings-preview.json` | **default user node** (Home desktop launches this — `qortium-home/electron/core-manager.ts:465`) | ✅ | ✅ | ✅ unsigned builders only |
-| `settings-preview-local.template.json` | ignored runtime snapshot for local preview nodes | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-06-29** |
-| `settings-preview-local.json` | ignored generated local preview node settings; read at runtime (`core-manager.ts:2216`) | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-06-29** |
+| Config file | Used by | GET reads | Chat send | Poll builders | QDN publish |
+|---|---|---|---|---|---|
+| `settings-preview-seed.json` | seed VPS (apiRestricted) | ✅ | ✅ | ✅ | ✅ unsigned builders only |
+| `settings-preview-seed-netcup.json` | seed VPS (netcup) | ✅ | ✅ | ✅ | ✅ unsigned builders only |
+| `settings-preview.json` | **default user node** (Home desktop launches this — `qortium-home/electron/core-manager.ts:465`) | ✅ | ✅ | ✅ | ✅ unsigned builders only |
+| `settings-preview-local.template.json` | ignored runtime snapshot for local preview nodes | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-07-15** | ✅ **locally repaired 2026-06-29** |
+| `settings-preview-local.json` | ignored generated local preview node settings; read at runtime (`core-manager.ts:2216`) | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-07-15** | ✅ **locally repaired 2026-06-29** |
 
 The current GET allowlist (all five files share this set):
 
@@ -271,7 +275,38 @@ Open-group chat send never exposes a key to the foreign node:
 
 ---
 
-## 9. Key references
+## 9. Public poll builders (implemented 2026-07-15, rollout pending)
+
+The original settings-only poll proposal was not sufficient because the normal
+`POST /polls/create`, `/vote`, and `/update` resource methods also reject
+`apiRestricted` nodes. Core now has dedicated no-key endpoints:
+
+- `GET /polls/public/capabilities` — protocol version, supported Home actions,
+  and the active fee-alternative MemoryPoW difficulty.
+- `POST /polls/public/create`
+- `POST /polls/public/vote`
+- `POST /polls/public/update`
+
+The three POST routes share the normal validation and serialization routines and
+return unsigned Base58 bytes only. They do not sign, compute MemoryPoW, broadcast,
+or write to the repository. Preview settings use exact entries for these three
+routes; `/transactions/sign` and `/transactions/mempow/compute` remain blocked.
+
+Home validates every returned poll field against the approved request, requires
+zero nonce/fee, computes MemoryPoW locally with a three-minute bound, signs
+locally, revalidates the account/node/app context, then uses the existing public
+`POST /transactions/process` route. The same hardening verifies public Chat
+builder output and the security-critical ARBITRARY resource/method/service/
+payment boundary before signing.
+
+Live baseline before rollout (2026-07-15): the Regxa and Netcup seeds returned
+HTTP 403 for `POST /polls/vote`, as expected for Core 1.4.2. Public poll support
+must not be claimed until the Core change is released and deployed; this API
+change does not alter consensus, chain configuration, the database, or peering.
+
+---
+
+## 10. Key references
 
 Core:
 - `src/main/java/org/qortium/api/PublicApiAccessHandler.java` — Gate 1.

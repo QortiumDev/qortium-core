@@ -131,6 +131,28 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
+	public void testPublicPollBuildersAreExactAllowlistEntries() throws Exception {
+		enablePublicApi();
+
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/polls/public/capabilities", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/polls/public/create", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/polls/public/vote", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/polls/public/update", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/polls/create", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/polls/public/compute", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/transactions/mempow/compute", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/transactions/sign", this.settings));
+	}
+
+	@Test
 	public void testPreviewSettingsExposePublicReadsAndKeylessBuildsOnly() throws Exception {
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview.json"));
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed.json"));
@@ -260,6 +282,10 @@ public class PublicApiAccessHandlerTests extends Common {
 				"GET /render/*",
 				"GET /names/*",
 				"GET /transactions/*",
+				"GET /polls/*",
+				"POST /polls/public/create",
+				"POST /polls/public/vote",
+				"POST /polls/public/update",
 				"POST /arbitrary/public/*"
 		}, true);
 	}
@@ -278,6 +304,12 @@ public class PublicApiAccessHandlerTests extends Common {
 				jsonArrayContains(publicApiPaths, "GET /peers/data/known"));
 		assertTrue(settingsPath + " should allow keyless public chat builds",
 				jsonArrayContains(publicApiPaths, "POST /chat/public/build"));
+		assertTrue(settingsPath + " should allow public poll create builds",
+				jsonArrayContains(publicApiPaths, "POST /polls/public/create"));
+		assertTrue(settingsPath + " should allow public poll vote builds",
+				jsonArrayContains(publicApiPaths, "POST /polls/public/vote"));
+		assertTrue(settingsPath + " should allow public poll update builds",
+				jsonArrayContains(publicApiPaths, "POST /polls/public/update"));
 		assertTrue(settingsPath + " should allow keyless public QDN publish/delete builds",
 				jsonArrayContains(publicApiPaths, "POST /arbitrary/public/*"));
 		assertTrue(settingsPath + " should allow unsigned transaction conversion",

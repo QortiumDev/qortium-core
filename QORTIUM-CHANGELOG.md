@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-15 - api: add public unsigned poll builders
+
+Public nodes can now advertise and build unsigned create, vote, and update poll
+transactions without receiving an API key or private key. The caller still has
+to perform the bounded proof of work, sign locally, and submit the signed bytes;
+Core does not perform those sensitive or resource-intensive steps for a public
+request. Existing poll builders and all generic signing and proof-of-work
+endpoints keep their prior access controls.
+
 ### 2026-07-14 - launch: use compact object headers on Java 25+
 
 The start scripts (regular, preview, and Docker) now enable the Java 25
