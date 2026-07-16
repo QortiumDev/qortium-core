@@ -87,7 +87,7 @@
   "bootstrap": false,
   "maxPeerConnectionTime": 999999999,
   "recoveryModeTimeout": 0,
-  "autoUpdateMode": "OFF",
+  "autoUpdateMode": "NOTIFY",
   "qdnEnabled": true,
   "relayModeEnabled": true,
   "qdnAuthBypassEnabled": true,

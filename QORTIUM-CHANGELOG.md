@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-15 - preview: default tester template auto-update mode to NOTIFY
+
+Nodes started from the tester settings template now check for approved
+on-chain updates and report them through the update status API instead of
+staying silent. Nothing installs automatically: NOTIFY only surfaces that an
+approved update exists, so standalone testers learn a new Core is available
+without Home. The seed templates keep auto-update OFF because seeds are
+updated manually in a controlled rolling order, and the preview operator docs
+now describe the split.
+
 ### 2026-07-15 - notifications: push incoming foreign payments from ElectrumX
 
 Wallet apps can now receive session-scoped alerts for incoming payments on

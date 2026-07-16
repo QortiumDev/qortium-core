@@ -148,11 +148,12 @@ The public seed profiles remain API restricted for local transaction-builder
 style endpoints, but also serve the same public read and QDN browsing allowlist
 so the initial preview network has known public API nodes available.
 
-Auto-update is explicitly off in the tracked preview settings templates.
-Operators can enable it in a local runtime settings file when testing approved
-QDN update manifests, but public preview defaults do not automatically install
-new jars. Like every other local settings change, an `autoUpdateMode` override
-survives restarts and release upgrades.
+The tester settings template defaults to `"autoUpdateMode": "NOTIFY"`, which
+checks for and reports approved updates without installing anything; the seed
+templates keep it `OFF`. Operators can raise it in a local runtime settings
+file when testing approved QDN update manifests, but no tracked preview
+default automatically installs new jars. Like every other local settings
+change, an `autoUpdateMode` override survives restarts and release upgrades.
 
 For a public VPS, expose the API port only if you want that public read-only
 access. Public preview peers need to reach the P2P port, and QDN/data peers
