@@ -25,6 +25,7 @@ history.
 ## Development And Operations
 
 - `Developer reference` [Database inspection](development/database.md) - local HSQLDB inspection notes
+- `Developer reference` [Notification WebSocket](development/notifications.md) - event filters, payloads, and foreign-payment watch lifecycle
 - `Developer reference` [I2P fallback operator guide](networking/i2p-fallback-operator-guide.md) - standalone Core setup and verification for optional i2pd fallback
 - `Developer reference` [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow
 - `Developer reference` [Core 1.2.1 release prep](releases/v1.2.1.md) - post-merge prerelease checklist and draft release notes

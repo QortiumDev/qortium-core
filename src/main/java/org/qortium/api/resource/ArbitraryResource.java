@@ -41,6 +41,7 @@ import org.qortium.controller.arbitrary.ArbitraryDataManager;
 import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
 import org.qortium.controller.arbitrary.ArbitraryDataStorageManager;
 import org.qortium.controller.arbitrary.ArbitraryMetadataManager;
+import org.qortium.crypto.Crypto;
 import org.qortium.data.account.AccountData;
 import org.qortium.data.PaymentData;
 import org.qortium.data.arbitrary.AdvancedStringMatcher;
@@ -862,6 +863,81 @@ public class ArbitraryResource {
 											  @PathParam("identifier") String identifier,
 											  @QueryParam("fee") Long fee) {
 		return this.buildDeleteResourceTransaction(service, name, identifier, fee, false);
+	}
+
+	@GET
+	@Path("/public/data/{hash58}")
+	@Produces(MediaType.APPLICATION_OCTET_STREAM)
+	@Operation(
+			summary = "Download an exact pre-signature QDN artifact for local publish attestation",
+			description = "Returns only a content-addressed artifact staged under data/_misc by an unsigned "
+					+ "public QDN builder. The caller verifies its SHA-256 hash, decrypts it using the secret "
+					+ "inside the unsigned transaction, and compares it with the intended source before signing.",
+			responses = {
+					@ApiResponse(
+							description = "Exact staged ciphertext or metadata bytes",
+							content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM)
+					),
+					@ApiResponse(responseCode = "400", description = "Hash is not canonical Base58 SHA-256"),
+					@ApiResponse(responseCode = "404", description = "No pre-signature artifact exists for the hash"),
+					@ApiResponse(responseCode = "409", description = "Stored artifact does not match its content address")
+			}
+	)
+	public Response getPublicStagedData(@PathParam("hash58") String hash58) {
+		byte[] expectedHash;
+		try {
+			expectedHash = Base58.decode(hash58);
+		} catch (RuntimeException e) {
+			return publicStagedDataError(Response.Status.BAD_REQUEST, "Invalid SHA-256 content hash");
+		}
+
+		if (expectedHash.length != 32 || !Base58.encode(expectedHash).equals(hash58))
+			return publicStagedDataError(Response.Status.BAD_REQUEST, "Invalid SHA-256 content hash");
+		if (!PublicQdnArtifactRegistry.getInstance().contains(hash58))
+			return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
+
+		try {
+			ArbitraryDataFile dataFile = ArbitraryDataFile.fromHash58(hash58, null);
+			java.nio.file.Path filePath = dataFile.getFilePath();
+			if (!Files.isRegularFile(filePath, java.nio.file.LinkOption.NOFOLLOW_LINKS))
+				return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
+			java.nio.file.Path miscRoot = Paths.get(Settings.getInstance().getDataPath(), "_misc").toRealPath();
+			java.nio.file.Path realFilePath = filePath.toRealPath();
+			if (!realFilePath.startsWith(miscRoot))
+				return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
+
+			long fileSize = Files.size(realFilePath);
+			long sizeLimit = publicStagedDataMaxSize(Settings.getInstance().getPublicQdnPublishMaxSize());
+			if (fileSize > sizeLimit)
+				return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
+
+			byte[] actualHash = Crypto.digestFileStream(realFilePath.toFile());
+			if (!Arrays.equals(expectedHash, actualHash))
+				return publicStagedDataError(Response.Status.CONFLICT, "Pre-signature artifact hash mismatch");
+
+			return Response.ok(realFilePath.toFile(), MediaType.APPLICATION_OCTET_STREAM)
+					.header("Content-Length", fileSize)
+					.header("Cache-Control", "no-store")
+					.header("X-Content-Type-Options", "nosniff")
+					.build();
+		} catch (DataException | IOException e) {
+			LOGGER.debug("Unable to read public pre-signature artifact {}: {}", hash58, e.getMessage());
+			return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
+		}
+	}
+
+	static long publicStagedDataMaxSize(long publishMaxSize) {
+		// AES-GCM output stores a 12-byte IV and a 16-byte authentication tag.
+		return publishMaxSize > Long.MAX_VALUE - 28L ? Long.MAX_VALUE : publishMaxSize + 28L;
+	}
+
+	private static Response publicStagedDataError(Response.Status status, String message) {
+		return Response.status(status)
+				.type(MediaType.TEXT_PLAIN_TYPE)
+				.entity(message)
+				.header("Cache-Control", "no-store")
+				.header("X-Content-Type-Options", "nosniff")
+				.build();
 	}
 
 	@POST
@@ -2184,8 +2260,9 @@ public String finalizeUpload(
 			@QueryParam("entryPoint") String entryPoint,
 			@QueryParam("preview") Boolean preview,
 			@QueryParam("isZip") Boolean isZip) {
-		return this.finalizeChunkedUpload(serviceString, name, null, title, description, tags, category, filename,
-				fee, entryPoint, false, isZip, Settings.getInstance().getPublicQdnPublishMaxSize());
+		return this.registerPublicQdnArtifacts(this.finalizeChunkedUpload(serviceString, name, null, title, description,
+				tags, category, filename, fee, entryPoint, false, isZip,
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 	@POST
@@ -2213,8 +2290,9 @@ public String finalizeUpload(
 			@QueryParam("entryPoint") String entryPoint,
 			@QueryParam("preview") Boolean preview,
 			@QueryParam("isZip") Boolean isZip) {
-		return this.finalizeChunkedUpload(serviceString, name, identifier, title, description, tags, category, filename,
-				fee, entryPoint, false, isZip, Settings.getInstance().getPublicQdnPublishMaxSize());
+		return this.registerPublicQdnArtifacts(this.finalizeChunkedUpload(serviceString, name, identifier, title,
+				description, tags, category, filename, fee, entryPoint, false, isZip,
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 	private String finalizeChunkedUpload(String serviceString, String name, String identifier, String title,
@@ -2436,9 +2514,9 @@ public String finalizeUpload(
 								   @QueryParam("preview") Boolean preview,
 								   @QueryParam("isZip") Boolean isZip,
 								   InputStream uploadStream) {
-		return this.uploadStream(Service.valueOf(serviceString), name, null, filename, Boolean.TRUE.equals(isZip),
+		return this.registerPublicQdnArtifacts(this.uploadStream(Service.valueOf(serviceString), name, null, filename, Boolean.TRUE.equals(isZip),
 				fee, title, description, tags, category, entryPoint, false, uploadStream,
-				Settings.getInstance().getPublicQdnPublishMaxSize());
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 	@POST
@@ -2474,9 +2552,9 @@ public String finalizeUpload(
 								   @QueryParam("preview") Boolean preview,
 								   @QueryParam("isZip") Boolean isZip,
 								   InputStream uploadStream) {
-		return this.uploadStream(Service.valueOf(serviceString), name, identifier, filename, Boolean.TRUE.equals(isZip),
+		return this.registerPublicQdnArtifacts(this.uploadStream(Service.valueOf(serviceString), name, identifier, filename, Boolean.TRUE.equals(isZip),
 				fee, title, description, tags, category, entryPoint, false, uploadStream,
-				Settings.getInstance().getPublicQdnPublishMaxSize());
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 	private String uploadStream(Service service, String name, String identifier, String filename, boolean zipped,
@@ -2589,9 +2667,9 @@ public String finalizeUpload(
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
 		}
 
-		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64, false,
+		return this.registerPublicQdnArtifacts(this.upload(Service.valueOf(serviceString), name, null, null, null, base64, false,
 				fee, filename, title, description, tags, category, null, false,
-				Settings.getInstance().getPublicQdnPublishMaxSize());
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 	@POST
@@ -2677,9 +2755,9 @@ public String finalizeUpload(
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
 		}
 
-		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
+		return this.registerPublicQdnArtifacts(this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
 				fee, filename, title, description, tags, category, null, false,
-				Settings.getInstance().getPublicQdnPublishMaxSize());
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 
@@ -2766,9 +2844,9 @@ public String finalizeUpload(
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
 		}
 
-		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64Zip, true,
+		return this.registerPublicQdnArtifacts(this.upload(Service.valueOf(serviceString), name, null, null, null, base64Zip, true,
 				fee, null, title, description, tags, category, entryPoint, false,
-				Settings.getInstance().getPublicQdnPublishMaxSize());
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 	@POST
@@ -2854,9 +2932,9 @@ public String finalizeUpload(
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
 		}
 
-		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
+		return this.registerPublicQdnArtifacts(this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
 				fee, null, title, description, tags, category, entryPoint, false,
-				Settings.getInstance().getPublicQdnPublishMaxSize());
+				Settings.getInstance().getPublicQdnPublishMaxSize()));
 	}
 
 
@@ -3062,6 +3140,24 @@ public String finalizeUpload(
 	}
 
 	// Shared methods
+
+	private String registerPublicQdnArtifacts(String rawTransaction58) {
+		try {
+			byte[] rawBytes = Base58.decode(rawTransaction58);
+			TransactionData transactionData = TransactionTransformer.fromBytes(
+					Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]));
+			if (!(transactionData instanceof ArbitraryTransactionData arbitraryData))
+				throw new TransformationException("Public QDN builder returned a non-ARBITRARY transaction");
+
+			if (arbitraryData.getDataType() == ArbitraryTransactionData.DataType.DATA_HASH)
+				PublicQdnArtifactRegistry.getInstance().register(arbitraryData.getData());
+			PublicQdnArtifactRegistry.getInstance().register(arbitraryData.getMetadataHash());
+			return rawTransaction58;
+		} catch (TransformationException | RuntimeException e) {
+			LOGGER.error("Unable to register public QDN attestation artifacts", e);
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		}
+	}
 
 	private String preview(String directoryPath, Service service) {
 		Security.checkApiCallAllowed(request);

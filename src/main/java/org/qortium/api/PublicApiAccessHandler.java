@@ -49,12 +49,7 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 
 	public static boolean isRequestAllowed(String remoteAddress, String method, String path,
 			String passedApiKey, String nodeApiKey, Settings settings) {
-		if (matchesAny(remoteAddress, settings.getApiWhitelist()))
-			return true;
-
-		// The node's API key authenticates the node owner, so let it bypass the IP/path
-		// rules; endpoint-level key checks still run afterwards.
-		if (settings.isApiKeyRemoteAccessEnabled() && matchesApiKey(passedApiKey, nodeApiKey))
+		if (isTrustedRequest(remoteAddress, passedApiKey, nodeApiKey, settings))
 			return true;
 
 		if (!settings.isPublicApiWhitelistEnabled())
@@ -62,6 +57,15 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 
 		return matchesAny(remoteAddress, settings.getPublicApiWhitelist())
 				&& matchesPublicPath(method, path, settings.getPublicApiPaths());
+	}
+
+	static boolean isTrustedRequest(String remoteAddress, String passedApiKey, String nodeApiKey, Settings settings) {
+		if (matchesAny(remoteAddress, settings.getApiWhitelist()))
+			return true;
+
+		// The node's API key authenticates the node owner, so let it bypass the IP/path
+		// rules; endpoint-level key checks still run afterwards.
+		return settings.isApiKeyRemoteAccessEnabled() && matchesApiKey(passedApiKey, nodeApiKey);
 	}
 
 	private static boolean matchesApiKey(String passedApiKey, String nodeApiKey) {
@@ -74,7 +78,7 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 	}
 
 	/** The node's generated API key, or null when none has been generated yet. */
-	private static String getNodeApiKey() {
+	static String getNodeApiKey() {
 		ApiKey apiKey = ApiService.getInstance().getApiKey();
 
 		if (apiKey == null) {

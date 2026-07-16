@@ -6,16 +6,27 @@ import org.eclipse.jetty.ee8.websocket.api.Session;
 import org.eclipse.jetty.ee8.websocket.api.WriteCallback;
 
 import org.qortium.crypto.Crypto;
+import org.qortium.data.transaction.AddGroupAdminTransactionData;
 import org.qortium.data.transaction.BuyNameTransactionData;
+import org.qortium.data.transaction.CancelGroupBanTransactionData;
+import org.qortium.data.transaction.CancelGroupInviteTransactionData;
 import org.qortium.data.transaction.CancelSellNameTransactionData;
 import org.qortium.data.transaction.ChatTransactionData;
+import org.qortium.data.transaction.CreateGroupTransactionData;
+import org.qortium.data.transaction.GroupBanTransactionData;
+import org.qortium.data.transaction.GroupInviteTransactionData;
+import org.qortium.data.transaction.GroupKickTransactionData;
+import org.qortium.data.transaction.JoinGroupTransactionData;
+import org.qortium.data.transaction.LeaveGroupTransactionData;
 import org.qortium.data.transaction.PaymentTransactionData;
 import org.qortium.data.transaction.RateAccountTransactionData;
 import org.qortium.data.transaction.RateResourceTransactionData;
 import org.qortium.data.transaction.RegisterNameTransactionData;
+import org.qortium.data.transaction.RemoveGroupAdminTransactionData;
 import org.qortium.data.transaction.SellNameTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.data.transaction.TransferAssetTransactionData;
+import org.qortium.data.transaction.UpdateGroupTransactionData;
 import org.qortium.data.transaction.UpdateNameTransactionData;
 import org.qortium.transaction.Transaction;
 import org.qortium.utils.Amounts;
@@ -69,17 +80,19 @@ public class NotificationManager {
     static final String WILDCARD = "*";
 
     private static final Set<String> SUPPORTED_EVENTS = Set.of(
-            "RESOURCE_PUBLISHED", "PAYMENT_RECEIVED", "CHAT_MESSAGE", "TRANSACTION_CONFIRMED");
+            "RESOURCE_PUBLISHED", "PAYMENT_RECEIVED", "CHAT_MESSAGE", "TRANSACTION_CONFIRMED",
+            ForeignPaymentNotificationService.EVENT);
     private static final Set<String> RESOURCE_PUBLISHED_FILTER_KEYS = Set.of("service", "name");
     private static final Set<String> PAYMENT_RECEIVED_FILTER_KEYS = Set.of("sender", "recipient", "amount", "created", "signature");
     private static final Set<String> CHAT_MESSAGE_FILTER_KEYS = Set.of("recipient", "sender", "txGroupId", "involving");
-    private static final Set<String> TRANSACTION_CONFIRMED_FILTER_KEYS = Set.of("signature", "address", "txType");
+    private static final Set<String> TRANSACTION_CONFIRMED_FILTER_KEYS = Set.of("signature", "address", "groupId", "txType");
 
     /** Notifications for the same resource within this window are deduplicated per session. */
     private static final long DEDUP_WINDOW_MS = 5 * 60 * 1000L; // 5 minutes
     /** Block-derived notifications are limited to recent blocks to avoid historical-sync floods. */
     static final long NOTIFICATION_RECENCY_WINDOW_MS = 5 * 60 * 1000L; // 5 minutes
     private static final int NOTIFICATION_DISPATCH_QUEUE_CAPACITY = 256;
+    private static final int FOREIGN_NOTIFICATION_DISPATCH_QUEUE_CAPACITY = 128;
     private static final long DISPATCH_OVERLOAD_WARNING_INTERVAL_MS = 60 * 1000L;
     private static volatile Supplier<Long> notificationTimeSupplier = NTP::getTime;
 
@@ -90,8 +103,14 @@ public class NotificationManager {
     private static final ThreadPoolExecutor NOTIFICATION_DISPATCH_EXECUTOR = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(NOTIFICATION_DISPATCH_QUEUE_CAPACITY),
-            new NotificationDispatchThreadFactory());
+            new NotificationDispatchThreadFactory("notification-dispatch"));
+    /** Foreign Electrum events cannot consume the chain-event dispatcher's queue. */
+    private static final ThreadPoolExecutor FOREIGN_NOTIFICATION_DISPATCH_EXECUTOR = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(FOREIGN_NOTIFICATION_DISPATCH_QUEUE_CAPACITY),
+            new NotificationDispatchThreadFactory("foreign-notification-dispatch"));
     private static final AtomicLong lastDispatchOverloadWarningTimestamp = new AtomicLong();
+    private static final AtomicLong lastForeignDispatchOverloadWarningTimestamp = new AtomicLong();
 
     private static NotificationManager instance;
 
@@ -151,6 +170,9 @@ public class NotificationManager {
             case "TRANSACTION_CONFIRMED":
                 allowedKeys = TRANSACTION_CONFIRMED_FILTER_KEYS;
                 break;
+            case ForeignPaymentNotificationService.EVENT:
+                allowedKeys = ForeignPaymentNotificationService.FILTER_KEYS;
+                break;
             default:
                 throw new IllegalStateException("Unsupported notification event: " + event);
         }
@@ -190,8 +212,12 @@ public class NotificationManager {
             return "CHAT_MESSAGE subscriptions require at least one filter";
         }
         if ("TRANSACTION_CONFIRMED".equals(event)
-                && (filters == null || (!filters.containsKey("signature") && !filters.containsKey("address")))) {
-            return "TRANSACTION_CONFIRMED subscriptions require a signature or address filter";
+                && (filters == null || (!filters.containsKey("signature")
+                && !filters.containsKey("address") && !filters.containsKey("groupId")))) {
+            return "TRANSACTION_CONFIRMED subscriptions require a signature, address, or groupId filter";
+        }
+        if (ForeignPaymentNotificationService.EVENT.equals(event)) {
+            return ForeignPaymentNotificationService.validateSubscription(rule);
         }
 
         return null;
@@ -201,12 +227,13 @@ public class NotificationManager {
     // Session lifecycle
     // -------------------------------------------------------------------------
 
-    public void onSessionOpen(Session session, String address) {
+    public synchronized void onSessionOpen(Session session, String address) {
         sessions.put(session, new SessionSubscriptions(session, address, Collections.emptyList()));
         LOGGER.debug("Notification session opened: address={}", address);
     }
 
-    public void onSessionClose(Session session) {
+    public synchronized void onSessionClose(Session session) {
+        removeForeignPaymentSession(session);
         SessionSubscriptions subs = sessions.remove(session);
         if (subs != null) {
             removeFromIndex(session);
@@ -233,13 +260,18 @@ public class NotificationManager {
         for (Map<String, Long> sessionMap : recentlySent.values()) {
             sessionMap.entrySet().removeIf(e -> e.getValue() < cutoff);
         }
+        try {
+            ForeignPaymentNotificationService.getInstance().removeExpiredSubscriptions();
+        } catch (Exception e) {
+            LOGGER.debug("Unable to clean up expired foreign-payment subscriptions: {}", e.getMessage());
+        }
     }
 
     // -------------------------------------------------------------------------
     // Subscription management
     // -------------------------------------------------------------------------
 
-    public void setSubscriptions(Session session, List<NotificationSubscription> rules) {
+    public synchronized String setSubscriptions(Session session, List<NotificationSubscription> rules) {
         if (rules == null) {
             rules = Collections.emptyList();
         }
@@ -247,14 +279,19 @@ public class NotificationManager {
         SessionSubscriptions subs = sessions.get(session);
         if (subs == null) {
             LOGGER.warn("setSubscriptions called for unknown session");
-            return;
+            return "Unknown notification websocket session";
         }
 
+        String foreignPaymentError = updateForeignPaymentSubscriptions(session, rules);
+        if (foreignPaymentError != null) {
+            return foreignPaymentError;
+        }
         removeFromIndex(session);
         subs.subscriptions = new ArrayList<>(rules);
         addToIndex(session, rules);
 
         LOGGER.debug("Subscriptions updated for address={}: {} rules", subs.address, rules.size());
+        return null;
     }
 
     /**
@@ -263,36 +300,41 @@ public class NotificationManager {
      * and {@code appService} match (null-safe). Otherwise it is appended. This allows different
      * apps to use the same notificationId without overwriting each other.
      */
-    public void mergeSubscriptions(Session session, List<NotificationSubscription> incoming) {
-        if (incoming == null || incoming.isEmpty()) return;
+    public synchronized String mergeSubscriptions(Session session, List<NotificationSubscription> incoming) {
+        if (incoming == null || incoming.isEmpty()) return null;
 
         SessionSubscriptions subs = sessions.get(session);
         if (subs == null) {
             LOGGER.warn("mergeSubscriptions called for unknown session");
-            return;
+            return "Unknown notification websocket session";
         }
 
         List<NotificationSubscription> merged = new ArrayList<>(subs.subscriptions);
+        Map<SubscriptionKey, Integer> positionsByKey = new LinkedHashMap<>();
+        for (int index = 0; index < merged.size(); index++)
+            positionsByKey.putIfAbsent(new SubscriptionKey(merged.get(index)), index);
 
         for (NotificationSubscription rule : incoming) {
-            boolean replaced = false;
-            for (int i = 0; i < merged.size(); i++) {
-                if (sameSubscriptionKey(rule, merged.get(i))) {
-                    merged.set(i, rule);
-                    replaced = true;
-                    break;
-                }
-            }
-            if (!replaced) {
+            SubscriptionKey key = new SubscriptionKey(rule);
+            Integer existingPosition = positionsByKey.get(key);
+            if (existingPosition != null) {
+                merged.set(existingPosition, rule);
+            } else {
+                positionsByKey.put(key, merged.size());
                 merged.add(rule);
             }
         }
 
+        String foreignPaymentError = updateForeignPaymentSubscriptions(session, merged);
+        if (foreignPaymentError != null) {
+            return foreignPaymentError;
+        }
         removeFromIndex(session);
         subs.subscriptions = merged;
         addToIndex(session, merged);
 
         LOGGER.debug("Subscriptions merged for address={}: {} total rules", subs.address, merged.size());
+        return null;
     }
 
     /** True when both subscriptions share the same (notificationId, appName, appService) for merge/replace. */
@@ -303,10 +345,10 @@ public class NotificationManager {
     }
 
     /** Returns a snapshot of the current subscription list for the given session. */
-    public List<NotificationSubscription> getSubscriptions(Session session) {
+    public synchronized List<NotificationSubscription> getSubscriptions(Session session) {
         SessionSubscriptions subs = sessions.get(session);
         if (subs == null) return Collections.emptyList();
-        return Collections.unmodifiableList(subs.subscriptions);
+        return Collections.unmodifiableList(new ArrayList<>(subs.subscriptions));
     }
 
     /** Returns whether an event currently has at least one indexed subscription. */
@@ -349,7 +391,7 @@ public class NotificationManager {
      * Removes subscriptions whose (notificationId, appName, appService) match any of the given keys.
      * Re-indexes the session after removal.
      */
-    public void removeSubscriptions(Session session, List<NotificationSubscription> keys) {
+    public synchronized void removeSubscriptions(Session session, List<NotificationSubscription> keys) {
         if (keys == null || keys.isEmpty()) return;
 
         SessionSubscriptions subs = sessions.get(session);
@@ -369,6 +411,11 @@ public class NotificationManager {
             }
         }
 
+        String foreignPaymentError = updateForeignPaymentSubscriptions(session, kept);
+        if (foreignPaymentError != null) {
+            LOGGER.warn("Unable to remove foreign-payment subscriptions: {}", foreignPaymentError);
+            return;
+        }
         removeFromIndex(session);
         subs.subscriptions = kept;
         addToIndex(session, kept);
@@ -384,6 +431,9 @@ public class NotificationManager {
         for (NotificationSubscription rule : rules) {
             String event = rule.getEvent();
             if (event == null || event.isEmpty()) {
+                continue;
+            }
+            if (ForeignPaymentNotificationService.EVENT.equals(event)) {
                 continue;
             }
 
@@ -421,6 +471,23 @@ public class NotificationManager {
                     entries.removeIf(e -> e.session == session);
                 }
             }
+        }
+    }
+
+    private String updateForeignPaymentSubscriptions(Session session, List<NotificationSubscription> rules) {
+        try {
+            return ForeignPaymentNotificationService.getInstance().updateSession(session, rules);
+        } catch (Exception e) {
+            LOGGER.debug("Unable to update foreign-payment notification subscriptions: {}", e.getMessage());
+            return "Unable to update foreign-payment notification subscriptions";
+        }
+    }
+
+    private void removeForeignPaymentSession(Session session) {
+        try {
+            ForeignPaymentNotificationService.getInstance().removeSession(session);
+        } catch (Exception e) {
+            LOGGER.debug("Unable to close foreign-payment notification session: {}", e.getMessage());
         }
     }
 
@@ -661,6 +728,31 @@ public class NotificationManager {
             putNonBlank(data, "name", ((UpdateNameTransactionData) transactionData).getName());
         } else if (transactionData instanceof CancelSellNameTransactionData) {
             putNonBlank(data, "name", ((CancelSellNameTransactionData) transactionData).getName());
+        } else if (transactionData instanceof JoinGroupTransactionData) {
+            data.put("groupId", ((JoinGroupTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof GroupInviteTransactionData) {
+            data.put("groupId", ((GroupInviteTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof LeaveGroupTransactionData) {
+            data.put("groupId", ((LeaveGroupTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof GroupKickTransactionData) {
+            data.put("groupId", ((GroupKickTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof GroupBanTransactionData) {
+            data.put("groupId", ((GroupBanTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof CancelGroupInviteTransactionData) {
+            data.put("groupId", ((CancelGroupInviteTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof CancelGroupBanTransactionData) {
+            data.put("groupId", ((CancelGroupBanTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof AddGroupAdminTransactionData) {
+            data.put("groupId", ((AddGroupAdminTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof RemoveGroupAdminTransactionData) {
+            data.put("groupId", ((RemoveGroupAdminTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof UpdateGroupTransactionData) {
+            data.put("groupId", ((UpdateGroupTransactionData) transactionData).getGroupId());
+        } else if (transactionData instanceof CreateGroupTransactionData) {
+            Integer groupId = ((CreateGroupTransactionData) transactionData).getGroupId();
+            if (groupId != null) {
+                data.put("groupId", groupId);
+            }
         }
     }
 
@@ -685,6 +777,34 @@ public class NotificationManager {
             });
         } catch (RejectedExecutionException e) {
             logDispatchOverload();
+        }
+    }
+
+    /** Dispatches one event only to the session/rule that owns an in-memory foreign-wallet watch. */
+    void dispatchTargetedEventAsync(Session session, NotificationSubscription rule, NotificationEvent event) {
+        try {
+            FOREIGN_NOTIFICATION_DISPATCH_EXECUTOR.execute(() -> {
+                try {
+                    SessionSubscriptions current = sessions.get(session);
+                    if (current != null && current.subscriptions.contains(rule)
+                            && session.isOpen() && !rule.isExpired()) {
+                        sendGenericNotification(session, event, rule);
+                    }
+                } catch (Exception e) {
+                    LOGGER.debug("Error dispatching targeted {} notification: {}", event.getType(), e.getMessage());
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            logForeignDispatchOverload();
+        }
+    }
+
+    private static void logForeignDispatchOverload() {
+        long now = System.currentTimeMillis();
+        long previous = lastForeignDispatchOverloadWarningTimestamp.get();
+        if (now - previous >= DISPATCH_OVERLOAD_WARNING_INTERVAL_MS
+                && lastForeignDispatchOverloadWarningTimestamp.compareAndSet(previous, now)) {
+            LOGGER.warn("Foreign-payment notification dispatch overloaded, dropping foreign notification events");
         }
     }
 
@@ -1296,12 +1416,44 @@ public class NotificationManager {
         return sessions.size();
     }
 
+    private static final class SubscriptionKey {
+        private final String notificationId;
+        private final String appName;
+        private final String appService;
+
+        private SubscriptionKey(NotificationSubscription subscription) {
+            this.notificationId = subscription.getNotificationId();
+            this.appName = subscription.getAppName();
+            this.appService = subscription.getAppService();
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (this == object) return true;
+            if (!(object instanceof SubscriptionKey)) return false;
+            SubscriptionKey other = (SubscriptionKey) object;
+            return Objects.equals(this.notificationId, other.notificationId)
+                    && Objects.equals(this.appName, other.appName)
+                    && Objects.equals(this.appService, other.appService);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(this.notificationId, this.appName, this.appService);
+        }
+    }
+
     private static final class NotificationDispatchThreadFactory implements ThreadFactory {
+        private final String prefix;
         private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+        private NotificationDispatchThreadFactory(String prefix) {
+            this.prefix = prefix;
+        }
 
         @Override
         public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "notification-dispatch-" + this.threadNumber.getAndIncrement());
+            Thread thread = new Thread(runnable, this.prefix + "-" + this.threadNumber.getAndIncrement());
             thread.setDaemon(true);
             return thread;
         }

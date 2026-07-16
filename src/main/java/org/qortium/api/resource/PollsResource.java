@@ -15,6 +15,8 @@ import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiException;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.model.PollVotes;
+import org.qortium.api.model.PublicPollCapabilities;
+import org.qortium.block.BlockChain;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.account.AccountData;
 import org.qortium.data.account.AccountTrustSnapshotData;
@@ -54,6 +56,10 @@ import java.util.stream.Collectors;
 @Path("/polls")
 @Tag(name = "Polls")
 public class PollsResource {
+    private static final int PUBLIC_POLL_PROTOCOL_VERSION = 1;
+    private static final List<String> PUBLIC_POLL_ACTIONS = List.of(
+            "CREATE_POLL", "VOTE_ON_POLL", "UPDATE_POLL");
+
     @Context
     HttpServletRequest request;
 
@@ -316,6 +322,32 @@ public class PollsResource {
         if (Settings.getInstance().isApiRestricted())
             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+        return buildCreatePoll(transactionData);
+    }
+
+    @GET
+    @Path("/public/capabilities")
+    @Operation(
+            summary = "Describe the public unsigned poll-builder protocol",
+            description = "Advertises the poll actions that can be built without an API key and the MemoryPoW difficulty required for zero-fee submissions."
+    )
+    public PublicPollCapabilities getPublicPollCapabilities() {
+        return new PublicPollCapabilities(PUBLIC_POLL_PROTOCOL_VERSION, PUBLIC_POLL_ACTIONS,
+                BlockChain.getInstance().getMempowFeeAlternativeDifficulty());
+    }
+
+    @POST
+    @Path("/public/create")
+    @Operation(
+            summary = "Build raw, unsigned, CREATE_POLL transaction (public, no API key)",
+            description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+    )
+    @ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+    public String buildPublicCreatePoll(CreatePollTransactionData transactionData) {
+        return buildCreatePoll(transactionData);
+    }
+
+    private String buildCreatePoll(CreatePollTransactionData transactionData) {
         try (final Repository repository = RepositoryManager.getRepository()) {
             Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -363,6 +395,21 @@ public class PollsResource {
         if (Settings.getInstance().isApiRestricted())
             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+        return buildVoteOnPoll(transactionData);
+    }
+
+    @POST
+    @Path("/public/vote")
+    @Operation(
+            summary = "Build raw, unsigned, VOTE_ON_POLL transaction (public, no API key)",
+            description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+    )
+    @ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+    public String buildPublicVoteOnPoll(VoteOnPollTransactionData transactionData) {
+        return buildVoteOnPoll(transactionData);
+    }
+
+    private String buildVoteOnPoll(VoteOnPollTransactionData transactionData) {
         try (final Repository repository = RepositoryManager.getRepository()) {
             Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -410,6 +457,21 @@ public class PollsResource {
         if (Settings.getInstance().isApiRestricted())
             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+        return buildUpdatePoll(transactionData);
+    }
+
+    @POST
+    @Path("/public/update")
+    @Operation(
+            summary = "Build raw, unsigned, UPDATE_POLL transaction (public, no API key)",
+            description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+    )
+    @ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+    public String buildPublicUpdatePoll(UpdatePollTransactionData transactionData) {
+        return buildUpdatePoll(transactionData);
+    }
+
+    private String buildUpdatePoll(UpdatePollTransactionData transactionData) {
         try (final Repository repository = RepositoryManager.getRepository()) {
             Transaction transaction = Transaction.fromData(repository, transactionData);
 

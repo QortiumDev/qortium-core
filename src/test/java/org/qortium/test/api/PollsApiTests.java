@@ -1,12 +1,19 @@
 package org.qortium.test.api;
 
+import com.google.common.primitives.Bytes;
 import org.junit.Before;
 import org.junit.Test;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.qortium.api.ApiError;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.api.model.PollVotes;
+import org.qortium.api.model.PublicPollCapabilities;
 import org.qortium.api.resource.PollsResource;
+import org.qortium.block.BlockChain;
 import org.qortium.data.account.AccountTrustStatus;
+import org.qortium.data.transaction.BaseTransactionData;
+import org.qortium.data.transaction.CreatePollTransactionData;
+import org.qortium.data.transaction.TransactionData;
 import org.qortium.data.transaction.UpdatePollTransactionData;
 import org.qortium.data.transaction.VoteOnPollTransactionData;
 import org.qortium.data.voting.PollData;
@@ -15,12 +22,17 @@ import org.qortium.data.voting.VoteOnPollData;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
+import org.qortium.settings.Settings;
 import org.qortium.test.common.ApiCommon;
 import org.qortium.test.common.AccountTrustTestUtils;
 import org.qortium.test.common.BlockUtils;
 import org.qortium.test.common.Common;
 import org.qortium.test.common.TestAccount;
 import org.qortium.test.common.transaction.TestTransaction;
+import org.qortium.transaction.Transaction;
+import org.qortium.transform.TransformationException;
+import org.qortium.transform.transaction.TransactionTransformer;
+import org.qortium.utils.Base58;
 import org.qortium.voting.Poll;
 
 import java.util.List;
@@ -43,6 +55,16 @@ public class PollsApiTests extends ApiCommon {
 	@Test
 	public void testResource() {
 		assertNotNull(this.pollsResource);
+	}
+
+	@Test
+	public void testPublicPollCapabilitiesMatchChainSettings() {
+		PublicPollCapabilities capabilities = this.pollsResource.getPublicPollCapabilities();
+
+		assertEquals(1, capabilities.protocolVersion);
+		assertEquals(List.of("CREATE_POLL", "VOTE_ON_POLL", "UPDATE_POLL"), capabilities.actions);
+		assertEquals(BlockChain.getInstance().getMempowFeeAlternativeDifficulty(),
+				capabilities.mempowFeeAlternativeDifficulty);
 	}
 
 	@Test
@@ -180,6 +202,86 @@ public class PollsApiTests extends ApiCommon {
 
 			assertNotNull(rawTransaction);
 			assertFalse(rawTransaction.isEmpty());
+		}
+	}
+
+	@Test
+	public void testPublicPollBuildersMatchProtectedBuilders() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			List<PollOptionData> options = List.of(new PollOptionData("Yes"), new PollOptionData("No"));
+			CreatePollTransactionData createData = new CreatePollTransactionData(
+					TestTransaction.generateBase(alice), alice.getAddress(), "public-poll-build-test",
+					"Public builder parity", options, (Long) null, (Long) null);
+
+			assertEquals(this.pollsResource.CreatePoll(createData),
+					this.pollsResource.buildPublicCreatePoll(createData));
+
+			createTestPoll(repository, "public-poll-vote-update-test");
+			PollData pollData = repository.getVotingRepository().fromPollName("public-poll-vote-update-test");
+			VoteOnPollTransactionData voteData = new VoteOnPollTransactionData(
+					TestTransaction.generateBase(alice), pollData.getPollId(), List.of(1, 2));
+			assertEquals(this.pollsResource.VoteOnPoll(voteData),
+					this.pollsResource.buildPublicVoteOnPoll(voteData));
+
+			UpdatePollTransactionData updateData = new UpdatePollTransactionData(
+					TestTransaction.generateBase(alice), pollData.getPollId(), "public-poll-updated",
+					"Updated", options, null, null);
+			assertEquals(this.pollsResource.UpdatePoll(updateData),
+					this.pollsResource.buildPublicUpdatePoll(updateData));
+		}
+	}
+
+	@Test
+	public void testPublicVoteBuilderStillWorksWhenApiIsRestricted() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			createTestPoll(repository, "public-restricted-vote-test");
+			PollData pollData = repository.getVotingRepository().fromPollName("public-restricted-vote-test");
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			VoteOnPollTransactionData voteData = new VoteOnPollTransactionData(
+					TestTransaction.generateBase(alice), pollData.getPollId(), 1);
+
+			FieldUtils.writeField(Settings.getInstance(), "apiRestricted", true, true);
+			assertApiError(ApiError.NON_PRODUCTION, () -> this.pollsResource.VoteOnPoll(voteData));
+			assertFalse(this.pollsResource.buildPublicVoteOnPoll(voteData).isEmpty());
+		} finally {
+			FieldUtils.writeField(Settings.getInstance(), "apiRestricted", false, true);
+		}
+	}
+
+	@Test
+	public void testPublicBuildersProduceLocallySignableProcessablePollTransactions() throws Exception {
+		Object mempowSettings = FieldUtils.readField(BlockChain.getInstance(), "mempowSettings", true);
+		int previousDifficulty = (Integer) FieldUtils.readField(mempowSettings, "feeAlternativeDifficulty", true);
+		FieldUtils.writeField(mempowSettings, "feeAlternativeDifficulty", 1, true);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			List<PollOptionData> options = List.of(new PollOptionData("Yes"), new PollOptionData("No"));
+			long endTime = System.currentTimeMillis() + 86_400_000L;
+			CreatePollTransactionData createData = new CreatePollTransactionData(
+					zeroFeeBase(alice), alice.getAddress(), "public-poll-process-test",
+					"Public builder process test", options, null, endTime);
+			processPublicTransaction(repository, alice, this.pollsResource.buildPublicCreatePoll(createData));
+			BlockUtils.mintBlock(repository);
+
+			PollData pollData = repository.getVotingRepository().fromPollName("public-poll-process-test");
+			assertNotNull(pollData);
+			VoteOnPollTransactionData voteData = new VoteOnPollTransactionData(
+					zeroFeeBase(alice), pollData.getPollId(), 1);
+			processPublicTransaction(repository, alice, this.pollsResource.buildPublicVoteOnPoll(voteData));
+			BlockUtils.mintBlock(repository);
+
+			UpdatePollTransactionData updateData = new UpdatePollTransactionData(
+					zeroFeeBase(alice), pollData.getPollId(), pollData.getPollName(), pollData.getDescription(),
+					pollData.getPollOptions(), pollData.getStartTime(), endTime + 86_400_000L);
+			processPublicTransaction(repository, alice, this.pollsResource.buildPublicUpdatePoll(updateData));
+			BlockUtils.mintBlock(repository);
+
+			assertEquals(Long.valueOf(endTime + 86_400_000L),
+					repository.getVotingRepository().fromPollId(pollData.getPollId()).getEndTime());
+		} finally {
+			FieldUtils.writeField(mempowSettings, "feeAlternativeDifficulty", previousDifficulty, true);
 		}
 	}
 
@@ -413,6 +515,21 @@ public class PollsApiTests extends ApiCommon {
 
 	private void createTestPoll(Repository repository, String pollName) throws DataException {
 		createTestPoll(repository, pollName, null);
+	}
+
+	private static BaseTransactionData zeroFeeBase(PrivateKeyAccount account) {
+		return new BaseTransactionData(System.currentTimeMillis(), 0, account.getPublicKey(), 0L, 0, null);
+	}
+
+	private static void processPublicTransaction(Repository repository, PrivateKeyAccount account, String unsigned58)
+			throws DataException, TransformationException {
+		byte[] bytesWithEmptySignature = Bytes.concat(Base58.decode(unsigned58), new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+		TransactionData transactionData = TransactionTransformer.fromBytes(bytesWithEmptySignature);
+		transactionData.setSignature(null);
+		Transaction transaction = Transaction.fromData(repository, transactionData);
+		transaction.computeMempowFeeNonce();
+		transaction.sign(account);
+		assertEquals(Transaction.ValidationResult.OK, transaction.importAsUnconfirmed());
 	}
 
 	private void createTestPoll(Repository repository, String pollName, Long endTime) throws DataException {
