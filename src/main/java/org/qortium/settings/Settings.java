@@ -142,6 +142,22 @@ public class Settings {
 	private String[] publicApiPaths = new String[0];
 	/** Whether a request carrying the node's API key bypasses the IP/path API access rules. */
 	private boolean apiKeyRemoteAccessEnabled = true;
+	/** Maximum body accepted from an anonymous public transaction builder/submission request. */
+	private long publicApiWriteMaxBodySize = 256L * 1024L;
+	/** Per-client sustained request rate for lightweight public builders. */
+	private int publicApiBuilderRequestsPerMinute = 120;
+	/** Immediate per-client burst accepted for lightweight public builders. */
+	private int publicApiBuilderRateLimitBurst = 30;
+	/** Maximum public builder requests executing at once across all remote clients. */
+	private int publicApiBuilderMaxConcurrentRequests = 16;
+	/** Per-client sustained request rate for signed transaction submission. */
+	private int publicApiProcessRequestsPerMinute = 240;
+	/** Immediate per-client burst accepted for signed transaction submission. */
+	private int publicApiProcessRateLimitBurst = 60;
+	/** Maximum public transaction submissions executing at once across all remote clients. */
+	private int publicApiProcessMaxConcurrentRequests = 32;
+	/** Maximum expensive public QDN build/read requests executing at once. */
+	private int publicQdnApiMaxConcurrentRequests = 2;
 
 	/** Storage location for API key file (Nov 2021 onwards) */
 	private String apiKeyPath = System.getProperty("user.dir");
@@ -1087,6 +1103,14 @@ public class Settings {
 		settings.put("minBlockchainPeers", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("minDataPeers", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("apiKeyRemoteAccessEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("publicApiWriteMaxBodySize", new WritableSetting(WritableSettingType.LONG, false));
+		settings.put("publicApiBuilderRequestsPerMinute", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicApiBuilderRateLimitBurst", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicApiBuilderMaxConcurrentRequests", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicApiProcessRequestsPerMinute", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicApiProcessRateLimitBurst", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicApiProcessMaxConcurrentRequests", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicQdnApiMaxConcurrentRequests", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("minPeerVersion", new WritableSetting(WritableSettingType.PEER_VERSION, true));
 		settings.put("allowConnectionsWithOlderPeerVersions", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("hsqldbCacheRows", new WritableSetting(WritableSettingType.INTEGER, true));
@@ -1749,6 +1773,30 @@ public class Settings {
 		if (this.publicQdnPublishChunkSessionLimit < 1)
 			throwValidationError("publicQdnPublishChunkSessionLimit must be at least 1");
 
+		if (this.publicApiWriteMaxBodySize < 1)
+			throwValidationError("publicApiWriteMaxBodySize must be at least 1 byte");
+
+		if (this.publicApiBuilderRequestsPerMinute < 1)
+			throwValidationError("publicApiBuilderRequestsPerMinute must be at least 1");
+
+		if (this.publicApiBuilderRateLimitBurst < 1)
+			throwValidationError("publicApiBuilderRateLimitBurst must be at least 1");
+
+		if (this.publicApiBuilderMaxConcurrentRequests < 1)
+			throwValidationError("publicApiBuilderMaxConcurrentRequests must be at least 1");
+
+		if (this.publicApiProcessRequestsPerMinute < 1)
+			throwValidationError("publicApiProcessRequestsPerMinute must be at least 1");
+
+		if (this.publicApiProcessRateLimitBurst < 1)
+			throwValidationError("publicApiProcessRateLimitBurst must be at least 1");
+
+		if (this.publicApiProcessMaxConcurrentRequests < 1)
+			throwValidationError("publicApiProcessMaxConcurrentRequests must be at least 1");
+
+		if (this.publicQdnApiMaxConcurrentRequests < 1)
+			throwValidationError("publicQdnApiMaxConcurrentRequests must be at least 1");
+
 		if (this.maxStorageCapacity != null && this.maxStorageCapacity < 1)
 			throwValidationError("maxStorageCapacity must be at least 1 byte");
 	}
@@ -1943,6 +1991,38 @@ public class Settings {
 
 	public boolean isApiKeyRemoteAccessEnabled() {
 		return this.apiKeyRemoteAccessEnabled;
+	}
+
+	public long getPublicApiWriteMaxBodySize() {
+		return this.publicApiWriteMaxBodySize;
+	}
+
+	public int getPublicApiBuilderRequestsPerMinute() {
+		return this.publicApiBuilderRequestsPerMinute;
+	}
+
+	public int getPublicApiBuilderRateLimitBurst() {
+		return this.publicApiBuilderRateLimitBurst;
+	}
+
+	public int getPublicApiBuilderMaxConcurrentRequests() {
+		return this.publicApiBuilderMaxConcurrentRequests;
+	}
+
+	public int getPublicApiProcessRequestsPerMinute() {
+		return this.publicApiProcessRequestsPerMinute;
+	}
+
+	public int getPublicApiProcessRateLimitBurst() {
+		return this.publicApiProcessRateLimitBurst;
+	}
+
+	public int getPublicApiProcessMaxConcurrentRequests() {
+		return this.publicApiProcessMaxConcurrentRequests;
+	}
+
+	public int getPublicQdnApiMaxConcurrentRequests() {
+		return this.publicQdnApiMaxConcurrentRequests;
 	}
 
 	public boolean isApiRestricted() {

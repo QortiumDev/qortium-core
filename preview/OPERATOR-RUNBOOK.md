@@ -176,8 +176,9 @@ The expected response code for restricted endpoints is `403`.
 
 ## QDN Auto-Update Testing
 
-The tracked preview settings keep `"autoUpdateMode": "OFF"` so a normal seed
-restart does not automatically install a new jar. For a live update test, use
+The tracked seed settings keep `"autoUpdateMode": "OFF"` so a normal seed
+restart does not automatically install a new jar (the tester template defaults
+to `NOTIFY`, which reports approved updates but never installs). For a live update test, use
 two different seed paths:
 
 - keep one seed on `OFF` and trigger the approved update manually with

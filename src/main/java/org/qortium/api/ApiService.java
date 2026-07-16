@@ -267,9 +267,13 @@ public class ApiService {
 			PublicApiAccessHandler accessHandler = new PublicApiAccessHandler();
 			this.server.setHandler(accessHandler);
 
+			// Body, rate and concurrency bounds for anonymous public write work.
+			PublicApiProtectionHandler protectionHandler = new PublicApiProtectionHandler();
+			accessHandler.setHandler(protectionHandler);
+
 			// URL rewriting
 			RewriteHandler rewriteHandler = new RewriteHandler();
-			accessHandler.setHandler(rewriteHandler);
+			protectionHandler.setHandler(rewriteHandler);
 
 			// Context
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);

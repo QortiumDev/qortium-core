@@ -4,6 +4,7 @@ import org.eclipse.jetty.ee8.websocket.api.Session;
 import org.junit.After;
 import org.junit.Test;
 import org.qortium.data.transaction.BaseTransactionData;
+import org.qortium.data.transaction.JoinGroupTransactionData;
 import org.qortium.data.transaction.PaymentTransactionData;
 import org.qortium.data.transaction.RateAccountTransactionData;
 import org.qortium.data.transaction.RegisterNameTransactionData;
@@ -24,6 +25,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class NotificationManagerTests extends Common {
+
+    private static final String BITCOIN_TEST_XPUB =
+            "tpubDCxs3oB9X7XJYkQGU6gfPwd4h3NEiBGA8mfD1aEbZiG5x3BTH4cJqszDP6dtoHPPjZNEj5jPxuSWHCvjg9AHz4dNg6w5vQhv1B8KwWKpxoz";
+    private static final String BITCOIN_TEST_XPRV =
+            "tprv8ZgxMBicQKsPdahhFSrCdvC1bsWyzHHZfTneTVqUXN6s1wEtZLwAkZXzFP6TYLg2aQMecZLXLre5bTVGajEB55L1HYJcawpdFG66STVAWPJ";
 
     private final NotificationManager notificationManager = NotificationManager.getInstance();
     private final List<Session> sessions = new ArrayList<>();
@@ -126,10 +132,30 @@ public class NotificationManagerTests extends Common {
     }
 
     @Test
+    public void testTransactionConfirmedGroupIdFilterMatchesWithoutAddressAnchor() throws Exception {
+        CapturingSession groupMatch = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("txType", "JOIN_GROUP", "groupId", "123"));
+        CapturingSession groupMiss = subscribe("TRANSACTION_CONFIRMED",
+                Map.of("txType", "JOIN_GROUP", "groupId", "456"));
+        long now = 1_000_000L;
+        NotificationManager.setNotificationTimeSupplierForTesting(() -> now);
+
+        this.notificationManager.onTransactionConfirmed(new NotificationTestTransaction(
+                new JoinGroupTransactionData(baseTransactionData(), 123)), 99, now - 1L);
+
+        awaitNotificationCount(1, groupMatch);
+        assertNotificationCount(0, groupMiss);
+        assertTrue(groupMatch.notifications.get(0).contains("\"groupId\":123"));
+    }
+
+    @Test
     public void testSubscriptionValidationRejectsUnknownEventsAndFilters() {
         assertValidationError(subscription("UNKNOWN", Map.of("recipient", "recipient")), "Unknown notification event");
         assertValidationError(subscription("CHAT_MESSAGE", Map.of()), "require at least one filter");
-        assertValidationError(subscription("TRANSACTION_CONFIRMED", Map.of("txType", "PAYMENT")), "require a signature or address");
+        assertValidationError(subscription("TRANSACTION_CONFIRMED", Map.of("txType", "PAYMENT")),
+                "require a signature, address, or groupId");
+        assertNull(NotificationManager.validateSubscription(subscription("TRANSACTION_CONFIRMED",
+                Map.of("txType", "JOIN_GROUP", "groupId", "123"))));
         assertValidationError(subscription("CHAT_MESSAGE", Map.of("content", "secret")), "Unknown filter key");
         assertNull(NotificationManager.validateSubscription(subscription("PAYMENT_RECEIVED", Map.of("recipient", "recipient"))));
     }
@@ -143,6 +169,24 @@ public class NotificationManagerTests extends Common {
                 "only non-blank strings");
         assertValidationError(subscription("RESOURCE_PUBLISHED", Map.of("service", List.of("APP", "WEBSITE"))),
                 "not supported for RESOURCE_PUBLISHED");
+    }
+
+    @Test
+    public void testForeignPaymentSubscriptionValidation() {
+        assertNull(NotificationManager.validateSubscription(subscription("FOREIGN_PAYMENT_RECEIVED",
+                Map.of("coin", "BTC", "xpub", BITCOIN_TEST_XPUB))));
+        assertValidationError(subscription("FOREIGN_PAYMENT_RECEIVED", Map.of("coin", "UNKNOWN", "xpub", "invalid")),
+                "Unsupported ElectrumX coin");
+        assertValidationError(subscription("FOREIGN_PAYMENT_RECEIVED", Map.of("coin", "BTC")), "require a non-blank xpub");
+        assertValidationError(subscription("FOREIGN_PAYMENT_RECEIVED", Map.of("coin", "BTC", "xpub", "invalid")),
+                "Invalid xpub");
+        assertValidationError(subscription("FOREIGN_PAYMENT_RECEIVED",
+                Map.of("coin", "BTC", "xpub", BITCOIN_TEST_XPRV)), "requires a public extended key");
+        assertValidationError(subscription("FOREIGN_PAYMENT_RECEIVED",
+                Map.of("coin", List.of("BTC"), "xpub", BITCOIN_TEST_XPUB)), "must be a string");
+        assertValidationError(subscription("FOREIGN_PAYMENT_RECEIVED",
+                Map.of("coin", "BTC", "xpub", "x".repeat(ForeignPaymentNotificationService.MAX_XPUB_LENGTH + 1))),
+                "character limit");
     }
 
     @Test

@@ -34,6 +34,72 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-15 - preview: default tester template auto-update mode to NOTIFY
+
+Nodes started from the tester settings template now check for approved
+on-chain updates and report them through the update status API instead of
+staying silent. Nothing installs automatically: NOTIFY only surfaces that an
+approved update exists, so standalone testers learn a new Core is available
+without Home. The seed templates keep auto-update OFF because seeds are
+updated manually in a controlled rolling order, and the preview operator docs
+now describe the split.
+
+### 2026-07-15 - notifications: push incoming foreign payments from ElectrumX
+
+Wallet apps can now receive session-scoped alerts for incoming payments on
+Core's ElectrumX-backed foreign chains. A watch-only public wallet key is kept
+in memory for the websocket session, expanded with the same receive/change and
+gap-limit rules as existing wallet history, and multiplexed through one
+separate reconnecting push connection per active coin. Existing deposits form
+the starting baseline; new incoming transactions include the coin, hash,
+receiving address, eight-decimal amount, confirmation count, and a required
+ElectrumX checkpoint for replay suppression. PirateChain remains excluded,
+private wallet keys are rejected, the last subscription tears the connection
+down, and bounded daemon workers keep foreign notifications isolated from
+block processing, trading, ordinary notification delivery, and existing
+synchronous ElectrumX calls. Per-session, node-wide, derivation, history,
+message, and raw-transaction ceilings reject or fail over abusive inputs;
+periodic pings detect blackholed servers; transient transaction-fetch failures
+remain retryable; and the notification-only chain instance can never become a
+disabled wallet's normal shared instance.
+
+### 2026-07-15 - notifications: add group-aware confirmed-transaction filters
+
+Apps can now watch confirmed group transactions by group ID without also naming
+an involved account. This makes join-request alerts practical for group admins,
+who are not transaction participants when somebody asks to join. Confirmed
+notifications for the group transaction family now carry their direct group ID,
+while the unrelated default-group setting keeps its existing meaning and is not
+included.
+
+### 2026-07-15 - api: attest and throttle public writes; release 1.5.0
+
+Anonymous public-node writes now have layered availability protection without
+changing transaction validity: small builders and transaction submission have
+bounded request bodies, separate per-client token buckets, and separate global
+concurrency ceilings, while expensive QDN work has a tighter two-request global
+ceiling and a size allowance compatible with the existing public publish cap.
+Loopback/API-whitelisted callers and valid node-API-key requests keep their
+existing trusted behavior. The public QDN builder also gains a narrow
+content-addressed read endpoint for its pre-signature ciphertext and metadata;
+Home can rehash and decrypt those exact staged bytes, compare them with the
+user's selected source, and refuse to sign substituted content. The endpoint
+accepts only a canonical SHA-256 Base58 hash, serves only the unsigned `_misc`
+store, revalidates the file hash and size, and is covered by the same QDN
+limits. Core is advanced to 1.5.0 for this public-write security boundary; no
+consensus, database, chain-configuration, or peering behavior changes.
+Unsigned MemoryPoW builders also consistently accept the wire-format zero nonce
+placeholder that Home verifies and replaces with the computed nonce.
+
+### 2026-07-15 - api: add public unsigned poll builders
+
+Public nodes can now advertise and build unsigned create, vote, and update poll
+transactions without receiving an API key or private key. The caller still has
+to perform the bounded proof of work, sign locally, and submit the signed bytes;
+Core does not perform those sensitive or resource-intensive steps for a public
+request. Existing poll builders and all generic signing and proof-of-work
+endpoints keep their prior access controls.
+
 ### 2026-07-14 - launch: use compact object headers on Java 25+
 
 The start scripts (regular, preview, and Docker) now enable the Java 25

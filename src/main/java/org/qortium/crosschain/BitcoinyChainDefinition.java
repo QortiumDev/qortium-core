@@ -12,6 +12,7 @@ public final class BitcoinyChainDefinition<T extends Bitcoiny> {
 	private final BiFunction<BitcoinyChainConfig, BitcoinyNetwork, T> instanceFactory;
 
 	private T instance;
+	private T notificationInstance;
 
 	public BitcoinyChainDefinition(BitcoinyChainConfig config, Supplier<? extends BitcoinyNetwork> networkSupplier,
 			BiFunction<BitcoinyChainConfig, BitcoinyNetwork, T> instanceFactory) {
@@ -29,14 +30,31 @@ public final class BitcoinyChainDefinition<T extends Bitcoiny> {
 	}
 
 	public synchronized T getInstance() {
-		if (this.instance == null && Settings.getInstance().isWalletEnabled(this.config.getCurrencyCode()))
-			this.instance = this.instanceFactory.apply(this.config, this.networkSupplier.get());
+		if (this.instance != null)
+			return this.instance;
+
+		if (!Settings.getInstance().isWalletEnabled(this.config.getCurrencyCode()))
+			return null;
+
+		this.instance = this.instanceFactory.apply(this.config, this.networkSupplier.get());
 
 		return this.instance;
 	}
 
+	/**
+	 * Creates a segregated watch-only chain instance without changing or bypassing the operator's
+	 * wallet-enabled setting. This instance is never returned from {@link #getInstance()}.
+	 */
+	public synchronized T getOrCreateNotificationInstance() {
+		if (this.notificationInstance == null)
+			this.notificationInstance = this.instanceFactory.apply(this.config, this.networkSupplier.get());
+
+		return this.notificationInstance;
+	}
+
 	public synchronized void resetForTesting() {
 		this.instance = null;
+		this.notificationInstance = null;
 	}
 
 }

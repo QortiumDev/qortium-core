@@ -151,16 +151,19 @@ public final class ForeignBlockchainRegistry {
 		private final Integer slip44CoinType;
 		private final String currencyCode;
 		private final Supplier<? extends ForeignBlockchain> instanceSupplier;
+		private final Supplier<? extends Bitcoiny> bitcoinyNotificationInstanceSupplier;
 		private final Runnable resetForTesting;
 		private final boolean bitcoiny;
 		private final BitcoinyChainSpec bitcoinySpec;
 
 		private Entry(String name, Integer slip44CoinType, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
-				Runnable resetForTesting, boolean bitcoiny, BitcoinyChainSpec bitcoinySpec) {
+				Supplier<? extends Bitcoiny> bitcoinyNotificationInstanceSupplier, Runnable resetForTesting,
+				boolean bitcoiny, BitcoinyChainSpec bitcoinySpec) {
 			this.name = name;
 			this.slip44CoinType = slip44CoinType;
 			this.currencyCode = currencyCode;
 			this.instanceSupplier = instanceSupplier;
+			this.bitcoinyNotificationInstanceSupplier = bitcoinyNotificationInstanceSupplier;
 			this.resetForTesting = resetForTesting;
 			this.bitcoiny = bitcoiny;
 			this.bitcoinySpec = bitcoinySpec;
@@ -177,6 +180,7 @@ public final class ForeignBlockchainRegistry {
 					spec.getSlip44CoinType(),
 					spec.getCurrencyCode(),
 					definition::getInstance,
+					definition::getOrCreateNotificationInstance,
 					definition::resetForTesting,
 					true,
 					spec);
@@ -184,7 +188,7 @@ public final class ForeignBlockchainRegistry {
 
 		private static Entry foreign(String name, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
 				Runnable resetForTesting) {
-			return new Entry(name, null, currencyCode, instanceSupplier, resetForTesting, false, null);
+			return new Entry(name, null, currencyCode, instanceSupplier, null, resetForTesting, false, null);
 		}
 
 		public String name() {
@@ -234,6 +238,12 @@ public final class ForeignBlockchainRegistry {
 		public Bitcoiny getBitcoinyInstance() {
 			ForeignBlockchain foreignBlockchain = this.getInstance();
 			return foreignBlockchain instanceof Bitcoiny ? (Bitcoiny) foreignBlockchain : null;
+		}
+
+		/** Returns a segregated watch-only Bitcoiny instance without enabling the wallet in node settings. */
+		public Bitcoiny getBitcoinyNotificationInstance() {
+			return this.bitcoinyNotificationInstanceSupplier == null
+					? null : this.bitcoinyNotificationInstanceSupplier.get();
 		}
 
 		public void resetForTesting() {
