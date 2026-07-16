@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-15 - docs: refresh README and testing guidance
+
+Brings the main README back in line with where the project actually is. The
+Preview Network section now describes Previewnet as a live public network
+whose consensus features activate at scheduled block heights, so testers must
+run the latest release (downloadable as `qortium-preview.zip` from GitHub
+releases, or built from source) to stay on the network. A new short section
+lists what Qortium changes versus Qortal - the dev-group approval split, poll
+upgrades, websocket notification subscriptions, trust and rating APIs, I2P
+fallback, and QDN auto-update - and a footer adds license, bug-reporting,
+release, and homepage links. The local-checks example now uses
+`mvn test -DskipJUnitTests=false`, since a bare `mvn test` silently runs zero
+tests, and the testing guide's stated coverage gates are corrected to the 50%
+instruction, 35% branch, and 48% line thresholds that the build actually
+enforces. No code or behavior changes.
+
 ### 2026-07-14 - launch: use compact object headers on Java 25+
 
 The start scripts (regular, preview, and Docker) now enable the Java 25

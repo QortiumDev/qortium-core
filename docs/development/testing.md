@@ -22,8 +22,8 @@ mvn clean test jacoco:report jacoco:check -Pcoverage -DskipJUnitTests=false
 
 The HTML report is written to `target/site/jacoco/index.html`, with machine-readable
 XML and CSV output in the same directory. The coverage profile enforces intentionally
-low bundle-level baselines so coverage cannot regress silently: 30% instruction
-coverage, 20% branch coverage, and 30% line coverage. These thresholds are starting
+low bundle-level baselines so coverage cannot regress silently: 50% instruction
+coverage, 35% branch coverage, and 48% line coverage. These thresholds are starting
 points and should be ratcheted upward after broader default coverage is added. The
 coverage profile excludes the performance-sensitive MemoryPoW implementation from
 instrumentation because JaCoCo bytecode instrumentation makes nonce computation too
