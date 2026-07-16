@@ -35,6 +35,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public class PollVoteRemovalTests extends ApiCommon {
 
@@ -151,6 +152,50 @@ public class PollVoteRemovalTests extends ApiCommon {
 			assertEquals(0, findOptionWeight(afterRemoval.voteWeights, "Yes"));
 			assertEquals(0, findOptionWeight(afterRemoval.voteWeights, "No"));
 			assertNull(repository.getVotingRepository().getVote(pollName, bob.getPublicKey()));
+		}
+	}
+
+	@Test
+	public void testUnsortedMultiOptionVotesAreNormalizedAndCanonicalBytesEnforced() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			String pollName = "unsorted-vote-poll";
+			createTestPoll(repository, alice, pollName, null);
+
+			// The build path sorts selections ascending so clients sign canonical bytes
+			VoteOnPollTransactionData unsortedData = voteData(repository, bob, pollName, List.of(2, 1));
+			unsortedData.normalizeOptionIndexOrder();
+			assertEquals(List.of(1, 2), unsortedData.getSelectedOptionIndexes());
+
+			// Non-ascending serialized bytes are rejected outright: the repository returns
+			// selections ascending, so any other order breaks its own signature when the
+			// transaction is re-serialized for a block and would sit unconfirmed forever.
+			VoteOnPollTransactionData rawUnsortedData = voteData(repository, bob, pollName, List.of(2, 1));
+			new VoteOnPollTransaction(repository, rawUnsortedData).sign(bob);
+			byte[] unsortedBytes = TransactionTransformer.toBytes(rawUnsortedData);
+			try {
+				TransactionTransformer.fromBytes(unsortedBytes);
+				fail("Non-ascending option indexes must not deserialize");
+			} catch (TransformationException expected) {
+				// canonical-order enforcement
+			}
+
+			// Duplicate indexes are caught by the same canonical-order check
+			VoteOnPollTransactionData duplicateData = voteData(repository, bob, pollName, List.of(1, 1));
+			new VoteOnPollTransaction(repository, duplicateData).sign(bob);
+			try {
+				TransactionTransformer.fromBytes(TransactionTransformer.toBytes(duplicateData));
+				fail("Duplicate option indexes must not deserialize");
+			} catch (TransformationException expected) {
+				// canonical-order enforcement
+			}
+
+			// The canonical ascending form still round-trips byte-identically
+			VoteOnPollTransactionData sortedData = voteData(repository, bob, pollName, List.of(1, 2));
+			new VoteOnPollTransaction(repository, sortedData).sign(bob);
+			byte[] sortedBytes = TransactionTransformer.toBytes(sortedData);
+			assertArrayEquals(sortedBytes, TransactionTransformer.toBytes(TransactionTransformer.fromBytes(sortedBytes)));
 		}
 	}
 

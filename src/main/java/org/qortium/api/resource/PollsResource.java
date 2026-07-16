@@ -410,6 +410,10 @@ public class PollsResource {
     }
 
     private String buildVoteOnPoll(VoteOnPollTransactionData transactionData) {
+        // Normalize multi-option selections to the canonical ascending order before
+        // building, so clients sign bytes that survive Core's re-serialization.
+        transactionData.normalizeOptionIndexOrder();
+
         try (final Repository repository = RepositoryManager.getRepository()) {
             Transaction transaction = Transaction.fromData(repository, transactionData);
 

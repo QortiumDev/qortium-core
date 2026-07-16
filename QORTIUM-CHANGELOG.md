@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-16 - fix(polls): enforce ascending vote option order so multi-option votes can confirm
+
+Fixes multi-option poll votes that could get stuck forever without confirming.
+The database stores a vote's chosen options in ascending order, but a vote's
+signature covers the exact bytes the voter signed. A multi-option vote
+submitted with its options in any other order (for example option 2 before
+option 1) passed the initial checks, but when the node rebuilt it from the
+database for a block the options came back sorted, the bytes no longer matched
+the signature, and the vote silently never confirmed.
+
+Two changes close the gap. The vote-build endpoints (/polls/vote and
+/polls/public/vote) now sort multi-option selections into ascending order
+before returning the unsigned transaction, so every client signs bytes that
+survive the rebuild. And the transaction deserializer now rejects any
+multi-option vote whose serialized options are not strictly ascending, so a
+vote that could never confirm is refused up front with a clear error instead
+of being accepted into the unconfirmed pool. Everything already recorded on
+chain is stored in ascending order, so existing blocks are unaffected.
+
 ### 2026-07-15 - docs: refresh README and testing guidance
 
 Brings the main README back in line with where the project actually is. The

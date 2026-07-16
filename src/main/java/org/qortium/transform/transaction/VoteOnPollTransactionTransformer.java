@@ -70,11 +70,20 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 			if (optionBytesLength != INT_LENGTH + optionsCount * INT_LENGTH)
 				throw new TransformationException("Invalid option count for VoteOnPollTransaction");
 
+			int previousOptionIndex = Poll.NO_VOTE_OPTION_INDEX;
 			for (int i = 0; i < optionsCount; ++i) {
 				int optionIndex = byteBuffer.getInt();
 				if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > Poll.MAX_OPTIONS)
 					throw new TransformationException("Invalid option number for VoteOnPollTransaction");
 
+				// The repository returns stored selections in ascending order, so bytes in any
+				// other order could never re-serialize to themselves and their signature would
+				// break at block assembly. Enforce the canonical ascending form (this also
+				// rejects duplicates).
+				if (optionIndex <= previousOptionIndex)
+					throw new TransformationException("Option indexes must be ascending for VoteOnPollTransaction");
+
+				previousOptionIndex = optionIndex;
 				optionIndexes.add(optionIndex);
 			}
 		}
