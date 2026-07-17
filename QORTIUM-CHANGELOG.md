@@ -34,7 +34,7 @@ own chain.
 
 ## Change Entries
 
-### 2026-07-16 - fix(polls, qdn): vote option order, /apps allowlist, and a read-only browser bridge
+### 2026-07-16 - fix(polls, qdn): vote order, /apps allowlist, read-only browser bridge, response compression
 
 Fixes multi-option poll votes that could get stuck forever without confirming.
 The database stores a vote's chosen options in ascending order, but a vote's
@@ -78,6 +78,19 @@ a clear message pointing to the desktop app - and it never overrides the full
 bridge when the app is running inside Qortium Home. Because it only reaches
 the same node the page already came from, it can see nothing that a direct
 visit to that node's public address could not.
+
+Both the API and gateway HTTP servers now compress large text responses
+(gzip) when the browser asks for it. A rendered app's JavaScript and styles
+are often several hundred kilobytes each; sent uncompressed over a slow or
+unreliable connection - a phone on a weak signal, or an appliance browser -
+they can take a long time or never finish, leaving a blank page. Compression
+typically shrinks them about four-fold (a ~780 KB script becomes under
+200 KB on the wire), so pages load faster and are far more likely to finish
+on a poor link. Already-compressed content (images, archives) is left
+untouched, and the browser transparently decompresses, so nothing changes for
+callers beyond speed. The read-only browser bridge also now abandons a stalled
+node read after a timeout instead of hanging forever, so an app can recover
+and retry rather than freezing on a dropped connection.
 
 ### 2026-07-15 - docs: refresh README and testing guidance
 

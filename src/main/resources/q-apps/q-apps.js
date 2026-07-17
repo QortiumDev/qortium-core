@@ -1301,7 +1301,7 @@ window.addEventListener("beforeunload", () => {
   function sanitizeReadPath(path) {
     if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//"))
       throw new Error("Node API paths must start with a single /.");
-    if (/[ -]/.test(path))
+    if (/[\x00-\x1F]/.test(path))
       throw new Error("Node API path contains invalid control characters.");
     const parsed = new URL(path, window.location.origin);
     return parsed.pathname + parsed.search;
@@ -1337,20 +1337,40 @@ window.addEventListener("beforeunload", () => {
       return Promise.reject(e);
     }
 
-    return fetch(window.location.origin + apiPath, { method: method }).then((response) => {
+    // Abort a stalled read instead of hanging forever: on a slow or dropping
+    // link (e.g. an appliance browser) a fetch with no timeout can leave the
+    // app waiting indefinitely rather than failing and recovering.
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutMs =
+      request && typeof request.timeout === "number" && request.timeout > 0
+        ? request.timeout
+        : 30000;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    const options = { method: method };
+    if (controller) options.signal = controller.signal;
+
+    const maxBytes =
+      request && typeof request.maxBytes === "number" ? request.maxBytes : 0;
+
+    return fetch(window.location.origin + apiPath, options).then((response) => {
       const contentType = response.headers.get("content-type") || "";
+      const rawLength = response.headers.get("content-length");
+      const contentLength = rawLength != null ? Number(rawLength) : undefined;
+
+      // Reject an advertised oversized response before buffering it when the
+      // server provides a useful Content-Length. Keep the decoded byte check
+      // below because compressed/chunked responses can omit or understate it.
+      if (maxBytes > 0 && isFinite(contentLength) && contentLength > maxBytes)
+        throw new Error("Node API response exceeded the " + maxBytes + " byte limit.");
+
       const bodyPromise = method === "HEAD" ? Promise.resolve("") : response.text();
       return bodyPromise.then((body) => {
         const byteLength = new TextEncoder().encode(body).byteLength;
-        const maxBytes =
-          request && typeof request.maxBytes === "number" ? request.maxBytes : 0;
         if (maxBytes > 0 && byteLength > maxBytes)
           throw new Error("Node API response exceeded the " + maxBytes + " byte limit.");
-        const rawLength = response.headers.get("content-length");
-        const contentLength = rawLength != null ? Number(rawLength) : byteLength;
         return {
           body: body,
-          contentLength: isFinite(contentLength) ? contentLength : undefined,
+          contentLength: isFinite(contentLength) ? contentLength : byteLength,
           contentType: contentType,
           data: parseResponseBody(body, contentType),
           ok: response.ok,
@@ -1358,6 +1378,11 @@ window.addEventListener("beforeunload", () => {
           statusText: response.statusText,
         };
       });
+    }).finally(() => {
+      // Keep the abort timer armed until the response body has finished. A
+      // slow link can deliver headers and then stall while response.text() is
+      // still consuming the body.
+      if (timer) clearTimeout(timer);
     });
   }
 

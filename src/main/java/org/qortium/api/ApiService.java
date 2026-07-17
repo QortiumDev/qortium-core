@@ -11,6 +11,7 @@ import org.eclipse.jetty.rewrite.handler.RedirectPatternRule;
 import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.ErrorHandler;
+import org.eclipse.jetty.server.handler.gzip.GzipHandler;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.ee8.servlet.DefaultServlet;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
@@ -275,12 +276,20 @@ public class ApiService {
 			RewriteHandler rewriteHandler = new RewriteHandler();
 			protectionHandler.setHandler(rewriteHandler);
 
+			// Response compression for compressible payloads (rendered QDN
+			// bundles are often hundreds of KB of JS/CSS). This matters most for
+			// slow/unreliable clients such as mobile or gateway browsers, where an
+			// uncompressed multi-hundred-KB asset may never finish downloading.
+			GzipHandler gzipHandler = new GzipHandler();
+			gzipHandler.setMinGzipSize(1400);
+			rewriteHandler.setHandler(gzipHandler);
+
 			// Context
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
 			context.setContextPath("/");
 			// Allow multipart/form-data up to 10 MB (e.g. /chunk uploads); Jetty's default is 200 KB
 			context.setMaxFormContentSize(10 * 1024 * 1024);
-			rewriteHandler.setHandler(context);
+			gzipHandler.setHandler(context);
 
 			// Cross-origin resource sharing
 			CorsFilter.addTo(context);
