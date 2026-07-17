@@ -1,7 +1,7 @@
 # Public API allowlist & QDN app access on the preview public network
 
 **Status:** implemented for chat/QDN; public poll builders implemented on a feature branch and pending release/deployment.
-**Last updated:** 2026-07-15.
+**Last updated:** 2026-07-16.
 **Owner:** QuickMythril.
 
 This document captures the current behaviour of the Qortium public-API access
@@ -124,11 +124,23 @@ MemoryPoW endpoints remain excluded.
 The current GET allowlist (all five files share this set):
 
 ```
-GET /admin/status, /peers/known, /arbitrary/*, /render/*, /names/*,
+GET /admin/status, /peers/known, /arbitrary/*, /render/*, /apps/*, /names/*,
     /addresses/*, /blocks/*, /transactions/*, /groups/*, /assets/*,
     /polls/*, /chat/*, /chain-parameters/*, /account-ratings/*,
     /resource-ratings/*, /at/*, /stats/*
 ```
+
+### /apps shim gap (fixed 2026-07-16)
+
+Every HTML page served by `/render/*` gets `<script src="/apps/q-apps.js">`
+injected by `HTMLParser` (plus `/apps/q-apps-gateway.js` in gateway context) —
+that script *is* the `qdnRequest` bridge. The allowlist granted `GET /render/*`
+but not `GET /apps/*`, so a remote client could load an app's HTML and then
+have the shim itself 403-blocked: rendered apps silently lost `qdnRequest`
+(read-only actions included) on public nodes. Both `/apps` endpoints are static
+read-only scripts (`AppsResource.java`). `GET /apps/*` is now paired with
+`GET /render/*` in all tracked preview configs, and
+`PublicApiAccessHandlerTests` pins the pairing so they cannot drift apart.
 
 ### Drift bug (fixed 2026-06-29)
 

@@ -63,6 +63,10 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/render/WEBSITE/QortiumHomeTest/index.html", this.settings));
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/apps/q-apps.js", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/apps/q-apps-gateway.js", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/names", this.settings));
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/names/search", this.settings));
@@ -280,6 +284,7 @@ public class PublicApiAccessHandlerTests extends Common {
 				"GET /peers/data/known",
 				"GET /arbitrary/*",
 				"GET /render/*",
+				"GET /apps/*",
 				"GET /names/*",
 				"GET /transactions/*",
 				"GET /polls/*",
@@ -304,6 +309,8 @@ public class PublicApiAccessHandlerTests extends Common {
 				settingsJson.getInt("publicQdnApiMaxConcurrentRequests") == 2);
 		assertTrue(settingsPath + " should allow public render reads",
 				jsonArrayContains(publicApiPaths, "GET /render/*"));
+		assertTrue(settingsPath + " should allow public app shim script reads",
+				jsonArrayContains(publicApiPaths, "GET /apps/*"));
 		assertTrue(settingsPath + " should allow public known data peer reads",
 				jsonArrayContains(publicApiPaths, "GET /peers/data/known"));
 		assertTrue(settingsPath + " should allow keyless public chat builds",

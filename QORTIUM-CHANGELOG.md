@@ -34,7 +34,7 @@ own chain.
 
 ## Change Entries
 
-### 2026-07-16 - fix(polls): enforce ascending vote option order so multi-option votes can confirm
+### 2026-07-16 - fix(polls, qdn): enforce vote option order and allow public /apps shim reads
 
 Fixes multi-option poll votes that could get stuck forever without confirming.
 The database stores a vote's chosen options in ascending order, but a vote's
@@ -52,6 +52,17 @@ multi-option vote whose serialized options are not strictly ascending, so a
 vote that could never confirm is refused up front with a clear error instead
 of being accepted into the unconfirmed pool. Everything already recorded on
 chain is stored in ascending order, so existing blocks are unaffected.
+
+This PR also fixes remotely rendered QDN apps failing on public preview
+nodes. Every rendered app or website page loads a small helper script from
+the serving node (/apps/q-apps.js) that provides the qdnRequest bridge apps
+use to talk to the network. The public API allowlist permitted rendering the
+page itself (GET /render/*) but not fetching that helper, so an app rendered
+from a public node - for example inside Home on Android in network mode, or
+any plain browser on the LAN - loaded its HTML and then lost every
+qdnRequest action, read-only ones included. The preview settings now allow
+the read-only GET /apps/* scripts alongside GET /render/*, and the allowlist
+tests pin the two entries together so they cannot drift apart again.
 
 ### 2026-07-15 - docs: refresh README and testing guidance
 
