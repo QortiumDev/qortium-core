@@ -1264,3 +1264,137 @@ window.addEventListener("beforeunload", () => {
   requestQueue.length = 0;
   activeRequestCount = 0;
 });
+
+/**
+ * Read-only qdnRequest bridge for browser / gateway contexts.
+ *
+ * Bundled QDN apps detect a host bridge by checking
+ * `typeof window.qdnRequest === "function"` and, when it is absent, fall back
+ * to fetching a hard-coded local node URL such as http://127.0.0.1:24891.
+ * That address does not exist inside a plain browser (or on an appliance
+ * browser pointed at a public gateway), so those apps silently lose every
+ * node read. Qortium Home injects a full bridge through its preload; over
+ * /render or the public gateway there is none.
+ *
+ * This installs a minimal, read-only bridge that services the node-read
+ * actions apps depend on by fetching the SAME ORIGIN that served the app.
+ * Same-origin keeps every call inside the page CSP (connect-src 'self') and,
+ * on an access-controlled node, inside that node's own public-API allowlist:
+ * it grants nothing a direct browser fetch of those endpoints would not.
+ * Write / wallet / signing actions are rejected — those require Qortium Home.
+ *
+ * Guarded so it never clobbers a real Home bridge, which sets
+ * window.qdnRequest before page scripts run.
+ */
+(function installReadOnlyQdnBridge() {
+  if (typeof window === "undefined") return;
+  if (typeof window.qdnRequest === "function") return; // real Home bridge present
+
+  const READ_ONLY_ACTIONS = [
+    "FETCH_NODE_API",
+    "GET_NODE_STATUS",
+    "IS_USING_PUBLIC_NODE",
+    "SHOW_ACTIONS",
+    "WHICH_UI",
+  ];
+
+  function sanitizeReadPath(path) {
+    if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//"))
+      throw new Error("Node API paths must start with a single /.");
+    if (/[ -]/.test(path))
+      throw new Error("Node API path contains invalid control characters.");
+    const parsed = new URL(path, window.location.origin);
+    return parsed.pathname + parsed.search;
+  }
+
+  function readOnlyMethod(method) {
+    const normalized =
+      typeof method === "string" && method.trim() ? method.trim().toUpperCase() : "GET";
+    if (normalized !== "GET" && normalized !== "HEAD")
+      throw new Error("Only GET and HEAD node API requests are supported in read-only mode.");
+    return normalized;
+  }
+
+  function parseResponseBody(body, contentType) {
+    if (!body) return null;
+    if ((contentType || "").toLowerCase().indexOf("json") !== -1 || /^[\s]*[[{]/.test(body)) {
+      try {
+        return JSON.parse(body);
+      } catch (e) {
+        return body;
+      }
+    }
+    return body;
+  }
+
+  function fetchNodeApi(request) {
+    let method;
+    let apiPath;
+    try {
+      method = readOnlyMethod(request && request.method);
+      apiPath = sanitizeReadPath(request && request.path);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
+    return fetch(window.location.origin + apiPath, { method: method }).then((response) => {
+      const contentType = response.headers.get("content-type") || "";
+      const bodyPromise = method === "HEAD" ? Promise.resolve("") : response.text();
+      return bodyPromise.then((body) => {
+        const byteLength = new TextEncoder().encode(body).byteLength;
+        const maxBytes =
+          request && typeof request.maxBytes === "number" ? request.maxBytes : 0;
+        if (maxBytes > 0 && byteLength > maxBytes)
+          throw new Error("Node API response exceeded the " + maxBytes + " byte limit.");
+        const rawLength = response.headers.get("content-length");
+        const contentLength = rawLength != null ? Number(rawLength) : byteLength;
+        return {
+          body: body,
+          contentLength: isFinite(contentLength) ? contentLength : undefined,
+          contentType: contentType,
+          data: parseResponseBody(body, contentType),
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+        };
+      });
+    });
+  }
+
+  function handleReadOnlyRequest(request) {
+    if (!request || typeof request.action !== "string")
+      return Promise.reject(new Error("QDN requests must include an action."));
+
+    switch (request.action.toUpperCase()) {
+      case "SHOW_ACTIONS":
+        return Promise.resolve(READ_ONLY_ACTIONS.slice());
+      case "WHICH_UI":
+        return Promise.resolve("QORTIUM_GATEWAY");
+      case "IS_USING_PUBLIC_NODE":
+        return Promise.resolve(true);
+      case "FETCH_NODE_API":
+        return fetchNodeApi(request);
+      case "GET_NODE_STATUS":
+        return fetchNodeApi({ action: "FETCH_NODE_API", path: "/admin/status" }).then(
+          (result) => {
+            if (!result.ok)
+              throw new Error(
+                result.body || "Node status failed with HTTP " + result.status + ".",
+              );
+            return result.data;
+          },
+        );
+      default:
+        return Promise.reject(
+          new Error(
+            request.action +
+              " is not available in read-only gateway mode. Interactive features require the Qortium Home app.",
+          ),
+        );
+    }
+  }
+
+  window.qdnRequest = function (request) {
+    return handleReadOnlyRequest(request);
+  };
+})();

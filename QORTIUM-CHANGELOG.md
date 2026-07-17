@@ -34,7 +34,7 @@ own chain.
 
 ## Change Entries
 
-### 2026-07-16 - fix(polls, qdn): enforce vote option order and allow public /apps shim reads
+### 2026-07-16 - fix(polls, qdn): vote option order, /apps allowlist, and a read-only browser bridge
 
 Fixes multi-option poll votes that could get stuck forever without confirming.
 The database stores a vote's chosen options in ascending order, but a vote's
@@ -63,6 +63,21 @@ any plain browser on the LAN - loaded its HTML and then lost every
 qdnRequest action, read-only ones included. The preview settings now allow
 the read-only GET /apps/* scripts alongside GET /render/*, and the allowlist
 tests pin the two entries together so they cannot drift apart again.
+
+Finally, it lets modern bundled apps actually read from the node when they
+are opened in a plain web browser or through the public gateway, instead of
+only inside the Qortium Home desktop app. These apps look for a helper that
+Home normally provides and, not finding it, used to try to reach a node at
+the viewer's own computer - which is nobody's node - so they came up empty
+(for example Chat rendering but showing no messages). The bundled helper
+script now installs a small read-only bridge in that situation: it answers an
+app's data-read requests by fetching from the very same node that served the
+page, so lists, chat history, names, and similar all load. It is strictly
+read-only - anything that would send, publish, sign, or spend is refused with
+a clear message pointing to the desktop app - and it never overrides the full
+bridge when the app is running inside Qortium Home. Because it only reaches
+the same node the page already came from, it can see nothing that a direct
+visit to that node's public address could not.
 
 ### 2026-07-15 - docs: refresh README and testing guidance
 
