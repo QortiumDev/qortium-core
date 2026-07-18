@@ -1,7 +1,7 @@
 # Public API allowlist & QDN app access on the preview public network
 
 **Status:** implemented for chat/QDN; public poll builders implemented on a feature branch and pending release/deployment.
-**Last updated:** 2026-07-15.
+**Last updated:** 2026-07-16.
 **Owner:** QuickMythril.
 
 This document captures the current behaviour of the Qortium public-API access
@@ -124,11 +124,51 @@ MemoryPoW endpoints remain excluded.
 The current GET allowlist (all five files share this set):
 
 ```
-GET /admin/status, /peers/known, /arbitrary/*, /render/*, /names/*,
+GET /admin/status, /peers/known, /arbitrary/*, /render/*, /apps/*, /names/*,
     /addresses/*, /blocks/*, /transactions/*, /groups/*, /assets/*,
     /polls/*, /chat/*, /chain-parameters/*, /account-ratings/*,
     /resource-ratings/*, /at/*, /stats/*
 ```
+
+### Read-only browser/gateway bridge (added 2026-07-16)
+
+The `/apps` allowlist fix lets the shim *load*, but modern bundled apps
+(qortium-chat, qortium-polls, …) detect their host via
+`typeof window.qdnRequest === "function"`. Over `/render` or the gateway that
+was undefined, so they fell back to fetching a hard-coded `127.0.0.1:24891` —
+the *viewer's* localhost, not the serving node — and every node read failed
+(Chat rendered but showed zero messages). `q-apps.js` now installs a minimal
+**read-only** `window.qdnRequest` in browser/gateway contexts (guarded so it
+never clobbers Home's real bridge). It services `FETCH_NODE_API`,
+`GET_NODE_STATUS`, `SHOW_ACTIONS` (returns the read-only set), `WHICH_UI`
+(`QORTIUM_GATEWAY`), and `IS_USING_PUBLIC_NODE` (`true`) by fetching the
+**same origin** that served the app; writes/wallet/signing are rejected. Same
+origin means it stays within the page CSP (`connect-src 'self'`) and the
+node's own `publicApiPaths` allowlist — no broader reach than a direct fetch.
+
+Gateway-server caveat (known, not yet closed): the gateway HTTP server
+(`GatewayService`, port 8080) is **not** fronted by `PublicApiAccessHandler` —
+it uses an unconfigured `InetAccessHandler`, so it exposes the broader
+annotation-gated read surface (e.g. `GET /peers`, address balances) that the
+main API port's curated `publicApiPaths` withholds. Admin/wallet/minting
+remain protected by their endpoint `@SecurityRequirement`s (verified 401/403
+/503 from a remote IP). The leaked surface is public P2P data, but an operator
+exposing the gateway to an untrusted client should note it; a follow-up should
+apply the same allowlist (plus the gateway's own `/{service}/{name}` routes)
+to the gateway server. Serving apps from the access-controlled `/render/*` on
+the main API port avoids the gap entirely.
+
+### /apps shim gap (fixed 2026-07-16)
+
+Every HTML page served by `/render/*` gets `<script src="/apps/q-apps.js">`
+injected by `HTMLParser` (plus `/apps/q-apps-gateway.js` in gateway context) —
+that script *is* the `qdnRequest` bridge. The allowlist granted `GET /render/*`
+but not `GET /apps/*`, so a remote client could load an app's HTML and then
+have the shim itself 403-blocked: rendered apps silently lost `qdnRequest`
+(read-only actions included) on public nodes. Both `/apps` endpoints are static
+read-only scripts (`AppsResource.java`). `GET /apps/*` is now paired with
+`GET /render/*` in all tracked preview configs, and
+`PublicApiAccessHandlerTests` pins the pairing so they cannot drift apart.
 
 ### Drift bug (fixed 2026-06-29)
 

@@ -6,6 +6,7 @@ import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.InetAccessHandler;
+import org.eclipse.jetty.server.handler.gzip.GzipHandler;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
@@ -134,10 +135,18 @@ public class GatewayService {
 			RewriteHandler rewriteHandler = new RewriteHandler();
 			accessHandler.setHandler(rewriteHandler);
 
+			// Response compression: rendered QDN app bundles are often hundreds of
+			// KB of JS/CSS, and gateway clients are frequently slow/unreliable
+			// (mobile, appliance browsers) where an uncompressed asset may never
+			// finish downloading.
+			GzipHandler gzipHandler = new GzipHandler();
+			gzipHandler.setMinGzipSize(1400);
+			rewriteHandler.setHandler(gzipHandler);
+
 			// Context
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
 			context.setContextPath("/");
-			rewriteHandler.setHandler(context);
+			gzipHandler.setHandler(context);
 
 			// Cross-origin resource sharing
 			CorsFilter.addTo(context);

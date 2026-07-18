@@ -34,6 +34,64 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-16 - fix(polls, qdn): vote order, /apps allowlist, read-only browser bridge, response compression
+
+Fixes multi-option poll votes that could get stuck forever without confirming.
+The database stores a vote's chosen options in ascending order, but a vote's
+signature covers the exact bytes the voter signed. A multi-option vote
+submitted with its options in any other order (for example option 2 before
+option 1) passed the initial checks, but when the node rebuilt it from the
+database for a block the options came back sorted, the bytes no longer matched
+the signature, and the vote silently never confirmed.
+
+Two changes close the gap. The vote-build endpoints (/polls/vote and
+/polls/public/vote) now sort multi-option selections into ascending order
+before returning the unsigned transaction, so every client signs bytes that
+survive the rebuild. And the transaction deserializer now rejects any
+multi-option vote whose serialized options are not strictly ascending, so a
+vote that could never confirm is refused up front with a clear error instead
+of being accepted into the unconfirmed pool. Everything already recorded on
+chain is stored in ascending order, so existing blocks are unaffected.
+
+This PR also fixes remotely rendered QDN apps failing on public preview
+nodes. Every rendered app or website page loads a small helper script from
+the serving node (/apps/q-apps.js) that provides the qdnRequest bridge apps
+use to talk to the network. The public API allowlist permitted rendering the
+page itself (GET /render/*) but not fetching that helper, so an app rendered
+from a public node - for example inside Home on Android in network mode, or
+any plain browser on the LAN - loaded its HTML and then lost every
+qdnRequest action, read-only ones included. The preview settings now allow
+the read-only GET /apps/* scripts alongside GET /render/*, and the allowlist
+tests pin the two entries together so they cannot drift apart again.
+
+Finally, it lets modern bundled apps actually read from the node when they
+are opened in a plain web browser or through the public gateway, instead of
+only inside the Qortium Home desktop app. These apps look for a helper that
+Home normally provides and, not finding it, used to try to reach a node at
+the viewer's own computer - which is nobody's node - so they came up empty
+(for example Chat rendering but showing no messages). The bundled helper
+script now installs a small read-only bridge in that situation: it answers an
+app's data-read requests by fetching from the very same node that served the
+page, so lists, chat history, names, and similar all load. It is strictly
+read-only - anything that would send, publish, sign, or spend is refused with
+a clear message pointing to the desktop app - and it never overrides the full
+bridge when the app is running inside Qortium Home. Because it only reaches
+the same node the page already came from, it can see nothing that a direct
+visit to that node's public address could not.
+
+Both the API and gateway HTTP servers now compress large text responses
+(gzip) when the browser asks for it. A rendered app's JavaScript and styles
+are often several hundred kilobytes each; sent uncompressed over a slow or
+unreliable connection - a phone on a weak signal, or an appliance browser -
+they can take a long time or never finish, leaving a blank page. Compression
+typically shrinks them about four-fold (a ~780 KB script becomes under
+200 KB on the wire), so pages load faster and are far more likely to finish
+on a poor link. Already-compressed content (images, archives) is left
+untouched, and the browser transparently decompresses, so nothing changes for
+callers beyond speed. The read-only browser bridge also now abandons a stalled
+node read after a timeout instead of hanging forever, so an app can recover
+and retry rather than freezing on a dropped connection.
+
 ### 2026-07-15 - docs: refresh README and testing guidance
 
 Brings the main README back in line with where the project actually is. The

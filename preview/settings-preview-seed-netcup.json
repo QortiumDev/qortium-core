@@ -59,6 +59,7 @@
     "GET /peers/data/known",
     "GET /arbitrary/*",
     "GET /render/*",
+    "GET /apps/*",
     "GET /names/*",
     "GET /addresses/*",
     "GET /blocks/*",

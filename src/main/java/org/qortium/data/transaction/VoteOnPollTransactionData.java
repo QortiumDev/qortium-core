@@ -129,6 +129,23 @@ public class VoteOnPollTransactionData extends TransactionData {
 		return Collections.singletonList(this.optionIndex);
 	}
 
+	/**
+	 * Sorts a multi-option selection into ascending order — the canonical serialized form.
+	 * The repository returns stored selections ascending, so a transaction signed with any
+	 * other order breaks its own signature once re-serialized for a block. Conflicting or
+	 * invalid inputs are left untouched for validation to reject.
+	 */
+	public void normalizeOptionIndexOrder() {
+		if (this.optionIndexes == null || this.optionIndexes.size() <= 1 || hasConflictingOptionInputs())
+			return;
+
+		for (Integer optionIndex : this.optionIndexes)
+			if (optionIndex == null)
+				return;
+
+		Collections.sort(this.optionIndexes);
+	}
+
 	@XmlTransient
 	@Schema(hidden = true)
 	public boolean hasConflictingOptionInputs() {
