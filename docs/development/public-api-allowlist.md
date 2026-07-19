@@ -1,7 +1,7 @@
 # Public API allowlist & QDN app access on the preview public network
 
-**Status:** implemented for chat/QDN; public poll builders implemented on a feature branch and pending release/deployment.
-**Last updated:** 2026-07-16.
+**Status:** implemented for chat, QDN, and public poll builders.
+**Last updated:** 2026-07-19.
 **Owner:** QuickMythril.
 
 This document captures the current behaviour of the Qortium public-API access
@@ -40,13 +40,21 @@ Hard security constraint for both:
 
 ## 2. How "allowed on a public node" is decided (two gates)
 
-A request from a non-local client must pass **both** gates.
+A non-local API request made by a QDN app must pass **both** gates. Fetching
+the QDN page or asset itself is gateway resource serving, not an API request,
+and is intentionally public.
 
-### Gate 1 — Core, Jetty layer: `PublicApiAccessHandler`
+### Gate 1 — Core access layer: `PublicApiAccessHandler`
 
 - `src/main/java/org/qortium/api/PublicApiAccessHandler.java:39` — `isRequestAllowed()`.
 - Wired as the **outermost** handler, before routing/CORS/servlets:
   `src/main/java/org/qortium/api/ApiService.java:267`.
+- The QDN gateway applies the same decision after Jersey routing through
+  `GatewayPublicApiAccessFilter`. Post-routing enforcement is necessary there
+  because normal API resources and `GatewayResource`'s QDN catch-all share the
+  same URL space. Routes resolved to the explicitly marked QDN resource remain
+  public; routes resolved to any API resource must pass the configured
+  IP/API-key/method/path rules below.
 - Logic:
   - If the remote IP matches `apiWhitelist` (localhost by default) → allowed (full access).
   - Else if the request carries the node's own API key in `X-API-KEY` and
@@ -57,16 +65,18 @@ A request from a non-local client must pass **both** gates.
     the "never send an API key to a *foreign* node" rule — this is for a node the
     caller owns. Note the API port is plain HTTP, so prefer an SSH tunnel/VPN
     when the path crosses untrusted networks.
-  - Else if `publicApiWhitelistEnabled == false` → **403** (deny all foreign access).
+  - Else if `publicApiWhitelistEnabled == false` → **403** (deny all foreign API access).
   - Else allowed **only if** the IP matches `publicApiWhitelist` **and** the
     request's `METHOD /path` matches an entry in `publicApiPaths`
     (`matchesPublicPath`, line 76; supports a trailing `/*` wildcard).
-  - Path matching uses `request.getHttpURI().getPath()` — **query string is
-    ignored**, so `POST /transactions/process?apiVersion=2` matches the entry
-    `POST /transactions/process`.
+  - Path matching uses only the request path — **query string is ignored**, so
+    `POST /transactions/process?apiVersion=2` matches the entry
+    `POST /transactions/process` on both the main API and gateway.
 - This is a **Qortium-specific** addition (not in upstream Qortal).
-- Anything not matched gets a hard **403 before reaching any resource class**, so
-  per-endpoint `@SecurityRequirement(apiKey)` / `qdnAuthBypass` logic never runs
+- Anything not matched gets a hard **403 before its resource method runs**. On
+  the main API this happens before routing; on the gateway it happens after
+  route selection but before invocation. Per-endpoint
+  `@SecurityRequirement(apiKey)` / `qdnAuthBypass` logic therefore never runs
   for blocked paths.
 
 Settings backing this gate (`src/main/java/org/qortium/settings/Settings.java`):
@@ -74,7 +84,7 @@ Settings backing this gate (`src/main/java/org/qortium/settings/Settings.java`):
 | Setting | Default (line) | Notes |
 |---|---|---|
 | `apiWhitelist` | localhost/127.0.0.1/::1 (130) | full-access IPs |
-| `publicApiWhitelistEnabled` | `false` (133) | must be `true` to serve any foreign traffic |
+| `publicApiWhitelistEnabled` | `false` (133) | must be `true` to serve any foreign API traffic |
 | `publicApiWhitelist` | `[]` (134) | preview uses `0.0.0.0/0`, `::/0` |
 | `publicApiPaths` | `[]` (135) | the per-call allowlist |
 | `apiKeyRemoteAccessEnabled` | `true` | node's own API key bypasses the IP/path gate; file-only (not PATCH-writable) |
@@ -146,17 +156,16 @@ never clobbers Home's real bridge). It services `FETCH_NODE_API`,
 origin means it stays within the page CSP (`connect-src 'self'`) and the
 node's own `publicApiPaths` allowlist — no broader reach than a direct fetch.
 
-Gateway-server caveat (known, not yet closed): the gateway HTTP server
-(`GatewayService`, port 8080) is **not** fronted by `PublicApiAccessHandler` —
-it uses an unconfigured `InetAccessHandler`, so it exposes the broader
-annotation-gated read surface (e.g. `GET /peers`, address balances) that the
-main API port's curated `publicApiPaths` withholds. Admin/wallet/minting
-remain protected by their endpoint `@SecurityRequirement`s (verified 401/403
-/503 from a remote IP). The leaked surface is public P2P data, but an operator
-exposing the gateway to an untrusted client should note it; a follow-up should
-apply the same allowlist (plus the gateway's own `/{service}/{name}` routes)
-to the gateway server. Serving apps from the access-controlled `/render/*` on
-the main API port avoids the gap entirely.
+The gateway HTTP server now enforces the public API allowlist on every request
+that Jersey resolves to an API resource. It does so after routing, allowing it
+to distinguish those endpoints from `GatewayResource`, whose `/{path}`
+catch-all serves public QDN content. The gateway resource is explicitly marked
+as public, so `/WEBSITE/{name}`, `/APP/{name}`, bare `/{name}`, and their nested
+resource paths do not need dangerous `GET /*` settings entries. An API route
+such as `GET /peers` still resolves to its API resource and is rejected unless
+its exact method/path is configured. The main API port continues to use the
+outer Jetty `PublicApiAccessHandler`; only the gateway needs the route-aware
+post-match form.
 
 ### /apps shim gap (fixed 2026-07-16)
 
@@ -317,7 +326,7 @@ Open-group chat send never exposes a key to the foreign node:
 
 ---
 
-## 9. Public poll builders (implemented 2026-07-15, rollout pending)
+## 9. Public poll builders (implemented 2026-07-15)
 
 The original settings-only poll proposal was not sufficient because the normal
 `POST /polls/create`, `/vote`, and `/update` resource methods also reject
@@ -341,10 +350,11 @@ locally, revalidates the account/node/app context, then uses the existing public
 builder output and the security-critical ARBITRARY resource/method/service/
 payment boundary before signing.
 
-Live baseline before rollout (2026-07-15): the Regxa and Netcup seeds returned
-HTTP 403 for `POST /polls/vote`, as expected for Core 1.4.2. Public poll support
-must not be claimed until the Core change is released and deployed; this API
-change does not alter consensus, chain configuration, the database, or peering.
+Historical deployment baseline (2026-07-15): the Regxa and Netcup seeds still
+running Core 1.4.2 returned HTTP 403 for `POST /polls/vote`, as expected. The
+dedicated public builder support is part of Core 1.5.0; nodes on older releases
+will continue to reject it. This API change does not alter consensus, chain
+configuration, the database, or peering.
 
 ---
 
@@ -401,6 +411,9 @@ before signing.
 
 Core:
 - `src/main/java/org/qortium/api/PublicApiAccessHandler.java` — Gate 1.
+- `src/main/java/org/qortium/api/GatewayPublicApiAccessFilter.java` and
+  `gateway/resource/PublicQdnResource.java` — route-aware gateway enforcement
+  and the explicit QDN-serving exemption.
 - `src/main/java/org/qortium/api/PublicApiProtectionHandler.java` — public write
   body, rate, and concurrency bounds.
 - `src/main/java/org/qortium/api/ApiService.java` — handler wiring.

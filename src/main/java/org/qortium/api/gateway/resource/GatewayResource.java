@@ -32,6 +32,7 @@ import java.util.List;
 
 @Path("/")
 @Tag(name = "Gateway")
+@PublicQdnResource
 public class GatewayResource {
 
     @Context HttpServletRequest request;

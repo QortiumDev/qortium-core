@@ -38,6 +38,7 @@ public class GatewayService {
 	private GatewayService() {
 		this.config = new ResourceConfig();
 		this.config.packages("org.qortium.api.resource", "org.qortium.api.gateway.resource");
+		registerPublicApiAccess(this.config);
 		this.config.register(org.glassfish.jersey.media.multipart.MultiPartFeature.class);
 		this.config.register(OpenApiResource.class);
 		this.config.register(ApiDefinition.class);
@@ -129,10 +130,7 @@ public class GatewayService {
 			// URL rewriting
 			RewriteHandler rewriteHandler = new RewriteHandler();
 
-			// Apply the same IP/path boundary as the main API before any gateway
-			// resource or render route is dispatched.
-			PublicApiAccessHandler accessHandler = wrapWithPublicApiAccess(rewriteHandler);
-			this.server.setHandler(accessHandler);
+			this.server.setHandler(rewriteHandler);
 
 			// Response compression: rendered QDN app bundles are often hundreds of
 			// KB of JS/CSS, and gateway clients are frequently slow/unreliable
@@ -164,8 +162,10 @@ public class GatewayService {
 		}
 	}
 
-	static PublicApiAccessHandler wrapWithPublicApiAccess(Handler handler) {
-		return new PublicApiAccessHandler(handler);
+	static void registerPublicApiAccess(ResourceConfig config) {
+		// Jersey must resolve the route before access control can distinguish the
+		// gateway's public QDN catch-all from API resources in the same URL space.
+		config.register(GatewayPublicApiAccessFilter.class);
 	}
 
 	public void stop() {

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-19 - fix: keep QDN gateway resources public while allowlisting API routes (#134)
+
+Restores the QDN gateway's core public-serving behavior without reopening the
+API routes that its allowlist was added to protect. The gateway now waits until
+it knows which resource will handle a request: website and app URLs handled by
+the QDN catch-all remain public, including service-qualified, bare-name, and
+nested paths, while requests handled by normal API resources must still match
+the configured client, HTTP method, and path rules. This avoids a broad `/*`
+settings exception that would have made the gateway's API allowlist ineffective.
+
 ### 2026-07-19 - fix: apply the public API allowlist to the QDN gateway
 
 Closes a difference between Core's main API port and its public QDN gateway.
