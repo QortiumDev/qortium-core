@@ -5,7 +5,6 @@ import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.ErrorHandler;
-import org.eclipse.jetty.server.handler.InetAccessHandler;
 import org.eclipse.jetty.server.handler.gzip.GzipHandler;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
@@ -127,13 +126,13 @@ public class GatewayService {
 				this.server.setRequestLog(requestLog);
 			}
 
-			// Access handler (currently no whitelist is used)
-			InetAccessHandler accessHandler = new InetAccessHandler();
-			this.server.setHandler(accessHandler);
-
 			// URL rewriting
 			RewriteHandler rewriteHandler = new RewriteHandler();
-			accessHandler.setHandler(rewriteHandler);
+
+			// Apply the same IP/path boundary as the main API before any gateway
+			// resource or render route is dispatched.
+			PublicApiAccessHandler accessHandler = wrapWithPublicApiAccess(rewriteHandler);
+			this.server.setHandler(accessHandler);
 
 			// Response compression: rendered QDN app bundles are often hundreds of
 			// KB of JS/CSS, and gateway clients are frequently slow/unreliable
@@ -163,6 +162,10 @@ public class GatewayService {
 			// Failed to start
 			throw new RuntimeException("Failed to start API", e);
 		}
+	}
+
+	static PublicApiAccessHandler wrapWithPublicApiAccess(Handler handler) {
+		return new PublicApiAccessHandler(handler);
 	}
 
 	public void stop() {
