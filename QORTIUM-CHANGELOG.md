@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-19 - fix(qdn): honor identifiers on status query requests
+
+Makes the shorter QDN status endpoint honor an `identifier` query
+parameter instead of silently checking the default resource. Requests such as
+`/arbitrary/resource/status/DOCUMENT/name?identifier=book.epub` now report the
+same resource as the identifier-in-the-path form, while an omitted or empty
+identifier continues to check the default resource. This prevents clients and
+operators from receiving a valid-looking status for the wrong QDN resource.
+
 ### 2026-07-19 - fix: keep QDN gateway resources public while allowlisting API routes (#134)
 
 Restores the QDN gateway's core public-serving behavior without reopening the

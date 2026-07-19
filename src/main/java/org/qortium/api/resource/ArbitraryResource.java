@@ -339,7 +339,8 @@ public class ArbitraryResource {
 	@Path("/resource/status/{service}/{name}")
 	@Operation(
 			summary = "Get status of arbitrary resource with supplied service and name",
-			description = "If build is set to true, the resource will be built synchronously before returning the status.",
+			description = "Returns the default resource unless identifier is supplied as a query parameter. " +
+					"If build is set to true, the resource will be built synchronously before returning the status.",
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ArbitraryResourceStatus.class))
@@ -348,12 +349,15 @@ public class ArbitraryResource {
 	)
 	public ArbitraryResourceStatus getDefaultResourceStatus(@PathParam("service") Service service,
 															@PathParam("name") String name,
+															@QueryParam("identifier") String identifier,
 															@QueryParam("build") Boolean build) {
+		if (identifier != null && identifier.isEmpty())
+			identifier = null;
 
 		if (!Settings.getInstance().isQDNAuthBypassEnabled())
-			Security.requirePriorAuthorizationOrApiKey(request, name, service, null, null);
+			Security.requirePriorAuthorizationOrApiKey(request, name, service, identifier, null);
 
-		return ArbitraryTransactionUtils.getStatus(service, name, null, build, true);
+		return ArbitraryTransactionUtils.getStatus(service, name, identifier, build, true);
 	}
 
 	@GET

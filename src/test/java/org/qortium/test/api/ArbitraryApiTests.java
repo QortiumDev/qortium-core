@@ -15,6 +15,7 @@ import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.Controller;
 import org.qortium.controller.arbitrary.ArbitraryDataCleanupManager;
 import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
+import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.data.transaction.RegisterNameTransactionData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.TransactionData;
@@ -104,6 +105,31 @@ public class ArbitraryApiTests extends ApiCommon {
 								}
 
 		assertNotNull(this.arbitraryResource.searchTransactions(null, null, null, Service.APP, null, this.aliceAddress, null, 10, null, true));
+	}
+
+	@Test
+	public void testDefaultStatusEndpointHonorsIdentifierQueryParameter() throws Exception {
+		String name = "status-query-identifier";
+		String identifier = "published-identifier";
+		registerName(name);
+		publishTestResource(name, identifier);
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon
+					.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+			ArbitraryResourceStatus defaultStatus = resource
+					.getDefaultResourceStatus(Service.APP, name, null, false);
+			ArbitraryResourceStatus queryStatus = resource
+					.getDefaultResourceStatus(Service.APP, name, identifier, false);
+			ArbitraryResourceStatus pathStatus = resource
+					.getResourceStatus(Service.APP, name, identifier, false);
+
+			assertEquals(pathStatus.getStatus(), queryStatus.getStatus());
+			assertFalse(defaultStatus.getStatus().equals(queryStatus.getStatus()));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
 	}
 
 	@Test
