@@ -34,7 +34,6 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 				request.getMethod(),
 				request.getHttpURI().getPath(),
 				passedApiKey,
-				passedApiKey == null || passedApiKey.isBlank() ? null : getNodeApiKey(),
 				Settings.getInstance())) {
 			Response.writeError(request, response, callback, HttpStatus.FORBIDDEN_403);
 			return true;
@@ -45,6 +44,12 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 
 	public static boolean isRequestAllowed(String remoteAddress, String method, String path, Settings settings) {
 		return isRequestAllowed(remoteAddress, method, path, null, null, settings);
+	}
+
+	static boolean isRequestAllowed(String remoteAddress, String method, String path,
+			String passedApiKey, Settings settings) {
+		String nodeApiKey = passedApiKey == null || passedApiKey.isBlank() ? null : getNodeApiKey();
+		return isRequestAllowed(remoteAddress, method, path, passedApiKey, nodeApiKey, settings);
 	}
 
 	public static boolean isRequestAllowed(String remoteAddress, String method, String path,
