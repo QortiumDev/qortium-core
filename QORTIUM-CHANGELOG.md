@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-19 - fix: apply the public API allowlist to the QDN gateway
+
+Closes a difference between Core's main API port and its public QDN gateway.
+The main API already limits anonymous remote callers to the deliberately
+configured public routes, but the gateway previously dispatched every request
+to the API resources and relied only on each resource's annotations. The
+gateway now applies the same IP, API-key, HTTP-method, and path checks before
+dispatch. Required QDN rendering, app helper scripts, status checks, and
+configured read-only app data remain available, while unrelated routes such as
+peer lists, node settings, wallets, and generic write operations are rejected.
+
 ### 2026-07-19 - fix: run peer pruning on the intended schedule
 
 Corrects a timer error that made the node wait three and a half minutes before
