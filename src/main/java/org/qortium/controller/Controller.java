@@ -121,6 +121,8 @@ public class Controller extends Thread {
 	private static final long NTP_PRE_SYNC_CHECK_PERIOD = 5 * 1000L; // ms
 	private static final long NTP_POST_SYNC_CHECK_PERIOD = 5 * 60 * 1000L; // ms
 	private static final long DELETE_EXPIRED_INTERVAL = 5 * 60 * 1000L; // ms
+	private static final long PEER_PRUNE_START_DELAY = 2 * 60 * 1000L; // ms
+	private static final long PEER_PRUNE_INTERVAL = 90 * 1000L; // ms
 
 	private static volatile boolean isStopping = false;
 	private static BlockMinter blockMinter = null;
@@ -150,7 +152,7 @@ public class Controller extends Thread {
 	private long repositoryBackupTimestamp = startTime; // ms
 	private long repositoryMaintenanceTimestamp = startTime; // ms
 	private long repositoryCheckpointTimestamp = startTime; // ms
-	private long prunePeersTimestamp = startTime + 120000; // ms
+	private long nextPeerPruneTimestamp = initialPeerPruneTimestamp(startTime);
 	private long ntpCheckTimestamp = startTime; // ms
 	private long deleteExpiredTimestamp = startTime + DELETE_EXPIRED_INTERVAL; // ms
 
@@ -858,8 +860,6 @@ public class Controller extends Thread {
 		final long repositoryBackupInterval = Settings.getInstance().getRepositoryBackupInterval();
 		final long repositoryCheckpointInterval = Settings.getInstance().getRepositoryCheckpointInterval();
 		long repositoryMaintenanceInterval = getRandomRepositoryMaintenanceInterval();
-		final long prunePeersInterval = 90 * 1000L; // Every 90 seconds (1.5 minutes)
-
 		// Start executor service for trimming or pruning
 		PruneManager.getInstance().start();
 
@@ -955,8 +955,8 @@ public class Controller extends Thread {
 				}
 
 				// Prune stuck/slow/old peers
-				if (now >= prunePeersTimestamp + prunePeersInterval) {
-					prunePeersTimestamp = now + prunePeersInterval;
+				if (isPeerPruneDue(now, nextPeerPruneTimestamp)) {
+					nextPeerPruneTimestamp = calculateNextPeerPruneTimestamp(now);
 
 					try {
 						LOGGER.debug("Pruning peers...");
@@ -1000,6 +1000,18 @@ public class Controller extends Thread {
 		} finally {
 			PruneManager.getInstance().stop();
 		}
+	}
+
+	static long initialPeerPruneTimestamp(long controllerStartTimestamp) {
+		return controllerStartTimestamp + PEER_PRUNE_START_DELAY;
+	}
+
+	static boolean isPeerPruneDue(long now, long nextPruneTimestamp) {
+		return now >= nextPruneTimestamp;
+	}
+
+	static long calculateNextPeerPruneTimestamp(long now) {
+		return now + PEER_PRUNE_INTERVAL;
 	}
 
 	/**

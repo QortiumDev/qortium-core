@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-19 - fix: run peer pruning on the intended schedule
+
+Corrects a timer error that made the node wait three and a half minutes before
+its first peer-cleanup pass and then repeat cleanup only every three minutes.
+The first pass now runs after the intended two-minute startup delay, followed
+by a pass every 90 seconds. This helps the node replace stuck, slow, or expired
+chain and QDN data peers promptly instead of retaining them for twice as long
+as intended.
+
 ### 2026-07-16 - fix(polls, qdn): vote order, /apps allowlist, read-only browser bridge, response compression
 
 Fixes multi-option poll votes that could get stuck forever without confirming.
