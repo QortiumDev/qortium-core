@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-20 - chore(release): prepare Core 1.5.1
+
+Marks the version for the next preview release. Since 1.5.0 the node gained
+byte-range support for rendered files, so audio and video published to QDN can
+be skipped through rather than only played from the start; a maintenance tool
+that removes superseded auto-update installers from the network; unconditional
+QDN relaying for nodes that have QDN enabled; and fixes for identifier handling
+on status queries and for serving QDN routes through the public gateway.
+
 ### 2026-07-20 - feat(tools): prune superseded auto-update binaries from QDN
 
 Adds a maintenance tool that removes old auto-update download files from the
