@@ -316,6 +316,10 @@ public class ArbitraryDataRenderer {
             response.setHeader("Content-Range", String.format("bytes */%d", fileSize));
             response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
             response.setContentLength(0);
+            // Commit the response before returning. This method's caller hands the response back to
+            // Jersey, which will otherwise try to marshal it as an entity because nothing was
+            // written, fail, and let ApiExceptionMapper replace our 416 with a 400.
+            response.flushBuffer();
             return;
         }
 

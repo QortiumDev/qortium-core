@@ -153,6 +153,10 @@ public class ArbitraryDataRendererTests {
         assertEquals("bytes */" + body.length, exchange.responseHeaders.get("Content-Range"));
         assertEquals(0, exchange.contentLength);
         assertEquals(0, exchange.outputStream.toByteArray().length);
+
+        // The 416 must be committed here. Without this the caller returns an uncommitted response
+        // to Jersey, which marshals it as an entity, fails, and ships a 400 instead.
+        exchange.callIndex("flushBuffer");
     }
 
     @Test
@@ -162,6 +166,7 @@ public class ArbitraryDataRendererTests {
 
         assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
         assertEquals(0, exchange.outputStream.toByteArray().length);
+        exchange.callIndex("flushBuffer");
     }
 
     @Test
@@ -173,6 +178,7 @@ public class ArbitraryDataRendererTests {
         // less than it asked for, so it is refused outright
         assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
         assertEquals(0, exchange.outputStream.toByteArray().length);
+        exchange.callIndex("flushBuffer");
     }
 
     private static byte[] mediaBody() {
@@ -487,6 +493,9 @@ public class ArbitraryDataRendererTests {
                             case "getOutputStream":
                                 this.responseCalls.add(method.getName());
                                 return this.outputStream;
+                            case "flushBuffer":
+                                this.responseCalls.add(method.getName());
+                                return null;
                             case "toString":
                                 return "ArbitraryDataRendererTestResponse";
                             default:

@@ -3706,6 +3706,9 @@ public String finalizeUpload(
 				response.setHeader("Content-Range", String.format("bytes */%d", fileSize));
 				response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
 				response.setContentLength(0);
+				// Commit before returning, otherwise Jersey sees a void method that wrote no entity
+				// and downgrades the 416 to a 204 on the wire
+				response.flushBuffer();
 				return;
 			}
 
