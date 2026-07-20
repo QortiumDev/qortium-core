@@ -35,6 +35,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import quote
 
 import requests
@@ -44,7 +45,7 @@ QDN_UPDATE_SERVICE = "AUTO_UPDATE_BINARY"
 DEFAULT_KEEP = 2
 
 
-def abort(message):
+def abort(message) -> NoReturn:
     sys.exit(f"ERROR: {message}")
 
 
@@ -204,9 +205,38 @@ def parse_args():
     parser.add_argument("--i-know-the-pinned-binary", action="store_true",
                         help="Proceed even if the manifest is not APPROVED "
                              "(still requires a binarySignature)")
+    parser.add_argument("--private-key-file",
+                        help="Read the owner's private key from this file "
+                             "instead of prompting. Use when no TTY is "
+                             "available; the key never appears on argv.")
     parser.add_argument("--yes", action="store_true",
                         help="Actually submit the delete transactions")
     return parser.parse_args()
+
+
+def read_private_key(args):
+    """Obtain the signing key without ever putting it on the command line."""
+    if args.private_key_file:
+        path = Path(args.private_key_file)
+        if not path.exists():
+            abort(f"Private key file not found: {path}")
+        key = path.read_text(encoding="utf-8").strip()
+        if not key:
+            abort(f"Private key file is empty: {path}")
+        return key
+
+    import getpass
+    try:
+        key = getpass.getpass(
+            f"Private key for the owner of {args.qdn_name!r}: ").strip()
+    except (EOFError, OSError):
+        abort("No terminal available to prompt for the private key. Either run "
+              "this from a real terminal, or write the key to a file and pass "
+              "--private-key-file. Nothing was submitted.")
+
+    if not key:
+        abort("No private key supplied")
+    return key
 
 
 def main():
@@ -262,11 +292,7 @@ def main():
         print("\nDry run -- nothing submitted. Re-run with --yes to delete.")
         return
 
-    import getpass
-    private_key = getpass.getpass(
-        f"Private key for the owner of {args.qdn_name!r}: ").strip()
-    if not private_key:
-        abort("No private key supplied")
+    private_key = read_private_key(args)
 
     for resource in prunable:
         identifier = resource["identifier"]
