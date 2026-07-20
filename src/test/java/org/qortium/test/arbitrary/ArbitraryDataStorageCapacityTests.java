@@ -87,6 +87,21 @@ public class ArbitraryDataStorageCapacityTests extends Common {
     }
 
     @Test
+    public void testRemainingStorageCapacityAtFullThresholdIsClamped() throws IllegalAccessException {
+        ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+        FieldUtils.writeField(storageManager, "storageCapacity", 1_000L, true);
+
+        ArbitraryDataFolderSizeEstimator.getInstance().set(700L);
+        assertEquals(100L, storageManager.getRemainingStorageCapacityAtFullThreshold());
+
+        ArbitraryDataFolderSizeEstimator.getInstance().set(800L);
+        assertEquals(0L, storageManager.getRemainingStorageCapacityAtFullThreshold());
+
+        ArbitraryDataFolderSizeEstimator.getInstance().set(900L);
+        assertEquals(0L, storageManager.getRemainingStorageCapacityAtFullThreshold());
+    }
+
+    @Test
     public void testCalculateStorageCapacityPerName() {
         ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
         ResourceListManager resourceListManager = ResourceListManager.getInstance();

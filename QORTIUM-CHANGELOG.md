@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-20 - qdn: make QDN relaying unconditional
+
+Removes the inherited operator switch that allowed a QDN-enabled node to opt out
+of relaying discovery, metadata, and chunks for other peers. QDN-enabled Qortium
+nodes now always participate in relay while retaining separate storage-policy,
+block-list, capacity, hop/time, and queue controls. Existing settings files that
+still contain `relayModeEnabled` remain loadable, but the value is ignored; the
+setting is no longer writable or shipped in Previewnet templates. The legacy
+`/arbitrary/relaymode` endpoint remains temporarily for compatibility and
+always returns `true`.
+
 ### 2026-07-19 - fix(qdn): honor identifiers on status query requests
 
 Makes the shorter QDN status endpoint honor an `identifier` query
