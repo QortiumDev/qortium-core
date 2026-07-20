@@ -6,6 +6,7 @@ import org.qortium.arbitrary.misc.Service;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.WriteListener;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -39,7 +40,7 @@ public class ArbitraryDataRendererTests {
         try {
             Exchange exchange = new Exchange("text/plain");
 
-            ArbitraryDataRenderer.streamNonHtmlFileResponse(exchange.response, exchange.context, filePath, "asset.txt");
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(exchange.request, exchange.response, exchange.context, filePath, "asset.txt");
 
             assertEquals("default-src 'self'", exchange.responseHeaders.get("Content-Security-Policy"));
             assertEquals("text/plain", exchange.contentType);
@@ -62,7 +63,7 @@ public class ArbitraryDataRendererTests {
         try {
             Exchange exchange = new Exchange("text/javascript");
 
-            ArbitraryDataRenderer.streamNonHtmlFileResponse(exchange.response, exchange.context, filePath, "extractzip.worker.js");
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(exchange.request, exchange.response, exchange.context, filePath, "extractzip.worker.js");
 
             String csp = exchange.responseHeaders.get("Content-Security-Policy");
             assertTrue("script-src should allow unsafe-eval: " + csp,
@@ -71,6 +72,185 @@ public class ArbitraryDataRendererTests {
             assertTrue("workers from blob: should be allowed: " + csp, csp.contains("worker-src 'self' blob:"));
             assertEquals("text/javascript", exchange.contentType);
             assertArrayEquals(body, exchange.outputStream.toByteArray());
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    // Byte-range support on the render path is what makes embedded audio/video seekable:
+    // native media elements only allow scrubbing past buffered data when the server
+    // advertises Accept-Ranges and answers a Range request with 206.
+
+    @Test
+    public void testMediaResponseWithoutRangeAdvertisesRangeSupport() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, null);
+
+        assertEquals(HttpServletResponse.SC_OK, exchange.status);
+        assertEquals("bytes", exchange.responseHeaders.get("Accept-Ranges"));
+        assertNull(exchange.responseHeaders.get("Content-Range"));
+        assertEquals(body.length, exchange.contentLength);
+        assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testMediaResponseServesBoundedRange() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=5-9");
+
+        assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+        assertEquals("bytes", exchange.responseHeaders.get("Accept-Ranges"));
+        assertEquals("bytes 5-9/" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(5, exchange.contentLength);
+        assertArrayEquals(slice(body, 5, 9), exchange.outputStream.toByteArray());
+
+        // A partial response must keep the same protections as a full one
+        assertEquals("default-src 'self'", exchange.responseHeaders.get("Content-Security-Policy"));
+        assertEquals("audio/mpeg", exchange.contentType);
+    }
+
+    @Test
+    public void testMediaResponseServesOpenEndedRange() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=40-");
+
+        assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+        assertEquals("bytes 40-" + (body.length - 1) + "/" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(body.length - 40, exchange.contentLength);
+        assertArrayEquals(slice(body, 40, body.length - 1), exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testMediaResponseServesSuffixRange() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=-4");
+
+        assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+        assertEquals("bytes " + (body.length - 4) + "-" + (body.length - 1) + "/" + body.length,
+                exchange.responseHeaders.get("Content-Range"));
+        assertEquals(4, exchange.contentLength);
+        assertArrayEquals(slice(body, body.length - 4, body.length - 1), exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testMediaResponseClampsRangeEndToFileSize() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=60-999999");
+
+        assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+        assertEquals("bytes 60-" + (body.length - 1) + "/" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(body.length - 60, exchange.contentLength);
+        assertArrayEquals(slice(body, 60, body.length - 1), exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testMediaResponseRejectsRangeStartingPastEndOfFile() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=" + body.length + "-");
+
+        assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
+        assertEquals("bytes */" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(0, exchange.contentLength);
+        assertEquals(0, exchange.outputStream.toByteArray().length);
+
+        // The 416 must be committed here. Without this the caller returns an uncommitted response
+        // to Jersey, which marshals it as an entity, fails, and ships a 400 instead.
+        exchange.callIndex("flushBuffer");
+    }
+
+    @Test
+    public void testMediaResponseRejectsMalformedRangeUnit() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "items=0-1");
+
+        assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
+        assertEquals(0, exchange.outputStream.toByteArray().length);
+        exchange.callIndex("flushBuffer");
+    }
+
+    @Test
+    public void testMediaResponseRejectsMultipartRange() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=0-1,4-5");
+
+        // Serving only the first part of a multipart request would silently give the client
+        // less than it asked for, so it is refused outright
+        assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
+        assertEquals(0, exchange.outputStream.toByteArray().length);
+        exchange.callIndex("flushBuffer");
+    }
+
+    private static byte[] mediaBody() {
+        byte[] body = new byte[128];
+        for (int i = 0; i < body.length; ++i) {
+            body[i] = (byte) i;
+        }
+
+        return body;
+    }
+
+    private static byte[] slice(byte[] body, int startInclusive, int endInclusive) {
+        byte[] slice = new byte[endInclusive - startInclusive + 1];
+        System.arraycopy(body, startInclusive, slice, 0, slice.length);
+        return slice;
+    }
+
+    /**
+     * QDN cache files are pruned and rebuilt while they are being served. Content-Length and
+     * Content-Range are now derived from the open channel rather than from the path, so they
+     * describe the file actually being read. If that file is nevertheless truncated in place
+     * mid-response, the loop must stop cleanly and report a short body rather than spin, throw,
+     * or silently claim success.
+     */
+    @Test
+    public void testMediaResponseHandlesFileTruncatedWhileStreaming() throws Exception {
+        // Larger than the 10240-byte copy buffer so the body takes several reads and the file
+        // can be disturbed after the first one.
+        byte[] body = new byte[50_000];
+        for (int i = 0; i < body.length; ++i) {
+            body[i] = (byte) i;
+        }
+
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("clip.mp3");
+        Files.write(filePath, body);
+
+        try {
+            Exchange exchange = new Exchange("audio/mpeg", null);
+            exchange.outputStream.onFirstWrite = () -> {
+                try (RandomAccessFile randomAccessFile = new RandomAccessFile(filePath.toFile(), "rw")) {
+                    randomAccessFile.setLength(10_240);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            };
+
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(
+                    exchange.request, exchange.response, exchange.context, filePath, "clip.mp3");
+
+            // The declared length still describes the file as opened...
+            assertEquals(body.length, exchange.contentLength);
+            // ...but only the surviving bytes could be sent, and the call returned normally.
+            assertTrue(
+                    "Expected a short body after truncation, got " + exchange.outputStream.toByteArray().length,
+                    exchange.outputStream.toByteArray().length < body.length);
+            assertArrayEquals(slice(body, 0, 10_239), exchange.outputStream.toByteArray());
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    private static Exchange streamMedia(byte[] body, String rangeHeader) throws Exception {
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("clip.mp3");
+        Files.write(filePath, body);
+
+        try {
+            Exchange exchange = new Exchange("audio/mpeg", rangeHeader);
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(exchange.request, exchange.response, exchange.context, filePath, "clip.mp3");
+            return exchange;
         } finally {
             Files.deleteIfExists(filePath);
             Files.deleteIfExists(directory);
@@ -282,16 +462,40 @@ public class ArbitraryDataRendererTests {
 
     private static class Exchange {
 
+        private final Map<String, String> requestHeaders = new LinkedHashMap<>();
         private final Map<String, String> responseHeaders = new LinkedHashMap<>();
         private final List<String> responseCalls = new ArrayList<>();
         private final CapturingServletOutputStream outputStream = new CapturingServletOutputStream();
         private final ServletContext context;
+        private final HttpServletRequest request;
         private final HttpServletResponse response;
-        private int status;
+        private int status = HttpServletResponse.SC_OK;
         private String contentType;
         private long contentLength;
 
         private Exchange(String mimeType) {
+            this(mimeType, null);
+        }
+
+        private Exchange(String mimeType, String rangeHeader) {
+            if (rangeHeader != null) {
+                this.requestHeaders.put("Range", rangeHeader);
+            }
+
+            this.request = (HttpServletRequest) Proxy.newProxyInstance(
+                    ArbitraryDataRendererTests.class.getClassLoader(),
+                    new Class[] { HttpServletRequest.class },
+                    (proxy, method, args) -> {
+                        switch (method.getName()) {
+                            case "getHeader":
+                                return this.requestHeaders.get((String) args[0]);
+                            case "toString":
+                                return "ArbitraryDataRendererTestRequest";
+                            default:
+                                return defaultValue(method.getReturnType());
+                        }
+                    });
+
             this.context = (ServletContext) Proxy.newProxyInstance(
                     ArbitraryDataRendererTests.class.getClassLoader(),
                     new Class[] { ServletContext.class },
@@ -316,6 +520,7 @@ public class ArbitraryDataRendererTests {
                                 this.responseCalls.add(method.getName());
                                 return null;
                             case "addHeader":
+                            case "setHeader":
                                 this.responseHeaders.put((String) args[0], (String) args[1]);
                                 this.responseCalls.add(method.getName());
                                 return null;
@@ -334,6 +539,9 @@ public class ArbitraryDataRendererTests {
                             case "getOutputStream":
                                 this.responseCalls.add(method.getName());
                                 return this.outputStream;
+                            case "flushBuffer":
+                                this.responseCalls.add(method.getName());
+                                return null;
                             case "toString":
                                 return "ArbitraryDataRendererTestResponse";
                             default:
@@ -368,10 +576,33 @@ public class ArbitraryDataRendererTests {
     private static class CapturingServletOutputStream extends ServletOutputStream {
 
         private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        // Lets a test disturb the file on disk part-way through the response, which is the only
+        // way to reach the short-read branch deterministically.
+        private Runnable onFirstWrite;
+        private boolean written;
 
         @Override
         public void write(int b) {
+            this.fireFirstWrite();
             this.outputStream.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) {
+            this.fireFirstWrite();
+            this.outputStream.write(b, off, len);
+        }
+
+        private void fireFirstWrite() {
+            if (this.written) {
+                return;
+            }
+
+            this.written = true;
+
+            if (this.onFirstWrite != null) {
+                this.onFirstWrite.run();
+            }
         }
 
         @Override
