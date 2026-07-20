@@ -620,7 +620,9 @@ public class ArbitraryResource {
 	@GET
 	@Path("/relaymode")
 	@Operation(
-			summary = "Returns whether relay mode is enabled or not",
+			summary = "Returns true because QDN relay is always enabled",
+			description = "Deprecated compatibility endpoint. Qortium full nodes always relay QDN data.",
+			deprecated = true,
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "boolean"))
@@ -631,7 +633,7 @@ public class ArbitraryResource {
 	public boolean getRelayMode(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 
-		return Settings.getInstance().isRelayModeEnabled();
+		return true;
 	}
 
 	@GET

@@ -485,7 +485,7 @@ public class ArbitraryMetadataManager {
             } 
 
             // Forwarding
-            if (isRelayRequest && Settings.getInstance().isRelayModeEnabled()) {
+            if (isRelayRequest) {
                 if (!isBlocked) {
                     Peer requestingPeer = request.getB();
                     if (requestingPeer != null) {
@@ -637,8 +637,8 @@ public class ArbitraryMetadataManager {
 
                 // We may need to forward this request on
                 boolean isBlocked = (transactionDataList == null || ListUtils.isQdnBlocked(transactionData.getService(), transactionData.getName(), transactionData.getIdentifier()));
-                if (Settings.getInstance().isRelayModeEnabled() && !isBlocked) {
-                    // In relay mode - so ask our other peers if they have it
+                if (!isBlocked) {
+                    // Ask our other peers because Qortium full nodes always relay QDN metadata.
 
                     PeerMessage peerMessage = peerMessageBySignature58.get(signature58);
                     GetArbitraryMetadataMessage getArbitraryMetadataMessage = (GetArbitraryMetadataMessage) peerMessage.message;

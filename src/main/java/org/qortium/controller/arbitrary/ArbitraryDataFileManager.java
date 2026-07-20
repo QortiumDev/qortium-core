@@ -1666,9 +1666,6 @@ public class ArbitraryDataFileManager extends Thread {
             ArbitraryRelayInfo relayInfo = this.getOptimalRelayInfoEntryForHash(hash58);
             if (relayInfo != null) {
                 removeFromRelayMap(relayInfo);
-                if (!Settings.getInstance().isRelayModeEnabled()) {
-                    LOGGER.info("Relay info exists for hash {} but relay mode is disabled", hash58);
-                }
                 LOGGER.trace("Selected optimal relay info for hash {}: peer={}, hops={}", hash58,
                         relayInfo.getPeerData() != null ? relayInfo.getPeerData().getAddress() : "null",
                         relayInfo.getRequestHops());
@@ -1748,7 +1745,7 @@ public class ArbitraryDataFileManager extends Thread {
                     
                     LOGGER.trace("Resolved relayPeer: {}, socketOpen: {}", relayPeer, socketOpen);
                     
-                    if (!socketOpen && Settings.getInstance().isRelayModeEnabled()) {
+                    if (!socketOpen) {
                         // Socket is closed or peer not found - try to force connect
                         LOGGER.info("Socket closed or peer not found for relay to {}. Attempting reconnect...", relayPeerAddress);
                         
@@ -1758,7 +1755,7 @@ public class ArbitraryDataFileManager extends Thread {
                         LOGGER.warn("Skipping relay for hash {} because socket is closed. Forcing reconnect for future requests.", hash58);
                        
                     }
-                    else if (socketOpen && Settings.getInstance().isRelayModeEnabled()) {
+                    else {
                        
                         
                         // Track that this peer requested this hash from us, using composite key
@@ -1799,10 +1796,6 @@ public class ArbitraryDataFileManager extends Thread {
                                 forwards.removeIf(f -> f.requestingPeerData.equals(peerData) && f.messageId == originalMessage.getId());
                             }
                         }
-                    }
-                    else {
-                        LOGGER.warn("Cannot relay for hash {}: relayPeer={}, socketOpen={}, relayModeEnabled={}",
-                                hash58, relayPeer, socketOpen, Settings.getInstance().isRelayModeEnabled());
                     }
                 }
             }

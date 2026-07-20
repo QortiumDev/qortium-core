@@ -88,12 +88,9 @@ public class ArbitraryDataFileListManager {
     /** Maximum number of hops that a file list relay request is allowed to make */
     public static int RELAY_REQUEST_MAX_HOPS = 4; // was 4, this is no longer ArbData, only metaData/Lists
     public static int SEARCH_DEPTH_MAX_HOPS = 6; // Only used to determine if we should forward or terminate a search for QDN data
-    private final Boolean isRelayAvailable;
-
     private ArbitraryDataFileListManager() {
         getArbitraryDataFileListMessageScheduler.scheduleAtFixedRate(this::processNetworkGetArbitraryDataFileListMessage, 60 * 1000, 500, TimeUnit.MILLISECONDS);
         arbitraryDataFileListMessageScheduler.scheduleAtFixedRate(this::processNetworkArbitraryDataFileListMessage, 60 * 1000, 500, TimeUnit.MILLISECONDS);
-        this.isRelayAvailable = Settings.getInstance().isRelayModeEnabled();
     }
 
  
@@ -662,7 +659,8 @@ public class ArbitraryDataFileListManager {
                 
                 // Determine how many peers to process based on request type
                 List<PeerMessage> peersToProcess;
-                if (isRelayRequest != null && isRelayRequest && this.isRelayAvailable) {
+                boolean relayRequest = Boolean.TRUE.equals(isRelayRequest);
+                if (relayRequest) {
                     // For relay requests, only process first peer to avoid duplicate forwards
                     peersToProcess = Collections.singletonList(peerMessages.get(0));
                    
@@ -680,7 +678,7 @@ public class ArbitraryDataFileListManager {
                     ArbitraryDataFileListMessage arbitraryDataFileListMessage = (ArbitraryDataFileListMessage) message;
 
                     // Process direct download responses (not relay forwarding)
-                    if (!isRelayRequest || !this.isRelayAvailable) {
+                    if (!relayRequest) {
 
                         Long now = NTP.getTime();
 
@@ -769,7 +767,7 @@ public class ArbitraryDataFileListManager {
 
                     // Forwarding - We are not the original requestor, just in the middle
                     LOGGER.trace("Status of isRelayRequest {}", isRelayRequest);
-                    if (isRelayRequest && this.isRelayAvailable) {
+                    if (relayRequest) {
                         Triple<String, Peer, Long> request = requestBySignature58.get(signature58);
                         Peer requestingPeer = request.getB();
                         if (requestingPeer != null) {
@@ -1064,7 +1062,7 @@ public class ArbitraryDataFileListManager {
 
                     String nodeId = NetworkData.getInstance().getOurNodeId();
                     arbitraryDataFileListMessage = new ArbitraryDataFileListMessage(signature,
-                        hashes, NTP.getTime(), 0, ourAddress, nodeId, this.isRelayAvailable, this.getIsDirectConnectable());
+                        hashes, NTP.getTime(), 0, ourAddress, nodeId, true, this.getIsDirectConnectable());
 
                     arbitraryDataFileListMessage.setId(message.getId());
 
@@ -1092,11 +1090,8 @@ public class ArbitraryDataFileListManager {
                     }
                 }
 
-                LOGGER.trace("We don't have hashes or all hashes - Checking Relay Mode");
-                // We may need to forward this request on
-
-                //if (this.isRelayAvailable ) { = We do not want to block the relay of file find requests, this prevents Direct-Connect finding
-                    // In relay mode - so ask our other peers if they have it
+                LOGGER.trace("We don't have hashes or all hashes - forwarding the QDN search");
+                // Qortium full nodes always relay QDN discovery requests.
 
                     GetArbitraryDataFileListMessage getArbitraryDataFileListMessage = (GetArbitraryDataFileListMessage) message;
 
@@ -1135,9 +1130,6 @@ public class ArbitraryDataFileListManager {
                     } else {
                         LOGGER.trace("Relay Request has timed out");
                     }
-                //} else {
-                //    LOGGER.debug("Relay (fetch-reserve) is disabled");
-                //}
             }
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);

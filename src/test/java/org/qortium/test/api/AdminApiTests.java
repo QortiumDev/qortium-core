@@ -87,6 +87,16 @@ public class AdminApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testLegacyRelayModeSettingCannotDisableRelay() throws Exception {
+		Path settingsPath = createWritableApiSettings("{\"relayModeEnabled\":false}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertFalse(this.adminResource.settingsMetadata().writable.containsKey("relayModeEnabled"));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.adminResource.updateSettings(ApiCommon.TEST_API_KEY, "{\"relayModeEnabled\":false}"));
+	}
+
+	@Test
 	public void testSettingsMetadata() throws Exception {
 		Path settingsPath = createWritableApiSettings("{\"storagePolicy\":\"NONE\"}");
 		Settings.fileInstance(settingsPath.toString());
@@ -148,6 +158,7 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(false, metadata.writable.get("publicQdnPublishChunkMaxSize").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("publicQdnPublishChunkSessionLimit").type);
 		assertEquals(false, metadata.writable.get("publicQdnPublishChunkSessionLimit").restartRequired);
+		assertFalse(metadata.writable.containsKey("relayModeEnabled"));
 		assertTrue(metadata.pendingRestart.isEmpty());
 	}
 

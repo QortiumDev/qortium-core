@@ -133,6 +133,18 @@ public class ArbitraryApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testRelayModeCompatibilityEndpointIsAlwaysEnabled() {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon
+					.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+			assertTrue(resource.getRelayMode(ApiCommon.TEST_API_KEY));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
 	public void testPreviewPathWorksWithoutName() throws Exception {
 		ApiCommon.installTestApiKey();
 		try {
