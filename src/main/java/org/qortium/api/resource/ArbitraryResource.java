@@ -94,6 +94,8 @@ import java.io.OutputStream;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.FileNameMap;
 import java.net.URLConnection;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -3691,8 +3693,13 @@ public String finalizeUpload(
 				response.setHeader("Content-Disposition", buildAttachmentContentDisposition(rawFilename));
 			}
 
-			// Determine the total size of the requested file
-			long fileSize = Files.size(path);
+			// Open the file before measuring it, and take the size from the open handle rather
+			// than from the path. QDN cache files are pruned and rebuilt in the background, so
+			// sizing the path and then opening it separately leaves a window in which the file
+			// we describe in the headers is not the file we go on to serve. An open handle keeps
+			// referring to the same content even if the path is replaced underneath us.
+			try (SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ)) {
+			long fileSize = channel.size();
 			String mimeType = context.getMimeType(path.toString());
 
 			// Attempt to read the "Range" header from the request to support partial content delivery (e.g., for video streaming or resumable downloads)
@@ -3767,28 +3774,32 @@ public String finalizeUpload(
 
 			// Stream file content
 
-			try (InputStream inputStream = Files.newInputStream(path)) {
-
-				// skip() is allowed to skip fewer bytes than asked, which would silently serve the
-				// wrong offset for the Content-Range we already committed to, so insist on all of them
+			{
+				// position() seeks exactly, unlike skip(), which is allowed to move fewer bytes
+				// than asked and would then serve the wrong offset for the Content-Range we have
+				// already committed to in the headers.
 				if (rangeStart > 0) {
-					inputStream.skipNBytes(rangeStart);
+					channel.position(rangeStart);
 				}
 
+				InputStream inputStream = Channels.newInputStream(channel);
 				byte[] buffer = new byte[65536];
 				long bytesRemaining = contentLength;
 				int bytesRead;
-				long totalBytesWritten = 0;
-				int readCount = 0;
 
 				while (bytesRemaining > 0 && (bytesRead = inputStream.read(buffer, 0, (int) Math.min(buffer.length, bytesRemaining))) != -1) {
 					rawOut.write(buffer, 0, bytesRead);
 					bytesRemaining -= bytesRead;
-					totalBytesWritten += bytesRead;
-					readCount++;
 				}
 
-
+				if (bytesRemaining > 0) {
+					// We promised contentLength bytes and cannot deliver them. The response is
+					// already committed, so the client will see the Content-Length mismatch as a
+					// truncated transfer, which is the honest outcome — but do not let it pass silently.
+					LOGGER.warn(String.format(
+							"Truncated response for %s %s: %d of %d bytes short, file changed while being served",
+							service, name, bytesRemaining, contentLength));
+				}
 			}
 
 				// Stream finished
@@ -3805,7 +3816,7 @@ public String finalizeUpload(
 			LOGGER.trace(String.format("Streaming error for %s %s: %s", service, name, e.getMessage()));
 		}
 
-
+			} // close the file channel opened before sizing
 
 	} catch (IOException | ApiException | DataException e) {
 			LOGGER.debug(String.format("Unable to load %s %s: %s", service, name, e.getMessage()));

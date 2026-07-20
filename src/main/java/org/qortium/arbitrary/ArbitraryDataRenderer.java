@@ -305,36 +305,41 @@ public class ArbitraryDataRenderer {
         response.addHeader("Content-Security-Policy", contentSecurityPolicyForAsset(filename));
         response.setContentType(context.getMimeType(filename));
 
-        long fileSize = Files.size(filePath);
-        response.setHeader("Accept-Ranges", "bytes");
-
-        long[] requestedRange;
-        try {
-            requestedRange = HttpRanges.parse(request == null ? null : request.getHeader("Range"), fileSize);
-        } catch (InvalidHttpRangeException e) {
-            LOGGER.debug("Invalid range for {}: {}", filename, e.getMessage());
-            response.setHeader("Content-Range", String.format("bytes */%d", fileSize));
-            response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
-            response.setContentLength(0);
-            // Commit the response before returning. This method's caller hands the response back to
-            // Jersey, which will otherwise try to marshal it as an entity because nothing was
-            // written, fail, and let ApiExceptionMapper replace our 416 with a 400.
-            response.flushBuffer();
-            return;
-        }
-
-        long rangeStart = requestedRange == null ? 0 : requestedRange[0];
-        long rangeEnd = requestedRange == null ? fileSize - 1 : requestedRange[1];
-        long contentLength = requestedRange == null ? fileSize : rangeEnd - rangeStart + 1;
-
-        if (requestedRange != null) {
-            response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
-            response.setHeader("Content-Range", String.format("bytes %d-%d/%d", rangeStart, rangeEnd, fileSize));
-        }
-
-        setResponseContentLength(response, contentLength);
-
+        // Open the file before measuring it, and take the size from the open channel rather than
+        // from the path. QDN cache files are pruned and rebuilt in the background, so sizing the
+        // path and then opening it separately leaves a window in which the file described by
+        // Content-Length/Content-Range is not the file actually served. An open channel keeps
+        // referring to the same content even if the path is replaced underneath us.
         try (SeekableByteChannel channel = Files.newByteChannel(filePath, StandardOpenOption.READ)) {
+            long fileSize = channel.size();
+            response.setHeader("Accept-Ranges", "bytes");
+
+            long[] requestedRange;
+            try {
+                requestedRange = HttpRanges.parse(request == null ? null : request.getHeader("Range"), fileSize);
+            } catch (InvalidHttpRangeException e) {
+                LOGGER.debug("Invalid range for {}: {}", filename, e.getMessage());
+                response.setHeader("Content-Range", String.format("bytes */%d", fileSize));
+                response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+                response.setContentLength(0);
+                // Commit the response before returning. This method's caller hands the response back to
+                // Jersey, which will otherwise try to marshal it as an entity because nothing was
+                // written, fail, and let ApiExceptionMapper replace our 416 with a 400.
+                response.flushBuffer();
+                return;
+            }
+
+            long rangeStart = requestedRange == null ? 0 : requestedRange[0];
+            long rangeEnd = requestedRange == null ? fileSize - 1 : requestedRange[1];
+            long contentLength = requestedRange == null ? fileSize : rangeEnd - rangeStart + 1;
+
+            if (requestedRange != null) {
+                response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+                response.setHeader("Content-Range", String.format("bytes %d-%d/%d", rangeStart, rangeEnd, fileSize));
+            }
+
+            setResponseContentLength(response, contentLength);
+
             if (rangeStart > 0) {
                 channel.position(rangeStart);
             }
@@ -355,6 +360,14 @@ public class ArbitraryDataRenderer {
 
                 outputStream.write(buffer, 0, bytesRead);
                 bytesRemaining -= bytesRead;
+            }
+
+            if (bytesRemaining > 0) {
+                // We promised contentLength bytes and cannot deliver them. The response is already
+                // committed, so the client sees the Content-Length mismatch as a truncated transfer,
+                // which is the honest outcome — but do not let it pass silently.
+                LOGGER.warn("Truncated render response for {}: {} of {} bytes short, file changed while being served",
+                        filename, bytesRemaining, contentLength);
             }
         }
     }

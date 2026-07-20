@@ -196,6 +196,52 @@ public class ArbitraryDataRendererTests {
         return slice;
     }
 
+    /**
+     * QDN cache files are pruned and rebuilt while they are being served. Content-Length and
+     * Content-Range are now derived from the open channel rather than from the path, so they
+     * describe the file actually being read. If that file is nevertheless truncated in place
+     * mid-response, the loop must stop cleanly and report a short body rather than spin, throw,
+     * or silently claim success.
+     */
+    @Test
+    public void testMediaResponseHandlesFileTruncatedWhileStreaming() throws Exception {
+        // Larger than the 10240-byte copy buffer so the body takes several reads and the file
+        // can be disturbed after the first one.
+        byte[] body = new byte[50_000];
+        for (int i = 0; i < body.length; ++i) {
+            body[i] = (byte) i;
+        }
+
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("clip.mp3");
+        Files.write(filePath, body);
+
+        try {
+            Exchange exchange = new Exchange("audio/mpeg", null);
+            exchange.outputStream.onFirstWrite = () -> {
+                try (RandomAccessFile randomAccessFile = new RandomAccessFile(filePath.toFile(), "rw")) {
+                    randomAccessFile.setLength(10_240);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            };
+
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(
+                    exchange.request, exchange.response, exchange.context, filePath, "clip.mp3");
+
+            // The declared length still describes the file as opened...
+            assertEquals(body.length, exchange.contentLength);
+            // ...but only the surviving bytes could be sent, and the call returned normally.
+            assertTrue(
+                    "Expected a short body after truncation, got " + exchange.outputStream.toByteArray().length,
+                    exchange.outputStream.toByteArray().length < body.length);
+            assertArrayEquals(slice(body, 0, 10_239), exchange.outputStream.toByteArray());
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
     private static Exchange streamMedia(byte[] body, String rangeHeader) throws Exception {
         Path directory = Files.createTempDirectory("qdn-renderer");
         Path filePath = directory.resolve("clip.mp3");
@@ -530,10 +576,33 @@ public class ArbitraryDataRendererTests {
     private static class CapturingServletOutputStream extends ServletOutputStream {
 
         private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        // Lets a test disturb the file on disk part-way through the response, which is the only
+        // way to reach the short-read branch deterministically.
+        private Runnable onFirstWrite;
+        private boolean written;
 
         @Override
         public void write(int b) {
+            this.fireFirstWrite();
             this.outputStream.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) {
+            this.fireFirstWrite();
+            this.outputStream.write(b, off, len);
+        }
+
+        private void fireFirstWrite() {
+            if (this.written) {
+                return;
+            }
+
+            this.written = true;
+
+            if (this.onFirstWrite != null) {
+                this.onFirstWrite.run();
+            }
         }
 
         @Override
