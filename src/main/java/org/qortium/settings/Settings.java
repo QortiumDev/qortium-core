@@ -513,9 +513,6 @@ public class Settings {
 	/** Storage policy to indicate which data should be hosted */
 	private String storagePolicy = "FOLLOWED_OR_VIEWED";
 
-	/** Whether to allow data outside of the storage policy to be relayed between other peers */
-	private boolean relayModeEnabled = true;
-
 	/** Whether, after publishing/holding our own resource, we proactively PUSH it out to a few
 	 * reachable (outbound, push-capable) peers so the data reaches the network even when this node
 	 * is NAT'd and cannot be pulled from. Receivers still gate acceptance on their own storage policy. */
@@ -1127,7 +1124,6 @@ public class Settings {
 		settings.put("publicQdnPublishMaxSize", new WritableSetting(WritableSettingType.LONG, false));
 		settings.put("publicQdnPublishChunkMaxSize", new WritableSetting(WritableSettingType.LONG, false));
 		settings.put("publicQdnPublishChunkSessionLimit", new WritableSetting(WritableSettingType.INTEGER, false));
-		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("qdnPushOnPublishEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("publicDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("privateDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -2724,10 +2720,6 @@ public class Settings {
 
 	public StoragePolicy getStoragePolicy() {
 		return StoragePolicy.valueOf(this.storagePolicy);
-	}
-
-	public boolean isRelayModeEnabled() {
-		return this.relayModeEnabled;
 	}
 
 	public boolean isQdnPushOnPublishEnabled() {

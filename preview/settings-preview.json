@@ -90,7 +90,6 @@
   "recoveryModeTimeout": 0,
   "autoUpdateMode": "NOTIFY",
   "qdnEnabled": true,
-  "relayModeEnabled": true,
   "qdnAuthBypassEnabled": true,
   "publicQdnPublishMaxSize": 104857600,
   "publicApiWriteMaxBodySize": 262144,

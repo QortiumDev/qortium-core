@@ -91,7 +91,6 @@
   "recoveryModeTimeout": 0,
   "autoUpdateMode": "OFF",
   "qdnEnabled": true,
-  "relayModeEnabled": true,
   "qdnAuthBypassEnabled": true,
   "gatewayEnabled": true,
   "gatewayPort": 8090,

@@ -48,7 +48,7 @@ public class ArbitraryDataStorageManager extends Thread {
     private static ArbitraryDataStorageManager instance;
     private volatile boolean isStopping = false;
 
-    private Long storageCapacity = null;
+    private volatile Long storageCapacity = null;
     private long totalDirectorySize = 0L;
     private long lastDirectorySizeCheck = 0;
 
@@ -430,7 +430,7 @@ public class ArbitraryDataStorageManager extends Thread {
         return false;
     }
 
-    public void getDataDirectorySize(Long now) {
+    public synchronized void getDataDirectorySize(Long now) {
         if (now == null) {
             return;
         }
@@ -524,6 +524,48 @@ public class ArbitraryDataStorageManager extends Thread {
 
     public long getTotalDirectorySize() {
         return this.totalDirectorySize;
+    }
+
+    /**
+     * Forces an exact directory scan and refreshes the usable/configured capacity.
+     * Relay-cache admission uses this at startup so it never relies on an
+     * uninitialized or stale fallback allowance.
+     */
+    public synchronized void recalculateDataDirectorySize(Long now) {
+        if (now == null) {
+            return;
+        }
+
+        this.recalculate.set(true);
+        this.getDataDirectorySize(now);
+    }
+
+    /**
+     * Returns the bytes that can still be written before QDN reaches its normal
+     * storage-full threshold. The live estimator is used so cache and permanent
+     * writes are accounted for between full directory scans.
+     */
+    public long getRemainingStorageCapacityAtFullThreshold() {
+        Long thresholdCapacity = this.getStorageCapacityAtFullThreshold();
+        if (thresholdCapacity == null) {
+            return 0L;
+        }
+
+        long estimatedSize = ArbitraryDataFolderSizeEstimator.getInstance().get();
+        return Math.max(0L, thresholdCapacity - estimatedSize);
+    }
+
+    public Long getStorageCapacityAtFullThreshold() {
+        if (this.storageCapacity == null) {
+            return null;
+        }
+
+        long effectiveCapacity = this.storageCapacity;
+        Long configuredCapacity = Settings.getInstance().getMaxStorageCapacity();
+        if (configuredCapacity != null) {
+            effectiveCapacity = Math.min(effectiveCapacity, configuredCapacity);
+        }
+        return (long) (effectiveCapacity * STORAGE_FULL_THRESHOLD);
     }
 
     public boolean isStorageSpaceAvailable(double threshold) {
