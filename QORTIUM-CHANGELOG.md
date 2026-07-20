@@ -34,6 +34,28 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-20 - feat(tools): prune superseded auto-update binaries from QDN
+
+Adds a maintenance tool that removes old auto-update download files from the
+network. Each time a new version is published for auto-update, the installer
+file it points at (around 76 MB) stays on the network permanently, and every
+node following the publishing account downloads all of them. Ten had built up
+on the preview network, roughly 764 MB that every follower was storing for no
+benefit.
+
+The tool determines which installer is actually in use by asking the node which
+one the currently approved release points at, rather than assuming it is simply
+the newest. Those two differ whenever a newer release has been published but
+not yet approved, and removing the wrong one would leave nodes unable to
+complete an update that has already been approved. It keeps the in-use
+installer plus a configurable number of recent ones as a fallback, refuses to
+run unless it can confirm which release is approved, and only previews what it
+would remove until explicitly told to proceed.
+
+It is deliberately a separate tool rather than a step inside publishing,
+because at publishing time the new release is not yet approved and the previous
+installer is still the one in use.
+
 ### 2026-07-20 - qdn: serve rendered files with HTTP byte range support
 
 Makes audio and video published to QDN seekable. When a media player asks for
