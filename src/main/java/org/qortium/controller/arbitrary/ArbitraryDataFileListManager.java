@@ -548,14 +548,18 @@ public class ArbitraryDataFileListManager {
      * Received a ArbitraryDataList Message
      */
     private void processNetworkArbitraryDataFileListMessage() {
+        List<PeerMessage> messagesToProcess;
+        synchronized (arbitraryDataFileListMessageLock) {
+            messagesToProcess = new ArrayList<>(arbitraryDataFileListMessageList);
+            arbitraryDataFileListMessageList.clear();
+        }
 
+        processNetworkArbitraryDataFileListMessages(messagesToProcess);
+    }
+
+    /** Synchronous processing seam used by the scheduler and relay-behavior tests. */
+    void processNetworkArbitraryDataFileListMessages(List<PeerMessage> messagesToProcess) {
         try {
-            List<PeerMessage> messagesToProcess;
-            synchronized (arbitraryDataFileListMessageLock) {
-                messagesToProcess = new ArrayList<>(arbitraryDataFileListMessageList);
-                arbitraryDataFileListMessageList.clear();
-            }
-
             if (messagesToProcess.isEmpty()) return;
 
             // Store ALL peer messages per signature (not just the last one)
@@ -1091,7 +1095,7 @@ public class ArbitraryDataFileListManager {
                 }
 
                 LOGGER.trace("We don't have hashes or all hashes - forwarding the QDN search");
-                // Qortium full nodes always relay QDN discovery requests.
+                // QDN-enabled Qortium nodes always relay discovery requests.
 
                     GetArbitraryDataFileListMessage getArbitraryDataFileListMessage = (GetArbitraryDataFileListMessage) message;
 

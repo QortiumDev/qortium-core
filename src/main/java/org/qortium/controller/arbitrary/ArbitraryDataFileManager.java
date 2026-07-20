@@ -20,12 +20,14 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortium.arbitrary.ArbitraryDataFile;
+import org.qortium.arbitrary.ArbitraryDataFolderSizeEstimator;
 import org.qortium.controller.Controller;
 import org.qortium.data.arbitrary.ArbitraryDirectConnectionInfo;
 import org.qortium.data.arbitrary.ArbitraryFileListResponseInfo;
@@ -156,6 +158,8 @@ public class ArbitraryDataFileManager extends Thread {
     private static final long RELAY_CACHE_MIN_FILE_AGE_MS = 5 * 60 * 1000L; // 5 minutes minimum age before deletion
     private Path relayCacheDir;
     private final AtomicInteger relayCacheFileCount = new AtomicInteger(0);
+    private final AtomicLong relayCacheSize = new AtomicLong(0L);
+    private final Object relayCacheLock = new Object();
 
     /**
      * Creates a composite key for tracking relay requests by hash and source peer
@@ -168,27 +172,41 @@ public class ArbitraryDataFileManager extends Thread {
     }
     
     /**
-     * Initializes the relay cache directory in the system temp directory
+     * Initializes the relay cache directory inside the QDN data directory.
      */
     private void initializeRelayCache() {
         try {
             this.relayCacheDir = Paths.get(Settings.getInstance().getDataPath() + File.separator + RELAY_CACHE_DIR_NAME);
             Files.createDirectories(relayCacheDir);
+
+            // A prior process may have stopped between staging and atomic replacement.
+            // Remove those incomplete files before establishing the exact startup size.
+            deleteStaleRelayCacheStagingFiles(false);
             
             // Count existing files on startup
             File[] existingFiles = relayCacheDir.toFile().listFiles();
             if (existingFiles != null) {
                 int fileCount = 0;
+                long cacheSize = 0L;
                 for (File file : existingFiles) {
                     if (file.isFile() && file.getName().endsWith(".tmp")) {
                         fileCount++;
+                        cacheSize += file.length();
                     }
                 }
                 this.relayCacheFileCount.set(fileCount);
+                this.relayCacheSize.set(cacheSize);
                 LOGGER.debug("Initialized relay cache directory: {} ({} existing files)", relayCacheDir, fileCount);
             } else {
+                this.relayCacheSize.set(0L);
                 LOGGER.debug("Initialized relay cache directory: {}", relayCacheDir);
             }
+
+            // Establish exact QDN usage/capacity before the first relay-cache write.
+            // If this cannot be calculated, admission remains fail-closed at zero bytes.
+            Long now = NTP.getTime();
+            ArbitraryDataStorageManager.getInstance().recalculateDataDirectorySize(
+                    now != null ? now : System.currentTimeMillis());
             cleanupRelayCache();  // Run cleanup in case disk conditions changed while node was offline
         } catch (IOException e) {
             LOGGER.error("Failed to initialize relay cache directory: {}", e.getMessage());
@@ -218,43 +236,147 @@ public class ArbitraryDataFileManager extends Thread {
      * @param hash58 The hash of the chunk
      * @param data The chunk data
      */
-    private void saveToRelayCache(String hash58, byte[] data) {
+    boolean saveToRelayCache(String hash58, byte[] data) {
         if (relayCacheDir == null || data == null) {
-            return;
+            return false;
         }
 
         Path cachePath = getRelayCachePath(hash58);
         if (cachePath == null) {
             LOGGER.debug("Invalid relay cache path for hash {}", hash58);
-            return;
+            return false;
         }
 
-        boolean isNewFile = false;
-        try {
-            isNewFile = !Files.exists(cachePath);
-            if (isNewFile) {
-                int currentCount = relayCacheFileCount.incrementAndGet();
-                if (currentCount > RELAY_CACHE_CLEANUP_TRIGGER) {
-                    LOGGER.trace("Relay cache has {} files (threshold: {}), triggering cleanup",
-                            currentCount, RELAY_CACHE_CLEANUP_TRIGGER);
-                    cleanupRelayCache();
+        synchronized (relayCacheLock) {
+            Path stagingPath = null;
+            try {
+                boolean isNewFile = !Files.exists(cachePath);
+                long existingSize = isNewFile ? 0L : Files.size(cachePath);
+                long sizeDelta = (long) data.length - existingSize;
+
+                if (!hasRelayCacheWriteCapacity(sizeDelta, data.length)) {
+                    return false;
+                }
+
+                // Write to a sibling first so an interrupted write can never corrupt the
+                // existing cache entry or leave a partial file outside capacity accounting.
+                stagingPath = Files.createTempFile(relayCacheDir, ".relay-", ".part");
+                try (java.io.OutputStream out = Files.newOutputStream(stagingPath,
+                        java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                        java.nio.file.StandardOpenOption.WRITE)) {
+                    out.write(data);
+                    out.flush();
+                }
+
+                // Re-read the destination and recheck logical headroom immediately before
+                // the atomic replacement in case capacity settings or external state changed.
+                isNewFile = !Files.exists(cachePath);
+                existingSize = isNewFile ? 0L : Files.size(cachePath);
+                sizeDelta = (long) data.length - existingSize;
+                if (!hasRelayCacheWriteCapacity(sizeDelta, 0L)) {
+                    return false;
+                }
+
+                Files.move(stagingPath, cachePath,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+                stagingPath = null;
+
+                if (sizeDelta > 0L) {
+                    ArbitraryDataFolderSizeEstimator.getInstance().add(sizeDelta);
+                    relayCacheSize.addAndGet(sizeDelta);
+                } else if (sizeDelta < 0L) {
+                    ArbitraryDataFolderSizeEstimator.getInstance().subtract(-sizeDelta);
+                    relayCacheSize.addAndGet(sizeDelta);
+                }
+
+                if (isNewFile) {
+                    int currentCount = relayCacheFileCount.incrementAndGet();
+                    if (currentCount > RELAY_CACHE_CLEANUP_TRIGGER) {
+                        LOGGER.trace("Relay cache has {} files (threshold: {}), triggering cleanup",
+                                currentCount, RELAY_CACHE_CLEANUP_TRIGGER);
+                        cleanupRelayCache();
+                    }
+                }
+                return true;
+            } catch (IOException e) {
+                LOGGER.warn("Failed to save to relay cache for hash {}: {}", hash58, e.getMessage());
+                return false;
+            } finally {
+                if (stagingPath != null) {
+                    try {
+                        Files.deleteIfExists(stagingPath);
+                    } catch (IOException e) {
+                        LOGGER.warn("Failed to remove relay cache staging file {}: {}",
+                                stagingPath.getFileName(), e.getMessage());
+                        Long now = NTP.getTime();
+                        ArbitraryDataStorageManager.getInstance().recalculateDataDirectorySize(
+                                now != null ? now : System.currentTimeMillis());
+                    }
                 }
             }
+        }
+    }
 
-            // Use streaming write to avoid holding byte[] reference in memory during I/O
-            try (java.io.OutputStream out = Files.newOutputStream(cachePath,
-                    java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
-                    java.nio.file.StandardOpenOption.WRITE)) {
-                out.write(data);
-                out.flush();
+    private void deleteStaleRelayCacheStagingFiles(boolean updateEstimator) {
+        long deletedSize = 0L;
+        try (DirectoryStream<Path> stagingFiles = Files.newDirectoryStream(relayCacheDir, "*.part")) {
+            for (Path stagingFile : stagingFiles) {
+                try {
+                    long size = Files.size(stagingFile);
+                    if (Files.deleteIfExists(stagingFile)) {
+                        deletedSize += size;
+                    }
+                } catch (IOException e) {
+                    LOGGER.warn("Failed to remove stale relay cache staging file {}: {}",
+                            stagingFile.getFileName(), e.getMessage());
+                }
             }
         } catch (IOException e) {
-            LOGGER.warn("Failed to save to relay cache for hash {}: {}", hash58, e.getMessage());
-            if (isNewFile) {
-                relayCacheFileCount.decrementAndGet(); // Rollback counter on failure
-            }
+            LOGGER.warn("Failed to scan relay cache staging files: {}", e.getMessage());
         }
+
+        if (updateEstimator && deletedSize > 0L) {
+            ArbitraryDataFolderSizeEstimator.getInstance().subtract(deletedSize);
+        }
+    }
+
+    private boolean hasRelayCacheWriteCapacity(long logicalGrowth, long temporaryDiskBytes) {
+        long usableSpace = relayCacheDir.toFile().getUsableSpace();
+        if (temporaryDiskBytes > usableSpace) {
+            LOGGER.debug("Skipping relay cache write: need {} temporary bytes, filesystem headroom {} bytes",
+                    temporaryDiskBytes, usableSpace);
+            return false;
+        }
+
+        if (logicalGrowth <= 0L) {
+            return true;
+        }
+
+        long configuredHeadroom = ArbitraryDataStorageManager.getInstance()
+                .getRemainingStorageCapacityAtFullThreshold();
+        long softCacheHeadroom = Math.max(0L,
+                calculateRelayCacheLimit(relayCacheSize.get()) - relayCacheSize.get());
+        long writableHeadroom = Math.max(0L, Math.min(configuredHeadroom, softCacheHeadroom));
+        if (logicalGrowth > writableHeadroom) {
+            LOGGER.debug("Skipping relay cache write: need {} logical bytes, headroom {} bytes",
+                    logicalGrowth, writableHeadroom);
+            return false;
+        }
+        return true;
+    }
+
+    private long calculateRelayCacheLimit(long currentCacheSize) {
+        ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+        Long fullThresholdCapacity = storageManager.getStorageCapacityAtFullThreshold();
+        if (fullThresholdCapacity == null) {
+            return 0L;
+        }
+
+        long estimatedTotalSize = ArbitraryDataFolderSizeEstimator.getInstance().get();
+        long nonCacheSize = Math.max(0L, estimatedTotalSize - currentCacheSize);
+        long nonCacheHeadroom = Math.max(0L, fullThresholdCapacity - nonCacheSize);
+        return nonCacheHeadroom / 10L;
     }
     
     /**
@@ -290,10 +412,15 @@ public class ArbitraryDataFileManager extends Thread {
         if (relayCacheDir == null || !Files.exists(relayCacheDir)) {
             return;
         }
-        
+
+        synchronized (relayCacheLock) {
         try {
+            deleteStaleRelayCacheStagingFiles(true);
+
             File[] files = relayCacheDir.toFile().listFiles();
             if (files == null || files.length == 0) {
+                relayCacheFileCount.set(0);
+                relayCacheSize.set(0L);
                 return;
             }
             
@@ -316,43 +443,27 @@ public class ArbitraryDataFileManager extends Thread {
             }
             
             if (fileInfos.isEmpty()) {
+                relayCacheSize.set(totalSize);
                 return;
             }
             
             // Sort by creation time (oldest first)
             fileInfos.sort(Comparator.comparingLong(fi -> fi.creationTime));
             
-            // Calculate max allowed size based on QDN storage headroom
-            long maxAllowedSize;
-            ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
-            Long qdnStorageCapacity = storageManager.getStorageCapacity();
-            long qdnUsedSpace = storageManager.getTotalDirectorySize();
-            
-            if (qdnStorageCapacity != null && qdnUsedSpace > 0) {
-                // Calculate space before QDN hits its cleanup threshold (90%)
-                long qdnCleanupThreshold = (long)(qdnStorageCapacity * ArbitraryDataStorageManager.DELETION_THRESHOLD);
-                long qdnHeadroom = qdnCleanupThreshold - qdnUsedSpace;
-                
-                if (qdnHeadroom < 0) {
-                    // QDN is already over threshold, use minimal relay cache
-                    maxAllowedSize = 500L * 1024 * 1024; // 500MB minimum
-                    LOGGER.debug("QDN over storage threshold, relay cache limited to 500MB");
-                } else {
-                    // Use up to 10% of the headroom, with min/max bounds
-                    long calculatedSize = (long)(qdnHeadroom * 0.10);
-                    maxAllowedSize = Math.max(500L * 1024 * 1024, // Min 500MB
-                                              calculatedSize);    // 10% of free QDN space
-                    RELAY_CACHE_CLEANUP_TRIGGER = (int)(maxAllowedSize / (512L * 1024)); // 500KB avg per file
-                    LOGGER.debug("Relay cache limit: {} MB (based on {}% of {} MB headroom)", 
-                            maxAllowedSize / (1024 * 1024), 
-                            (int)(0.10 * 100),
-                            qdnHeadroom / (1024 * 1024));
-                }
-            } else {
-                // Fallback: conservative fixed size if QDN storage not calculated yet
-                maxAllowedSize = 2L * 1024 * 1024 * 1024; // 2GB
-                LOGGER.debug("Relay cache limit: 2GB (fallback - QDN storage not calculated)");
-            }
+            // Calculate a soft cache ceiling from exact non-cache QDN usage. There is
+            // no positive fallback/minimum: the hard capacity boundary wins.
+            long maxAllowedSize = calculateRelayCacheLimit(totalSize);
+            Long fullThresholdCapacity = ArbitraryDataStorageManager.getInstance().getStorageCapacityAtFullThreshold();
+            long estimatedTotalSize = ArbitraryDataFolderSizeEstimator.getInstance().get();
+            long nonCacheSize = Math.max(0L, estimatedTotalSize - totalSize);
+            long nonCacheHeadroom = fullThresholdCapacity == null
+                    ? 0L
+                    : Math.max(0L, fullThresholdCapacity - nonCacheSize);
+            RELAY_CACHE_CLEANUP_TRIGGER = maxAllowedSize == 0L
+                    ? 0
+                    : (int) Math.min(Integer.MAX_VALUE, Math.max(1L, maxAllowedSize / (512L * 1024L)));
+            LOGGER.debug("Relay cache limit: {} MB (10% of {} MB non-cache QDN headroom)",
+                    maxAllowedSize / (1024 * 1024), nonCacheHeadroom / (1024 * 1024));
             
             int deletedCount = 0;
             long deletedSize = 0;
@@ -395,6 +506,10 @@ public class ArbitraryDataFileManager extends Thread {
                 }
             }
             relayCacheFileCount.set(actualCount);
+            relayCacheSize.set(totalSize);
+            if (deletedSize > 0L) {
+                ArbitraryDataFolderSizeEstimator.getInstance().subtract(deletedSize);
+            }
             
             if (deletedCount > 0) {
                 String youngFilesMsg = skippedYoungFiles > 0 ? String.format(" (skipped %d young files)", skippedYoungFiles) : "";
@@ -409,6 +524,7 @@ public class ArbitraryDataFileManager extends Thread {
             
         } catch (Exception e) {
             LOGGER.error("Error during relay cache cleanup: {}", e.getMessage(), e);
+        }
         }
     }
     
@@ -474,10 +590,12 @@ public class ArbitraryDataFileManager extends Thread {
             return false;
         }
         
+        synchronized (relayCacheLock) {
         try {
             // Get the count before cleaning
             int deletedCount = relayCacheFileCount.get();
             final AtomicInteger failedCount = new AtomicInteger(0);
+            final AtomicLong deletedSize = new AtomicLong(0L);
             
             // Recursive delete using Files.walkFileTree for better error handling
             Files.walkFileTree(relayCacheDir, new SimpleFileVisitor<Path>() {
@@ -485,6 +603,7 @@ public class ArbitraryDataFileManager extends Thread {
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     try {
                         Files.delete(file);
+                        deletedSize.addAndGet(attrs.size());
                         return FileVisitResult.CONTINUE;
                     } catch (IOException e) {
                         // File might be locked or have permission issues - log and continue
@@ -522,6 +641,10 @@ public class ArbitraryDataFileManager extends Thread {
             // Update file count
             int failed = failedCount.get();
             relayCacheFileCount.set(failed);
+            if (deletedSize.get() > 0L) {
+                ArbitraryDataFolderSizeEstimator.getInstance().subtract(deletedSize.get());
+                relayCacheSize.updateAndGet(size -> Math.max(0L, size - deletedSize.get()));
+            }
 
             if (failed > 0) {
                 LOGGER.warn("Erased relay cache: deleted {} files, {} failed", deletedCount - failed, failed);
@@ -533,6 +656,7 @@ public class ArbitraryDataFileManager extends Thread {
         } catch (IOException e) {
             LOGGER.error("Error erasing relay cache: {}", e.getMessage(), e);
             return false;
+        }
         }
     }
 
@@ -1012,7 +1136,7 @@ public class ArbitraryDataFileManager extends Thread {
             }
             
             // Save to relay cache for persistence (uses streaming write to avoid holding reference)
-            saveToRelayCache(hash58, chunkData);
+            boolean cachedForRelay = saveToRelayCache(hash58, chunkData);
             
             // Capture primitives for MessageFactory lambdas
             byte[] hashCopy = hash;
@@ -1113,7 +1237,8 @@ public class ArbitraryDataFileManager extends Thread {
                 }
             }
             // Relay chunks are now cached to temp dir - no need to skip further processing
-            LOGGER.trace("Completed relay forwarding for chunk {} - saved to relay cache, using zero-copy for {} forwards", hash58, pendingRequests.size());
+            LOGGER.trace("Completed relay forwarding for chunk {} - cache persisted={}, using zero-copy for {} forwards",
+                    hash58, cachedForRelay, pendingRequests.size());
             return;
         }
         

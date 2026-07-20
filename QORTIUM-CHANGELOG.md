@@ -34,11 +34,11 @@ own chain.
 
 ## Change Entries
 
-### 2026-07-20 - qdn: make full-node relaying unconditional
+### 2026-07-20 - qdn: make QDN relaying unconditional
 
-Removes the inherited operator switch that allowed a full node to opt out of
-relaying QDN discovery, metadata, and chunks for other peers. Qortium full nodes
-now always participate in QDN relay while retaining separate storage-policy,
+Removes the inherited operator switch that allowed a QDN-enabled node to opt out
+of relaying discovery, metadata, and chunks for other peers. QDN-enabled Qortium
+nodes now always participate in relay while retaining separate storage-policy,
 block-list, capacity, hop/time, and queue controls. Existing settings files that
 still contain `relayModeEnabled` remain loadable, but the value is ignored; the
 setting is no longer writable or shipped in Previewnet templates. The legacy

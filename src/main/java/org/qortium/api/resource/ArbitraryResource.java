@@ -621,7 +621,7 @@ public class ArbitraryResource {
 	@Path("/relaymode")
 	@Operation(
 			summary = "Returns true because QDN relay is always enabled",
-			description = "Deprecated compatibility endpoint. Qortium full nodes always relay QDN data.",
+			description = "Deprecated compatibility endpoint. QDN-enabled Qortium nodes always relay QDN data.",
 			deprecated = true,
 			responses = {
 					@ApiResponse(
