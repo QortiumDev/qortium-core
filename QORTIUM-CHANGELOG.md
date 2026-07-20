@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-20 - qdn: serve rendered files with HTTP byte range support
+
+Makes audio and video published to QDN seekable. When a media player asks for
+just one part of a file, so that it can jump to a chosen position without
+downloading everything before it, the node previously ignored the request and
+sent the whole file from the beginning. Players therefore had no reliable way to
+move the position slider beyond whatever had already loaded. Rendered files are
+now served with proper partial-content support: the node advertises that ranges
+are available, returns exactly the requested portion, and refuses ranges a file
+cannot satisfy instead of quietly sending something different.
+
+The rules the raw download route already used are now shared by both routes, so
+there is one seeking behaviour across the node rather than two. Web pages
+published to QDN are unaffected, because those are rewritten in memory before
+being sent and a position within the stored file would not match what the
+browser receives. A weakness in the raw download route, where the node could in
+rare cases begin reading from the wrong position, is corrected at the same time.
+
 ### 2026-07-20 - qdn: make QDN relaying unconditional
 
 Removes the inherited operator switch that allowed a QDN-enabled node to opt out

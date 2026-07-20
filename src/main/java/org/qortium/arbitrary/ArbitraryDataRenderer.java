@@ -15,6 +15,8 @@ import org.qortium.controller.Controller;
 import org.qortium.controller.arbitrary.ArbitraryMetadataManager;
 import org.qortium.settings.Settings;
 import org.qortium.utils.FilesystemUtils;
+import org.qortium.utils.HttpRanges;
+import org.qortium.utils.HttpRanges.InvalidHttpRangeException;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -23,15 +25,17 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -227,8 +231,8 @@ public class ArbitraryDataRenderer {
                 response.getOutputStream().write(htmlParser.getData());
             }
             else {
-                // Regular file - can be streamed directly
-                ArbitraryDataRenderer.streamNonHtmlFileResponse(response, context, filePath, filename);
+                // Regular file - can be streamed directly, and is seekable via HTTP byte ranges
+                ArbitraryDataRenderer.streamNonHtmlFileResponse(this.request, response, context, filePath, filename);
             }
             return response;
         } catch (HtmlFileTooLargeException e) {
@@ -286,17 +290,67 @@ public class ArbitraryDataRenderer {
         return lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs");
     }
 
-    static void streamNonHtmlFileResponse(HttpServletResponse response, ServletContext context, Path filePath, String filename) throws IOException {
+    /**
+     * Streams a non-HTML render asset, honouring a single HTTP byte range.
+     *
+     * <p>Range support matters for embedded media: native audio/video elements only treat a
+     * source as seekable when the server advertises {@code Accept-Ranges} and answers with
+     * {@code 206}, so without this a scrubber cannot move outside already-buffered data.
+     *
+     * <p>The HTML path deliberately does not come through here — those bytes are rewritten in
+     * memory by {@link org.qortium.api.HTMLParser}, so an offset into the on-disk file would
+     * not correspond to what the client is being served.
+     */
+    static void streamNonHtmlFileResponse(HttpServletRequest request, HttpServletResponse response, ServletContext context, Path filePath, String filename) throws IOException {
         response.addHeader("Content-Security-Policy", contentSecurityPolicyForAsset(filename));
         response.setContentType(context.getMimeType(filename));
-        setResponseContentLength(response, Files.size(filePath));
 
-        try (InputStream inputStream = Files.newInputStream(filePath)) {
+        long fileSize = Files.size(filePath);
+        response.setHeader("Accept-Ranges", "bytes");
+
+        long[] requestedRange;
+        try {
+            requestedRange = HttpRanges.parse(request == null ? null : request.getHeader("Range"), fileSize);
+        } catch (InvalidHttpRangeException e) {
+            LOGGER.debug("Invalid range for {}: {}", filename, e.getMessage());
+            response.setHeader("Content-Range", String.format("bytes */%d", fileSize));
+            response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+            response.setContentLength(0);
+            return;
+        }
+
+        long rangeStart = requestedRange == null ? 0 : requestedRange[0];
+        long rangeEnd = requestedRange == null ? fileSize - 1 : requestedRange[1];
+        long contentLength = requestedRange == null ? fileSize : rangeEnd - rangeStart + 1;
+
+        if (requestedRange != null) {
+            response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+            response.setHeader("Content-Range", String.format("bytes %d-%d/%d", rangeStart, rangeEnd, fileSize));
+        }
+
+        setResponseContentLength(response, contentLength);
+
+        try (SeekableByteChannel channel = Files.newByteChannel(filePath, StandardOpenOption.READ)) {
+            if (rangeStart > 0) {
+                channel.position(rangeStart);
+            }
+
             OutputStream outputStream = response.getOutputStream();
-            int bytesRead;
             byte[] buffer = new byte[10240];
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
+            ByteBuffer byteBuffer = ByteBuffer.wrap(buffer);
+            long bytesRemaining = contentLength;
+
+            while (bytesRemaining > 0) {
+                byteBuffer.clear();
+                byteBuffer.limit((int) Math.min(buffer.length, bytesRemaining));
+
+                int bytesRead = channel.read(byteBuffer);
+                if (bytesRead == -1) {
+                    break;
+                }
+
                 outputStream.write(buffer, 0, bytesRead);
+                bytesRemaining -= bytesRead;
             }
         }
     }

@@ -77,6 +77,7 @@ import org.qortium.transform.TransformationException;
 import org.qortium.transform.transaction.ArbitraryTransactionTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.*;
+import org.qortium.utils.HttpRanges.InvalidHttpRangeException;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -3765,8 +3766,10 @@ public String finalizeUpload(
 
 			try (InputStream inputStream = Files.newInputStream(path)) {
 
+				// skip() is allowed to skip fewer bytes than asked, which would silently serve the
+				// wrong offset for the Content-Range we already committed to, so insist on all of them
 				if (rangeStart > 0) {
-					inputStream.skip(rangeStart);
+					inputStream.skipNBytes(rangeStart);
 				}
 
 				byte[] buffer = new byte[65536];
@@ -3809,80 +3812,12 @@ public String finalizeUpload(
 		}
 	}
 
+	/**
+	 * Delegates to the shared {@link HttpRanges} parser so the raw download path and the QDN
+	 * render path apply identical single-byte-range semantics.
+	 */
 	static long[] parseHttpRangeHeader(String rangeHeader, long fileSize) throws InvalidHttpRangeException {
-		if (rangeHeader == null || rangeHeader.isBlank()) {
-			return null;
-		}
-
-		String range = rangeHeader.trim();
-		if (!range.regionMatches(true, 0, "bytes=", 0, "bytes=".length())) {
-			throw new InvalidHttpRangeException("Range unit must be bytes");
-		}
-
-		String rangeValue = range.substring("bytes=".length()).trim();
-		if (rangeValue.isEmpty() || rangeValue.contains(",")) {
-			throw new InvalidHttpRangeException("Only a single byte range is supported");
-		}
-
-		int separatorIndex = rangeValue.indexOf('-');
-		if (separatorIndex < 0 || separatorIndex != rangeValue.lastIndexOf('-')) {
-			throw new InvalidHttpRangeException("Byte range must use start-end syntax");
-		}
-
-		String startValue = rangeValue.substring(0, separatorIndex).trim();
-		String endValue = rangeValue.substring(separatorIndex + 1).trim();
-		if (startValue.isEmpty() && endValue.isEmpty()) {
-			throw new InvalidHttpRangeException("Byte range is empty");
-		}
-
-		if (fileSize <= 0) {
-			throw new InvalidHttpRangeException("Requested range is unsatisfiable for an empty file");
-		}
-
-		long rangeStart;
-		long rangeEnd;
-		if (startValue.isEmpty()) {
-			long suffixLength = parseUnsignedLongRangeValue(endValue);
-			if (suffixLength <= 0) {
-				throw new InvalidHttpRangeException("Suffix range length must be greater than zero");
-			}
-
-			rangeStart = Math.max(fileSize - suffixLength, 0);
-			rangeEnd = fileSize - 1;
-		} else {
-			rangeStart = parseUnsignedLongRangeValue(startValue);
-			if (rangeStart >= fileSize) {
-				throw new InvalidHttpRangeException("Requested range starts after the end of the file");
-			}
-
-			rangeEnd = endValue.isEmpty() ? fileSize - 1 : parseUnsignedLongRangeValue(endValue);
-			if (rangeEnd < rangeStart) {
-				throw new InvalidHttpRangeException("Requested range ends before it starts");
-			}
-
-			rangeEnd = Math.min(rangeEnd, fileSize - 1);
-		}
-
-		return new long[] { rangeStart, rangeEnd };
-	}
-
-	private static long parseUnsignedLongRangeValue(String value) throws InvalidHttpRangeException {
-		if (value == null || value.isBlank()) {
-			throw new InvalidHttpRangeException("Byte range value is empty");
-		}
-
-		for (int i = 0; i < value.length(); ++i) {
-			char c = value.charAt(i);
-			if (c < '0' || c > '9') {
-				throw new InvalidHttpRangeException("Byte range value must contain digits only");
-			}
-		}
-
-		try {
-			return Long.parseLong(value);
-		} catch (NumberFormatException e) {
-			throw new InvalidHttpRangeException("Byte range value is too large");
-		}
+		return HttpRanges.parse(rangeHeader, fileSize);
 	}
 
 	private static void setResponseContentLength(HttpServletResponse response, long contentLength) {
@@ -3891,14 +3826,6 @@ public String finalizeUpload(
 		} else {
 			response.setContentLength((int) contentLength);
 		}
-	}
-
-	static class InvalidHttpRangeException extends Exception {
-
-		private InvalidHttpRangeException(String message) {
-			super(message);
-		}
-
 	}
 
 	static class UploadChunkTooLargeException extends Exception {
