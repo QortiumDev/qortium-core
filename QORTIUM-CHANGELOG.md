@@ -66,10 +66,18 @@ store, again stalling block processing for everyone.
 All three are now fixed: the two payment routes share one view of the balance,
 every payout is rounded to a whole quantity for indivisible assets before it is
 issued, and the declared working area is measured at its fullest when the
-contract is deployed. As a safety net, a contract that somehow still outgrows
-the limit is skipped for that round instead of stopping the block. The payment
-and deployment changes alter agreed network rules, so they switch on at
-Previewnet block 70000; the safety net applies immediately.
+contract is deployed. The older payment instructions also keep their own
+internal ledger, which reduces by the amount a contract asked to pay rather
+than the amount actually sent — the difference is now tracked and settled
+exactly, so a rounded-down payment's remainder comes back to the creator
+instead of being stranded in the finished contract, and a payment request for
+a negative amount (which that internal ledger would happily treat as a
+deposit) can neither pay out money the contract does not have nor stop the
+chain. As a safety net, a contract that somehow still outgrows the storage
+limit is skipped for that round instead of stopping the block. All of these
+changes — the safety net included, since skipping a contract changes what a
+block contains — alter agreed network rules, so they switch on together at
+Previewnet block 70000.
 
 ### 2026-07-20 - feat(gateway): serve read-only QDN actions in gateway mode
 

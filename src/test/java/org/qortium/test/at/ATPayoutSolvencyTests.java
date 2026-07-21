@@ -67,6 +67,17 @@ public class ATPayoutSolvencyTests extends Common {
 	 */
 	private static final long INDIVISIBLE_STOCK_PAYOUT_REQUEST = 12L * Amounts.MULTIPLIER + 33L;
 
+	/** Whole platform-function payout used alongside {@link #NEGATIVE_STOCK_PAYOUT_REQUEST}. */
+	private static final long PLATFORM_PAYOUT_AMOUNT = 5L * Amounts.MULTIPLIER;
+
+	/**
+	 * A stock-opcode payout request that is negative. {@code PAY_TO_ADDRESS_IN_B}'s amount is an
+	 * AT-controlled data cell, and the VM's clamp is {@code min(currentBalance, value1)}, which passes a
+	 * negative value straight through -- the VM then debits it, INFLATING the machine balance. Any AT
+	 * deployer can supply this.
+	 */
+	private static final long NEGATIVE_STOCK_PAYOUT_REQUEST = -(5L * Amounts.MULTIPLIER);
+
 	/**
 	 * Deploy-time worst-case bound for {@link #buildMinimalAT}, derived purely from {@link MachineState}
 	 * constants so it tracks the production serialization format instead of a hard-coded byte count.
@@ -298,6 +309,13 @@ public class ATPayoutSolvencyTests extends Common {
 	 * which a fractional amount reaches the "last line of defence" rounding in
 	 * {@code ChainATAPI#addPayment}. Both payouts combined are large enough that a naive "zero it out" fix
 	 * could not pass this test.
+	 *
+	 * <p>The assertions are exact, not merely "whole and positive": the VM debits its machine balance by
+	 * the full pre-rounding request while only the rounded amount is emitted, and without the
+	 * machine-balance-delta reconciliation that divergence resurfaces in {@code onFinished}, whose refund
+	 * of the too-small machine balance is itself rounded down again -- permanently stranding a whole unit
+	 * in the finished AT. Asserting the exact payout, the exact refund and a zero final AT balance is what
+	 * distinguishes true conservation from that silent stranding.
 	 */
 	@Test
 	public void testAtRoundsFractionalIndivisibleAssetPayoutAcrossBothPayoutPaths() throws DataException {
@@ -319,17 +337,117 @@ public class ATPayoutSolvencyTests extends Common {
 			// divisibility rounding itself as the thing under test.
 			transferAsset(repository, deployer, atAddress, assetId, PREFUND_AMOUNT);
 
+			// Capture after the funding transfer so the delta below is purely the AT's refund.
+			long deployerBalanceBeforeRun = deployer.getConfirmedBalance(assetId);
+
 			BlockUtils.mintBlock(repository);
 
 			long totalPaidOut = recipient.getConfirmedBalance(assetId) - recipientInitialBalance;
+			long refund = deployer.getConfirmedBalance(assetId) - deployerBalanceBeforeRun;
 			long atFinalBalance = atAccount.getConfirmedBalance(assetId);
 
-			assertTrue(String.format("AT balance must never go negative, was %d", atFinalBalance),
-					atFinalBalance >= 0L);
-			assertEquals(String.format("indivisible asset payout must be a whole quantity, was %d raw units", totalPaidOut),
-					0L, totalPaidOut % Amounts.MULTIPLIER);
-			assertTrue(String.format("payout must not be rounded all the way down to zero, was %d raw units", totalPaidOut),
-					totalPaidOut > 0L);
+			long expectedStockPayout = INDIVISIBLE_STOCK_PAYOUT_REQUEST
+					- (INDIVISIBLE_STOCK_PAYOUT_REQUEST % Amounts.MULTIPLIER);
+			long expectedPaidOut = INDIVISIBLE_PLATFORM_PAYOUT + expectedStockPayout;
+
+			assertEquals("payout must be exactly the platform amount plus the rounded-down stock amount",
+					expectedPaidOut, totalPaidOut);
+			assertEquals("everything not paid out must come back to the creator, exactly",
+					PREFUND_AMOUNT - expectedPaidOut, refund);
+			assertEquals("nothing may be left stranded in the finished AT", 0L, atFinalBalance);
+		}
+	}
+
+	/**
+	 * A negative stock-opcode payout request must not inflate the AT's balance or halt the chain.
+	 *
+	 * <p>The VM's {@code min(currentBalance, value1)} clamp passes a negative {@code value1} straight
+	 * through and then debits it, so its machine balance INFLATES by the requested amount while nothing is
+	 * emitted. Without the machine-balance-delta reconciliation, {@code onFinished} refunds against the
+	 * inflated figure, over-paying the AT's real asset balance -- the repository's
+	 * {@code CHECKBALANCENOTNEGATIVE} constraint then surfaces as an unhandled {@code DataException} that
+	 * makes the block unprocessable on every node: the same class of chain halt the solvency fix targets,
+	 * reachable by anyone who can deploy an AT.
+	 */
+	@Test
+	public void testNegativeStockPayoutMustNotInflateBalanceOrHaltBlock() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+			long assetId = AssetUtils.issueAsset(repository, "alice", "AT-NEGATIVE-PAY", 100L * Amounts.MULTIPLIER, true);
+
+			byte[] creationBytes = buildDoublePayoutWithFractionalTailAT(recipient.getAddress(), assetId,
+					PLATFORM_PAYOUT_AMOUNT, NEGATIVE_STOCK_PAYOUT_REQUEST);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes, 0L, assetId, NATIVE_FEE_RESERVE);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			long recipientInitialBalance = recipient.getConfirmedBalance(assetId);
+
+			transferAsset(repository, deployer, atAddress, assetId, PREFUND_AMOUNT);
+
+			long deployerBalanceBeforeRun = deployer.getConfirmedBalance(assetId);
+
+			// Under the unreconciled code this throws: the refund over-pays the inflated machine balance
+			// and the repository's balance constraint aborts block processing.
+			BlockUtils.mintBlock(repository);
+
+			long totalPaidOut = recipient.getConfirmedBalance(assetId) - recipientInitialBalance;
+			long refund = deployer.getConfirmedBalance(assetId) - deployerBalanceBeforeRun;
+			long atFinalBalance = atAccount.getConfirmedBalance(assetId);
+
+			assertEquals("only the platform payout may be emitted; the negative stock request must pay nothing",
+					PLATFORM_PAYOUT_AMOUNT, totalPaidOut);
+			assertEquals("the refund must ignore the VM's inflated machine balance",
+					PREFUND_AMOUNT - PLATFORM_PAYOUT_AMOUNT, refund);
+			assertEquals("nothing may be left stranded in the finished AT", 0L, atFinalBalance);
+		}
+	}
+
+	/**
+	 * A negative stock payout's balance inflation must not let a LATER payout in the same round overspend.
+	 *
+	 * <p>This is the mid-round half of the negative-payout defect, distinct from the refund half above:
+	 * after the negative request inflates the machine balance, a following {@code PAY_ALL_TO_ADDRESS_IN_B}
+	 * passes that inflated balance as its amount. The solvency clamp consults
+	 * {@code getSpendableAssetBalance}, which is based on the same machine balance -- so unless the
+	 * machine-balance delta is folded in there too (not just in {@code onFinished}), the clamp overestimates
+	 * and the AT overspends. A fix that only reconciled the final refund would pass the test above and fail
+	 * this one.
+	 */
+	@Test
+	public void testNegativeStockPayoutMustNotLetLaterPayoutOverspend() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+			long assetId = AssetUtils.issueAsset(repository, "alice", "AT-NEGATIVE-PAYALL", 100L * Amounts.MULTIPLIER, true);
+
+			byte[] creationBytes = buildNegativeThenPayAllAT(recipient.getAddress(), assetId,
+					PLATFORM_PAYOUT_AMOUNT, NEGATIVE_STOCK_PAYOUT_REQUEST);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes, 0L, assetId, NATIVE_FEE_RESERVE);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			long recipientInitialBalance = recipient.getConfirmedBalance(assetId);
+
+			transferAsset(repository, deployer, atAddress, assetId, PREFUND_AMOUNT);
+
+			long deployerBalanceBeforeRun = deployer.getConfirmedBalance(assetId);
+
+			// Under a clamp that trusts the inflated machine balance, PAY_ALL emits more than the AT holds
+			// and the repository's balance constraint aborts block processing.
+			BlockUtils.mintBlock(repository);
+
+			long totalPaidOut = recipient.getConfirmedBalance(assetId) - recipientInitialBalance;
+			long refund = deployer.getConfirmedBalance(assetId) - deployerBalanceBeforeRun;
+			long atFinalBalance = atAccount.getConfirmedBalance(assetId);
+
+			assertEquals("PAY_ALL must pay exactly the true remaining balance, not the inflated machine balance",
+					PREFUND_AMOUNT, totalPaidOut);
+			assertEquals("nothing remains after PAY_ALL, so the refund must be exactly zero", 0L, refund);
+			assertEquals("nothing may be left stranded in the finished AT", 0L, atFinalBalance);
 		}
 	}
 
@@ -507,6 +625,74 @@ public class ATPayoutSolvencyTests extends Common {
 
 				// VM payout: a fixed, data-supplied amount that need not be a whole quantity.
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PAY_TO_ADDRESS_IN_B, addrStockAmount));
+
+				codeByteBuffer.put(OpCode.FIN_IMD.compile());
+			} catch (CompilationException e) {
+				throw new IllegalStateException("Unable to compile AT?", e);
+			}
+		}
+
+		return toCreationBytes(codeByteBuffer, dataByteBuffer);
+	}
+
+	/**
+	 * Waits for a transaction, then pays {@code platformAmount} via the Qortium asset function, requests a
+	 * stock {@code PAY_TO_ADDRESS_IN_B} of {@code stockAmount} (intended to be negative, inflating the VM's
+	 * machine balance), and finally issues a stock {@code PAY_ALL_TO_ADDRESS_IN_B}. All target the
+	 * recipient held in B.
+	 *
+	 * <p>The trailing {@code PAY_ALL} is the point: it spends whatever the VM believes its balance to be,
+	 * so it converts the negative request's balance inflation into an actual overspend attempt within the
+	 * same round.
+	 */
+	private static byte[] buildNegativeThenPayAllAT(String recipient, long assetId, long platformAmount, long stockAmount) {
+		int addrCounter = 0;
+		final int addrResult = addrCounter++;
+		final int addrAssetId = addrCounter++;
+		final int addrPlatformAmount = addrCounter++;
+		final int addrStockAmount = addrCounter++;
+		final int addrLastTxTimestamp = addrCounter++;
+		final int addrNoTransaction = addrCounter++;
+		final int addrRecipientBytes = addrCounter;
+		addrCounter += 4;
+		final int addrRecipientBytesPointer = addrCounter++;
+
+		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(addrResult * MachineState.VALUE_SIZE, 0L);
+		dataByteBuffer.putLong(addrAssetId * MachineState.VALUE_SIZE, assetId);
+		dataByteBuffer.putLong(addrPlatformAmount * MachineState.VALUE_SIZE, platformAmount);
+		dataByteBuffer.putLong(addrStockAmount * MachineState.VALUE_SIZE, stockAmount);
+		dataByteBuffer.position(addrRecipientBytes * MachineState.VALUE_SIZE);
+		dataByteBuffer.put(Bytes.ensureCapacity(Base58.decode(recipient), 32, 0));
+		dataByteBuffer.putLong(addrRecipientBytesPointer * MachineState.VALUE_SIZE, addrRecipientBytes);
+
+		ByteBuffer codeByteBuffer = ByteBuffer.allocate(512);
+		Integer labelPayout = null;
+
+		for (int pass = 0; pass < 2; ++pass) {
+			codeByteBuffer.clear();
+
+			try {
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_CREATION_TIMESTAMP, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.SET_PCS.compile());
+
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PUT_TX_AFTER_TIMESTAMP_INTO_A, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.CHECK_A_IS_ZERO, addrNoTransaction));
+				codeByteBuffer.put(OpCode.BZR_DAT.compile(addrNoTransaction, OpCode.calcOffset(codeByteBuffer, labelPayout)));
+				codeByteBuffer.put(OpCode.STP_IMD.compile());
+
+				labelPayout = codeByteBuffer.position();
+
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrRecipientBytesPointer));
+
+				// Platform payout: whole quantity, recorded as pending without touching the machine balance.
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value, addrResult, addrAssetId, addrPlatformAmount));
+
+				// VM payout: a data-supplied negative amount, inflating the VM's machine balance.
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PAY_TO_ADDRESS_IN_B, addrStockAmount));
+
+				// VM payout: spends the (now inflated) machine balance in full.
+				codeByteBuffer.put(OpCode.EXT_FUN.compile(FunctionCode.PAY_ALL_TO_ADDRESS_IN_B));
 
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 			} catch (CompilationException e) {

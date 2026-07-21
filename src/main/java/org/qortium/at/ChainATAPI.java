@@ -51,6 +51,21 @@ public class ChainATAPI extends API {
 	/** Generated platform-function payouts not tracked by CIYAM's single current-balance field. */
 	private final Map<Long, Long> pendingAssetPayouts;
 
+	/**
+	 * Running total, over this execution round, of (amount the VM debited from its machine balance)
+	 * minus (amount actually emitted) across the stock CIYAM {@code PAY_*} opcodes. The VM debits the
+	 * pre-clamp amount it passed to {@link #payAmountToB} regardless of what we emit, so whenever the
+	 * solvency clamp or divisibility rounding reduces (or suppresses) the emission, the machine balance
+	 * and the AT's true remaining balance diverge by exactly this amount. Always zero before the
+	 * {@code atPayoutSolvencyHeight} trigger, since the clamp only runs once enforced.
+	 *
+	 * <p>Intermediate overflow is harmless: the reconciled values ({@code currentBalance + delta} and
+	 * {@code finalBalance + delta}) are exact in two's-complement arithmetic because the true remaining
+	 * balance always fits in a long, so any wrap-around introduced by an extreme AT-supplied amount
+	 * cancels out.
+	 */
+	private long machineBalanceDelta;
+
 	// Constructors
 
 	public ChainATAPI(Repository repository, ATData atData, long blockTimestamp) {
@@ -386,18 +401,31 @@ public class ChainATAPI extends API {
 		if (this.isPayoutSolvencyEnforced()) {
 			// The VM clamps against its own current balance, which does not account for payouts already made
 			// this round via PAY_ASSET_AMOUNT_TO_B. Clamp again against what is genuinely still spendable.
-			// onFinished() subtracts the same pending total from the final balance, so value is conserved.
 			//
-			// Invariant: getSpendableAssetBalance() == the AT's true remaining balance at every point in a
-			// round. This holds only because the machine's currentBalance is touched by exactly the three
+			// The VM will debit its machine balance by the amount it passed us (see the stock CIYAM pay
+			// opcodes in FunctionCode: setCurrentBalance(currentBalance - amount) with no regard to what we
+			// emit), so whenever this clamp or the divisibility rounding changes the emission, the machine
+			// balance diverges from the AT's true remaining balance. machineBalanceDelta records that
+			// divergence; getSpendableAssetBalance() and onFinished() add it back, keeping every subsequent
+			// clamp and the final refund exact. This also covers a negative AT-supplied amount, which the
+			// VM's min(currentBalance, value1) passes through unchanged and then debits, INFLATING the
+			// machine balance: we emit nothing and the delta cancels the inflation.
+			//
+			// This accounting holds only because the machine's currentBalance is touched by exactly the three
 			// stock CIYAM pay opcodes (PAY_TO_ADDRESS_IN_B, PAY_ALL_TO_ADDRESS_IN_B, PAY_PREVIOUS_TO_ADDRESS_IN_B),
 			// all of which route here, plus PAY_ASSET_AMOUNT_TO_B which records into pendingAssetPayouts.
-			// A future CIYAM library change that spends currentBalance by any other path would break this
-			// clamp silently — no test asserts the invariant directly, only the payout outcomes.
+			// A future CIYAM library change that spends currentBalance by any other path would break it silently.
+			long vmDebit = amount;
+
 			amount = Math.min(amount, this.getSpendableAssetBalance(assetId, state));
 			amount = this.roundToAssetPrecision(amount, assetId);
 
-			if (amount <= 0)
+			if (amount < 0)
+				amount = 0;
+
+			this.machineBalanceDelta += vmDebit - amount;
+
+			if (amount == 0)
 				return;
 		}
 
@@ -438,7 +466,10 @@ public class ChainATAPI extends API {
 	@Override
 	public void onFinished(long finalBalance, MachineState state) {
 		long configuredAssetId = this.atData.getAssetId();
-		long configuredRefund = Math.max(0L, finalBalance - this.getPendingPayout(configuredAssetId));
+		// machineBalanceDelta reconciles the VM's final machine balance with what was actually emitted via
+		// the stock pay opcodes this round (see payAmountToB); without it the refund would re-strand any
+		// rounded-off remainder, or over-pay after a negative stock payout inflated the machine balance.
+		long configuredRefund = Math.max(0L, finalBalance + this.machineBalanceDelta - this.getPendingPayout(configuredAssetId));
 
 		if (configuredRefund > 0)
 			this.addPaymentToCreator(configuredRefund, configuredAssetId);
@@ -811,7 +842,10 @@ public class ChainATAPI extends API {
 		long balance;
 
 		if (assetId == this.atData.getAssetId()) {
-			balance = state.getCurrentBalance();
+			// The machine balance drifts from the true remaining balance whenever a stock pay's emission
+			// was clamped, rounded, or suppressed (see payAmountToB); machineBalanceDelta is that drift.
+			// Without it, a negative stock payout's inflated machine balance would let a later pay overspend.
+			balance = state.getCurrentBalance() + this.machineBalanceDelta;
 		} else {
 			try {
 				Account atAccount = this.getATAccount();
