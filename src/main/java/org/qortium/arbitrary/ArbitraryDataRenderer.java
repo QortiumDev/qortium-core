@@ -486,14 +486,12 @@ public class ArbitraryDataRenderer {
             responseString = responseString.replace("%%SERVICE%%", escapeJavaScriptStringContents(service.toString()));
             responseString = responseString.replace("%%NAME%%", escapeJavaScriptStringContents(name));
             responseString = responseString.replace("%%IDENTIFIER%%", escapeJavaScriptStringContents(identifier));
-            // The loading splash needs concrete colours; fall back cosmetically
-            // when the host did not specify a theme/accent/uiStyle (see field defaults).
-            String splashTheme = (theme == null || theme.isEmpty()) ? "light" : theme;
-            String splashAccent = (accent == null || accent.isEmpty()) ? "green" : accent;
-            String splashUiStyle = (uiStyle == null || uiStyle.isEmpty()) ? "classic" : uiStyle;
-            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(splashTheme));
-            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(splashAccent));
-            responseString = responseString.replace("%%UISTYLE%%", escapeJavaScriptStringContents(splashUiStyle));
+            // Display settings are validated against their known values rather than
+            // escaped, so anything unrecognised becomes Home's default instead of
+            // reaching the page at all.
+            responseString = responseString.replace("%%THEME%%", validatedTheme(theme));
+            responseString = responseString.replace("%%ACCENT%%", validatedAccent(accent));
+            responseString = responseString.replace("%%UISTYLE%%", validatedUiStyle(uiStyle));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
@@ -522,14 +520,11 @@ public class ArbitraryDataRenderer {
                     service == null ? "" : escapeJavaScriptStringContents(service.name()));
             responseString = responseString.replace("%%SERVICES%%", browsableServicesJson());
 
-            // Same cosmetic fallbacks as the loading splash, so a bare gateway request
-            // (no Home-supplied display settings) still gets concrete colours.
-            String browseTheme = (theme == null || theme.isEmpty()) ? "light" : theme;
-            String browseAccent = (accent == null || accent.isEmpty()) ? "green" : accent;
-            String browseUiStyle = (uiStyle == null || uiStyle.isEmpty()) ? "classic" : uiStyle;
-            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(browseTheme));
-            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(browseAccent));
-            responseString = responseString.replace("%%UISTYLE%%", escapeJavaScriptStringContents(browseUiStyle));
+            // Same validation as the loading splash, so a bare gateway request (no
+            // Home-supplied display settings) still gets concrete colours.
+            responseString = responseString.replace("%%THEME%%", validatedTheme(theme));
+            responseString = responseString.replace("%%ACCENT%%", validatedAccent(accent));
+            responseString = responseString.replace("%%UISTYLE%%", validatedUiStyle(uiStyle));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show browse page: {}", e.getMessage());
@@ -581,6 +576,36 @@ public class ArbitraryDataRenderer {
             LOGGER.info("Error writing {} response", responseCode);
         }
         return response;
+    }
+
+    /*
+     * Display settings arrive as query parameters, so they are caller-controlled. They
+     * each have a small closed set of legal values, so they are validated against it and
+     * replaced with Home's default when unrecognised. That is stronger than escaping --
+     * an attacker-supplied value never reaches the page in any form -- and it keeps the
+     * templated values provably constant, which escaping alone cannot express.
+     */
+    private static final Set<String> VALID_THEMES = Set.of("light", "dark");
+
+    private static final Set<String> VALID_ACCENTS = Set.of(
+            "green", "blue", "orange", "purple", "red", "teal", "cyan", "pink", "yellow");
+
+    private static final Set<String> VALID_UI_STYLES = Set.of("classic", "modern", "fun");
+
+    private static String validatedFrom(Set<String> allowed, String value, String fallback) {
+        return value != null && allowed.contains(value) ? value : fallback;
+    }
+
+    private static String validatedTheme(String theme) {
+        return validatedFrom(VALID_THEMES, theme, "light");
+    }
+
+    private static String validatedAccent(String accent) {
+        return validatedFrom(VALID_ACCENTS, accent, "green");
+    }
+
+    private static String validatedUiStyle(String uiStyle) {
+        return validatedFrom(VALID_UI_STYLES, uiStyle, "classic");
     }
 
     private static String escapeJavaScriptStringContents(String value) {

@@ -619,4 +619,42 @@ public class ArbitraryDataRendererTests {
         }
     }
 
+
+    @Test
+    public void testBrowseResponseRejectsUnknownDisplaySettings() {
+        Exchange exchange = new Exchange("text/html");
+
+        // Every one of these is caller-controlled via a gateway query parameter.
+        ArbitraryDataRenderer.getBrowseResponse(exchange.response, null,
+                "dark\"</script><script>alert(1)</script>",
+                "green\"; alert(2); var x=\"",
+                "../../etc/passwd");
+
+        String rendered = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+
+        // Unrecognised values are replaced outright, so no part of them is templated in --
+        // not even in escaped form.
+        assertEquals(200, exchange.status);
+        assertTrue(rendered.contains("var theme = \"light\""));
+        assertTrue(rendered.contains("var accent = \"green\""));
+        assertTrue(rendered.contains("var uiStyle = \"classic\""));
+        assertFalse(rendered.contains("alert(1)"));
+        assertFalse(rendered.contains("alert(2)"));
+        assertFalse(rendered.contains("etc/passwd"));
+    }
+
+    @Test
+    public void testBrowseResponseKeepsRecognisedDisplaySettings() {
+        Exchange exchange = new Exchange("text/html");
+
+        ArbitraryDataRenderer.getBrowseResponse(exchange.response, null, "dark", "purple", "fun");
+
+        String rendered = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+
+        // Validation must not be so blunt that legitimate settings are discarded.
+        assertTrue(rendered.contains("var theme = \"dark\""));
+        assertTrue(rendered.contains("var accent = \"purple\""));
+        assertTrue(rendered.contains("var uiStyle = \"fun\""));
+    }
+
 }
