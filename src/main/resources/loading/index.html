@@ -513,21 +513,24 @@
           peerCountFetchInterval: 5000  // Fetch peer count every 5 seconds
         };
         
-        // Only show avatar/name for WEBSITE or APP services
-        if (service === "WEBSITE" || service === "APP") {
-          // Show header with avatar and name
+        // Show the publisher for every service. This used to be limited to
+        // WEBSITE and APP, but the gateway serves any service by direct link
+        // (and now lists them for browsing), so knowing who published the
+        // thing you are waiting on is useful whatever it is. The avatar is
+        // keyed on the name alone, so it resolves for any service; loadAvatar
+        // hides the container by itself when the account has no avatar.
+        if (name) {
           document.querySelector('.header-container').style.display = 'flex';
-          
+
           // Load avatar immediately (non-blocking)
           loadAvatar(name);
-          
+
           // Set username in UI
-          const usernameEl = document.getElementById("username");
-          if (usernameEl && name) {
+          var usernameEl = document.getElementById("username");
+          if (usernameEl) {
             usernameEl.textContent = name;
           }
         } else {
-          // Hide header for non-app/website services
           document.querySelector('.header-container').style.display = 'none';
         }
       }
@@ -806,7 +809,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     // rather than toward pure black/white.
     ctx.fillStyle = 'rgba(' + pageBgRgb + ',' + opts.repaintAlpha + ')';
     ctx.fillRect( 0, 0, w, h );
-    ctx.globalCompositeOperation = theme === "dark" ? 'lighter' : 'darker';
+    // 'darken', not 'darker': the latter was dropped from the canvas spec, so
+    // browsers silently ignore the assignment and leave 'source-over' in place.
+    // The light theme has therefore never applied its intended blend.
+    ctx.globalCompositeOperation = theme === "dark" ? 'lighter' : 'darken';
 
     if( lines.length < opts.count && Math.random() < opts.spawnChance )
       lines.push( new Line );
