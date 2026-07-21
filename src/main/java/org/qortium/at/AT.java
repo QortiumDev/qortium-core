@@ -1,5 +1,7 @@
 package org.qortium.at;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.ciyam.at.MachineState;
 import org.ciyam.at.Timestamp;
 import org.qortium.crypto.Crypto;
@@ -10,12 +12,15 @@ import org.qortium.repository.ATRepository;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.transaction.AtTransaction;
+import org.qortium.transaction.DeployAtTransaction;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 public class AT {
+
+	private static final Logger LOGGER = LogManager.getLogger(AT.class);
 
 	// Properties
 	private Repository repository;
@@ -127,6 +132,17 @@ public class AT {
 		}
 
 		byte[] stateData = state.toBytes();
+
+		// An AT whose runtime state outgrows the storage limit must not take the block down with it.
+		// Deploy-time validation bounds this for newly deployed ATs; this contains anything deployed
+		// before that bound existed. Skipping the round is deterministic across nodes; throwing is not.
+		if (stateData.length > DeployAtTransaction.MAX_AT_STATE_LENGTH) {
+			LOGGER.error(String.format("AT %s produced oversized state (%d bytes, limit %d) - skipping round",
+					atAddress, stateData.length, DeployAtTransaction.MAX_AT_STATE_LENGTH));
+			// this.atStateData stays null
+			return Collections.emptyList();
+		}
+
 		byte[] stateHash = Crypto.digest(stateData);
 
 		// Nothing happened?

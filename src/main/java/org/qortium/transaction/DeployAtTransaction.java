@@ -20,6 +20,7 @@ import org.qortium.transform.TransformationException;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Amounts;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
@@ -187,12 +188,50 @@ public class DeployAtTransaction extends Transaction {
 			byte[] atStateBytes = state.toBytes();
 			if (atStateBytes == null || atStateBytes.length > MAX_AT_STATE_LENGTH)
 				return ValidationResult.INVALID_CREATION_BYTES;
+
+			// The serialization above has empty stacks and zeroed registers, so it understates how large
+			// this AT's state can become once it runs. Bound the worst case too, otherwise an oversized
+			// state only surfaces at runtime, where it cannot be rejected without stalling block processing.
+			if (height >= BlockChain.getInstance().getAtPayoutSolvencyHeight()
+					&& worstCaseStateLength(atStateBytes.length, this.deployAtTransactionData.getCreationBytes()) > MAX_AT_STATE_LENGTH)
+				return ValidationResult.INVALID_CREATION_BYTES;
 		} catch (IllegalArgumentException e) {
 			// Not valid
 			return ValidationResult.INVALID_CREATION_BYTES;
 		}
 
 		return ValidationResult.OK;
+	}
+
+	/**
+	 * Upper bound on how large this AT's serialized state can grow at runtime.
+	 *
+	 * <p>Adds everything the empty deploy-time serialization omits: both stacks filled to the depth the
+	 * creation-bytes header declares, non-zero A and B registers, an on-error address, a sleep-until height
+	 * and a frozen balance. Stack page counts live in the header and are not otherwise bounded by
+	 * creation-bytes size, so a small AT can legally declare very deep stacks.
+	 */
+	private static int worstCaseStateLength(int emptyStateLength, byte[] creationBytes) {
+		if (creationBytes == null || creationBytes.length < MachineState.HEADER_LENGTH)
+			return emptyStateLength;
+
+		ByteBuffer header = ByteBuffer.wrap(creationBytes, 0, MachineState.HEADER_LENGTH);
+		header.getShort(); // version
+		header.getShort(); // reserved
+		header.getShort(); // numCodePages
+		header.getShort(); // numDataPages
+		int numCallStackPages = header.getShort() & 0xffff;
+		int numUserStackPages = header.getShort() & 0xffff;
+
+		long worstCase = (long) emptyStateLength
+				+ (long) numCallStackPages * MachineState.ADDRESS_SIZE
+				+ (long) numUserStackPages * MachineState.VALUE_SIZE
+				+ 2L * MachineState.AB_REGISTER_SIZE
+				+ MachineState.ADDRESS_SIZE  // onErrorAddress (settable via ERR_ADR)
+				+ MachineState.ADDRESS_SIZE  // sleepUntilHeight
+				+ MachineState.VALUE_SIZE;   // frozenBalance
+
+		return worstCase > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) worstCase;
 	}
 
 	@Override

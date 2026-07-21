@@ -381,7 +381,27 @@ public class ChainATAPI extends API {
 
 	@Override
 	public void payAmountToB(long amount, MachineState state) {
-		this.addPaymentToB(amount, this.atData.getAssetId(), state);
+		long assetId = this.atData.getAssetId();
+
+		if (this.isPayoutSolvencyEnforced()) {
+			// The VM clamps against its own current balance, which does not account for payouts already made
+			// this round via PAY_ASSET_AMOUNT_TO_B. Clamp again against what is genuinely still spendable.
+			// onFinished() subtracts the same pending total from the final balance, so value is conserved.
+			//
+			// Invariant: getSpendableAssetBalance() == the AT's true remaining balance at every point in a
+			// round. This holds only because the machine's currentBalance is touched by exactly the three
+			// stock CIYAM pay opcodes (PAY_TO_ADDRESS_IN_B, PAY_ALL_TO_ADDRESS_IN_B, PAY_PREVIOUS_TO_ADDRESS_IN_B),
+			// all of which route here, plus PAY_ASSET_AMOUNT_TO_B which records into pendingAssetPayouts.
+			// A future CIYAM library change that spends currentBalance by any other path would break this
+			// clamp silently — no test asserts the invariant directly, only the payout outcomes.
+			amount = Math.min(amount, this.getSpendableAssetBalance(assetId, state));
+			amount = this.roundToAssetPrecision(amount, assetId);
+
+			if (amount <= 0)
+				return;
+		}
+
+		this.addPaymentToB(amount, assetId, state);
 	}
 
 	@Override
@@ -611,6 +631,12 @@ public class ChainATAPI extends API {
 		}
 
 		long amount = Math.min(requestedAmount, this.getSpendableAssetBalance(assetId, state));
+
+		// Clamping to the spendable balance can leave a fractional quantity of an indivisible asset,
+		// which the check above cannot catch because it only sees the requested amount.
+		if (this.isPayoutSolvencyEnforced())
+			amount = this.roundToAssetPrecision(amount, assetId);
+
 		if (amount <= 0)
 			return 0L;
 
@@ -722,6 +748,36 @@ public class ChainATAPI extends API {
 		}
 	}
 
+	/** Whether this AT is executing at or beyond the payout-solvency feature trigger. */
+	private boolean isPayoutSolvencyEnforced() {
+		// During AT execution getCurrentBlockHeight() returns the parent block's height, since the block
+		// being built is not yet persisted. The trigger is expressed in terms of the block the AT runs in,
+		// so add 1 to match the deploy-time check in DeployAtTransaction and the other height gates.
+		return this.getCurrentBlockHeight() + 1 >= BlockChain.getInstance().getAtPayoutSolvencyHeight();
+	}
+
+	/**
+	 * Rounds {@code amount} down to a whole quantity for an indivisible asset, leaving divisible assets
+	 * untouched. Amounts are raw 1e8-scaled units regardless of divisibility, so an indivisible asset can
+	 * only legitimately move in multiples of {@link Amounts#MULTIPLIER}.
+	 */
+	private long roundToAssetPrecision(long amount, long assetId) {
+		if (amount <= 0)
+			return amount;
+
+		AssetData assetData;
+		try {
+			assetData = this.repository.getAssetRepository().fromAssetId(assetId);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch asset details?", e);
+		}
+
+		if (assetData == null || assetData.isDivisible())
+			return amount;
+
+		return amount - (amount % Amounts.MULTIPLIER);
+	}
+
 	private long getPendingPayout(long assetId) {
 		return this.pendingAssetPayouts.getOrDefault(assetId, 0L);
 	}
@@ -791,6 +847,15 @@ public class ChainATAPI extends API {
 	}
 
 	private void addPayment(String recipient, long amount, long assetId) {
+		// Last line of defence: every AT-generated payment funnels through here, and AT transactions are
+		// not validated by the block pipeline, so an invalid amount would reach the repository unchecked.
+		if (this.isPayoutSolvencyEnforced()) {
+			amount = this.roundToAssetPrecision(amount, assetId);
+
+			if (amount <= 0)
+				return;
+		}
+
 		long timestamp = this.getNextTransactionTimestamp();
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);

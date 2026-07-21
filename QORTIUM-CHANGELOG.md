@@ -34,6 +34,43 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-21 - fix(at): stop ATs overspending, paying fractions, or stalling blocks
+
+Closes three ways an automated transaction could take the whole chain down, all
+found while designing a simple giveaway contract.
+
+An AT can pay out in two different ways: the Qortium asset functions added for
+non-native working assets, and the older payment instructions inherited from the
+CIYAM automated-transaction design. Each kept its own idea of how much money the
+contract had left, and neither told the other. A contract that paid once through
+the first route and then again through the second spent the same balance twice.
+Nothing downstream caught it, because payments an AT generates are the one kind
+of transaction the block does not re-check before applying. The overspend was
+stopped only by the database refusing to write a negative balance — which means
+no funds were ever created, but the block carrying that contract could not be
+processed by anybody, and every node would have failed on it identically. Any
+account able to deploy a contract could have triggered it.
+
+Separately, a contract could pay out a fraction of an asset that was declared
+indivisible, because the whole-number check ran against the amount asked for
+rather than the smaller amount actually affordable, and the older payment
+instructions did not check at all.
+
+The third problem was size. A contract declares up front how much scratch space
+it wants, and that declaration was never checked against the storage limit —
+only the contract's size at the moment of deployment was, when the scratch space
+is still empty. A small contract could therefore declare a large working area,
+deploy successfully, fill it while running, and produce a record too big to
+store, again stalling block processing for everyone.
+
+All three are now fixed: the two payment routes share one view of the balance,
+every payout is rounded to a whole quantity for indivisible assets before it is
+issued, and the declared working area is measured at its fullest when the
+contract is deployed. As a safety net, a contract that somehow still outgrows
+the limit is skipped for that round instead of stopping the block. The payment
+and deployment changes alter agreed network rules, so they switch on at
+Previewnet block 70000; the safety net applies immediately.
+
 ### 2026-07-20 - feat(gateway): serve read-only QDN actions in gateway mode
 
 Lets apps viewed through a public gateway read from the network instead of
