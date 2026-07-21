@@ -34,6 +34,37 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-20 - feat(gateway): serve read-only QDN actions in gateway mode
+
+Lets apps viewed through a public gateway read from the network instead of
+failing. Apps ask the host they are running inside for data, and when that host
+is a gateway rather than the Qortium Home app, only five of those requests were
+answered. Everything else was refused with a message saying the action is not
+available in read-only gateway mode. That included plain lookups such as
+searching QDN for published resources, so the Recipes app, for example, could
+load its page but never list any recipes.
+
+The refusal was not protecting anything. The gateway already serves the same
+information over its ordinary web address, so an app could fetch it directly;
+the request simply had no handler behind it. This adds handlers for the reads
+that need nothing but public data: searching and listing QDN resources, reading
+a resource's metadata, status, properties and address, looking up names, account
+details and balances, reading group listings and membership, searching public
+chat messages, and reading account and resource ratings.
+
+Anything needing the signed-in account stays refused, because a gateway has no
+signed-in account and no access to anyone's keys: publishing, deleting,
+payments, joining or administering groups, voting, minting, private encrypted
+chat, and foreign-coin wallets. Requests aimed at a second network, such as the
+Qortal-side lookups and the external market-price feed, also stay refused,
+because a gateway can only reach its own address.
+
+One behavioural difference is worth knowing. In the Home app, requests such as
+"get balance" fall back to the signed-in account when no address is given. A
+gateway cannot make that assumption, so those requests now require the address
+to be stated. An app that relied on the fallback gets a clear message naming the
+missing value instead of a confusing failure from the node.
+
 ### 2026-07-20 - chore(release): prepare Core 1.5.1
 
 Marks the version for the next preview release. Since 1.5.0 the node gained

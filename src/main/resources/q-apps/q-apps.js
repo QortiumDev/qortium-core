@@ -1290,10 +1290,43 @@ window.addEventListener("beforeunload", () => {
   if (typeof window === "undefined") return;
   if (typeof window.qdnRequest === "function") return; // real Home bridge present
 
+  // Every action here resolves to a GET against this same origin, so the set
+  // stays bounded by the serving node's own publicApiPaths allowlist. Actions
+  // needing the logged-in account, signing, decryption, Home-local state, or a
+  // second origin are deliberately absent: the *_QORTAL_* twins target a
+  // separately configured Qortal node and GET_MARKET_PRICES calls an external
+  // price API, neither of which exists at this origin.
   const READ_ONLY_ACTIONS = [
     "FETCH_NODE_API",
+    "FETCH_QDN_RESOURCE",
+    "GET_ACCOUNT_DATA",
+    "GET_ACCOUNT_GROUPS",
+    "GET_ACCOUNT_GROUP_JOIN_REQUESTS",
+    "GET_ACCOUNT_NAMES",
+    "GET_ACCOUNT_RATING",
+    "GET_ACTIVE_CHATS",
+    "GET_ADMIN_GROUP_JOIN_REQUESTS",
+    "GET_BALANCE",
+    "GET_GROUP",
+    "GET_GROUP_BANS",
+    "GET_GROUP_JOIN_REQUESTS",
+    "GET_GROUP_KICKS",
+    "GET_GROUP_MEMBERS",
+    "GET_MEMBER_BANS",
+    "GET_MEMBER_KICKS",
+    "GET_NAME_DATA",
     "GET_NODE_STATUS",
+    "GET_QDN_RESOURCE_METADATA",
+    "GET_QDN_RESOURCE_PROPERTIES",
+    "GET_QDN_RESOURCE_STATUS",
+    "GET_QDN_RESOURCE_URL",
+    "GET_RESOURCE_RATING",
     "IS_USING_PUBLIC_NODE",
+    "LIST_GROUPS",
+    "LIST_QDN_RESOURCES",
+    "SEARCH_CHAT_MESSAGES",
+    "SEARCH_GROUPS",
+    "SEARCH_QDN_RESOURCES",
     "SHOW_ACTIONS",
     "WHICH_UI",
   ];
@@ -1386,37 +1419,534 @@ window.addEventListener("beforeunload", () => {
     });
   }
 
+  // --- Request value readers -------------------------------------------------
+  // Home accepts each parameter either at the top level or inside `payload`,
+  // and apps rely on both spellings. Mirror that lookup order exactly so the
+  // same app code works against Home and against a gateway.
+
+  function getRequestValue(request, key) {
+    const payload = request && typeof request.payload === "object" && request.payload !== null
+      ? request.payload
+      : {};
+    const fromPayload = payload[key];
+    return fromPayload !== undefined && fromPayload !== null ? fromPayload : request[key];
+  }
+
+  function getString(value) {
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" && isFinite(value)) return String(value);
+    return "";
+  }
+
+  function getInteger(value) {
+    if (typeof value === "number" && isFinite(value)) return Math.trunc(value);
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value.trim());
+      if (isFinite(parsed)) return Math.trunc(parsed);
+    }
+    return undefined;
+  }
+
+  function getBoolean(value) {
+    if (typeof value === "boolean") return value;
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return undefined;
+  }
+
+  function requiredString(request, key, label) {
+    const value = getString(getRequestValue(request, key));
+    if (!value) throw new Error(label + " is required.");
+    return value;
+  }
+
+  // A gateway has no logged-in account, so the actions Home defaults to the
+  // selected address must demand an explicit one. Without this they would
+  // silently resolve to "undefined" and return a confusing node error rather
+  // than saying what the app actually got wrong.
+  function requiredAddress(request, label) {
+    return requiredString(request, "address", label || "Address");
+  }
+
+  function requiredGroupId(request, minimumValue) {
+    const groupId = getInteger(
+      getRequestValue(request, "groupId") !== undefined
+        ? getRequestValue(request, "groupId")
+        : getRequestValue(request, "txGroupId"),
+    );
+    if (typeof groupId !== "number" || groupId < minimumValue)
+      throw new Error(
+        minimumValue > 0
+          ? "Group id must be a positive integer."
+          : "Group id must be a non-negative integer.",
+      );
+    return groupId;
+  }
+
+  function appendQueryValue(queryParams, key, value) {
+    if (Array.isArray(value)) {
+      for (const item of value) appendQueryValue(queryParams, key, item);
+      return;
+    }
+    if (typeof value === "boolean" || typeof value === "number") {
+      queryParams.append(key, String(value));
+      return;
+    }
+    const stringValue = getString(value);
+    if (stringValue) queryParams.append(key, stringValue);
+  }
+
+  function appendFields(queryParams, request, queryFields) {
+    for (const requestKey of Object.keys(queryFields))
+      appendQueryValue(queryParams, queryFields[requestKey], getRequestValue(request, requestKey));
+  }
+
+  function withQuery(basePath, queryParams) {
+    const queryString = queryParams.toString();
+    return queryString ? basePath + "?" + queryString : basePath;
+  }
+
+  // --- Fetch helpers ---------------------------------------------------------
+
+  function fetchPayload(request, apiPath) {
+    return fetchNodeApi({
+      action: "FETCH_NODE_API",
+      path: apiPath,
+      maxBytes: getRequestValue(request, "maxBytes"),
+      timeout: getRequestValue(request, "timeout"),
+    }).then((result) => {
+      if (!result.ok)
+        throw new Error(
+          result.body || "Qortium node request failed with HTTP " + result.status + ".",
+        );
+      return result.data;
+    });
+  }
+
+  function fetchOptionalPayload(request, apiPath, notFoundValue) {
+    return fetchNodeApi({
+      action: "FETCH_NODE_API",
+      path: apiPath,
+      maxBytes: getRequestValue(request, "maxBytes"),
+      timeout: getRequestValue(request, "timeout"),
+    }).then((result) => {
+      if (result.status === 404) return notFoundValue;
+      if (!result.ok)
+        throw new Error(
+          result.body || "Qortium node request failed with HTTP " + result.status + ".",
+        );
+      return result.data;
+    });
+  }
+
+  // --- QDN resource paths ----------------------------------------------------
+
+  // A QDN service is a bare enum-style token that gets concatenated into the
+  // request path, so validate its shape rather than relying on encoding alone.
+  // Unvalidated, a value such as "../admin" is normalized by sanitizeReadPath()
+  // into an entirely different endpoint family, and one containing "?" splices
+  // an attacker-controlled query onto the request.
+  function getServiceToken(value) {
+    const service = getString(value).toUpperCase();
+    if (!service) return "";
+    if (!/^[A-Z0-9_]+$/.test(service)) throw new Error("QDN resource service is invalid.");
+    return service;
+  }
+
+  function getResourceRequest(request) {
+    const service = getServiceToken(getRequestValue(request, "service"));
+    const name = getString(getRequestValue(request, "name"));
+    const identifier = getString(getRequestValue(request, "identifier"));
+    const resourcePath =
+      getString(getRequestValue(request, "path")) || getString(getRequestValue(request, "filepath"));
+
+    if (!service) throw new Error("QDN resource service is required.");
+    if (!name) throw new Error("QDN resource name is required.");
+
+    return {
+      service: service,
+      name: name,
+      identifier: identifier || undefined,
+      path: resourcePath,
+    };
+  }
+
+  function resourceIdentifierPath(resource) {
+    return resource.identifier ? "/" + encodeURIComponent(resource.identifier) : "";
+  }
+
+  function buildResourcesPath(request, pathBase) {
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, {
+      default: "default",
+      description: "description",
+      exactMatchNames: "exactmatchnames",
+      excludeBlocked: "excludeblocked",
+      followedOnly: "followedonly",
+      identifier: "identifier",
+      includeMetadata: "includemetadata",
+      includeStatus: "includestatus",
+      keywords: "keywords",
+      limit: "limit",
+      mode: "mode",
+      name: "name",
+      nameListFilter: "namefilter",
+      names: "name",
+      offset: "offset",
+      prefix: "prefix",
+      query: "query",
+      reverse: "reverse",
+      service: "service",
+      title: "title",
+    });
+    return withQuery(pathBase, queryParams);
+  }
+
+  function buildResourceStatusPath(request) {
+    const resource = getResourceRequest(request);
+    const queryParams = new URLSearchParams();
+    const build = getBoolean(getRequestValue(request, "build"));
+    if (typeof build === "boolean") queryParams.set("build", String(build));
+    return withQuery(
+      "/arbitrary/resource/status/" +
+        encodeURIComponent(resource.service) +
+        "/" +
+        encodeURIComponent(resource.name) +
+        resourceIdentifierPath(resource),
+      queryParams,
+    );
+  }
+
+  function buildResourcePropertiesPath(request) {
+    const resource = getResourceRequest(request);
+    return (
+      "/arbitrary/resource/properties/" +
+      encodeURIComponent(resource.service) +
+      "/" +
+      encodeURIComponent(resource.name) +
+      "/" +
+      encodeURIComponent(resource.identifier || "default")
+    );
+  }
+
+  function buildResourceMetadataPath(request) {
+    const resource = getResourceRequest(request);
+    return (
+      "/arbitrary/metadata/" +
+      encodeURIComponent(resource.service) +
+      "/" +
+      encodeURIComponent(resource.name) +
+      "/" +
+      encodeURIComponent(resource.identifier || "default")
+    );
+  }
+
+  function buildFetchResourcePath(request) {
+    const resource = getResourceRequest(request);
+    const queryParams = new URLSearchParams();
+    if (resource.path) queryParams.set("filepath", resource.path);
+    for (const key of ["encoding", "rebuild", "async"]) {
+      const value = getRequestValue(request, key);
+      if (typeof value === "boolean" || typeof value === "number" || typeof value === "string")
+        queryParams.set(key, String(value));
+    }
+    return withQuery(
+      "/arbitrary/" +
+        encodeURIComponent(resource.service) +
+        "/" +
+        encodeURIComponent(resource.name) +
+        resourceIdentifierPath(resource),
+      queryParams,
+    );
+  }
+
+  function encodeResourcePath(resourcePath) {
+    return resourcePath
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+  }
+
+  // Home resolves this against its configured node; on a gateway the serving
+  // origin IS the node, so the render URL is same-origin by construction.
+  function getResourceUrl(request) {
+    const resource = getResourceRequest(request);
+    return fetchPayload(request, buildResourceStatusPath(request)).then((status) => {
+      if (!status || typeof status !== "object" || !status.status || status.status === "NOT_PUBLISHED")
+        throw new Error("Resource does not exist.");
+
+      const rawPath = resource.path || "";
+      const queryIndex = rawPath.indexOf("?");
+      const pathOnly = queryIndex === -1 ? rawPath : rawPath.slice(0, queryIndex);
+      const queryString = queryIndex === -1 ? "" : rawPath.slice(queryIndex + 1);
+      const encodedPath = encodeResourcePath(pathOnly);
+
+      return withQuery(
+        window.location.origin +
+          "/render/" +
+          encodeURIComponent(resource.service) +
+          "/" +
+          encodeURIComponent(resource.name) +
+          resourceIdentifierPath(resource) +
+          (encodedPath ? "/" + encodedPath : ""),
+        new URLSearchParams(queryString),
+      );
+    });
+  }
+
+  // --- Group / chat paths ----------------------------------------------------
+
+  function buildGroupsPath(request) {
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, { limit: "limit", offset: "offset", reverse: "reverse" });
+    return withQuery("/groups", queryParams);
+  }
+
+  function buildSearchGroupsPath(request) {
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, {
+      limit: "limit",
+      offset: "offset",
+      prefixOnly: "prefixOnly",
+      query: "query",
+      reverse: "reverse",
+      visibility: "visibility",
+    });
+    return withQuery("/groups/search", queryParams);
+  }
+
+  function buildGroupMembersPath(request) {
+    const groupId = requiredGroupId(request, 1);
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, {
+      limit: "limit",
+      offset: "offset",
+      onlyAdmins: "onlyAdmins",
+      reverse: "reverse",
+    });
+    return withQuery("/groups/members/" + encodeURIComponent(String(groupId)), queryParams);
+  }
+
+  function buildGroupKicksPath(request) {
+    const groupId = requiredGroupId(request, 1);
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, {
+      address: "address",
+      before: "before",
+      after: "after",
+      limit: "limit",
+      offset: "offset",
+      reverse: "reverse",
+    });
+    return withQuery("/groups/kicks/" + encodeURIComponent(String(groupId)), queryParams);
+  }
+
+  function buildMemberKicksPath(request) {
+    const queryParams = new URLSearchParams({ address: requiredAddress(request) });
+    appendFields(queryParams, request, {
+      groupId: "groupId",
+      before: "before",
+      after: "after",
+      limit: "limit",
+      offset: "offset",
+      reverse: "reverse",
+    });
+    return "/groups/kicks/member?" + queryParams.toString();
+  }
+
+  function buildMemberBansPath(request) {
+    const queryParams = new URLSearchParams({ address: requiredAddress(request) });
+    appendFields(queryParams, request, { limit: "limit", offset: "offset", reverse: "reverse" });
+    return "/groups/bans/member?" + queryParams.toString();
+  }
+
+  function buildAccountGroupsPath(request) {
+    const address = requiredAddress(request);
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, { adminOnly: "adminOnly", ownerOnly: "ownerOnly" });
+    return withQuery("/groups/member/" + encodeURIComponent(address), queryParams);
+  }
+
+  function buildSearchChatMessagesPath(request) {
+    const queryParams = new URLSearchParams();
+    const groupId = getInteger(
+      getRequestValue(request, "groupId") !== undefined
+        ? getRequestValue(request, "groupId")
+        : getRequestValue(request, "txGroupId"),
+    );
+    if (typeof groupId === "number") {
+      if (groupId < 0) throw new Error("Group id must be a non-negative integer.");
+      queryParams.set("txGroupId", String(groupId));
+    }
+    appendFields(queryParams, request, {
+      after: "after",
+      before: "before",
+      chatReference: "chatreference",
+      encoding: "encoding",
+      hasChatReference: "haschatreference",
+      involving: "involving",
+      limit: "limit",
+      offset: "offset",
+      reverse: "reverse",
+      sender: "sender",
+    });
+    return "/chat/messages?" + queryParams.toString();
+  }
+
+  function buildActiveChatsPath(request) {
+    const address = requiredAddress(request);
+    const queryParams = new URLSearchParams();
+    appendFields(queryParams, request, {
+      encoding: "encoding",
+      hasChatReference: "haschatreference",
+    });
+    return withQuery("/chat/active/" + encodeURIComponent(address), queryParams);
+  }
+
+  // --- Ratings ---------------------------------------------------------------
+
+  function normalizeRatingSummary(summary) {
+    if (summary === null || summary === undefined) return null;
+    if (Array.isArray(summary) && summary.length === 0) return null;
+    if (typeof summary === "object" && Object.keys(summary).length === 0) return null;
+    return summary;
+  }
+
+  // `rater` defaults to the selected account in Home; a gateway must be given
+  // one explicitly.
+  function getResourceRating(request) {
+    const service = getServiceToken(getRequestValue(request, "service"));
+    const name = requiredString(request, "name", "QDN resource name");
+    const identifier = getString(getRequestValue(request, "identifier")) || "default";
+    const rater = requiredString(request, "rater", "Rater address");
+    if (!service) throw new Error("QDN resource service is required.");
+
+    const summaryQuery = new URLSearchParams({
+      service: service,
+      name: name,
+      identifier: identifier,
+    });
+    const ratingQuery = new URLSearchParams({
+      service: service,
+      name: name,
+      identifier: identifier,
+      rater: rater,
+    });
+
+    return Promise.all([
+      fetchOptionalPayload(request, "/resource-ratings/summary?" + summaryQuery.toString(), null),
+      fetchOptionalPayload(request, "/resource-ratings/rating?" + ratingQuery.toString(), null),
+    ]).then((results) => ({
+      action: "GET_RESOURCE_RATING",
+      service: service,
+      name: name,
+      identifier: identifier,
+      rater: rater,
+      summary: normalizeRatingSummary(results[0]),
+      rating: results[1] === undefined ? null : results[1],
+    }));
+  }
+
+  function getAccountRating(request) {
+    const target = requiredString(request, "target", "Target address");
+    const category = getString(getRequestValue(request, "category"));
+    const rater = requiredString(request, "rater", "Rater address");
+
+    const summaryQuery = new URLSearchParams({ target: target });
+    const ratingQuery = new URLSearchParams({ target: target, rater: rater });
+    if (category) {
+      summaryQuery.set("category", category);
+      ratingQuery.set("category", category);
+    }
+
+    return Promise.all([
+      fetchOptionalPayload(request, "/account-ratings/summary?" + summaryQuery.toString(), null),
+      fetchOptionalPayload(request, "/account-ratings?" + ratingQuery.toString(), []),
+    ]).then((results) => ({
+      action: "GET_ACCOUNT_RATING",
+      target: target,
+      category: category,
+      rater: rater,
+      summary: normalizeRatingSummary(results[0]),
+      ratings: Array.isArray(results[1]) ? results[1] : [],
+    }));
+  }
+
+  // --- Dispatch --------------------------------------------------------------
+
+  // Each entry returns either a node API path (fetched and unwrapped) or a
+  // promise, so adding a plain read stays a one-line change.
+  const PATH_ACTIONS = {
+    FETCH_QDN_RESOURCE: buildFetchResourcePath,
+    GET_ACCOUNT_DATA: (request) => "/addresses/" + encodeURIComponent(requiredAddress(request)),
+    GET_ACCOUNT_GROUPS: buildAccountGroupsPath,
+    GET_ACCOUNT_GROUP_JOIN_REQUESTS: (request) =>
+      "/groups/joinrequests/address/" + encodeURIComponent(requiredAddress(request)),
+    GET_ACCOUNT_NAMES: (request) =>
+      "/names/address/" + encodeURIComponent(requiredAddress(request)),
+    GET_ACTIVE_CHATS: buildActiveChatsPath,
+    GET_ADMIN_GROUP_JOIN_REQUESTS: (request) =>
+      "/groups/joinrequests/admin/" + encodeURIComponent(requiredAddress(request)),
+    GET_BALANCE: (request) =>
+      "/addresses/balance/" + encodeURIComponent(requiredAddress(request)),
+    GET_GROUP: (request) => "/groups/" + encodeURIComponent(String(requiredGroupId(request, 1))),
+    GET_GROUP_BANS: (request) =>
+      "/groups/bans/" + encodeURIComponent(String(requiredGroupId(request, 1))),
+    GET_GROUP_JOIN_REQUESTS: (request) =>
+      "/groups/joinrequests/" + encodeURIComponent(String(requiredGroupId(request, 1))),
+    GET_GROUP_KICKS: buildGroupKicksPath,
+    GET_GROUP_MEMBERS: buildGroupMembersPath,
+    GET_MEMBER_BANS: buildMemberBansPath,
+    GET_MEMBER_KICKS: buildMemberKicksPath,
+    GET_NAME_DATA: (request) =>
+      "/names/" + encodeURIComponent(requiredString(request, "name", "Name")),
+    GET_NODE_STATUS: () => "/admin/status",
+    GET_QDN_RESOURCE_METADATA: buildResourceMetadataPath,
+    GET_QDN_RESOURCE_PROPERTIES: buildResourcePropertiesPath,
+    GET_QDN_RESOURCE_STATUS: buildResourceStatusPath,
+    LIST_GROUPS: buildGroupsPath,
+    LIST_QDN_RESOURCES: (request) => buildResourcesPath(request, "/arbitrary/resources"),
+    SEARCH_CHAT_MESSAGES: buildSearchChatMessagesPath,
+    SEARCH_GROUPS: buildSearchGroupsPath,
+    SEARCH_QDN_RESOURCES: (request) =>
+      buildResourcesPath(request, "/arbitrary/resources/search"),
+  };
+
+  const PROMISE_ACTIONS = {
+    FETCH_NODE_API: fetchNodeApi,
+    GET_ACCOUNT_RATING: getAccountRating,
+    GET_QDN_RESOURCE_URL: getResourceUrl,
+    GET_RESOURCE_RATING: getResourceRating,
+    IS_USING_PUBLIC_NODE: () => Promise.resolve(true),
+    SHOW_ACTIONS: () => Promise.resolve(READ_ONLY_ACTIONS.slice()),
+    WHICH_UI: () => Promise.resolve("QORTIUM_GATEWAY"),
+  };
+
   function handleReadOnlyRequest(request) {
     if (!request || typeof request.action !== "string")
       return Promise.reject(new Error("QDN requests must include an action."));
 
-    switch (request.action.toUpperCase()) {
-      case "SHOW_ACTIONS":
-        return Promise.resolve(READ_ONLY_ACTIONS.slice());
-      case "WHICH_UI":
-        return Promise.resolve("QORTIUM_GATEWAY");
-      case "IS_USING_PUBLIC_NODE":
-        return Promise.resolve(true);
-      case "FETCH_NODE_API":
-        return fetchNodeApi(request);
-      case "GET_NODE_STATUS":
-        return fetchNodeApi({ action: "FETCH_NODE_API", path: "/admin/status" }).then(
-          (result) => {
-            if (!result.ok)
-              throw new Error(
-                result.body || "Node status failed with HTTP " + result.status + ".",
-              );
-            return result.data;
-          },
-        );
-      default:
-        return Promise.reject(
-          new Error(
-            request.action +
-              " is not available in read-only gateway mode. Interactive features require the Qortium Home app.",
-          ),
-        );
+    const action = request.action.toUpperCase();
+
+    try {
+      if (Object.prototype.hasOwnProperty.call(PROMISE_ACTIONS, action))
+        return Promise.resolve(PROMISE_ACTIONS[action](request));
+
+      if (Object.prototype.hasOwnProperty.call(PATH_ACTIONS, action))
+        return fetchPayload(request, PATH_ACTIONS[action](request));
+    } catch (e) {
+      // Parameter validation throws synchronously; surface it as a rejection so
+      // callers only ever have one failure path to handle.
+      return Promise.reject(e);
     }
+
+    return Promise.reject(
+      new Error(
+        request.action +
+          " is not available in read-only gateway mode. Interactive features require the Qortium Home app.",
+      ),
+    );
   }
 
   window.qdnRequest = function (request) {
