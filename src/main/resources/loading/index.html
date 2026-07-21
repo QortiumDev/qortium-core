@@ -4,6 +4,103 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Loading - QDN</title>
+
+  <script>
+    // Display settings arrive as query params on the render URL (see
+    // RenderResource.getIndexByName) and are substituted in server-side. Home
+    // always sends them; a bare gateway request will not, hence the fallbacks
+    // below, which mirror Home's own defaults (DEFAULT_RESOLVED_THEME 'light',
+    // DEFAULT_ACCENT 'green', DEFAULT_UI_STYLE 'classic').
+    var theme = "%%THEME%%" === "dark" ? "dark" : "light";
+    var accent = "%%ACCENT%%";
+    var uiStyle = "%%UISTYLE%%";
+
+    // Base + strong accent pairs, copied from qortium-home src/styles.css so the
+    // splash matches the shell exactly. Dark-theme accents are light tints, not
+    // darkened versions -- they sit on a dark page background. The soft/ring/glow
+    // tints Home defines are just the base colour at low alpha, so they are
+    // derived at runtime from --accent-rgb rather than duplicated here.
+    var ACCENTS = {
+      green:  { light: ["#21824a", "#196a3a"], dark: ["#87d99b", "#6fcd87"] },
+      blue:   { light: ["#2368cf", "#1e5ec3"], dark: ["#8abefe", "#7aaef7"] },
+      orange: { light: ["#de8b23", "#bf6e0f"], dark: ["#f1b16d", "#eaa257"] },
+      purple: { light: ["#7b44da", "#622fbd"], dark: ["#caa2ff", "#b58dff"] },
+      red:    { light: ["#c63838", "#b63232"], dark: ["#f19a9a", "#dd7a7a"] },
+      teal:   { light: ["#17a398", "#12857a"], dark: ["#6ed9d1", "#5fc3bc"] },
+      cyan:   { light: ["#1298d8", "#0f79aa"], dark: ["#88d2ff", "#79c5f5"] },
+      pink:   { light: ["#bd3673", "#bd3673"], dark: ["#f8a7cf", "#f58cbf"] },
+      yellow: { light: ["#d6a828", "#bd8f20"], dark: ["#f4cb67", "#edbf53"] }
+    };
+
+    // Page background and text colours per UI style, also copied from
+    // qortium-home src/styles.css -- classic from :root / :root[data-theme=dark],
+    // modern from [data-ui="modern"], fun from [data-ui="fun"]. The accent
+    // system is deliberately shared across all three styles in Home (no
+    // [data-ui] rule overrides --color-accent), so only these surface and text
+    // colours vary here; ACCENTS above stays style-independent.
+    var STYLES = {
+      classic: {
+        light: { pageBg: "#f7f5ef", text: "#18201f", textSecondary: "#44504e" },
+        dark:  { pageBg: "#0e1111", text: "#f4f0e8", textSecondary: "#cbd5d5" }
+      },
+      modern: {
+        light: { pageBg: "#F2EFE6", text: "#0D0D0D", textSecondary: "#6B6B6B" },
+        dark:  { pageBg: "#111318", text: "#E4E8F0", textSecondary: "#8892A4" }
+      },
+      fun: {
+        light: { pageBg: "#eaf4ff", text: "#17201d", textSecondary: "#3f4e49" },
+        dark:  { pageBg: "#07100f", text: "#fff9ed", textSecondary: "#d5dfda" }
+      }
+    };
+
+    if (!Object.prototype.hasOwnProperty.call(ACCENTS, accent)) {
+      accent = "green";
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(STYLES, uiStyle)) {
+      uiStyle = "classic";
+    }
+
+    var hexToRgb = function (hex) {
+      var int = parseInt(hex.slice(1), 16);
+      return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+    };
+
+    // Hue only -- the particle field picks its own saturation/lightness so it
+    // stays legible against both page backgrounds.
+    var rgbToHue = function (rgb) {
+      var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+      var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+      if (d === 0) return 0;
+      var h;
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h = Math.round(h * 60);
+      return h < 0 ? h + 360 : h;
+    };
+
+    var palette = ACCENTS[accent][theme];
+    var accentRgb = hexToRgb(palette[0]);
+    var themeColors = STYLES[uiStyle][theme];
+
+    var root = document.documentElement;
+    root.setAttribute("data-theme", theme);
+    root.setAttribute("data-accent", accent);
+    // Same attribute name Home uses (see qortium-home src/displaySettings.ts),
+    // so the CSS below can key off it exactly as the shell's stylesheet does.
+    root.setAttribute("data-ui", uiStyle);
+    root.style.setProperty("--accent", palette[0]);
+    root.style.setProperty("--accent-strong", palette[1]);
+    root.style.setProperty("--accent-rgb", accentRgb.join(", "));
+    root.style.setProperty("--page-bg", themeColors.pageBg);
+    root.style.setProperty("--text", themeColors.text);
+    root.style.setProperty("--text-secondary", themeColors.textSecondary);
+
+    // Consumed by the particle field further down the page.
+    var accentHue = rgbToHue(accentRgb);
+  </script>
+
   <style>
     * {
       margin: 0;
@@ -12,10 +109,61 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-family: var(--font-stack);
       overflow: hidden;
       position: relative;
       min-height: 100vh;
+      background: var(--page-bg);
+      color: var(--text);
+    }
+
+    /* Panel surface, tinted per theme. The accent-driven values all derive from
+       --accent / --accent-rgb set by the palette script in <head>. */
+    :root {
+      --panel-bg: rgba(255, 255, 255, 0.95);
+      --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.15),
+                      0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+      --text-tertiary: #7c8583;
+      /* Classic uses the platform UI stack; modern and fun override it below. */
+      --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      --panel-radius: 24px;
+      --panel-radius-mobile: 20px;
+    }
+
+    :root[data-theme="dark"] {
+      --panel-bg: rgba(24, 28, 28, 0.95);
+      --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+                      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+      --text-tertiary: #8b9694;
+    }
+
+    /* UI style overrides. Kept to the two cheapest, highest-signal differences
+       from Home's own [data-ui] blocks -- the typeface, and (for fun) its
+       hand-drawn irregular radius plus hard offset shadow. Declared after the
+       dark block so a style wins at equal specificity for both themes.
+
+       Note the typefaces will usually NOT match Home here. Home bundles Inter
+       and Lexend as local @font-face and Comic Neue and Fredoka via
+       @fontsource, but this splash is a standalone page served from Core,
+       which ships no fonts at all -- so these resolve only if the font happens
+       to be installed on the system, and otherwise fall back down the stack.
+       Naming them is still worth it: it costs nothing and matches when it can.
+       Bundling fonts into Core purely for the splash is not worth the jar
+       size, so the radius, shadow and colour differences carry the style. */
+    :root[data-ui="modern"] {
+      --font-stack: "Inter", ui-sans-serif, system-ui, sans-serif;
+    }
+
+    :root[data-ui="fun"] {
+      --fun-ink: #07100c;
+      --font-stack: "Comic Neue", "Trebuchet MS", ui-sans-serif, sans-serif;
+      --panel-radius: 22px 9px 19px 10px / 10px 19px 9px 22px;
+      --panel-radius-mobile: 14px 7px 12px 8px / 8px 12px 7px 14px;
+      --panel-shadow: 5px 5px 0 var(--fun-ink);
+    }
+
+    :root[data-theme="dark"][data-ui="fun"] {
+      --fun-ink: #020504;
     }
 
     canvas {
@@ -41,15 +189,14 @@
     }
 
     #panel {
-      background: rgba(255, 255, 255, 0.95);
+      background: var(--panel-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      border-radius: 24px;
+      border-radius: var(--panel-radius);
       padding: 40px;
       max-width: 480px;
       width: 100%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15),
-                  0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+      box-shadow: var(--panel-shadow);
       text-align: center;
       animation: slideUp 0.5s ease-out;
     }
@@ -90,21 +237,21 @@
       height: 100%;
       border-radius: 50%;
       object-fit: cover;
-      border: 3px solid rgba(3, 169, 244, 0.2);
+      border: 3px solid rgba(var(--accent-rgb), 0.2);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     #username {
       font-size: 24px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: var(--text);
       letter-spacing: -0.3px;
     }
 
     #description {
       font-size: 15px;
       line-height: 1.6;
-      color: #666;
+      color: var(--text-secondary);
       margin-bottom: 28px;
     }
 
@@ -120,8 +267,8 @@
     .spinner {
       width: 48px;
       height: 48px;
-      border: 4px solid rgba(3, 169, 244, 0.1);
-      border-top-color: #03a9f4;
+      border: 4px solid rgba(var(--accent-rgb), 0.1);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -136,7 +283,7 @@
       display: block;
       font-size: 16px;
       font-weight: 500;
-      color: #03a9f4;
+      color: var(--accent);
       margin-bottom: 12px;
       min-height: 24px;
       transition: color 0.3s ease;
@@ -149,7 +296,7 @@
     #progress {
       display: block;
       font-size: 14px;
-      color: #999;
+      color: var(--text-tertiary);
       font-weight: 500;
       min-height: 20px;
     }
@@ -157,7 +304,7 @@
     .progress-bar-container {
       width: 100%;
       height: 4px;
-      background: rgba(3, 169, 244, 0.1);
+      background: rgba(var(--accent-rgb), 0.1);
       border-radius: 2px;
       margin: 20px 0 16px;
       overflow: hidden;
@@ -166,7 +313,7 @@
 
     .progress-bar {
       height: 100%;
-      background: linear-gradient(90deg, #03a9f4, #0288d1);
+      background: linear-gradient(90deg, var(--accent), var(--accent-strong));
       border-radius: 2px;
       transition: width 0.3s ease;
       width: 0%;
@@ -180,60 +327,57 @@
     #peer-info {
       display: none;
       font-size: 13px;
-      color: #666;
+      color: var(--text-secondary);
       margin-top: 12px;
       padding: 10px 14px;
-      background: rgba(3, 169, 244, 0.06);
+      background: rgba(var(--accent-rgb), 0.06);
       border-radius: 10px;
-      border: 1px solid rgba(3, 169, 244, 0.15);
+      border: 1px solid rgba(var(--accent-rgb), 0.15);
       transition: all 0.3s ease;
       text-align: center;
     }
 
     #peer-info .peer-count {
       font-weight: 600;
-      color: #03a9f4;
+      color: var(--accent);
       font-size: 14px;
     }
 
-    /* Dark theme support */
-    body.dark-theme #panel {
-      background: rgba(30, 30, 30, 0.95);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
-                  0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    /* Dark theme: panel surface, text and accent all come from the custom
+       properties above, so only the tints that genuinely differ in dark mode
+       (Home uses slightly stronger alphas there) need restating. */
+    :root[data-theme="dark"] .avatar {
+      border-color: rgba(var(--accent-rgb), 0.3);
     }
 
-    body.dark-theme #username {
-      color: #f5f5f5;
+    :root[data-theme="dark"] #peer-info {
+      background: rgba(var(--accent-rgb), 0.1);
+      border-color: rgba(var(--accent-rgb), 0.25);
     }
 
-    body.dark-theme #description {
-      color: #aaa;
-    }
+    /* Respect the OS reduced-motion preference: the particle field and the
+       panel entrance are decorative, and this page can stay open for minutes
+       while chunks arrive. The spinner keeps a slow rotation so the page still
+       reads as "working" rather than frozen. */
+    @media (prefers-reduced-motion: reduce) {
+      canvas {
+        display: none;
+      }
 
-    body.dark-theme #progress {
-      color: #777;
-    }
+      #panel {
+        animation: none;
+      }
 
-    body.dark-theme .avatar {
-      border-color: rgba(3, 169, 244, 0.3);
-    }
-
-    body.dark-theme #peer-info {
-      color: #aaa;
-      background: rgba(3, 169, 244, 0.1);
-      border-color: rgba(3, 169, 244, 0.25);
-    }
-
-    body.dark-theme #peer-info .peer-count {
-      color: #4fc3f7;
+      .spinner {
+        animation-duration: 3s;
+      }
     }
 
     /* Mobile optimization */
     @media (max-width: 600px) {
       #panel {
         padding: 32px 24px;
-        border-radius: 20px;
+        border-radius: var(--panel-radius-mobile);
       }
 
       #username {
@@ -376,21 +520,24 @@
           peerCountFetchInterval: 5000  // Fetch peer count every 5 seconds
         };
         
-        // Only show avatar/name for WEBSITE or APP services
-        if (service === "WEBSITE" || service === "APP") {
-          // Show header with avatar and name
+        // Show the publisher for every service. This used to be limited to
+        // WEBSITE and APP, but the gateway serves any service by direct link
+        // (and now lists them for browsing), so knowing who published the
+        // thing you are waiting on is useful whatever it is. The avatar is
+        // keyed on the name alone, so it resolves for any service; loadAvatar
+        // hides the container by itself when the account has no avatar.
+        if (name) {
           document.querySelector('.header-container').style.display = 'flex';
-          
+
           // Load avatar immediately (non-blocking)
           loadAvatar(name);
-          
+
           // Set username in UI
-          const usernameEl = document.getElementById("username");
-          if (usernameEl && name) {
+          var usernameEl = document.getElementById("username");
+          if (usernameEl) {
             usernameEl.textContent = name;
           }
         } else {
-          // Hide header for non-app/website services
           document.querySelector('.header-container').style.display = 'none';
         }
       }
@@ -618,13 +765,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <canvas id="c"></canvas>
 
 <script>
-  var theme = "%%THEME%%";
-  var accent = "%%ACCENT%%";
-
-  // Apply theme class to body for consistent styling
-  if (theme === "dark") {
-    document.body.classList.add('dark-theme');
-  }
+  // theme, accent, themeColors, hexToRgb and accentHue are all set by the
+  // palette script in <head>; the field only adds its own geometry on top.
+  var pageBgRgb = hexToRgb(themeColors.pageBg).join(',');
 
   var w = c.width = window.innerWidth,
       h = c.height = window.innerHeight,
@@ -649,7 +792,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         cx: w / 2,
         cy: h / 2,
         repaintAlpha: .04,
-        startColor: 210,
+        startColor: accentHue,
         hueChange: 0.001
       },
 
@@ -659,11 +802,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       dieY = h / 2 / opts.len,
       baseRad = Math.PI * 2 / 6;
 
-  if (theme === "dark") {
-    ctx.fillStyle = 'black';
-  } else {
-    ctx.fillStyle = 'white';
-  }
+  ctx.fillStyle = themeColors.pageBg;
   ctx.fillRect( 0, 0, w, h );
 
   function loop() {
@@ -673,15 +812,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     ctx.globalCompositeOperation = 'source-over';
     ctx.shadowBlur = 0;
 
-    if (theme === "dark") {
-      ctx.fillStyle = 'rgba(0,0,0,alp)'.replace('alp', opts.repaintAlpha);
-      ctx.fillRect( 0, 0, w, h );
-      ctx.globalCompositeOperation = 'lighter';
-    } else {
-      ctx.fillStyle = 'rgba(230,230,230,alp)'.replace('alp', opts.repaintAlpha);
-      ctx.fillRect( 0, 0, w, h );
-      ctx.globalCompositeOperation = 'darker';
-    }
+    // Fade toward the page background so the field dissolves into the shell
+    // rather than toward pure black/white.
+    ctx.fillStyle = 'rgba(' + pageBgRgb + ',' + opts.repaintAlpha + ')';
+    ctx.fillRect( 0, 0, w, h );
+    // 'darken', not 'darker': the latter was dropped from the canvas spec, so
+    // browsers silently ignore the assignment and leave 'source-over' in place.
+    // The light theme has therefore never applied its intended blend.
+    ctx.globalCompositeOperation = theme === "dark" ? 'lighter' : 'darken';
 
     if( lines.length < opts.count && Math.random() < opts.spawnChance )
       lines.push( new Line );
@@ -738,12 +876,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       ctx.fillRect( opts.cx + ( this.x + x ) * opts.len + Math.random() * opts.sparkDist * ( Math.random() < .5 ? 1 : -1 ) - opts.sparkSize / 2, opts.cy + ( this.y + y ) * opts.len + Math.random() * opts.sparkDist * ( Math.random() < .5 ? 1 : -1 ) - opts.sparkSize / 2, opts.sparkSize, opts.sparkSize )
   }
 
-  loop();
+  // The CSS hides the canvas under prefers-reduced-motion; skip the animation
+  // loop entirely so it does not burn a frame budget on a page that can sit
+  // open for minutes while chunks arrive.
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) {
+    loop();
+  }
 
   window.addEventListener( 'resize', function(){
     w = c.width = window.innerWidth;
     h = c.height = window.innerHeight;
-    ctx.fillStyle = theme === "dark" ? 'black' : 'white';
+    ctx.fillStyle = themeColors.pageBg;
     ctx.fillRect( 0, 0, w, h );
     opts.cx = w / 2;
     opts.cy = h / 2;

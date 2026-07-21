@@ -37,6 +37,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -65,6 +66,7 @@ public class ArbitraryDataRenderer {
     private String lang = "en";
     private String textSize = "";
     private String accent = "";
+    private String uiStyle = "";
     private String inPath;
     private final String secret58;
     private final String prefix;
@@ -116,7 +118,7 @@ public class ArbitraryDataRenderer {
                 // If async is requested, show a loading screen whilst build is in progress
                 if (async) {
                     arbitraryDataReader.loadAsynchronously(false, 10);
-                    return this.getLoadingResponse(service, resourceId, identifier, theme, accent);
+                    return this.getLoadingResponse(service, resourceId, identifier, theme, accent, uiStyle);
                 }
 
                 // Otherwise, loop until we have data
@@ -474,7 +476,7 @@ public class ArbitraryDataRenderer {
         return userPath;
     }
 
-    private HttpServletResponse getLoadingResponse(Service service, String name, String identifier, String theme, String accent) {
+    private HttpServletResponse getLoadingResponse(Service service, String name, String identifier, String theme, String accent, String uiStyle) {
         String responseString = "";
         URL url = Resources.getResource("loading/index.html");
         try {
@@ -484,17 +486,75 @@ public class ArbitraryDataRenderer {
             responseString = responseString.replace("%%SERVICE%%", escapeJavaScriptStringContents(service.toString()));
             responseString = responseString.replace("%%NAME%%", escapeJavaScriptStringContents(name));
             responseString = responseString.replace("%%IDENTIFIER%%", escapeJavaScriptStringContents(identifier));
-            // The loading splash needs concrete colours; fall back cosmetically
-            // when the host did not specify a theme/accent (see field defaults).
-            String splashTheme = (theme == null || theme.isEmpty()) ? "light" : theme;
-            String splashAccent = (accent == null || accent.isEmpty()) ? "green" : accent;
-            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(splashTheme));
-            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(splashAccent));
+            // Display settings are validated against their known values rather than
+            // escaped, so anything unrecognised becomes Home's default instead of
+            // reaching the page at all.
+            responseString = responseString.replace("%%THEME%%", validatedTheme(theme));
+            responseString = responseString.replace("%%ACCENT%%", validatedAccent(accent));
+            responseString = responseString.replace("%%UISTYLE%%", validatedUiStyle(uiStyle));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
         }
         return ArbitraryDataRenderer.getHtmlResponse(response, 503, responseString);
+    }
+
+    /**
+     * Serve the QDN browse page: the service index when {@code service} is null, or the
+     * resource listing for a single service otherwise.
+     * <p>
+     * The page fetches {@code /arbitrary/resources} from its own origin client-side, so this
+     * method only has to template in the service being browsed and the caller's display
+     * settings. Same classpath-template + {@code %%PLACEHOLDER%%} approach as
+     * {@link #getLoadingResponse}.
+     */
+    public static HttpServletResponse getBrowseResponse(HttpServletResponse response, Service service,
+                                                        String theme, String accent, String uiStyle) {
+        String responseString;
+        URL url = Resources.getResource("browse/index.html");
+        try {
+            responseString = Resources.toString(url, StandardCharsets.UTF_8);
+
+            // Empty string means "browse root" to the page's script
+            responseString = responseString.replace("%%SERVICE%%",
+                    service == null ? "" : escapeJavaScriptStringContents(service.name()));
+            responseString = responseString.replace("%%SERVICES%%", browsableServicesJson());
+
+            // Same validation as the loading splash, so a bare gateway request (no
+            // Home-supplied display settings) still gets concrete colours.
+            responseString = responseString.replace("%%THEME%%", validatedTheme(theme));
+            responseString = responseString.replace("%%ACCENT%%", validatedAccent(accent));
+            responseString = responseString.replace("%%UISTYLE%%", validatedUiStyle(uiStyle));
+
+        } catch (IOException e) {
+            LOGGER.info("Unable to show browse page: {}", e.getMessage());
+            return ArbitraryDataRenderer.getResponse(response, 500, "Error 500: Internal Server Error");
+        }
+        return ArbitraryDataRenderer.getHtmlResponse(response, 200, responseString);
+    }
+
+    /**
+     * The services offered on the browse root, as a JSON array literal. Private services are
+     * omitted: their payloads are encrypted, so a public index of them would list rows that
+     * nobody browsing the gateway can open.
+     */
+    private static String browsableServicesJson() {
+        List<String> names = new ArrayList<>();
+        for (Service service : Service.values()) {
+            if (!service.isPrivate()) {
+                names.add(service.name());
+            }
+        }
+        Collections.sort(names);
+
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < names.size(); ++i) {
+            if (i > 0) {
+                json.append(",");
+            }
+            json.append("\"").append(escapeJavaScriptStringContents(names.get(i))).append("\"");
+        }
+        return json.append("]").toString();
     }
 
     public static HttpServletResponse getResponse(HttpServletResponse response, int responseCode, String responseString) {
@@ -516,6 +576,52 @@ public class ArbitraryDataRenderer {
             LOGGER.info("Error writing {} response", responseCode);
         }
         return response;
+    }
+
+    /*
+     * Display settings arrive as query parameters, so they are caller-controlled. They
+     * each have a small closed set of legal values, so they are validated against it and
+     * replaced with Home's default when unrecognised. That is stronger than escaping --
+     * an attacker-supplied value never reaches the page in any form -- and it keeps the
+     * templated values provably constant, which escaping alone cannot express.
+     */
+    private static final List<String> VALID_THEMES = List.of("light", "dark");
+
+    private static final List<String> VALID_ACCENTS = List.of(
+            "green", "blue", "orange", "purple", "red", "teal", "cyan", "pink", "yellow");
+
+    private static final List<String> VALID_UI_STYLES = List.of("classic", "modern", "fun");
+
+    /*
+     * Returns the matching entry from the allowlist rather than the caller's own string.
+     * The two are equal, so this is not a behavioural difference -- but the value handed
+     * back is then always one of the constants declared above, never a reference derived
+     * from request input. That is what makes the guarantee checkable: "this came from the
+     * allowlist" rather than "this was compared against the allowlist". Taint analysis
+     * cannot infer the latter from a membership test, and neither can a reader.
+     */
+    private static String validatedFrom(List<String> allowed, String value, String fallback) {
+        if (value != null) {
+            for (String candidate : allowed) {
+                if (candidate.equals(value)) {
+                    return candidate;
+                }
+            }
+        }
+
+        return fallback;
+    }
+
+    private static String validatedTheme(String theme) {
+        return validatedFrom(VALID_THEMES, theme, "light");
+    }
+
+    private static String validatedAccent(String accent) {
+        return validatedFrom(VALID_ACCENTS, accent, "green");
+    }
+
+    private static String validatedUiStyle(String uiStyle) {
+        return validatedFrom(VALID_UI_STYLES, uiStyle, "classic");
     }
 
     private static String escapeJavaScriptStringContents(String value) {
@@ -599,6 +705,9 @@ public class ArbitraryDataRenderer {
     }
     public void setAccent(String accent) {
         this.accent = accent;
+    }
+    public void setUiStyle(String uiStyle) {
+        this.uiStyle = uiStyle;
     }
 
 }

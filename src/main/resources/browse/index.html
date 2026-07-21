@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse - QDN</title>
+
+  <script>
+    // Display settings arrive as query params on the gateway URL (see
+    // GatewayResource.getRoot / getPath) and are substituted in server-side.
+    // Home always sends them; a bare gateway request will not, hence the
+    // fallbacks below, which mirror Home's own defaults (DEFAULT_RESOLVED_THEME
+    // 'light', DEFAULT_ACCENT 'green', DEFAULT_UI_STYLE 'classic').
+    //
+    // This block is a deliberate duplicate of the palette script in
+    // loading/index.html. The two pages are served independently from the
+    // classpath with no shared asset pipeline, and the splash was recently
+    // re-verified, so duplicating ~60 lines is preferred over refactoring it.
+    var theme = "%%THEME%%" === "dark" ? "dark" : "light";
+    var accent = "%%ACCENT%%";
+    var uiStyle = "%%UISTYLE%%";
+
+    // Base + strong accent pairs, copied from qortium-home src/styles.css so the
+    // browse page matches the shell exactly. Dark-theme accents are light tints,
+    // not darkened versions -- they sit on a dark page background. The soft/ring
+    // tints Home defines are just the base colour at low alpha, so they are
+    // derived at runtime from --accent-rgb rather than duplicated here.
+    var ACCENTS = {
+      green:  { light: ["#21824a", "#196a3a"], dark: ["#87d99b", "#6fcd87"] },
+      blue:   { light: ["#2368cf", "#1e5ec3"], dark: ["#8abefe", "#7aaef7"] },
+      orange: { light: ["#de8b23", "#bf6e0f"], dark: ["#f1b16d", "#eaa257"] },
+      purple: { light: ["#7b44da", "#622fbd"], dark: ["#caa2ff", "#b58dff"] },
+      red:    { light: ["#c63838", "#b63232"], dark: ["#f19a9a", "#dd7a7a"] },
+      teal:   { light: ["#17a398", "#12857a"], dark: ["#6ed9d1", "#5fc3bc"] },
+      cyan:   { light: ["#1298d8", "#0f79aa"], dark: ["#88d2ff", "#79c5f5"] },
+      pink:   { light: ["#bd3673", "#bd3673"], dark: ["#f8a7cf", "#f58cbf"] },
+      yellow: { light: ["#d6a828", "#bd8f20"], dark: ["#f4cb67", "#edbf53"] }
+    };
+
+    // Page background and text colours per UI style, also copied from
+    // qortium-home src/styles.css -- classic from :root / :root[data-theme=dark],
+    // modern from [data-ui="modern"], fun from [data-ui="fun"].
+    var STYLES = {
+      classic: {
+        light: { pageBg: "#f7f5ef", text: "#18201f", textSecondary: "#44504e" },
+        dark:  { pageBg: "#0e1111", text: "#f4f0e8", textSecondary: "#cbd5d5" }
+      },
+      modern: {
+        light: { pageBg: "#F2EFE6", text: "#0D0D0D", textSecondary: "#6B6B6B" },
+        dark:  { pageBg: "#111318", text: "#E4E8F0", textSecondary: "#8892A4" }
+      },
+      fun: {
+        light: { pageBg: "#eaf4ff", text: "#17201d", textSecondary: "#3f4e49" },
+        dark:  { pageBg: "#07100f", text: "#fff9ed", textSecondary: "#d5dfda" }
+      }
+    };
+
+    if (!Object.prototype.hasOwnProperty.call(ACCENTS, accent)) {
+      accent = "green";
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(STYLES, uiStyle)) {
+      uiStyle = "classic";
+    }
+
+    var hexToRgb = function (hex) {
+      var int = parseInt(hex.slice(1), 16);
+      return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+    };
+
+    var palette = ACCENTS[accent][theme];
+    var accentRgb = hexToRgb(palette[0]);
+    var themeColors = STYLES[uiStyle][theme];
+
+    var root = document.documentElement;
+    root.setAttribute("data-theme", theme);
+    root.setAttribute("data-accent", accent);
+    // Same attribute name Home uses (see qortium-home src/displaySettings.ts),
+    // so the CSS below can key off it exactly as the shell's stylesheet does.
+    root.setAttribute("data-ui", uiStyle);
+    root.style.setProperty("--accent", palette[0]);
+    root.style.setProperty("--accent-strong", palette[1]);
+    root.style.setProperty("--accent-rgb", accentRgb.join(", "));
+    root.style.setProperty("--page-bg", themeColors.pageBg);
+    root.style.setProperty("--text", themeColors.text);
+    root.style.setProperty("--text-secondary", themeColors.textSecondary);
+  </script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* Surface tokens mirror loading/index.html so the splash and this page read
+       as one product; everything accent-driven derives from --accent /
+       --accent-rgb set by the palette script above. */
+    :root {
+      --panel-bg: rgba(255, 255, 255, 0.95);
+      --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.15),
+                      0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+      --text-tertiary: #7c8583;
+      --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      --panel-radius: 24px;
+      --panel-radius-mobile: 20px;
+      --row-radius: 14px;
+    }
+
+    :root[data-theme="dark"] {
+      --panel-bg: rgba(24, 28, 28, 0.95);
+      --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+                      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+      --text-tertiary: #8b9694;
+    }
+
+    :root[data-ui="modern"] {
+      --font-stack: "Inter", ui-sans-serif, system-ui, sans-serif;
+    }
+
+    :root[data-ui="fun"] {
+      --fun-ink: #07100c;
+      --font-stack: "Comic Neue", "Trebuchet MS", ui-sans-serif, sans-serif;
+      --panel-radius: 22px 9px 19px 10px / 10px 19px 9px 22px;
+      --panel-radius-mobile: 14px 7px 12px 8px / 8px 12px 7px 14px;
+      --panel-shadow: 5px 5px 0 var(--fun-ink);
+      --row-radius: 12px 6px 11px 7px / 7px 11px 6px 12px;
+    }
+
+    :root[data-theme="dark"][data-ui="fun"] {
+      --fun-ink: #020504;
+    }
+
+    body {
+      font-family: var(--font-stack);
+      min-height: 100vh;
+      background: var(--page-bg);
+      color: var(--text);
+      padding: 24px 20px 48px;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    #shell {
+      max-width: 880px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    #breadcrumb {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      min-height: 18px;
+    }
+
+    #breadcrumb a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    #breadcrumb a:hover {
+      text-decoration: underline;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      word-break: break-word;
+    }
+
+    #subtitle {
+      margin-top: 6px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    #panel {
+      background: var(--panel-bg);
+      border-radius: var(--panel-radius);
+      box-shadow: var(--panel-shadow);
+      padding: 20px;
+    }
+
+    /* Root view: one card per service */
+    #services {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+
+    .service-card {
+      display: block;
+      padding: 14px 16px;
+      border-radius: var(--row-radius);
+      border: 1px solid rgba(var(--accent-rgb), 0.18);
+      background: rgba(var(--accent-rgb), 0.06);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      word-break: break-word;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .service-card:hover,
+    .service-card:focus {
+      background: rgba(var(--accent-rgb), 0.14);
+      border-color: rgba(var(--accent-rgb), 0.35);
+    }
+
+    /* Service view: one row per resource */
+    .row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: var(--row-radius);
+      text-decoration: none;
+      color: var(--text);
+      border: 1px solid transparent;
+    }
+
+    .row + .row {
+      margin-top: 4px;
+    }
+
+    .row:hover,
+    .row:focus {
+      background: rgba(var(--accent-rgb), 0.08);
+      border-color: rgba(var(--accent-rgb), 0.2);
+    }
+
+    .row-main {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .row-name {
+      display: block;
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--accent);
+      word-break: break-word;
+    }
+
+    .row-identifier {
+      display: block;
+      margin-top: 2px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      word-break: break-word;
+    }
+
+    .row-size {
+      flex: 0 0 auto;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    #message {
+      padding: 28px 8px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    #message.error {
+      color: #f44336;
+    }
+
+    #pager {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    #pager button {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(var(--accent-rgb), 0.35);
+      background: rgba(var(--accent-rgb), 0.08);
+      color: var(--accent);
+      cursor: pointer;
+    }
+
+    #pager button[disabled] {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    #range {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 16px 12px 40px;
+      }
+
+      #panel {
+        padding: 14px;
+        border-radius: var(--panel-radius-mobile);
+      }
+
+      h1 {
+        font-size: 21px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <div id="breadcrumb"></div>
+    <h1 id="heading">QDN</h1>
+    <div id="subtitle"></div>
+  </header>
+
+  <div id="panel">
+    <div id="services"></div>
+    <div id="rows"></div>
+    <div id="message">Loading...</div>
+  </div>
+
+  <div id="pager">
+    <button id="prev" type="button">Previous</button>
+    <span id="range"></span>
+    <button id="next" type="button">Next</button>
+  </div>
+</div>
+
+<script>
+  // ES5 only -- this page has to run on the same old Android WebViews as the
+  // loading splash. No let/const, arrow functions, template literals or
+  // optional chaining. `fetch` is assumed, exactly as the splash assumes it.
+  (function () {
+    // "" means the browse root (the service index); otherwise a single service.
+    var SERVICE = "%%SERVICE%%";
+    // Injected server-side from Service.values(); enum constants only.
+    var SERVICES = %%SERVICES%%;
+
+    var PAGE_SIZE = 50;
+
+    var host = location.protocol + "//" + location.host;
+    var offset = 0;
+    var lastPageWasFull = false;
+
+    var messageEl = document.getElementById("message");
+    var rowsEl = document.getElementById("rows");
+    var servicesEl = document.getElementById("services");
+    var pagerEl = document.getElementById("pager");
+    var prevEl = document.getElementById("prev");
+    var nextEl = document.getElementById("next");
+    var rangeEl = document.getElementById("range");
+
+    // The display settings this page was served with are carried onto every
+    // link, so a Home user keeps their theme while browsing.
+    function displayQuery() {
+      return "?theme=" + encodeURIComponent(theme) +
+             "&accent=" + encodeURIComponent(accent) +
+             "&uiStyle=" + encodeURIComponent(uiStyle);
+    }
+
+    function showMessage(text, isError) {
+      messageEl.textContent = text;
+      messageEl.className = isError ? "error" : "";
+      messageEl.style.display = "block";
+    }
+
+    function hideMessage() {
+      messageEl.style.display = "none";
+    }
+
+    function formatSize(bytes) {
+      if (typeof bytes !== "number" || !isFinite(bytes) || bytes < 0) {
+        return "";
+      }
+      var units = ["B", "KB", "MB", "GB"];
+      var value = bytes;
+      var unit = 0;
+      while (value >= 1024 && unit < units.length - 1) {
+        value = value / 1024;
+        unit++;
+      }
+      return (unit === 0 ? value : Math.round(value * 10) / 10) + " " + units[unit];
+    }
+
+    // ---- Root view: the service index -------------------------------------
+
+    function renderServices() {
+      document.getElementById("heading").textContent = "Browse QDN";
+      document.getElementById("subtitle").textContent =
+        "Data services published to the Qortium Data Network. Pick one to list its resources.";
+
+      if (!SERVICES || !SERVICES.length) {
+        showMessage("No data services are available.", false);
+        return;
+      }
+
+      var i;
+      for (i = 0; i < SERVICES.length; i++) {
+        var link = document.createElement("a");
+        link.className = "service-card";
+        // Service names are enum constants, but encode anyway so this stays
+        // correct if the enum ever gains an unusual character.
+        link.href = "/" + encodeURIComponent(SERVICES[i]) + displayQuery();
+        link.textContent = SERVICES[i];
+        servicesEl.appendChild(link);
+      }
+      hideMessage();
+    }
+
+    // ---- Service view: a page of resources ---------------------------------
+
+    function renderBreadcrumb() {
+      var crumb = document.getElementById("breadcrumb");
+      var link = document.createElement("a");
+      link.href = "/" + displayQuery();
+      link.textContent = "QDN";
+      crumb.appendChild(link);
+      crumb.appendChild(document.createTextNode(" / " + SERVICE));
+    }
+
+    function resourceHref(item) {
+      var path = "/" + encodeURIComponent(SERVICE) + "/" + encodeURIComponent(item.name);
+      // A null identifier and the literal "default" both mean "the default
+      // resource", which is addressed as /{SERVICE}/{name} with no third segment.
+      if (item.identifier && item.identifier !== "default") {
+        path = path + "/" + encodeURIComponent(item.identifier);
+      }
+      return path + displayQuery();
+    }
+
+    // Every value below comes from the chain and is attacker-chooseable, so it
+    // is only ever written with textContent. Nothing on this page uses innerHTML.
+    function buildRow(item) {
+      var row = document.createElement("a");
+      row.className = "row";
+      row.href = resourceHref(item);
+
+      var main = document.createElement("div");
+      main.className = "row-main";
+
+      var name = document.createElement("span");
+      name.className = "row-name";
+      name.textContent = item.name == null ? "(unnamed)" : String(item.name);
+      main.appendChild(name);
+
+      var identifier = document.createElement("span");
+      identifier.className = "row-identifier";
+      identifier.textContent = (item.identifier == null || item.identifier === "default")
+        ? "default"
+        : String(item.identifier);
+      main.appendChild(identifier);
+
+      row.appendChild(main);
+
+      var sizeText = formatSize(item.size);
+      if (sizeText) {
+        var size = document.createElement("span");
+        size.className = "row-size";
+        size.textContent = sizeText;
+        row.appendChild(size);
+      }
+
+      return row;
+    }
+
+    function renderRows(items) {
+      while (rowsEl.firstChild) {
+        rowsEl.removeChild(rowsEl.firstChild);
+      }
+
+      var i;
+      for (i = 0; i < items.length; i++) {
+        rowsEl.appendChild(buildRow(items[i]));
+      }
+    }
+
+    function updatePager(shown) {
+      pagerEl.style.display = "flex";
+      prevEl.disabled = offset <= 0;
+      nextEl.disabled = !lastPageWasFull;
+      if (shown === 0) {
+        rangeEl.textContent = "";
+      } else {
+        rangeEl.textContent = (offset + 1) + " - " + (offset + shown);
+      }
+    }
+
+    function load() {
+      showMessage("Loading...", false);
+
+      // excludeblocked=true is what keeps the operator's blocklist honoured on
+      // this public index (see ArbitraryResource.getResources -> the repository
+      // applies ListUtils.blockedQdnFilter when it is set). Do not remove it.
+      // One extra row is requested purely to detect whether a next page exists.
+      var url = host + "/arbitrary/resources" +
+        "?service=" + encodeURIComponent(SERVICE) +
+        "&excludeblocked=true" +
+        "&reverse=true" +
+        "&limit=" + (PAGE_SIZE + 1) +
+        "&offset=" + offset;
+
+      fetch(url, { method: "GET", headers: { "Accept": "application/json" } })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("HTTP " + response.status);
+          }
+          return response.json();
+        })
+        .then(function (items) {
+          if (!items || typeof items.length !== "number") {
+            throw new Error("Unexpected response");
+          }
+
+          lastPageWasFull = items.length > PAGE_SIZE;
+          var page = lastPageWasFull ? items.slice(0, PAGE_SIZE) : items;
+
+          renderRows(page);
+
+          if (!page.length) {
+            showMessage(offset > 0
+              ? "No more resources on this page."
+              : "No resources of this type are known to this node yet.", false);
+          } else {
+            hideMessage();
+          }
+
+          updatePager(page.length);
+        })
+        .catch(function (e) {
+          renderRows([]);
+          showMessage("Could not load the resource list. " +
+            "The node may still be starting up. (" + e.message + ")", true);
+          updatePager(0);
+        });
+    }
+
+    prevEl.onclick = function () {
+      if (offset <= 0) {
+        return;
+      }
+      offset = Math.max(0, offset - PAGE_SIZE);
+      load();
+    };
+
+    nextEl.onclick = function () {
+      if (!lastPageWasFull) {
+        return;
+      }
+      offset = offset + PAGE_SIZE;
+      load();
+    };
+
+    if (SERVICE === "") {
+      renderServices();
+    } else {
+      document.getElementById("heading").textContent = SERVICE;
+      document.getElementById("subtitle").textContent =
+        "Resources of this type known to this node.";
+      renderBreadcrumb();
+      load();
+    }
+  })();
+</script>
+
+</body>
+</html>
