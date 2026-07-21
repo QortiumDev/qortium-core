@@ -318,7 +318,12 @@ public class DevProxyServerResource {
             accent = "green";
         }
 
-        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize, accent);
+        String uiStyle = request.getParameter("uiStyle");
+        if (uiStyle == null || uiStyle.isBlank()) {
+            uiStyle = "classic";
+        }
+
+        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize, accent, uiStyle);
         htmlParser.addAdditionalHeaderTags();
         response.addHeader(CONTENT_SECURITY_POLICY_HEADER, buildHtmlContentSecurityPolicy());
         response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);

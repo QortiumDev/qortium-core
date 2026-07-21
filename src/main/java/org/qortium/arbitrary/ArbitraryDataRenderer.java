@@ -211,7 +211,7 @@ public class ArbitraryDataRenderer {
                 } else {
                     encodedResourceId = resourceId;
                 }
-                HTMLParser htmlParser = new HTMLParser(encodedResourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize, accent);
+                HTMLParser htmlParser = new HTMLParser(encodedResourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize, accent, uiStyle);
                 htmlParser.addAdditionalHeaderTags();
                 response.addHeader(
                     "Content-Security-Policy",
