@@ -585,15 +585,31 @@ public class ArbitraryDataRenderer {
      * an attacker-supplied value never reaches the page in any form -- and it keeps the
      * templated values provably constant, which escaping alone cannot express.
      */
-    private static final Set<String> VALID_THEMES = Set.of("light", "dark");
+    private static final List<String> VALID_THEMES = List.of("light", "dark");
 
-    private static final Set<String> VALID_ACCENTS = Set.of(
+    private static final List<String> VALID_ACCENTS = List.of(
             "green", "blue", "orange", "purple", "red", "teal", "cyan", "pink", "yellow");
 
-    private static final Set<String> VALID_UI_STYLES = Set.of("classic", "modern", "fun");
+    private static final List<String> VALID_UI_STYLES = List.of("classic", "modern", "fun");
 
-    private static String validatedFrom(Set<String> allowed, String value, String fallback) {
-        return value != null && allowed.contains(value) ? value : fallback;
+    /*
+     * Returns the matching entry from the allowlist rather than the caller's own string.
+     * The two are equal, so this is not a behavioural difference -- but the value handed
+     * back is then always one of the constants declared above, never a reference derived
+     * from request input. That is what makes the guarantee checkable: "this came from the
+     * allowlist" rather than "this was compared against the allowlist". Taint analysis
+     * cannot infer the latter from a membership test, and neither can a reader.
+     */
+    private static String validatedFrom(List<String> allowed, String value, String fallback) {
+        if (value != null) {
+            for (String candidate : allowed) {
+                if (candidate.equals(value)) {
+                    return candidate;
+                }
+            }
+        }
+
+        return fallback;
     }
 
     private static String validatedTheme(String theme) {
