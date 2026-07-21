@@ -62,6 +62,7 @@ public class BlockChain {
 	private static final String BLOCK_REWARD_BATCH_START_TRIGGER = "blockRewardBatchStartHeight";
 	private static final String DEV_GROUP_APPROVAL_SPLIT_TRIGGER = "devGroupApprovalSplitHeight";
 	private static final String DEPLOY_AT_WORKING_ASSET_TRIGGER = "deployAtWorkingAssetHeight";
+	private static final String AT_PAYOUT_SOLVENCY_TRIGGER = "atPayoutSolvencyHeight";
 
 	// Properties
 
@@ -936,6 +937,15 @@ public class BlockChain {
 	/** From this height, DEPLOY_AT with a non-native working asset no longer requires the native asset to exist for step fees. */
 	public long getDeployAtWorkingAssetHeight() {
 		return getFeatureTriggerHeight(DEPLOY_AT_WORKING_ASSET_TRIGGER);
+	}
+
+	/**
+	 * From this height, AT payouts are held to two invariants: an AT cannot spend the same working-asset
+	 * balance through both {@code PAY_ASSET_AMOUNT_TO_B} and the stock CIYAM {@code PAY_*} opcodes, and no
+	 * payout may be a fractional quantity of an indivisible asset. Also bounds worst-case AT state at deploy.
+	 */
+	public long getAtPayoutSolvencyHeight() {
+		return getFeatureTriggerHeight(AT_PAYOUT_SOLVENCY_TRIGGER);
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {

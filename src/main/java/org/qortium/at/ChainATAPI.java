@@ -380,8 +380,31 @@ public class ChainATAPI extends API {
 	}
 
 	@Override
-	public void payAmountToB(long amount, MachineState state) {
-		this.addPaymentToB(amount, this.atData.getAssetId(), state);
+	public long payAmountToB(long amount, MachineState state) {
+		long assetId = this.atData.getAssetId();
+
+		if (this.isPayoutSolvencyEnforced()) {
+			// The VM asks us to pay the amount it computed from its own current balance, which does not
+			// account for payouts already made this round via PAY_ASSET_AMOUNT_TO_B. Clamp again against
+			// what is genuinely still spendable, and round to a whole quantity for an indivisible asset.
+			//
+			// We return the amount actually emitted, and the VM debits its machine balance by exactly that
+			// (see the stock CIYAM pay opcodes in FunctionCode), so the machine balance never diverges from
+			// the AT's true remaining balance: a clamped or rounded payout leaves the difference in the AT
+			// for onFinished() to refund, and a negative AT-supplied amount emits nothing and debits nothing
+			// rather than inflating the balance. Because the machine balance stays exact, every downstream
+			// read of it — this clamp on a later payout, the step-fee gate, previousBalance, the finished
+			// refund — sees the truth without any separate reconciliation.
+			amount = Math.min(amount, this.getSpendableAssetBalance(assetId, state));
+			amount = this.roundToAssetPrecision(amount, assetId);
+
+			if (amount <= 0)
+				return 0L;
+		}
+
+		this.addPaymentToB(amount, assetId, state);
+
+		return amount;
 	}
 
 	@Override
@@ -418,6 +441,8 @@ public class ChainATAPI extends API {
 	@Override
 	public void onFinished(long finalBalance, MachineState state) {
 		long configuredAssetId = this.atData.getAssetId();
+		// finalBalance is the VM's machine balance, which payAmountToB keeps exact by debiting only what was
+		// really emitted, so whatever is left after subtracting the pending platform payouts is the refund.
 		long configuredRefund = Math.max(0L, finalBalance - this.getPendingPayout(configuredAssetId));
 
 		if (configuredRefund > 0)
@@ -611,11 +636,29 @@ public class ChainATAPI extends API {
 		}
 
 		long amount = Math.min(requestedAmount, this.getSpendableAssetBalance(assetId, state));
+
+		// Clamping to the spendable balance can leave a fractional quantity of an indivisible asset,
+		// which the check above cannot catch because it only sees the requested amount.
+		if (this.isPayoutSolvencyEnforced())
+			amount = this.roundToAssetPrecision(amount, assetId);
+
 		if (amount <= 0)
 			return 0L;
 
 		this.addPaymentToB(amount, assetId, state);
-		this.addPendingPayout(assetId, amount);
+
+		if (this.isPayoutSolvencyEnforced() && assetId == this.atData.getAssetId()) {
+			// This platform payout is of the AT's configured working asset, which the VM tracks in its
+			// machine balance. Debit it there — exactly as the stock pay opcodes do — so the balance stays
+			// exact for the step-fee gate, the serialized previous balance, and the finished refund. Not
+			// doing so let a native-working-asset AT pay out its whole balance here yet keep spending against
+			// an unchanged machine balance, running (and being charged for) more steps than it funded and
+			// stalling the block. Pre-trigger, and for any other asset the machine balance does not track,
+			// we instead record a pending payout, which onFinished() and the clamps reconcile as before.
+			state.deductFromCurrentBalance(amount);
+		} else {
+			this.addPendingPayout(assetId, amount);
+		}
 
 		return amount;
 	}
@@ -722,6 +765,36 @@ public class ChainATAPI extends API {
 		}
 	}
 
+	/** Whether this AT is executing at or beyond the payout-solvency feature trigger. */
+	private boolean isPayoutSolvencyEnforced() {
+		// During AT execution getCurrentBlockHeight() returns the parent block's height, since the block
+		// being built is not yet persisted. The trigger is expressed in terms of the block the AT runs in,
+		// so add 1 to match the deploy-time check in DeployAtTransaction and the other height gates.
+		return this.getCurrentBlockHeight() + 1 >= BlockChain.getInstance().getAtPayoutSolvencyHeight();
+	}
+
+	/**
+	 * Rounds {@code amount} down to a whole quantity for an indivisible asset, leaving divisible assets
+	 * untouched. Amounts are raw 1e8-scaled units regardless of divisibility, so an indivisible asset can
+	 * only legitimately move in multiples of {@link Amounts#MULTIPLIER}.
+	 */
+	private long roundToAssetPrecision(long amount, long assetId) {
+		if (amount <= 0)
+			return amount;
+
+		AssetData assetData;
+		try {
+			assetData = this.repository.getAssetRepository().fromAssetId(assetId);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch asset details?", e);
+		}
+
+		if (assetData == null || assetData.isDivisible())
+			return amount;
+
+		return amount - (amount % Amounts.MULTIPLIER);
+	}
+
 	private long getPendingPayout(long assetId) {
 		return this.pendingAssetPayouts.getOrDefault(assetId, 0L);
 	}
@@ -755,6 +828,8 @@ public class ChainATAPI extends API {
 		long balance;
 
 		if (assetId == this.atData.getAssetId()) {
+			// payAmountToB keeps the machine balance exact (it debits only what was really emitted), so the
+			// VM's current balance minus the pending platform payouts is the genuinely spendable balance.
 			balance = state.getCurrentBalance();
 		} else {
 			try {
@@ -791,6 +866,15 @@ public class ChainATAPI extends API {
 	}
 
 	private void addPayment(String recipient, long amount, long assetId) {
+		// Last line of defence: every AT-generated payment funnels through here, and AT transactions are
+		// not validated by the block pipeline, so an invalid amount would reach the repository unchecked.
+		if (this.isPayoutSolvencyEnforced()) {
+			amount = this.roundToAssetPrecision(amount, assetId);
+
+			if (amount <= 0)
+				return;
+		}
+
 		long timestamp = this.getNextTransactionTimestamp();
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);

@@ -34,6 +34,74 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-21 - chore(at): pin the independent QortiumDev AT runtime
+
+Moved the automated-transaction dependency to the independent `QortiumDev/AT`
+repository while preserving the full CIYAM, catbref, and IceBurst commit history
+and authorship. The repository now carries a standard MIT license, an authorship
+and lineage record, inherited release tags, and CI that runs the full AT test
+suite. The runtime jar packages the license and authorship notices with the code.
+
+Core now pins and vendors the canonical QortiumDev merge containing the
+payout-balance correctness work instead of using a temporary local build or the
+older personal-repository coordinate. The tracked jar and minimal Maven metadata
+make the exact consensus dependency reproducible without relying on JitPack.
+
+### 2026-07-21 - fix(at): stop ATs overspending, paying fractions, or stalling blocks
+
+Closes three ways an automated transaction could take the whole chain down, all
+found while designing a simple giveaway contract.
+
+An AT can pay out in two different ways: the Qortium asset functions added for
+non-native working assets, and the older payment instructions inherited from the
+CIYAM automated-transaction design. Each kept its own idea of how much money the
+contract had left, and neither told the other. A contract that paid once through
+the first route and then again through the second spent the same balance twice.
+Nothing downstream caught it, because payments an AT generates are the one kind
+of transaction the block does not re-check before applying. The overspend was
+stopped only by the database refusing to write a negative balance — which means
+no funds were ever created, but the block carrying that contract could not be
+processed by anybody, and every node would have failed on it identically. Any
+account able to deploy a contract could have triggered it.
+
+Separately, a contract could pay out a fraction of an asset that was declared
+indivisible, because the whole-number check ran against the amount asked for
+rather than the smaller amount actually affordable, and the older payment
+instructions did not check at all.
+
+The third problem was size. A contract declares up front how much scratch space
+it wants, and that declaration was never checked against the storage limit —
+only the contract's size at the moment of deployment was, when the scratch space
+is still empty. A small contract could therefore declare a large working area,
+deploy successfully, fill it while running, and produce a record too big to
+store, again stalling block processing for everyone.
+
+All three are now fixed: the two payment routes share one view of the balance,
+every payout is rounded to a whole quantity for indivisible assets before it is
+issued, and the declared working area is measured at its fullest when the
+contract is deployed. The older payment instructions kept their own internal
+tally of the contract's balance and always reduced it by the amount a contract
+asked to pay, even when less — or nothing — was actually sent. That tally is now
+reduced by exactly the amount paid (a fix made in the automated-transaction
+engine itself, which our fork of that library carries), so it stays correct for
+everything that reads it: later payments in the same round, the per-step running
+cost that a contract's own funds must cover, the balance a contract can pay
+"again" next round, and the leftover returned to the creator when it finishes. A
+rounded-down payment's remainder now comes back to the creator instead of being
+stranded, and a request to pay a negative amount — which the engine would
+otherwise have treated as a deposit, inflating the balance — pays nothing and
+leaves the balance untouched, so it can neither overspend nor charge more
+running cost than the contract funded, both of which would otherwise stall the
+block. The same correction covers the Qortium-specific payment used for
+non-native working assets: when it pays out the contract's own working asset, it
+now reduces that shared balance too, so a contract paying itself empty this way
+cannot keep spending running cost against a balance it no longer has. As a
+safety net, a contract that somehow still outgrows the storage limit
+is skipped for that round instead of stopping the block. All of these
+changes — the safety net included, since skipping a contract changes what a
+block contains — alter agreed network rules, so they switch on together at
+Previewnet block 70000.
+
 ### 2026-07-20 - feat(gateway): serve read-only QDN actions in gateway mode
 
 Lets apps viewed through a public gateway read from the network instead of

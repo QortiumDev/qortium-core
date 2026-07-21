@@ -102,7 +102,7 @@ current release, although its GitHub `r1rv85` tag and finalized source release
 notes were still lagging at review time. Crypto, TLS, networking, packaging,
 and dependency-sensitive regression tests passed against the combined stack.
 
-Qortium now vendors its pinned `com.github.QuickMythril:AT:1b731d1` artifact in
+Qortium now vendors its pinned `com.github.QortiumDev:AT:22f9266` artifact in
 the tracked `lib/` Maven repository and has removed the remaining JitPack
 repository from the main build. Maven can resolve the full dependency graph from
 the repository plus Maven Central, including AT.

@@ -1,7 +1,10 @@
 package org.qortium.at;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.ciyam.at.MachineState;
 import org.ciyam.at.Timestamp;
+import org.qortium.block.BlockChain;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.at.ATData;
 import org.qortium.data.at.ATStateData;
@@ -10,12 +13,15 @@ import org.qortium.repository.ATRepository;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.transaction.AtTransaction;
+import org.qortium.transaction.DeployAtTransaction;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 public class AT {
+
+	private static final Logger LOGGER = LogManager.getLogger(AT.class);
 
 	// Properties
 	private Repository repository;
@@ -127,6 +133,22 @@ public class AT {
 		}
 
 		byte[] stateData = state.toBytes();
+
+		// An AT whose runtime state outgrows the storage limit must not take the block down with it.
+		// Deploy-time validation bounds this for newly deployed ATs; this contains anything deployed
+		// before that bound existed. Skipping changes the block's AT count/fees/state-hashes, which block
+		// validation compares across nodes, so it MUST gate on the same feature trigger as the deploy-time
+		// bound: an ungated skip would make updated and un-updated nodes deterministically disagree on any
+		// block containing such an AT. Below the trigger we fall through to the old behaviour (persist the
+		// oversized state), matching un-updated nodes.
+		if (stateData.length > DeployAtTransaction.MAX_AT_STATE_LENGTH
+				&& blockHeight >= BlockChain.getInstance().getAtPayoutSolvencyHeight()) {
+			LOGGER.error(String.format("AT %s produced oversized state (%d bytes, limit %d) - skipping round",
+					atAddress, stateData.length, DeployAtTransaction.MAX_AT_STATE_LENGTH));
+			// this.atStateData stays null
+			return Collections.emptyList();
+		}
+
 		byte[] stateHash = Crypto.digest(stateData);
 
 		// Nothing happened?

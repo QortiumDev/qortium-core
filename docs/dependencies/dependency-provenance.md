@@ -5,31 +5,38 @@ matter to Qortium's runtime or build reproducibility.
 
 ## CIYAM AT
 
-Qortium depends on the CIYAM Automated Transactions virtual machine through a
-Qortium-controlled fork:
+Qortium depends on the CIYAM Automated Transactions virtual machine through the
+independent Qortium-controlled `QortiumDev/AT` repository. That repository
+preserves the complete inherited Git history without remaining in GitHub's fork
+network.
 
-- Maven coordinate: `com.github.QuickMythril:AT`
-- Version pin: `1b731d1`
-- Local checkout: `~/git/AT`
-- Local jar: `lib/com/github/QuickMythril/AT/1b731d1/AT-1b731d1.jar`
-- Local POM: `lib/com/github/QuickMythril/AT/1b731d1/AT-1b731d1.pom`
+- Maven coordinate: `com.github.QortiumDev:AT`
+- Version pin: `22f9266`
+- Local checkout: `~/qortium/git/AT`
+- Local jar: `lib/com/github/QortiumDev/AT/22f9266/AT-22f9266.jar`
+- Local POM: `lib/com/github/QortiumDev/AT/22f9266/AT-22f9266.pom`
 - Pinned commit:
-  `1b731d19e66718d0f46183609c6a3ac76c2eeeb0`
+  `22f9266b48de86b7f5db0bd0d680ab5f2d59f659`
 - Local jar SHA-256:
-  `1e2182966c3dd59c327e204e3c0a37d7eb29131160dab38261670f7780a65d17`
+  `f94f7d41fe547a8a5a0b1387b31edd266cc6cf62ed06401dcc1ce618a26ed259`
 - Local POM SHA-256:
-  `7212e561c70740d7b13cadf11c158bf518572f1df4812cb84058b72d4a948b3c`
+  `6c354d4fb3aa7f993034d5d195c80010f43dad1c0b2e2a371faf210880518936`
 - Upstream lineage: `ciyam/AT` -> `catbref/AT` -> `IceBurst/AT` ->
-  `QuickMythril/AT`
+  `QortiumDev/AT`
 
-The pinned commit is the same `IceBurst/AT` `v1.4.3` commit that inherited
-Qortal Core already used. Moving the dependency to `QuickMythril/AT` is intended
-to be behavior-neutral while giving Qortium ownership of a consensus-critical AT
-VM dependency before any Qortium-specific AT changes are made.
+The pinned commit is the canonical merge on `QortiumDev/AT` containing the
+payout-balance correctness changes used by this Core branch. Stock payout
+opcodes now debit the VM balance by the amount the host actually emitted, and a
+host platform API can debit that same balance when it pays the configured
+working asset by another route. Core activates the matching behavior at its
+configured payout-solvency height; the library itself is pinned exactly so all
+nodes execute the same VM semantics.
 
 The IceBurst `v1.4.3` fork point mainly added JitPack/Maven build support and
 dependency updates on top of the Qortal-era `catbref/AT` lineage. The core AT VM
-behavior used by Qortium should remain unchanged at this fork point.
+history and original authorship remain intact in the independent repository.
+`QortiumDev/AT` carries a standardized MIT license and an `AUTHORS.md` lineage
+record; both notices are also packaged under `META-INF` in the runtime jar.
 
 Qortium vendors the pinned AT jar and a small local Maven POM under `lib/` so
 builds and dependency scanners can resolve this consensus-critical dependency
