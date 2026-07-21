@@ -27,10 +27,11 @@ public class HTMLParser {
     private String lang;
     private String textSize;
     private String accent;
+    private String uiStyle;
     private boolean usingCustomRouting;
 
     public HTMLParser(String resourceId, String inPath, String prefix, boolean includeResourceIdInPrefix, byte[] data,
-                      String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent) {
+                      String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent, String uiStyle) {
         String inPathWithoutFilename = inPath.contains("/") ? inPath.substring(0, inPath.lastIndexOf('/')) : String.format("/%s",inPath);
 
         // For the render context with a non-default identifier, fold the identifier into the base href as a
@@ -56,6 +57,7 @@ public class HTMLParser {
         this.lang = lang;
         this.textSize = textSize;
         this.accent = accent;
+        this.uiStyle = uiStyle;
         this.usingCustomRouting = usingCustomRouting;
     }
 
@@ -80,12 +82,13 @@ public class HTMLParser {
 
             // Escape and add vars
             String qdnContextVar = String.format(
-                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnTextSize=%s; var _qdnAccent=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s;",
+                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnTextSize=%s; var _qdnAccent=%s; var _qdnUiStyle=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s;",
                 javaScriptStringLiteral(this.qdnContext),
                 javaScriptStringLiteral(this.theme),
                 javaScriptStringLiteral(this.lang),
                 javaScriptStringLiteral(this.textSize),
                 javaScriptStringLiteral(this.accent),
+                javaScriptStringLiteral(this.uiStyle),
                 javaScriptStringLiteral(this.service.toString()),
                 javaScriptStringLiteral(this.resourceId),
                 javaScriptStringLiteral(this.identifier),
