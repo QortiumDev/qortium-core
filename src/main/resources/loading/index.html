@@ -139,10 +139,17 @@
 
     /* UI style overrides. Kept to the two cheapest, highest-signal differences
        from Home's own [data-ui] blocks -- the typeface, and (for fun) its
-       hand-drawn irregular radius plus hard offset shadow. Neither Comic Neue
-       nor Inter is bundled in Home either, so these are fallback stacks by
-       design. Declared after the dark block so a style wins at equal
-       specificity for both themes. */
+       hand-drawn irregular radius plus hard offset shadow. Declared after the
+       dark block so a style wins at equal specificity for both themes.
+
+       Note the typefaces will usually NOT match Home here. Home bundles Inter
+       and Lexend as local @font-face and Comic Neue and Fredoka via
+       @fontsource, but this splash is a standalone page served from Core,
+       which ships no fonts at all -- so these resolve only if the font happens
+       to be installed on the system, and otherwise fall back down the stack.
+       Naming them is still worth it: it costs nothing and matches when it can.
+       Bundling fonts into Core purely for the splash is not worth the jar
+       size, so the radius, shadow and colour differences carry the style. */
     :root[data-ui="modern"] {
       --font-stack: "Inter", ui-sans-serif, system-ui, sans-serif;
     }
