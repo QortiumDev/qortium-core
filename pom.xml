@@ -18,7 +18,7 @@
 		<bitcoinj.version>0.17.1</bitcoinj.version>
 		<bouncycastle.version>1.85</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
-		<ciyam-at.version>LOCAL-payoutfix</ciyam-at.version> <!-- LOCAL TEST BUILD of QuickMythril/AT payout-drift fix; revert to pushed commit hash before release -->
+		<ciyam-at.version>22f9266</ciyam-at.version>
 
 		<commons-net.version>3.13.0</commons-net.version>
 		<commons-text.version>1.15.0</commons-text.version>
@@ -524,7 +524,7 @@
 		</dependency>
 		<!-- CIYAM AT (automated transactions) -->
 		<dependency>
-			<groupId>com.github.QuickMythril</groupId>
+			<groupId>com.github.QortiumDev</groupId>
 			<artifactId>AT</artifactId>
 			<version>${ciyam-at.version}</version>
 			<exclusions>

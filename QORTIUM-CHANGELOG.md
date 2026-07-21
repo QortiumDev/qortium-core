@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-21 - chore(at): pin the independent QortiumDev AT runtime
+
+Moved the automated-transaction dependency to the independent `QortiumDev/AT`
+repository while preserving the full CIYAM, catbref, and IceBurst commit history
+and authorship. The repository now carries a standard MIT license, an authorship
+and lineage record, inherited release tags, and CI that runs the full AT test
+suite. The runtime jar packages the license and authorship notices with the code.
+
+Core now pins and vendors the canonical QortiumDev merge containing the
+payout-balance correctness work instead of using a temporary local build or the
+older personal-repository coordinate. The tracked jar and minimal Maven metadata
+make the exact consensus dependency reproducible without relying on JitPack.
+
 ### 2026-07-21 - fix(at): stop ATs overspending, paying fractions, or stalling blocks
 
 Closes three ways an automated transaction could take the whole chain down, all
