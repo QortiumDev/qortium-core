@@ -37,6 +37,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -498,6 +499,67 @@ public class ArbitraryDataRenderer {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
         }
         return ArbitraryDataRenderer.getHtmlResponse(response, 503, responseString);
+    }
+
+    /**
+     * Serve the QDN browse page: the service index when {@code service} is null, or the
+     * resource listing for a single service otherwise.
+     * <p>
+     * The page fetches {@code /arbitrary/resources} from its own origin client-side, so this
+     * method only has to template in the service being browsed and the caller's display
+     * settings. Same classpath-template + {@code %%PLACEHOLDER%%} approach as
+     * {@link #getLoadingResponse}.
+     */
+    public static HttpServletResponse getBrowseResponse(HttpServletResponse response, Service service,
+                                                        String theme, String accent, String uiStyle) {
+        String responseString;
+        URL url = Resources.getResource("browse/index.html");
+        try {
+            responseString = Resources.toString(url, StandardCharsets.UTF_8);
+
+            // Empty string means "browse root" to the page's script
+            responseString = responseString.replace("%%SERVICE%%",
+                    service == null ? "" : escapeJavaScriptStringContents(service.name()));
+            responseString = responseString.replace("%%SERVICES%%", browsableServicesJson());
+
+            // Same cosmetic fallbacks as the loading splash, so a bare gateway request
+            // (no Home-supplied display settings) still gets concrete colours.
+            String browseTheme = (theme == null || theme.isEmpty()) ? "light" : theme;
+            String browseAccent = (accent == null || accent.isEmpty()) ? "green" : accent;
+            String browseUiStyle = (uiStyle == null || uiStyle.isEmpty()) ? "classic" : uiStyle;
+            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(browseTheme));
+            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(browseAccent));
+            responseString = responseString.replace("%%UISTYLE%%", escapeJavaScriptStringContents(browseUiStyle));
+
+        } catch (IOException e) {
+            LOGGER.info("Unable to show browse page: {}", e.getMessage());
+            return ArbitraryDataRenderer.getResponse(response, 500, "Error 500: Internal Server Error");
+        }
+        return ArbitraryDataRenderer.getHtmlResponse(response, 200, responseString);
+    }
+
+    /**
+     * The services offered on the browse root, as a JSON array literal. Private services are
+     * omitted: their payloads are encrypted, so a public index of them would list rows that
+     * nobody browsing the gateway can open.
+     */
+    private static String browsableServicesJson() {
+        List<String> names = new ArrayList<>();
+        for (Service service : Service.values()) {
+            if (!service.isPrivate()) {
+                names.add(service.name());
+            }
+        }
+        Collections.sort(names);
+
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < names.size(); ++i) {
+            if (i > 0) {
+                json.append(",");
+            }
+            json.append("\"").append(escapeJavaScriptStringContents(names.get(i))).append("\"");
+        }
+        return json.append("]").toString();
     }
 
     public static HttpServletResponse getResponse(HttpServletResponse response, int responseCode, String responseString) {

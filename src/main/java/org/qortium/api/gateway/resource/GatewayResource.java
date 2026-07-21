@@ -23,11 +23,13 @@ import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 
 
 @Path("/")
@@ -38,6 +40,19 @@ public class GatewayResource {
     @Context HttpServletRequest request;
     @Context HttpServletResponse response;
     @Context ServletContext context;
+
+    /** Returns the matching {@link Service}, or null if this segment is not a service name. */
+    private static Service parseService(String segment) {
+        if (segment == null || segment.isEmpty()) {
+            return null;
+        }
+        try {
+            return Service.valueOf(segment.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            // Not a service
+            return null;
+        }
+    }
 
     private ArbitraryResourceStatus getStatus(Service service, String name, String identifier, Boolean build) {
 
@@ -63,23 +78,33 @@ public class GatewayResource {
     }
 
 
+    /**
+     * The browse root, equivalent to Home's {@code qdn://} address: an index of the QDN
+     * service types, each linking to {@code /{SERVICE}}.
+     */
     @GET
-    public HttpServletResponse getRoot() {
-        return ArbitraryDataRenderer.getResponse(response, 200, "");
+    public HttpServletResponse getRoot(@QueryParam("theme") String theme,
+                                       @QueryParam("accent") String accent,
+                                       @QueryParam("uiStyle") String uiStyle) {
+        return ArbitraryDataRenderer.getBrowseResponse(response, null, theme, accent, uiStyle);
     }
 
 
     @GET
     @Path("{path:.*}")
     @SecurityRequirement(name = "apiKey")
-    public HttpServletResponse getPath(@PathParam("path") String inPath) {
+    public HttpServletResponse getPath(@PathParam("path") String inPath,
+                                       @QueryParam("theme") String theme,
+                                       @QueryParam("accent") String accent,
+                                       @QueryParam("uiStyle") String uiStyle) {
         // Block requests from localhost, to prevent websites/apps from running javascript that fetches unvetted data
         Security.disallowLoopbackRequests(request);
-        return this.parsePath(inPath, "gateway", null, true, true);
+        return this.parsePath(inPath, "gateway", null, true, true, theme, accent, uiStyle);
     }
 
-    
-    private HttpServletResponse parsePath(String inPath, String qdnContext, String secret58, boolean includeResourceIdInPrefix, boolean async) {
+
+    private HttpServletResponse parsePath(String inPath, String qdnContext, String secret58, boolean includeResourceIdInPrefix, boolean async,
+                                          String theme, String accent, String uiStyle) {
 
         if (inPath == null || inPath.isEmpty()) {
             // Assume not a real file
@@ -94,6 +119,14 @@ public class GatewayResource {
         List<String> prefixParts = new ArrayList<>();
 
         if (!inPath.contains("/")) {
+            Service singleSegmentService = parseService(inPath);
+            if (singleSegmentService != null) {
+                // A bare service name is the service listing, equivalent to Home's qdn://{SERVICE}.
+                // Note this takes precedence over a registered name that happens to collide with a
+                // service name, which is the same precedence the multi-segment branch below applies.
+                return ArbitraryDataRenderer.getBrowseResponse(response, singleSegmentService, theme, accent, uiStyle);
+            }
+
             // Assume entire inPath is a registered name
             name = inPath;
         }
@@ -101,20 +134,26 @@ public class GatewayResource {
             // Parse the path to determine what we need to load
             List<String> parts = new LinkedList<>(Arrays.asList(inPath.split("/")));
 
+            if (parts.isEmpty()) {
+                // Nothing but separators (e.g. "//"); assume not a real file
+                return ArbitraryDataRenderer.getResponse(response, 404, "Error 404: File Not Found");
+            }
+
             // Check if the first element is a service
-            try {
-                Service parsedService = Service.valueOf(parts.get(0).toUpperCase());
-                if (parsedService != null) {
-                    // First element matches a service, so we can assume it is one
-                    service = parsedService;
-                    parts.remove(0);
-                    prefixParts.add(service.name());
-                }
-            } catch (IllegalArgumentException e) {
-                // Not a service
+            Service parsedService = parseService(parts.get(0));
+            if (parsedService != null) {
+                // First element matches a service, so we can assume it is one
+                service = parsedService;
+                parts.remove(0);
+                prefixParts.add(service.name());
             }
 
             if (parts.isEmpty()) {
+                if (parsedService != null) {
+                    // Only a service was supplied (e.g. "/APP/"), so show its resource listing
+                    return ArbitraryDataRenderer.getBrowseResponse(response, service, theme, accent, uiStyle);
+                }
+
                 // We need more than just a service
                 return ArbitraryDataRenderer.getResponse(response, 404, "Error 404: File Not Found");
             }
