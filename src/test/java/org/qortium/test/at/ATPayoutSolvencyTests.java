@@ -648,7 +648,8 @@ public class ATPayoutSolvencyTests extends Common {
 
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrRecipientBytesPointer));
 
-				// Platform payout: records a pending payout, leaves the machine balance untouched.
+				// Platform payout of the configured asset: emits the payment and (post-trigger) debits the
+				// machine balance for it, just as the stock pay opcodes do.
 				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value, addrResult, addrAssetId, addrAmount));
 
 				// VM payout: spends the machine balance, unaware of the payout above.
@@ -713,7 +714,8 @@ public class ATPayoutSolvencyTests extends Common {
 
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrRecipientBytesPointer));
 
-				// Platform payout: whole quantity, recorded as pending without touching the machine balance.
+				// Platform payout of the configured asset: whole quantity, emitted and (post-trigger) debited
+				// from the machine balance like the stock pay opcodes.
 				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value, addrResult, addrAssetId, addrPlatformAmount));
 
 				// VM payout: a fixed, data-supplied amount that need not be a whole quantity.
@@ -778,7 +780,8 @@ public class ATPayoutSolvencyTests extends Common {
 
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrRecipientBytesPointer));
 
-				// Platform payout: whole quantity, recorded as pending without touching the machine balance.
+				// Platform payout of the configured asset: whole quantity, emitted and (post-trigger) debited
+				// from the machine balance like the stock pay opcodes.
 				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value, addrResult, addrAssetId, addrPlatformAmount));
 
 				// VM payout: a data-supplied negative amount, inflating the VM's machine balance.
