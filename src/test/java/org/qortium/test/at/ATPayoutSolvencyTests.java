@@ -79,8 +79,11 @@ public class ATPayoutSolvencyTests extends Common {
 	 */
 	private static final long NEGATIVE_STOCK_PAYOUT_REQUEST = -(5L * Amounts.MULTIPLIER);
 
-	/** Native (QORT) working balance an AT is deployed with for the native-asset fee-halt test. */
+	/** Native (QORT) working balance an AT is deployed with for the native-asset fee-halt tests. */
 	private static final long NATIVE_WORKING_BALANCE = 25L * Amounts.MULTIPLIER;
+
+	/** A platform-payout request larger than any balance under test, so it pays out everything spendable. */
+	private static final long DRAIN_EVERYTHING_REQUEST = 1_000L * Amounts.MULTIPLIER;
 
 	/**
 	 * Deploy-time worst-case bound for {@link #buildMinimalAT}, derived purely from {@link MachineState}
@@ -500,6 +503,48 @@ public class ATPayoutSolvencyTests extends Common {
 	}
 
 	/**
+	 * A platform-function payout ({@code PAY_ASSET_AMOUNT_TO_B}) of the AT's native working asset must not
+	 * halt a block through step fees either -- the same fee-halt class as
+	 * {@link #testNegativeNativePayoutMustNotHaltBlockViaStepFees}, but reached through the Qortium platform
+	 * payout path instead of a negative stock request.
+	 *
+	 * <p>The platform payout emits the payment but, unlike the stock pay opcodes, the VM does not
+	 * subtract it from the machine balance. For a native working asset (payout pool == fee pool), if that
+	 * payout did not reduce the machine balance the fee-affordability gate would still see the pre-payout
+	 * balance, admit and charge further opcodes the AT can no longer fund, and block processing would trip
+	 * {@code CHECKBALANCENOTNEGATIVE}. The fix has {@code payAssetAmountToB} debit the machine balance for a
+	 * configured-asset payout, so the AT here drains its balance, then freezes at the next opcode (which it
+	 * can no longer afford) rather than overspending, and the block processes.
+	 */
+	@Test
+	public void testNativePlatformPayoutMustNotHaltBlockViaStepFees() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+
+			// Working asset is native (Asset.NATIVE), paid out through the platform function.
+			byte[] creationBytes = buildNativePlatformDrainThenSpendAT(recipient.getAddress(), DRAIN_EVERYTHING_REQUEST);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes, NATIVE_WORKING_BALANCE);
+			Account atAccount = deployAtTransaction.getATAccount();
+
+			long recipientInitialBalance = recipient.getConfirmedBalance(Asset.NATIVE);
+
+			// Under a platform payout that leaves the machine balance untouched, the trailing opcode is
+			// wrongly admitted and its fee overspends the drained account, throwing here.
+			BlockUtils.mintBlock(repository);
+
+			long paidToRecipient = recipient.getConfirmedBalance(Asset.NATIVE) - recipientInitialBalance;
+			long atFinalBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
+
+			assertTrue("AT native balance must never go negative, was " + atFinalBalance, atFinalBalance >= 0L);
+			assertTrue("the platform payout must have paid out a positive amount", paidToRecipient > 0L);
+			assertTrue(String.format("AT must not pay out more native than it was funded with (paid %d, funded %d)",
+					paidToRecipient, NATIVE_WORKING_BALANCE), paidToRecipient <= NATIVE_WORKING_BALANCE);
+		}
+	}
+
+	/**
 	 * An AT declaring an error handler (settable at runtime via {@code ERR_ADR}) must be rejected at
 	 * deploy if that pushes its worst-case state over the limit, even though the unstarted machine
 	 * serialized at deploy time has no error handler set yet.
@@ -782,6 +827,51 @@ public class ATPayoutSolvencyTests extends Common {
 
 			// VM payout: pays out whatever the VM believes remains.
 			codeByteBuffer.put(OpCode.EXT_FUN.compile(FunctionCode.PAY_ALL_TO_ADDRESS_IN_B));
+
+			codeByteBuffer.put(OpCode.FIN_IMD.compile());
+		} catch (CompilationException e) {
+			throw new IllegalStateException("Unable to compile AT?", e);
+		}
+
+		return toCreationBytes(codeByteBuffer, dataByteBuffer);
+	}
+
+	/**
+	 * Runs on first execution: sets B to the recipient, pays {@code drainRequest} of the native working
+	 * asset out through the platform function {@code PAY_ASSET_AMOUNT_TO_B} (clamped to everything
+	 * spendable), then attempts a further fee-costing opcode and finishes.
+	 *
+	 * <p>The trailing opcode is the point: with the machine balance correctly reduced by the platform
+	 * payout it can no longer be afforded and the AT freezes; without that reduction it is wrongly admitted
+	 * and its fee overspends the drained account.
+	 */
+	private static byte[] buildNativePlatformDrainThenSpendAT(String recipient, long drainRequest) {
+		int addrCounter = 0;
+		final int addrResult = addrCounter++;
+		final int addrAssetId = addrCounter++;
+		final int addrDrainAmount = addrCounter++;
+		final int addrRecipientBytes = addrCounter;
+		addrCounter += 4;
+		final int addrRecipientBytesPointer = addrCounter++;
+
+		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(addrResult * MachineState.VALUE_SIZE, 0L);
+		dataByteBuffer.putLong(addrAssetId * MachineState.VALUE_SIZE, Asset.NATIVE);
+		dataByteBuffer.putLong(addrDrainAmount * MachineState.VALUE_SIZE, drainRequest);
+		dataByteBuffer.position(addrRecipientBytes * MachineState.VALUE_SIZE);
+		dataByteBuffer.put(Bytes.ensureCapacity(Base58.decode(recipient), 32, 0));
+		dataByteBuffer.putLong(addrRecipientBytesPointer * MachineState.VALUE_SIZE, addrRecipientBytes);
+
+		ByteBuffer codeByteBuffer = ByteBuffer.allocate(512);
+
+		try {
+			codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrRecipientBytesPointer));
+
+			// Platform payout of the native working asset: emits the payment; the fix debits the machine balance.
+			codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value, addrResult, addrAssetId, addrDrainAmount));
+
+			// A further fee-costing opcode, only affordable if the payout did NOT reduce the machine balance.
+			codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_CREATION_TIMESTAMP, addrResult));
 
 			codeByteBuffer.put(OpCode.FIN_IMD.compile());
 		} catch (CompilationException e) {

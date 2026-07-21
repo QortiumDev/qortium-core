@@ -79,7 +79,11 @@ stranded, and a request to pay a negative amount — which the engine would
 otherwise have treated as a deposit, inflating the balance — pays nothing and
 leaves the balance untouched, so it can neither overspend nor charge more
 running cost than the contract funded, both of which would otherwise stall the
-block. As a safety net, a contract that somehow still outgrows the storage limit
+block. The same correction covers the Qortium-specific payment used for
+non-native working assets: when it pays out the contract's own working asset, it
+now reduces that shared balance too, so a contract paying itself empty this way
+cannot keep spending running cost against a balance it no longer has. As a
+safety net, a contract that somehow still outgrows the storage limit
 is skipped for that round instead of stopping the block. All of these
 changes — the safety net included, since skipping a contract changes what a
 block contains — alter agreed network rules, so they switch on together at

@@ -646,7 +646,19 @@ public class ChainATAPI extends API {
 			return 0L;
 
 		this.addPaymentToB(amount, assetId, state);
-		this.addPendingPayout(assetId, amount);
+
+		if (this.isPayoutSolvencyEnforced() && assetId == this.atData.getAssetId()) {
+			// This platform payout is of the AT's configured working asset, which the VM tracks in its
+			// machine balance. Debit it there — exactly as the stock pay opcodes do — so the balance stays
+			// exact for the step-fee gate, the serialized previous balance, and the finished refund. Not
+			// doing so let a native-working-asset AT pay out its whole balance here yet keep spending against
+			// an unchanged machine balance, running (and being charged for) more steps than it funded and
+			// stalling the block. Pre-trigger, and for any other asset the machine balance does not track,
+			// we instead record a pending payout, which onFinished() and the clamps reconcile as before.
+			state.deductFromCurrentBalance(amount);
+		} else {
+			this.addPendingPayout(assetId, amount);
+		}
 
 		return amount;
 	}
