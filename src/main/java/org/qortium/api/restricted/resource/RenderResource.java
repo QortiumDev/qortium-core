@@ -80,11 +80,12 @@ public class RenderResource {
                                                    @QueryParam("theme") String theme,
                                                    @QueryParam("lang") String lang,
                                                    @QueryParam("textSize") String textSize,
-                                                   @QueryParam("accent") String accent) {
+                                                   @QueryParam("accent") String accent,
+                                                   @QueryParam("uiStyle") String uiStyle) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, signature, Service.WEBSITE, null);
 
-        return this.get(signature, ResourceIdType.SIGNATURE, null, null, "/", null, "/render/signature", true, true, theme, lang, textSize, accent);
+        return this.get(signature, ResourceIdType.SIGNATURE, null, null, "/", null, "/render/signature", true, true, theme, lang, textSize, accent, uiStyle);
     }
 
     @GET
@@ -94,11 +95,12 @@ public class RenderResource {
                                                   @QueryParam("theme") String theme,
                                                   @QueryParam("lang") String lang,
                                                   @QueryParam("textSize") String textSize,
-                                                  @QueryParam("accent") String accent) {
+                                                  @QueryParam("accent") String accent,
+                                                  @QueryParam("uiStyle") String uiStyle) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, signature, Service.WEBSITE, null);
 
-        return this.get(signature, ResourceIdType.SIGNATURE, null, null, inPath,null, "/render/signature", true, true, theme, lang, textSize, accent);
+        return this.get(signature, ResourceIdType.SIGNATURE, null, null, inPath,null, "/render/signature", true, true, theme, lang, textSize, accent, uiStyle);
     }
 
     @GET
@@ -108,11 +110,12 @@ public class RenderResource {
                                               @QueryParam("theme") String theme,
                                               @QueryParam("lang") String lang,
                                               @QueryParam("textSize") String textSize,
-                                              @QueryParam("accent") String accent) {
+                                              @QueryParam("accent") String accent,
+                                              @QueryParam("uiStyle") String uiStyle) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, hash58, Service.WEBSITE, null);
 
-        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, "/", secret58, "/render/hash", true, false, theme, lang, textSize, accent);
+        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, "/", secret58, "/render/hash", true, false, theme, lang, textSize, accent, uiStyle);
     }
 
     @GET
@@ -123,11 +126,12 @@ public class RenderResource {
                                              @QueryParam("theme") String theme,
                                              @QueryParam("lang") String lang,
                                              @QueryParam("textSize") String textSize,
-                                             @QueryParam("accent") String accent) {
+                                             @QueryParam("accent") String accent,
+                                             @QueryParam("uiStyle") String uiStyle) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, hash58, Service.WEBSITE, null);
 
-        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, inPath, secret58, "/render/hash", true, false, theme, lang, textSize, accent);
+        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, inPath, secret58, "/render/hash", true, false, theme, lang, textSize, accent, uiStyle);
     }
 
     @GET
@@ -140,7 +144,8 @@ public class RenderResource {
                                              @QueryParam("theme") String theme,
                                              @QueryParam("lang") String lang,
                                              @QueryParam("textSize") String textSize,
-                                             @QueryParam("accent") String accent) {
+                                             @QueryParam("accent") String accent,
+                                             @QueryParam("uiStyle") String uiStyle) {
         // If an explicit ?identifier= was supplied and the path also starts with that same identifier,
         // strip the duplicate segment. This preserves relative links resolved from Core's injected
         // <base href="/render/{service}/{name}/{identifier}/"> without looking for identifier/path.
@@ -167,7 +172,7 @@ public class RenderResource {
             Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
-        return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang, textSize, accent);
+        return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang, textSize, accent, uiStyle);
     }
 
     static String stripDuplicateIdentifierPathSegment(String inPath, String identifier) {
@@ -213,19 +218,20 @@ public class RenderResource {
                                               @QueryParam("theme") String theme,
                                               @QueryParam("lang") String lang,
                                               @QueryParam("textSize") String textSize,
-                                              @QueryParam("accent") String accent) {
+                                              @QueryParam("accent") String accent,
+                                              @QueryParam("uiStyle") String uiStyle) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
-        return this.get(name, ResourceIdType.NAME, service, identifier, "/", null, prefix, true, true, theme, lang, textSize, accent);
+        return this.get(name, ResourceIdType.NAME, service, identifier, "/", null, prefix, true, true, theme, lang, textSize, accent, uiStyle);
     }
 
 
 
     private HttpServletResponse get(String resourceId, ResourceIdType resourceIdType, Service service, String identifier,
                                     String inPath, String secret58, String prefix, boolean includeResourceIdInPrefix, boolean async,
-                                    String theme, String lang, String textSize, String accent) {
+                                    String theme, String lang, String textSize, String accent, String uiStyle) {
 
         ArbitraryDataRenderer renderer = new ArbitraryDataRenderer(resourceId, resourceIdType, service, identifier, inPath,
                 secret58, prefix, includeResourceIdInPrefix, async, "render", request, response, context);
@@ -241,6 +247,9 @@ public class RenderResource {
         }
         if (accent != null) {
             renderer.setAccent(accent);
+        }
+        if (uiStyle != null) {
+            renderer.setUiStyle(uiStyle);
         }
         return renderer.render();
     }

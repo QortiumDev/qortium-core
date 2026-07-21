@@ -10,9 +10,10 @@
     // RenderResource.getIndexByName) and are substituted in server-side. Home
     // always sends them; a bare gateway request will not, hence the fallbacks
     // below, which mirror Home's own defaults (DEFAULT_RESOLVED_THEME 'light',
-    // DEFAULT_ACCENT 'green').
+    // DEFAULT_ACCENT 'green', DEFAULT_UI_STYLE 'classic').
     var theme = "%%THEME%%" === "dark" ? "dark" : "light";
     var accent = "%%ACCENT%%";
+    var uiStyle = "%%UISTYLE%%";
 
     // Base + strong accent pairs, copied from qortium-home src/styles.css so the
     // splash matches the shell exactly. Dark-theme accents are light tints, not
@@ -31,13 +32,33 @@
       yellow: { light: ["#d6a828", "#bd8f20"], dark: ["#f4cb67", "#edbf53"] }
     };
 
-    var THEMES = {
-      light: { pageBg: "#f7f5ef", text: "#18201f", textSecondary: "#44504e" },
-      dark:  { pageBg: "#0e1111", text: "#f4f0e8", textSecondary: "#cbd5d5" }
+    // Page background and text colours per UI style, also copied from
+    // qortium-home src/styles.css -- classic from :root / :root[data-theme=dark],
+    // modern from [data-ui="modern"], fun from [data-ui="fun"]. The accent
+    // system is deliberately shared across all three styles in Home (no
+    // [data-ui] rule overrides --color-accent), so only these surface and text
+    // colours vary here; ACCENTS above stays style-independent.
+    var STYLES = {
+      classic: {
+        light: { pageBg: "#f7f5ef", text: "#18201f", textSecondary: "#44504e" },
+        dark:  { pageBg: "#0e1111", text: "#f4f0e8", textSecondary: "#cbd5d5" }
+      },
+      modern: {
+        light: { pageBg: "#F2EFE6", text: "#0D0D0D", textSecondary: "#6B6B6B" },
+        dark:  { pageBg: "#111318", text: "#E4E8F0", textSecondary: "#8892A4" }
+      },
+      fun: {
+        light: { pageBg: "#eaf4ff", text: "#17201d", textSecondary: "#3f4e49" },
+        dark:  { pageBg: "#07100f", text: "#fff9ed", textSecondary: "#d5dfda" }
+      }
     };
 
     if (!Object.prototype.hasOwnProperty.call(ACCENTS, accent)) {
       accent = "green";
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(STYLES, uiStyle)) {
+      uiStyle = "classic";
     }
 
     var hexToRgb = function (hex) {
@@ -61,11 +82,14 @@
 
     var palette = ACCENTS[accent][theme];
     var accentRgb = hexToRgb(palette[0]);
-    var themeColors = THEMES[theme];
+    var themeColors = STYLES[uiStyle][theme];
 
     var root = document.documentElement;
     root.setAttribute("data-theme", theme);
     root.setAttribute("data-accent", accent);
+    // Same attribute name Home uses (see qortium-home src/displaySettings.ts),
+    // so the CSS below can key off it exactly as the shell's stylesheet does.
+    root.setAttribute("data-ui", uiStyle);
     root.style.setProperty("--accent", palette[0]);
     root.style.setProperty("--accent-strong", palette[1]);
     root.style.setProperty("--accent-rgb", accentRgb.join(", "));
@@ -85,7 +109,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-family: var(--font-stack);
       overflow: hidden;
       position: relative;
       min-height: 100vh;
@@ -100,6 +124,10 @@
       --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.15),
                       0 0 0 1px rgba(255, 255, 255, 0.5) inset;
       --text-tertiary: #7c8583;
+      /* Classic uses the platform UI stack; modern and fun override it below. */
+      --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      --panel-radius: 24px;
+      --panel-radius-mobile: 20px;
     }
 
     :root[data-theme="dark"] {
@@ -107,6 +135,28 @@
       --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
                       0 0 0 1px rgba(255, 255, 255, 0.1) inset;
       --text-tertiary: #8b9694;
+    }
+
+    /* UI style overrides. Kept to the two cheapest, highest-signal differences
+       from Home's own [data-ui] blocks -- the typeface, and (for fun) its
+       hand-drawn irregular radius plus hard offset shadow. Neither Comic Neue
+       nor Inter is bundled in Home either, so these are fallback stacks by
+       design. Declared after the dark block so a style wins at equal
+       specificity for both themes. */
+    :root[data-ui="modern"] {
+      --font-stack: "Inter", ui-sans-serif, system-ui, sans-serif;
+    }
+
+    :root[data-ui="fun"] {
+      --fun-ink: #07100c;
+      --font-stack: "Comic Neue", "Trebuchet MS", ui-sans-serif, sans-serif;
+      --panel-radius: 22px 9px 19px 10px / 10px 19px 9px 22px;
+      --panel-radius-mobile: 14px 7px 12px 8px / 8px 12px 7px 14px;
+      --panel-shadow: 5px 5px 0 var(--fun-ink);
+    }
+
+    :root[data-theme="dark"][data-ui="fun"] {
+      --fun-ink: #020504;
     }
 
     canvas {
@@ -135,7 +185,7 @@
       background: var(--panel-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      border-radius: 24px;
+      border-radius: var(--panel-radius);
       padding: 40px;
       max-width: 480px;
       width: 100%;
@@ -320,7 +370,7 @@
     @media (max-width: 600px) {
       #panel {
         padding: 32px 24px;
-        border-radius: 20px;
+        border-radius: var(--panel-radius-mobile);
       }
 
       #username {

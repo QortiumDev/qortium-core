@@ -65,6 +65,7 @@ public class ArbitraryDataRenderer {
     private String lang = "en";
     private String textSize = "";
     private String accent = "";
+    private String uiStyle = "";
     private String inPath;
     private final String secret58;
     private final String prefix;
@@ -116,7 +117,7 @@ public class ArbitraryDataRenderer {
                 // If async is requested, show a loading screen whilst build is in progress
                 if (async) {
                     arbitraryDataReader.loadAsynchronously(false, 10);
-                    return this.getLoadingResponse(service, resourceId, identifier, theme, accent);
+                    return this.getLoadingResponse(service, resourceId, identifier, theme, accent, uiStyle);
                 }
 
                 // Otherwise, loop until we have data
@@ -474,7 +475,7 @@ public class ArbitraryDataRenderer {
         return userPath;
     }
 
-    private HttpServletResponse getLoadingResponse(Service service, String name, String identifier, String theme, String accent) {
+    private HttpServletResponse getLoadingResponse(Service service, String name, String identifier, String theme, String accent, String uiStyle) {
         String responseString = "";
         URL url = Resources.getResource("loading/index.html");
         try {
@@ -485,11 +486,13 @@ public class ArbitraryDataRenderer {
             responseString = responseString.replace("%%NAME%%", escapeJavaScriptStringContents(name));
             responseString = responseString.replace("%%IDENTIFIER%%", escapeJavaScriptStringContents(identifier));
             // The loading splash needs concrete colours; fall back cosmetically
-            // when the host did not specify a theme/accent (see field defaults).
+            // when the host did not specify a theme/accent/uiStyle (see field defaults).
             String splashTheme = (theme == null || theme.isEmpty()) ? "light" : theme;
             String splashAccent = (accent == null || accent.isEmpty()) ? "green" : accent;
+            String splashUiStyle = (uiStyle == null || uiStyle.isEmpty()) ? "classic" : uiStyle;
             responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(splashTheme));
             responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(splashAccent));
+            responseString = responseString.replace("%%UISTYLE%%", escapeJavaScriptStringContents(splashUiStyle));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
@@ -599,6 +602,9 @@ public class ArbitraryDataRenderer {
     }
     public void setAccent(String accent) {
         this.accent = accent;
+    }
+    public void setUiStyle(String uiStyle) {
+        this.uiStyle = uiStyle;
     }
 
 }
