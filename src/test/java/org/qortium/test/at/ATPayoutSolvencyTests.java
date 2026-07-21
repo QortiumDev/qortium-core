@@ -9,6 +9,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.Account;
 import org.qortium.account.PrivateKeyAccount;
+import org.qortium.asset.Asset;
 import org.qortium.at.ChainFunctionCode;
 import org.qortium.block.BlockChain;
 import org.qortium.data.transaction.BaseTransactionData;
@@ -77,6 +78,9 @@ public class ATPayoutSolvencyTests extends Common {
 	 * deployer can supply this.
 	 */
 	private static final long NEGATIVE_STOCK_PAYOUT_REQUEST = -(5L * Amounts.MULTIPLIER);
+
+	/** Native (QORT) working balance an AT is deployed with for the native-asset fee-halt test. */
+	private static final long NATIVE_WORKING_BALANCE = 25L * Amounts.MULTIPLIER;
 
 	/**
 	 * Deploy-time worst-case bound for {@link #buildMinimalAT}, derived purely from {@link MachineState}
@@ -310,12 +314,13 @@ public class ATPayoutSolvencyTests extends Common {
 	 * {@code ChainATAPI#addPayment}. Both payouts combined are large enough that a naive "zero it out" fix
 	 * could not pass this test.
 	 *
-	 * <p>The assertions are exact, not merely "whole and positive": the VM debits its machine balance by
-	 * the full pre-rounding request while only the rounded amount is emitted, and without the
-	 * machine-balance-delta reconciliation that divergence resurfaces in {@code onFinished}, whose refund
-	 * of the too-small machine balance is itself rounded down again -- permanently stranding a whole unit
-	 * in the finished AT. Asserting the exact payout, the exact refund and a zero final AT balance is what
-	 * distinguishes true conservation from that silent stranding.
+	 * <p>The assertions are exact, not merely "whole and positive". If the VM debited its machine balance by
+	 * the full pre-rounding request instead of by what was actually emitted, the difference would resurface
+	 * in {@code onFinished}, whose refund of the too-small machine balance is itself rounded down again --
+	 * permanently stranding a whole unit in the finished AT. Because {@code payAmountToB} returns the emitted
+	 * amount and the VM debits exactly that, the machine balance stays whole and conservation is exact.
+	 * Asserting the exact payout, the exact refund and a zero final AT balance is what distinguishes true
+	 * conservation from that silent stranding.
 	 */
 	@Test
 	public void testAtRoundsFractionalIndivisibleAssetPayoutAcrossBothPayoutPaths() throws DataException {
@@ -362,12 +367,13 @@ public class ATPayoutSolvencyTests extends Common {
 	 * A negative stock-opcode payout request must not inflate the AT's balance or halt the chain.
 	 *
 	 * <p>The VM's {@code min(currentBalance, value1)} clamp passes a negative {@code value1} straight
-	 * through and then debits it, so its machine balance INFLATES by the requested amount while nothing is
-	 * emitted. Without the machine-balance-delta reconciliation, {@code onFinished} refunds against the
-	 * inflated figure, over-paying the AT's real asset balance -- the repository's
-	 * {@code CHECKBALANCENOTNEGATIVE} constraint then surfaces as an unhandled {@code DataException} that
-	 * makes the block unprocessable on every node: the same class of chain halt the solvency fix targets,
-	 * reachable by anyone who can deploy an AT.
+	 * through. If the VM then debited the machine balance by that request it would INFLATE while nothing is
+	 * emitted, and {@code onFinished} would refund against the inflated figure, over-paying the AT's real
+	 * asset balance -- the repository's {@code CHECKBALANCENOTNEGATIVE} constraint then surfacing as an
+	 * unhandled {@code DataException} that makes the block unprocessable on every node: the same class of
+	 * chain halt the solvency fix targets, reachable by anyone who can deploy an AT. Because
+	 * {@code payAmountToB} returns 0 for the suppressed negative payout and the VM debits only what was
+	 * returned, the machine balance never inflates.
 	 */
 	@Test
 	public void testNegativeStockPayoutMustNotInflateBalanceOrHaltBlock() throws DataException {
@@ -409,12 +415,11 @@ public class ATPayoutSolvencyTests extends Common {
 	 * A negative stock payout's balance inflation must not let a LATER payout in the same round overspend.
 	 *
 	 * <p>This is the mid-round half of the negative-payout defect, distinct from the refund half above:
-	 * after the negative request inflates the machine balance, a following {@code PAY_ALL_TO_ADDRESS_IN_B}
-	 * passes that inflated balance as its amount. The solvency clamp consults
-	 * {@code getSpendableAssetBalance}, which is based on the same machine balance -- so unless the
-	 * machine-balance delta is folded in there too (not just in {@code onFinished}), the clamp overestimates
-	 * and the AT overspends. A fix that only reconciled the final refund would pass the test above and fail
-	 * this one.
+	 * if the negative request inflated the machine balance, a following {@code PAY_ALL_TO_ADDRESS_IN_B}
+	 * would pass that inflated balance as its amount and the solvency clamp -- reading the same machine
+	 * balance via {@code getSpendableAssetBalance} -- would overestimate and let the AT overspend. Because
+	 * the negative payout is debited as 0, the machine balance stays exact and {@code PAY_ALL} pays only the
+	 * true remaining balance.
 	 */
 	@Test
 	public void testNegativeStockPayoutMustNotLetLaterPayoutOverspend() throws DataException {
@@ -448,6 +453,49 @@ public class ATPayoutSolvencyTests extends Common {
 					PREFUND_AMOUNT, totalPaidOut);
 			assertEquals("nothing remains after PAY_ALL, so the refund must be exactly zero", 0L, refund);
 			assertEquals("nothing may be left stranded in the finished AT", 0L, atFinalBalance);
+		}
+	}
+
+	/**
+	 * A negative stock payout must not halt a block through step fees when the AT's working asset is the
+	 * native coin -- the case where the payout pool and the fee pool are the same balance.
+	 *
+	 * <p>The VM deducts each opcode's step fee from its machine balance and gates further execution on that
+	 * balance. If a negative payout inflated the machine balance, the VM would run (and charge) more steps
+	 * than the AT's real native balance funds; block processing later debits those fees from the real
+	 * account ({@code Block.processAtFeesAndStates}) and trips {@code CHECKBALANCENOTNEGATIVE}. This path is
+	 * invisible to the non-native tests above, whose fees come from a separate native reserve. Because
+	 * {@code payAmountToB} returns 0 for the negative payout and the VM debits only what was returned, the
+	 * machine balance stays exact, the fee gate sees the truth, and the block processes. A subsequent
+	 * {@code PAY_ALL} then pays out only the genuinely remaining balance.
+	 */
+	@Test
+	public void testNegativeNativePayoutMustNotHaltBlockViaStepFees() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+
+			byte[] creationBytes = buildNativeNegativeThenPayAllAT(recipient.getAddress(), NEGATIVE_STOCK_PAYOUT_REQUEST);
+
+			// Native working asset: fund the AT's native balance at deploy; fees come out of that same balance.
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes, NATIVE_WORKING_BALANCE);
+			Account atAccount = deployAtTransaction.getATAccount();
+
+			long recipientInitialBalance = recipient.getConfirmedBalance(Asset.NATIVE);
+
+			// The AT runs on the next minted block. Under a VM that debited the negative request, its machine
+			// balance would inflate, extra steps would run, and this mintBlock would throw from the balance
+			// constraint. It must process cleanly instead.
+			BlockUtils.mintBlock(repository);
+
+			long paidToRecipient = recipient.getConfirmedBalance(Asset.NATIVE) - recipientInitialBalance;
+			long atFinalBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
+
+			assertTrue("AT native balance must never go negative, was " + atFinalBalance, atFinalBalance >= 0L);
+			assertTrue("the negative payout must be suppressed, so PAY_ALL pays a positive amount", paidToRecipient > 0L);
+			assertTrue(String.format("AT must not pay out more native than it was funded with (paid %d, funded %d)",
+					paidToRecipient, NATIVE_WORKING_BALANCE), paidToRecipient <= NATIVE_WORKING_BALANCE);
+			assertEquals("PAY_ALL must leave the AT empty", 0L, atFinalBalance);
 		}
 	}
 
@@ -698,6 +746,46 @@ public class ATPayoutSolvencyTests extends Common {
 			} catch (CompilationException e) {
 				throw new IllegalStateException("Unable to compile AT?", e);
 			}
+		}
+
+		return toCreationBytes(codeByteBuffer, dataByteBuffer);
+	}
+
+	/**
+	 * Runs on first execution (no transaction wait): sets B to the recipient, requests a stock
+	 * {@code PAY_TO_ADDRESS_IN_B} of {@code stockAmount} (intended negative, which would inflate the VM's
+	 * machine balance), then issues {@code PAY_ALL_TO_ADDRESS_IN_B} and finishes.
+	 *
+	 * <p>Used with a native working asset, so the machine balance is also the AT's step-fee balance: this
+	 * is the configuration where a balance inflation turns into extra charged steps and a block halt.
+	 */
+	private static byte[] buildNativeNegativeThenPayAllAT(String recipient, long stockAmount) {
+		int addrCounter = 0;
+		final int addrStockAmount = addrCounter++;
+		final int addrRecipientBytes = addrCounter;
+		addrCounter += 4;
+		final int addrRecipientBytesPointer = addrCounter++;
+
+		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(addrStockAmount * MachineState.VALUE_SIZE, stockAmount);
+		dataByteBuffer.position(addrRecipientBytes * MachineState.VALUE_SIZE);
+		dataByteBuffer.put(Bytes.ensureCapacity(Base58.decode(recipient), 32, 0));
+		dataByteBuffer.putLong(addrRecipientBytesPointer * MachineState.VALUE_SIZE, addrRecipientBytes);
+
+		ByteBuffer codeByteBuffer = ByteBuffer.allocate(512);
+
+		try {
+			codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrRecipientBytesPointer));
+
+			// VM payout: a data-supplied negative amount that would inflate the machine (and fee) balance.
+			codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PAY_TO_ADDRESS_IN_B, addrStockAmount));
+
+			// VM payout: pays out whatever the VM believes remains.
+			codeByteBuffer.put(OpCode.EXT_FUN.compile(FunctionCode.PAY_ALL_TO_ADDRESS_IN_B));
+
+			codeByteBuffer.put(OpCode.FIN_IMD.compile());
+		} catch (CompilationException e) {
+			throw new IllegalStateException("Unable to compile AT?", e);
 		}
 
 		return toCreationBytes(codeByteBuffer, dataByteBuffer);

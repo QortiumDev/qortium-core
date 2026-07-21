@@ -18,7 +18,8 @@
 		<bitcoinj.version>0.17.1</bitcoinj.version>
 		<bouncycastle.version>1.85</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
-		<ciyam-at.version>1b731d1</ciyam-at.version> <!-- QuickMythril/AT v1.4.3 fork point -->
+		<ciyam-at.version>LOCAL-payoutfix</ciyam-at.version> <!-- LOCAL TEST BUILD of QuickMythril/AT payout-drift fix; revert to pushed commit hash before release -->
+
 		<commons-net.version>3.13.0</commons-net.version>
 		<commons-text.version>1.15.0</commons-text.version>
 		<commons-io.version>2.22.0</commons-io.version>

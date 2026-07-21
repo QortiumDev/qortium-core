@@ -66,15 +66,21 @@ store, again stalling block processing for everyone.
 All three are now fixed: the two payment routes share one view of the balance,
 every payout is rounded to a whole quantity for indivisible assets before it is
 issued, and the declared working area is measured at its fullest when the
-contract is deployed. The older payment instructions also keep their own
-internal ledger, which reduces by the amount a contract asked to pay rather
-than the amount actually sent — the difference is now tracked and settled
-exactly, so a rounded-down payment's remainder comes back to the creator
-instead of being stranded in the finished contract, and a payment request for
-a negative amount (which that internal ledger would happily treat as a
-deposit) can neither pay out money the contract does not have nor stop the
-chain. As a safety net, a contract that somehow still outgrows the storage
-limit is skipped for that round instead of stopping the block. All of these
+contract is deployed. The older payment instructions kept their own internal
+tally of the contract's balance and always reduced it by the amount a contract
+asked to pay, even when less — or nothing — was actually sent. That tally is now
+reduced by exactly the amount paid (a fix made in the automated-transaction
+engine itself, which our fork of that library carries), so it stays correct for
+everything that reads it: later payments in the same round, the per-step running
+cost that a contract's own funds must cover, the balance a contract can pay
+"again" next round, and the leftover returned to the creator when it finishes. A
+rounded-down payment's remainder now comes back to the creator instead of being
+stranded, and a request to pay a negative amount — which the engine would
+otherwise have treated as a deposit, inflating the balance — pays nothing and
+leaves the balance untouched, so it can neither overspend nor charge more
+running cost than the contract funded, both of which would otherwise stall the
+block. As a safety net, a contract that somehow still outgrows the storage limit
+is skipped for that round instead of stopping the block. All of these
 changes — the safety net included, since skipping a contract changes what a
 block contains — alter agreed network rules, so they switch on together at
 Previewnet block 70000.
