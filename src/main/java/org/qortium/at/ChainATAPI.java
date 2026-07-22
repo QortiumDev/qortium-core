@@ -1001,7 +1001,14 @@ public class ChainATAPI extends API {
 
 	/** Whether this execution height has reached the {@code atCheckedArithmeticHeight} feature trigger. */
 	private boolean isCheckedArithmeticActive() {
-		return this.blockHeight >= BlockChain.getInstance().getAtCheckedArithmeticHeight();
+		// Key the gate off the locally-derived block height (parent height + 1), exactly like
+		// isPayoutSolvencyEnforced above, NOT the peer-supplied BlockData.height threaded in through
+		// this.blockHeight during block validation. That height field is null in the signed block and is
+		// filled separately from the network message, so it is attacker-influenced; selecting checked vs
+		// wrapping arithmetic on it would let the same signed block fork nodes on a non-canonical height.
+		// During AT execution getCurrentBlockHeight() returns the parent block's height (the block being
+		// built is not yet persisted), so + 1 gives this block's true, consensus-derived height.
+		return this.getCurrentBlockHeight() + 1 >= BlockChain.getInstance().getAtCheckedArithmeticHeight();
 	}
 
 	private boolean isHashingStepCostActive() {

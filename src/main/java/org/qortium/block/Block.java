@@ -89,6 +89,7 @@ public class Block {
 		TRANSACTION_NEEDS_APPROVAL(55),
 		TRANSACTION_NOT_CONFIRMABLE(56),
 		AT_STATES_MISMATCH(61),
+		BLOCK_FEE_OVERFLOW(62),
 		ONLINE_ACCOUNTS_INVALID(70),
 		ONLINE_ACCOUNT_UNKNOWN(71),
 		ONLINE_ACCOUNT_SIGNATURES_MISSING(72),
@@ -319,12 +320,12 @@ public class Block {
 		// We have to sum fees too
 		for (TransactionData transactionData : transactions) {
 			this.transactions.add(Transaction.fromData(repository, transactionData));
-			totalFees = this.addBlockFees(totalFees, transactionData.getFee());
+			totalFees += transactionData.getFee();
 		}
 
 		this.atStates = atStates;
 		for (ATStateData atState : atStates)
-			totalFees = this.addBlockFees(totalFees, atState.getFees());
+			totalFees += atState.getFees();
 
 		this.blockData.setTotalFees(totalFees);
 	}
@@ -349,11 +350,11 @@ public class Block {
 		// We have to sum fees too
 		for (TransactionData transactionData : transactions) {
 			this.transactions.add(Transaction.fromData(repository, transactionData));
-			totalFees = this.addBlockFees(totalFees, transactionData.getFee());
+			totalFees += transactionData.getFee();
 		}
 
 		this.atStatesHash = atStatesHash;
-		totalFees = this.addBlockFees(totalFees, this.blockData.getATFees());
+		totalFees += this.blockData.getATFees();
 
 		this.blockData.setTotalFees(totalFees);
 	}
@@ -1366,6 +1367,13 @@ public class Block {
 		if (parentBlock.getChild() != null)
 			return ValidationResult.PARENT_HAS_EXISTING_CHILD;
 
+		// Consensus fee-arithmetic gate, keyed on the locally-derived height (parent height + 1), never
+		// the peer-supplied BlockData.height: at/after atCheckedArithmeticHeight a block whose
+		// reconstructed total fees overflow a long is invalid deterministically on every node.
+		ValidationResult feeArithmeticResult = this.validateReconstructedFees(parentBlockData.getHeight() + 1);
+		if (feeArithmeticResult != ValidationResult.OK)
+			return feeArithmeticResult;
+
 		// Check timestamp is newer than parent timestamp
 		if (this.blockData.getTimestamp() <= parentBlockData.getTimestamp())
 			return ValidationResult.TIMESTAMP_OLDER_THAN_PARENT;
@@ -1578,33 +1586,48 @@ public class Block {
 		return ValidationResult.OK;
 	}
 
-	/**
-	 * Height-gated accumulation of block fees, used when a block's total fees and per-block AT fees are
-	 * reconstructed from untrusted, network-supplied per-transaction and per-AT fee fields.
-	 * <p>
-	 * Below {@code atCheckedArithmeticHeight} this is byte-for-byte the historic silently-wrapping
-	 * {@code +}: pre-existing unchecked multi-payment validation means wrapped balances (and hence
-	 * overflowing fee sums) are reachable on today's chain, so every node must keep computing the same
-	 * wrapped totals until the flag day. From the trigger height, an overflow instead surfaces as a
-	 * deterministic {@link ArithmeticException} that makes the block invalid on every node, rather than
-	 * yielding a smaller apparent total.
-	 */
-	long addBlockFees(long runningTotal, long fee) {
-		if (this.isCheckedFeeArithmeticActive())
-			return addCheckedFees(runningTotal, fee);
-
-		return runningTotal + fee;
-	}
-
 	/** Checked accumulation of block fees: overflow throws a deterministic {@link ArithmeticException}. */
 	static long addCheckedFees(long runningTotal, long fee) {
 		return Math.addExact(runningTotal, fee);
 	}
 
-	/** Whether this block's height has reached the {@code atCheckedArithmeticHeight} feature trigger. */
-	private boolean isCheckedFeeArithmeticActive() {
-		Integer height = this.blockData.getHeight();
-		return height != null && height >= BlockChain.getInstance().getAtCheckedArithmeticHeight();
+	/**
+	 * Height-gated consensus validation of a block's reconstructed total fees.
+	 * <p>
+	 * A block's total fees are rebuilt from untrusted, network-supplied per-transaction and per-AT fee
+	 * fields (see the network-block constructors, which sum them with plain wrapping addition). Below
+	 * {@code atCheckedArithmeticHeight} an overflowing sum wraps byte-for-byte as on the base branch —
+	 * wrapped balances/fees are reachable on today's chain via the pre-existing unchecked multi-payment
+	 * validation, so every node must keep agreeing on the same wrapped totals until the flag day. From
+	 * the trigger height, an overflowing reconstruction instead makes the block invalid deterministically
+	 * on every node.
+	 * <p>
+	 * The gate keys off {@code height}, which callers derive locally as {@code parent height + 1} (the
+	 * block's true, consensus-anchored chain position, matching the AT-side {@code getCurrentBlockHeight()
+	 * + 1} gate), NEVER the peer-supplied, non-canonical {@link BlockData#getHeight()}. The reconstruction
+	 * runs here — during {@link #isValid()}, with a repository attached — rather than in the network-block
+	 * constructor, because that constructor can be invoked with a null repository (bulk-sync
+	 * deserialization) where no local height is available; the same signed block must not select different
+	 * arithmetic semantics on different nodes.
+	 */
+	private ValidationResult validateReconstructedFees(int height) throws DataException {
+		if (height < BlockChain.getInstance().getAtCheckedArithmeticHeight())
+			return ValidationResult.OK;
+
+		try {
+			// getTransactions() returns the constructor-populated list for a network block (no repository
+			// round-trip) and lazy-loads for a repository-backed block, so this mirrors exactly the fee
+			// set the network constructors reconstruct, regardless of how this Block was built.
+			long totalFees = 0L;
+			for (Transaction transaction : this.getTransactions())
+				totalFees = addCheckedFees(totalFees, transaction.getTransactionData().getFee());
+
+			addCheckedFees(totalFees, this.blockData.getATFees());
+		} catch (ArithmeticException e) {
+			return ValidationResult.BLOCK_FEE_OVERFLOW;
+		}
+
+		return ValidationResult.OK;
 	}
 
 	/**
@@ -1653,7 +1676,7 @@ public class Block {
 
 			allAtTransactions.addAll(atTransactions);
 			this.ourAtStates.add(atStateData);
-			this.ourAtFees = this.addBlockFees(this.ourAtFees, atStateData.getFees());
+			this.ourAtFees += atStateData.getFees();
 		}
 
 		// AT Transactions never need approval

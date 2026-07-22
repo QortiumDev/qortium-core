@@ -34,6 +34,28 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - fix(at): key the checked-arithmetic activation on the block's true height, not the claimed one
+
+Follow-up to the checked-arithmetic hardening below, closing a subtle way two
+honest nodes could still disagree. The switch from wrapping to checked
+arithmetic turns on at a block height (`atCheckedArithmeticHeight`, Previewnet
+block 70,000). The previous version decided that height from the height field
+that travels *alongside* a block over the network — but that field is not part
+of what the block's signature covers, so a peer can relabel the very same signed
+block with a different height. Two nodes handed the same block with different
+claimed heights could then pick different arithmetic and split the chain on a
+height that isn't the block's real position.
+
+This fix makes every node compute the deciding height the same way, purely from
+information it already trusts: a block's real position is its parent's height
+plus one. The block-fee check now runs during block validation (where the parent,
+and therefore the true height, is known) instead of during network decoding
+(where a block can arrive with no chain context at all), and the AT-side money
+checks now read the same locally-derived height that the existing payout-solvency
+rule already uses. Nothing about the arithmetic itself changed, and behavior
+before block 70,000 is byte-for-byte identical to before, so the live Previewnet
+chain-config fingerprint is unchanged and no node needs to re-sync.
+
 ### 2026-07-22 - feat(at): consensus-safety hardening for AT money, asset sweeps and hashing cost
 
 Three safety improvements to how automated transactions (ATs) handle money,
