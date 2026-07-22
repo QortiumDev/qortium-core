@@ -163,6 +163,25 @@ public class DeployAtTransaction extends Transaction {
 		if (this.getVersion() < 2)
 			return ValidationResult.INVALID_CREATION_BYTES;
 
+		// The deciding height is derived locally - this repository's chain tip plus one - and never
+		// from the height a block claims for itself. That claimed height is not covered by the block
+		// signature, so a peer can relabel the very same signed block; two honest nodes handed the
+		// same block with different claimed heights would then gate differently and split the chain.
+		// During block validation the block being validated is not yet persisted, so the tip is its
+		// parent and tip + 1 is this block's true position. Same rule as the payout-solvency and
+		// checked-arithmetic gates.
+		int height = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+
+		// Creation version 3 unlocks the unsigned 256-bit A/B arithmetic function codes. The AT
+		// runtime gates *execution* of those codes on the AT's creation version, but nothing gated
+		// *deployment*: once any node ran a runtime that understands version 3, a version-3 DEPLOY_AT
+		// would be accepted by upgraded nodes and rejected as invalid creation bytes by every node
+		// still on the older runtime - a chain split. Gating deployment on an agreed height makes the
+		// decision identical everywhere. This check deliberately sits before the MachineState
+		// construction below so it does not depend on what the pinned runtime happens to accept.
+		if (this.getVersion() >= 3 && height < BlockChain.getInstance().getAtUnsigned256ArithmeticHeight())
+			return ValidationResult.AT_VERSION_NOT_YET_ACTIVE;
+
 		// Check creation bytes are valid (for v2+)
 		ensureATAddress(this.deployAtTransactionData);
 
@@ -172,7 +191,6 @@ public class DeployAtTransaction extends Transaction {
 		long creation = this.deployAtTransactionData.getTimestamp();
 		ATData skeletonAtData = new ATData(atAddress, creatorPublicKey, creation, assetId);
 
-		int height = this.repository.getBlockRepository().getBlockchainHeight() + 1;
 		long blockTimestamp = Timestamp.toLong(height, 0);
 
 		ChainATAPI api = new ChainATAPI(repository, skeletonAtData, blockTimestamp);

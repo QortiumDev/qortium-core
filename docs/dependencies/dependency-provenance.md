@@ -11,20 +11,23 @@ preserves the complete inherited Git history without remaining in GitHub's fork
 network.
 
 - Maven coordinate: `com.github.QortiumDev:AT`
-- Version pin: `33df17d`
+- Version pin: `0525eec`
 - Local checkout: `~/qortium/git/AT`
-- Local jar: `lib/com/github/QortiumDev/AT/33df17d/AT-33df17d.jar`
-- Local POM: `lib/com/github/QortiumDev/AT/33df17d/AT-33df17d.pom`
+- Local jar: `lib/com/github/QortiumDev/AT/0525eec/AT-0525eec.jar`
+- Local POM: `lib/com/github/QortiumDev/AT/0525eec/AT-0525eec.pom`
 - Pinned commit:
-  `33df17d976af63037ca345b928cc2daf350d9a58`
+  `0525eecd57419c2762aa8ee2914b09bdb1f5a720`
 - Local jar SHA-256:
-  `2f40ee7acfdeaa1dfc35615a6ba7870dcc4e85977d3e9e3a1b7ad6bcef340f3b`
+  `13fb9fa39dbef560d717c825e4c0a7b675257eb4caf4cdabcc6597350158aecd`
 - Local POM SHA-256:
-  `43f6ac5cfae6cf0f823f972c929b3d3844493cf1e510268c8369c31275eb8b4d`
+  `dd590a2735c3933f662b6da6d075483a51157e0773bdc5f0bc79b8daa768cd33`
 - Upstream lineage: `ciyam/AT` -> `catbref/AT` -> `IceBurst/AT` ->
   `QortiumDev/AT`
+- Previous pin `33df17d` (jar SHA-256
+  `2f40ee7acfdeaa1dfc35615a6ba7870dcc4e85977d3e9e3a1b7ad6bcef340f3b`) remains
+  vendored under `lib/`, alongside `22f9266`, for historical verification.
 
-The pinned commit includes the payout-balance correctness changes used by Core,
+The previously pinned commit `33df17d` included the payout-balance correctness changes used by Core,
 a backward-compatible pre-execution pricing hook, and enforcement of the
 existing platform-function validation hook. Stock payout opcodes debit the VM
 balance by the amount the host actually emitted, and a host platform API can

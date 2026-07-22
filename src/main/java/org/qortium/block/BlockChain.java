@@ -71,6 +71,7 @@ public class BlockChain {
 	private static final String AT_TRUST_STATUS_TRIGGER = "atTrustStatusHeight";
 	private static final String AT_BALANCE_QUERY_TRIGGER = "atBalanceQueryHeight";
 	private static final String AT_CODE_HASH_CHECK_TRIGGER = "atCodeHashCheckHeight";
+	private static final String AT_UNSIGNED_256_ARITHMETIC_TRIGGER = "atUnsigned256ArithmeticHeight";
 
 	// Properties
 
@@ -1016,6 +1017,23 @@ public class BlockChain {
 	/** From this height, ATs may verify another AT's stored code hash via {@code CHECK_CODE_HASH_OF_AT_IN_B}. */
 	public long getAtCodeHashCheckHeight() {
 		return getFeatureTriggerHeight(AT_CODE_HASH_CHECK_TRIGGER);
+	}
+
+	/**
+	 * From this height, ATs may be DEPLOYED with creation version 3, which unlocks the unsigned
+	 * 256-bit A/B arithmetic function codes ({@code 0x0140}-{@code 0x0147}) in the AT runtime.
+	 * <p>
+	 * The runtime gates <i>execution</i> of those function codes on the AT's creation version, but
+	 * that alone does not make the upgrade safe: without this trigger a version-3 AT could be
+	 * deployed as soon as the first node ran a runtime that understands version 3, and nodes still
+	 * on the older runtime would reject the very same DEPLOY_AT as invalid creation bytes. Gating
+	 * deployment on an agreed height makes every node accept or reject it identically.
+	 * <p>
+	 * Below the trigger, version-3 deployment is rejected and version-1/2 deployment is unaffected,
+	 * so behaviour is byte-for-byte the legacy behaviour until the flag day.
+	 */
+	public long getAtUnsigned256ArithmeticHeight() {
+		return getFeatureTriggerHeight(AT_UNSIGNED_256_ARITHMETIC_TRIGGER);
 	}
 
 	/** From this height, SET_GROUP_AVATAR transactions are consensus-active. Disabled unless configured. */

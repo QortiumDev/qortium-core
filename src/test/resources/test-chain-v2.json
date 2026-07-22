@@ -89,7 +89,8 @@
 		"atCheckedArithmeticHeight": 0,
 		"atTrustStatusHeight": 0,
 		"atBalanceQueryHeight": 0,
-		"atCodeHashCheckHeight": 0
+		"atCodeHashCheckHeight": 0,
+		"atUnsigned256ArithmeticHeight": 0
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

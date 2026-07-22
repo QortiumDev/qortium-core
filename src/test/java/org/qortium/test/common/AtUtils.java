@@ -18,6 +18,14 @@ import java.nio.ByteBuffer;
 public class AtUtils {
 
     public static byte[] buildSimpleAT() {
+        return buildSimpleAT((short) 2);
+    }
+
+    /**
+     * Builds the same trivial AT as {@link #buildSimpleAT()} but with a caller-chosen creation
+     * version, so tests can exercise the deployment gates that key on creation version.
+     */
+    public static byte[] buildSimpleAT(short ciyamAtVersion) {
         // Pretend we use 4 values in data segment
         int addrCounter = 4;
 
@@ -43,7 +51,6 @@ public class AtUtils {
         byte[] codeBytes = new byte[codeByteBuffer.limit()];
         codeByteBuffer.get(codeBytes);
 
-        final short ciyamAtVersion = 2;
         final short numCallStackPages = 0;
         final short numUserStackPages = 0;
         final long minActivationAmount = 0L;
