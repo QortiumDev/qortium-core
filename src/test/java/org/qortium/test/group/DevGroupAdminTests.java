@@ -838,6 +838,8 @@ public class DevGroupAdminTests extends Common {
 	public void testDevGroupApprovalCategoryMapping() {
 		EnumSet<Transaction.TransactionType> governanceTypes = EnumSet.of(
 				Transaction.TransactionType.UPDATE_GROUP,
+				// A group's avatar is owner/admin-controlled group state, so it is governance.
+				Transaction.TransactionType.SET_GROUP_AVATAR,
 				Transaction.TransactionType.ADD_GROUP_ADMIN,
 				Transaction.TransactionType.REMOVE_GROUP_ADMIN,
 				Transaction.TransactionType.GROUP_KICK,

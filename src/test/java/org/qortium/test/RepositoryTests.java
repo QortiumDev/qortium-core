@@ -198,23 +198,27 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
-	public void testVersionFourRepositorySchemaVersionIsUnsupported() throws Exception {
-		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-four-schema-" + System.nanoTime();
+	public void testSchemaVersionAboveCurrentIsUnsupported() throws Exception {
+		// Schema 4 used to be the "not ours" marker, but the group-avatar upgrade made 4 a real
+		// intermediate on the way to 5. Assert against the first version above the current baseline.
+		String connectionUrl = "jdbc:hsqldb:mem:unsupported-future-schema-" + System.nanoTime();
 
 		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
 			connection.setAutoCommit(false);
 
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("CREATE TABLE DatabaseInfo (version INTEGER NOT NULL)");
-				statement.execute("INSERT INTO DatabaseInfo VALUES (4)");
+				statement.execute("INSERT INTO DatabaseInfo VALUES ("
+						+ (HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION + 1) + ")");
 			}
 			connection.commit();
 
 			try {
 				HSQLDBDatabaseUpdates.updateDatabase(connection);
-				fail("Schema version 4 should not be treated as the Qortium baseline");
+				fail("A schema version above the current baseline should be rejected");
 			} catch (SQLException e) {
-				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 4"));
+				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version "
+						+ (HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION + 1)));
 			}
 
 			try (Statement statement = connection.createStatement()) {
@@ -314,6 +318,11 @@ public class RepositoryTests extends Common {
 			assertTableExists(connection, "ATMAPENTRIES");
 			assertTableExists(connection, "ATMAPENTRYCHANGES");
 			assertIndexExists(connection, "ATMAPENTRYCHANGES", "ATMAPENTRYCHANGESADDRESSKEYINDEX");
+			// Schema 3 -> 4 -> 5: group and account avatar state.
+			assertColumnExists(connection, "GROUPS", "AVATAR_SIGNATURE");
+			assertTableExists(connection, "SETGROUPAVATARTRANSACTIONS");
+			assertTableExists(connection, "ACCOUNTAVATARS");
+			assertTableExists(connection, "SETACCOUNTAVATARTRANSACTIONS");
 
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("SHUTDOWN");
@@ -368,6 +377,7 @@ public class RepositoryTests extends Common {
 			statement.execute("CREATE TABLE PUBLIC.VOTEONPOLLTRANSACTIONS(SIGNATURE VARBINARY(64) PRIMARY KEY,OPTION_INDEX TINYINT NOT NULL,PREVIOUS_OPTION_INDEX TINYINT)");
 			statement.execute("CREATE TABLE PUBLIC.ATS(AT_ADDRESS PUBLIC.ACCOUNTADDRESS PRIMARY KEY)");
 			statement.execute("CREATE TABLE PUBLIC.ATSTATES(AT_ADDRESS PUBLIC.ACCOUNTADDRESS,HEIGHT INTEGER NOT NULL,STATE_HASH PUBLIC.ATSTATEHASH NOT NULL,PRIMARY KEY(AT_ADDRESS,HEIGHT),FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
+			createMinimalAvatarUpgradePrerequisites(statement);
 		}
 	}
 
@@ -380,7 +390,23 @@ public class RepositoryTests extends Common {
 			statement.execute("INSERT INTO PUBLIC.DATABASEINFO VALUES(2)");
 			statement.execute("CREATE TABLE PUBLIC.ATS(AT_ADDRESS PUBLIC.ACCOUNTADDRESS PRIMARY KEY)");
 			statement.execute("CREATE TABLE PUBLIC.ATSTATES(AT_ADDRESS PUBLIC.ACCOUNTADDRESS,HEIGHT INTEGER NOT NULL,STATE_HASH PUBLIC.ATSTATEHASH NOT NULL,PRIMARY KEY(AT_ADDRESS,HEIGHT),FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
+			statement.execute("CREATE TYPE PUBLIC.SIGNATURE AS VARBINARY(64)");
+			createMinimalAvatarUpgradePrerequisites(statement);
 		}
+	}
+
+	/**
+	 * The schema-3 and schema-4 upgrades add group and account avatar state, so they touch GROUPS,
+	 * ACCOUNTS and TRANSACTIONS. The minimal fixtures only model the tables their own upgrade step
+	 * needed, so without these the upgrade chain fails on "object not found: PUBLIC.GROUPS" rather
+	 * than on anything the test is actually asserting.
+	 */
+	private static void createMinimalAvatarUpgradePrerequisites(Statement statement) throws SQLException {
+		statement.execute("CREATE TYPE PUBLIC.ACCOUNTPUBLICKEY AS VARBINARY(32)");
+		statement.execute("CREATE TYPE PUBLIC.GROUPID AS INTEGER");
+		statement.execute("CREATE TABLE PUBLIC.TRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY)");
+		statement.execute("CREATE TABLE PUBLIC.ACCOUNTS(ACCOUNT PUBLIC.ACCOUNTADDRESS PRIMARY KEY)");
+		statement.execute("CREATE TABLE PUBLIC.\"GROUPS\"(GROUP_ID PUBLIC.GROUPID PRIMARY KEY)");
 	}
 
 	private static void assertTableExists(Connection connection, String tableName) throws SQLException {
