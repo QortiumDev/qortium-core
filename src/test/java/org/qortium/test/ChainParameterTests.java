@@ -262,4 +262,18 @@ public class ChainParameterTests {
 		assertFalse(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.isValidValue(
 				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(-1)));
 	}
+
+	@Test
+	public void testMaxMapEntriesMetadataAndPositiveValue() {
+		ChainParameter parameter = ChainParameter.MAX_MAP_ENTRIES_PER_AT;
+
+		assertEquals(15, parameter.id);
+		assertEquals(Integer.BYTES, parameter.valueLength);
+		assertEquals("INTEGER", parameter.getValueType());
+		assertEquals(Integer.valueOf(1), parameter.getMinimumIntegerValue());
+		assertEquals("/chain-parameters/at-map/max-entries/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/at-map/max-entries/{height}", parameter.getEffectivePath());
+		assertTrue(parameter.isValidValue(parameter.encodeIntValue(500)));
+		assertFalse(parameter.isValidValue(parameter.encodeIntValue(0)));
+	}
 }

@@ -135,6 +135,22 @@ public class BlockChainConfigHashTests {
 	}
 
 	@Test
+	public void testShippedPreviewnetEnablesAtMapsWithoutHashingTheNewStepCost() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("previewchain.json"), StandardCharsets.UTF_8));
+
+		assertEquals(70_000L, blockChain.getAtMapStorageHeight());
+		assertEquals(100, blockChain.getCiyamAtSettings().mapEntryStepCost);
+	}
+
+	@Test
+	public void testShippedMainnetLeavesAtMapsDisabled() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("blockchain.json"), StandardCharsets.UTF_8));
+
+		assertEquals(BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT, blockChain.getAtMapStorageHeight());
+		assertEquals(100, blockChain.getCiyamAtSettings().mapEntryStepCost);
+	}
+
+	@Test
 	public void testOtherConfigChangesStillAffectHash() {
 		String firstConfig = "{"
 				+ "\"networkId\":\"qortium-preview\","

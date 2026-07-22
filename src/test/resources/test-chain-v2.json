@@ -83,7 +83,8 @@
 	"assetOrderBoundsHeight": 10,
 	"featureTriggers": {
 		"devGroupApprovalSplitHeight": 1000,
-		"atPayoutSolvencyHeight": 0
+		"atPayoutSolvencyHeight": 0,
+		"atMapStorageHeight": 0
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

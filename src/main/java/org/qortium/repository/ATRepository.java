@@ -1,6 +1,8 @@
 package org.qortium.repository;
 
 import org.qortium.data.at.ATData;
+import org.qortium.data.at.ATMapChangeData;
+import org.qortium.data.at.ATMapEntryData;
 import org.qortium.data.at.ATStateData;
 import org.qortium.utils.ByteArray;
 
@@ -39,6 +41,32 @@ public interface ATRepository {
 
 	/** Removes an AT from repository, including associated ATStateData */
 	public void delete(String atAddress) throws DataException;
+
+	// AT map storage
+
+	/** Returns current map entries for an AT, ordered by key1 then key2. */
+	public List<ATMapEntryData> getATMapEntries(String atAddress) throws DataException;
+
+	/** Returns a current map value, or null when the key is unset. */
+	public Long getATMapValue(String atAddress, long key1, long key2) throws DataException;
+
+	/** Returns the number of current map entries owned by an AT. */
+	public int getATMapEntryCount(String atAddress) throws DataException;
+
+	/**
+	 * Applies ordered map changes and records their undo data at the supplied block height.
+	 * Changes remain part of the repository's current transaction and are not committed here.
+	 */
+	public void saveATMapChanges(int height, List<ATMapChangeData> changes) throws DataException;
+
+	/** Restores map values changed at a block height and deletes the corresponding undo rows. */
+	public void revertATMapChanges(int height) throws DataException;
+
+	/** Deletes map undo rows inside a height range that is already beyond the node's orphan horizon. */
+	public int pruneATMapChanges(int minHeight, int maxHeight) throws DataException;
+
+	/** Verifies every current map against the latest committed root; throws on any mismatch. */
+	public void verifyATMapRoots() throws DataException;
 
 	// AT States
 

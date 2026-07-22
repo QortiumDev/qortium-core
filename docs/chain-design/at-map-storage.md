@@ -1,6 +1,6 @@
 # AT map storage
 
-Status: DESIGN, 2026-07-21. Target: Qortium Previewnet.
+Status: IMPLEMENTED, 2026-07-21. Target: Qortium Previewnet block 70,000.
 
 Persistent key/value storage for automated transactions, so an AT can keep state
 that does not fit in its 2 KB data segment.
@@ -67,12 +67,16 @@ disagree about map contents while producing identical AT state hashes. The
 divergence only surfaces later, when some contract reads a map value and branches
 on it, by which point the fork is deep and its cause is far away.
 
-Qortium commits map state. Each AT carries a 32-byte **map root** maintained as a
-hash chain over its own writes, in execution order:
+Qortium commits the **current** map state. Each AT carries a 32-byte **map root**
+computed over its live, nonzero entries. Entries are sorted lexicographically by
+signed `key1` and then signed `key2`, matching Java/HSQLDB `BIGINT` ordering. Each
+field is encoded as an 8-byte big-endian signed long and the canonical entry stream
+contains no count, separators or zero-valued rows:
 
 ```
-mapRoot_0 = 32 zero bytes
-mapRoot_n = SHA256(mapRoot_n-1 || key1 || key2 || value)      // 8-byte big-endian fields
+canonicalMap = concat(key1 || key2 || value for each sorted live entry)
+mapRoot = SHA256(canonicalMap)
+emptyMapRoot = SHA256(empty byte string)
 ```
 
 The root is stored alongside the AT state and folded into the state hash:
@@ -84,27 +88,25 @@ stateHash = SHA256(stateData || mapRoot)
 Properties this gives:
 
 - Bounded — 32 bytes per AT regardless of how many entries it holds.
-- Order-sensitive, which is correct: AT execution order is already pinned
-  deterministically by `ORDER BY created_when ASC, AT_address DESC`.
-- Any divergence in map writes changes the block's AT state hash immediately, at
-  the block that caused it, instead of silently later.
+- Canonical — the same current key/value set always has the same root regardless of
+  the history that produced it.
+- Directly verifiable — recomputing the root from `ATMapEntries` and comparing it to
+  the latest stored `mapRoot` verifies the serving table without replaying history.
+- Consensus-visible — any divergence in the current map state changes the AT state
+  hash in the block that commits that state.
 
 Changing `stateHash` is consensus-visible, so it is gated (see "Activation").
 
-Residual risk to be aware of: `mapRoot` is a hash chain over **write history**, not a
-Merkle structure over the **current** key/value set. It detects divergence between
-honest nodes (which execute deterministically and so write in identical order), but
-it cannot independently attest to what `ATMapEntries` currently holds — nothing
-consensus-checks that the local serving table matches the committed root. A bug in
-undo-log replay on reorg, or in reconstruction during resync/bootstrap, could desync
-a node's actual map contents from the agreed root and go undetected, exactly the
-failure class this design closes at the digest level pushed down one layer. Two
-mitigations to implement alongside: (1) a verification tool that recomputes `mapRoot`
-from `ATMapEntries` + `ATMapEntryChanges` at a checkpoint and compares it to the
-stored value, and (2) a defined reconstruction path for nodes that bootstrap from a
-pruned/archived range rather than replaying every `SET` from genesis — `ATMapEntries`
-holds current state and must be exempt from the `AT_TRIM_HEIGHT`/`AT_PRUNE_HEIGHT`
-pruning that trims historical `ATStatesData`.
+The root commits final state, not transient writes that cancel each other within one
+AT round. That is intentional: the map is consensus state, while the journal below
+exists only to reverse a committed block. A verification tool can recompute every
+AT's root directly from `ATMapEntries` and compare it with the latest `ATStateData`.
+
+`mapRoot` is stored alongside the serialized machine state in `ATStateData` and the
+`ATStates` repository row. Pre-activation rows have no root; the first active
+execution treats the prior map as empty and uses `SHA256(empty)`. The root does not
+need a new field in the block wire format because `stateHash` already commits it and
+validators re-execute the AT to derive the same value.
 
 ## Storage and rollback
 
@@ -116,14 +118,14 @@ CREATE TABLE ATMapEntries (
   key1        BIGINT      NOT NULL,
   key2        BIGINT      NOT NULL,
   value       BIGINT      NOT NULL,
-  height      INTEGER     NOT NULL,
   PRIMARY KEY (AT_address, key1, key2),
   FOREIGN KEY (AT_address) REFERENCES ATs (AT_address) ON DELETE CASCADE
 )
 ```
 
 Current values live in `ATMapEntries`. Because a reorg must restore *previous*
-values rather than merely drop new ones, every write also appends to an undo log:
+values rather than merely drop new ones, every actual mutation also appends to an
+undo journal:
 
 ```sql
 CREATE TABLE ATMapEntryChanges (
@@ -131,20 +133,75 @@ CREATE TABLE ATMapEntryChanges (
   key1          BIGINT    NOT NULL,
   key2          BIGINT    NOT NULL,
   previousValue BIGINT,              -- NULL when the entry did not exist
+  newValue      BIGINT,               -- NULL when the entry was deleted
   height        INTEGER   NOT NULL,
   sequence      INTEGER   NOT NULL,
-  PRIMARY KEY (AT_address, key1, key2, height, sequence)
+  PRIMARY KEY (height, sequence),
+  FOREIGN KEY (AT_address) REFERENCES ATs (AT_address) ON DELETE CASCADE
 )
 ```
 
-Orphaning height H replays `ATMapEntryChanges` for that height in reverse sequence,
-restoring `previousValue` or deleting the row where `previousValue IS NULL`, then
-deletes the change rows. The previous `mapRoot` comes back with the previous
-`ATStateData` row, which `AT.revert` already restores.
+`sequence` is allocated globally across accepted map mutations in deterministic AT
+execution order. A logical no-op (setting the effective value again, including
+deleting an absent entry) creates no journal row and does not change the root. A
+write rejected by the entry cap behaves the same way. Recording both previous and
+new values makes the journal independently auditable while keeping reverse replay
+simple.
 
-Writes within a block are visible to later reads in the same block, including
-reads by other ATs executing later in that block. This is what makes the oracle
-pattern work, and it is why execution order must stay pinned.
+Orphaning height H replays `ATMapEntryChanges` for that height in descending
+`sequence`, restoring `previousValue` or deleting the row where `previousValue IS
+NULL`, then deletes the change rows. The previous `mapRoot` comes back with the
+previous `ATStateData` row, which `AT.revert` already restores.
+
+## Validation overlay and atomicity
+
+AT execution must not write either table directly. `Block.executeATs()` runs during
+block construction and validation, before the block is accepted, so repository
+writes there could leak from an invalid candidate. Instead, each `Block` owns one
+in-memory map execution context shared by every `ChainATAPI` created for that block:
+
+- A read checks the block overlay first and then the committed `ATMapEntries` table.
+- A successful write changes only the calling AT's overlay, updates its effective
+  entry count and appends a block-global pending journal item.
+- Each AT round starts with a context checkpoint. If the round is discarded — for
+  example because its serialized state exceeds the limit — all writes from that AT
+  are removed before the next AT runs.
+- Once a round is accepted, its final canonical current-state root is computed from
+  the committed rows plus overlay and placed in that round's `ATStateData` before
+  `stateHash` is calculated.
+
+This overlay makes writes visible to later reads in the same AT and to other ATs
+executing later in the block without exposing unvalidated state. AT order remains
+pinned by `ORDER BY created_when ASC, AT_address DESC`; an earlier reader sees the
+parent-block value, while a later reader sees an earlier writer's accepted overlay.
+
+Only `Block.process()` applies the pending current rows and journal rows, alongside
+the already-derived AT states, generated transactions and fees. They use the same
+repository transaction and become durable together at the caller's normal commit.
+Any processing failure rolls the whole transaction back. Orphaning reverses all map
+changes for the height and AT states in the same repository transaction, so a reorg
+cannot expose a map from one branch with machine state from another.
+
+## Bootstrap, replay and pruning
+
+`ATMapEntries` is current consensus state. It must be included in repository
+backups/bootstrap snapshots and must never be trimmed or pruned with historical
+`ATStatesData`. The latest retained AT state must include its `mapRoot`, including
+for sleeping or finished ATs whose maps remain readable.
+
+A node replaying blocks from at or before `atMapStorageHeight` reconstructs maps and
+roots deterministically through normal AT execution. A bootstrap or archive replay
+that starts after activation cannot reconstruct current entries from block state
+hashes alone; its trusted starting snapshot must therefore include `ATMapEntries`
+and the corresponding latest per-AT roots. After repository initialization, Core
+recomputes every latest root from the current table and refuses to start if the
+serving rows and retained AT states disagree.
+
+`ATMapEntryChanges` is rollback history, not the source of current-state
+verification. Journal rows must be retained for every height the node still claims
+it can orphan. `AtStatesPruner` removes them only through the same safe AT-state
+prune horizon. Pruning journal history never permits pruning `ATMapEntries` or the
+latest root.
 
 ## Pricing and growth control
 
@@ -158,11 +215,12 @@ Qortium sets two limits up front, and they live in **different** places on purpo
 `ChainParameter` is the on-chain governance mechanism whose values are updated by a
 `ChainParameterUpdateTransaction` gated on an activation height:
 
-- `mapEntryStepCost` — steps charged for `SET_MAP_VALUE_KEYS_IN_A` when it creates a
-  new entry. Overwriting an existing entry, or writing `0` to delete one, costs the
-  ordinary function-call cost, since neither grows storage. Kept in `ciyamAtSettings`
-  alongside `feePerStep` and `maxStepsPerRound`, since it is a step-budget constant,
-  not a value expected to change under governance.
+- `mapEntryStepCost` — total steps charged for `SET_MAP_VALUE_KEYS_IN_A` when it
+  creates a new entry. Reads, overwrites, deletes, logical no-ops and cap-rejected
+  writes cost the ordinary function-call cost of 10 steps. A new live entry costs
+  100 steps total. Kept in `ciyamAtSettings` alongside `feePerStep` and
+  `maxStepsPerRound`, since it is a step-budget constant, not a value expected to
+  change under governance.
 - `maxMapEntriesPerAt` — hard ceiling on live entries per AT. A `SET` that would
   exceed it is a no-op; the AT continues rather than erroring, so a contract cannot
   be bricked by a full map, and authors are expected to check with a read first.
@@ -175,9 +233,18 @@ Deleting is writing `0`: the value `0` is indistinguishable from unset by design
 `GET` on a missing key returning `0` and a deleted key returning `0` are the same
 observable, and the row is removed to reclaim space.
 
-Suggested starting values, to be tuned against real step budgets before activation:
-`mapEntryStepCost` = 100 (10× a function call, against `maxStepsPerRound` = 500, so
-at most 5 new entries per AT per round), `maxMapEntriesPerAt` = **500**.
+The stock CIYAM API currently prices an external-function opcode before the platform
+function can inspect whether the key exists. QortiumDev/AT therefore adds a
+backward-compatible platform pre-charge hook with a no-op/default implementation for
+other hosts. Core uses that hook before execution to add 90 steps only when the SET
+would create a nonzero entry within the cap; the ordinary function charge already
+accounts for the first 10. If the remaining round budget cannot cover the full 100,
+the function does not execute and no overlay mutation occurs. Overwrite, delete,
+logical no-op and cap rejection receive no additional charge.
+
+Starting values: `mapEntryStepCost` = **100** (10× the ordinary function call,
+against `maxStepsPerRound` = 500, so at most 5 new entries per AT per round) and
+`maxMapEntriesPerAt` = **500**.
 
 The cap starts deliberately low because the ratchet only turns one way: raising it is
 safe, but lowering it bricks any contract that has already grown past the new limit.
@@ -185,6 +252,17 @@ Governance can raise 500 once there is real usage to calibrate against; it could
 safely walk back 5000. Note this bounds total storage only as (number of ATs) × cap,
 and on a fee-less chain the number of ATs is bounded only by MemPoW deploy cost — so
 the cap is a spam ceiling, not a spam solution.
+
+Because a cap-rejected SET is deliberately a no-op, contracts must not assume that
+returning from SET means the entry exists. The SMPL faucet must use this sequence:
+
+1. Check the claimant key is currently unset.
+2. SET a nonzero claimed marker.
+3. GET the same key from self and verify the marker was stored.
+4. Only then issue the payment.
+
+This SET-readback-before-PAY rule prevents a full map from turning the cap's no-op
+semantics into repeated faucet payouts.
 
 ## Where this differs from Signum
 
@@ -205,13 +283,19 @@ chain-specific work in the sanctioned platform range, as Qortal has.
 ## Activation
 
 Gated on a new feature trigger, `atMapStorageHeight`. Before it: both function codes
-are unrecognised and throw, and `stateHash` keeps its current definition. From it:
-the codes execute and `stateHash` includes the map root.
+are unrecognised and throw, `mapRoot` is absent, and `stateHash` keeps its current
+definition. From it: the codes execute, an empty map uses `SHA256(empty)`, and
+`stateHash` includes the map root. Existing ATs acquire their first root on their
+first active execution; ATs deployed at or after the trigger store the empty root in
+their initial state.
 
-No jar change is required — `FunctionCode.valueOf` routes the whole `0x0500-0x06ff`
-range to `API_PASSTHROUGH`, so both codes are implemented entirely in
-`ChainFunctionCode` and `ChainATAPI`. Adding a feature trigger is not a peering
-flag-day, since `featureTriggers` is excluded from the chain config hash.
+`FunctionCode.valueOf` already routes the whole `0x0500-0x06ff` range to
+`API_PASSTHROUGH`, so the function behavior lives in `ChainFunctionCode` and
+`ChainATAPI`. The new-entry pricing distinction additionally requires the
+backward-compatible QortiumDev/AT pre-charge hook described above. Adding a feature
+trigger is not a peering flag-day, since `featureTriggers` is excluded from the
+chain config hash, but every consensus node still has to run the supporting Core/AT
+version with the same activation height before the trigger.
 
 ## Decided
 
@@ -228,7 +312,7 @@ flag-day, since `featureTriggers` is excluded from the chain config hash.
 
 - Whether to expose a `GET_MAP_ENTRY_COUNT` so a contract can check its own headroom
   before writing, rather than discovering the cap by no-op. If added, note that a
-  rejected over-cap `SET` must **not** advance the write-hash-chain, so the count and
-  the committed `mapRoot` stay consistent.
+  rejected over-cap `SET` must not change the overlay, count, journal or committed
+  `mapRoot`.
 - Pruning or rent for ATs that are finished and can never write again. Their entries
   are dead weight but may still be read by other contracts.

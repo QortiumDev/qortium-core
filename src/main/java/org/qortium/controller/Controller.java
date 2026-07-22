@@ -493,6 +493,11 @@ public class Controller extends Thread {
 			try (final Repository repository = RepositoryManager.getRepository()) {
 				// RepositoryManager.rebuildTransactionSequences(repository);
 				ArbitraryDataCacheManager.getInstance().buildArbitraryResourcesCache(repository, false);
+				int repositoryHeight = repository.getBlockRepository().getBlockchainHeight();
+				if (repositoryHeight >= BlockChain.getInstance().getAtMapStorageHeight()) {
+					LOGGER.info("Verifying persistent AT map roots...");
+					repository.getATRepository().verifyATMapRoots();
+				}
 			}
 
 

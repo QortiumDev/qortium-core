@@ -5,6 +5,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.data.at.ATData;
+import org.qortium.data.at.ATMapChangeData;
+import org.qortium.data.at.ATMapEntryData;
 import org.qortium.data.at.ATStateData;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
@@ -400,6 +402,7 @@ public class AtRepositoryTests extends Common {
 					atStateData.getHeight(),
 					/*StateData*/ null,
 					atStateData.getStateHash(),
+					atStateData.getMapRoot(),
 					atStateData.getFees(),
 					atStateData.isInitial(),
 					atStateData.getSleepUntilMessageTimestamp());
@@ -410,6 +413,156 @@ public class AtRepositoryTests extends Common {
 
 			assertEquals(testHeight, atStateData.getHeight());
 			assertNull(atStateData.getStateData());
+		}
+	}
+
+	@Test
+	public void testATMapChangesApplyAndRevertInOrder() throws DataException {
+		byte[] creationBytes = AtUtils.buildSimpleAT();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes,
+					1_00000000L);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			int firstHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+
+			repository.getATRepository().saveATMapChanges(firstHeight, List.of(
+					new ATMapChangeData(atAddress, 5L, 7L, null, 10L),
+					new ATMapChangeData(atAddress, -1L, 2L, null, 30L),
+					new ATMapChangeData(atAddress, 5L, 7L, 10L, 20L)));
+
+			assertEquals(Long.valueOf(20L), repository.getATRepository().getATMapValue(atAddress, 5L, 7L));
+			assertEquals(Long.valueOf(30L), repository.getATRepository().getATMapValue(atAddress, -1L, 2L));
+			assertEquals(2, repository.getATRepository().getATMapEntryCount(atAddress));
+
+			List<ATMapEntryData> entries = repository.getATRepository().getATMapEntries(atAddress);
+			assertEquals(2, entries.size());
+			assertEquals(-1L, entries.get(0).getKey1());
+			assertEquals(5L, entries.get(1).getKey1());
+
+			int secondHeight = firstHeight + 1;
+			repository.getATRepository().saveATMapChanges(secondHeight, List.of(
+					new ATMapChangeData(atAddress, 5L, 7L, 20L, null),
+					new ATMapChangeData(atAddress, 9L, 9L, null, 90L)));
+			assertNull(repository.getATRepository().getATMapValue(atAddress, 5L, 7L));
+			assertEquals(Long.valueOf(90L), repository.getATRepository().getATMapValue(atAddress, 9L, 9L));
+
+			repository.getATRepository().revertATMapChanges(secondHeight);
+			assertEquals(Long.valueOf(20L), repository.getATRepository().getATMapValue(atAddress, 5L, 7L));
+			assertNull(repository.getATRepository().getATMapValue(atAddress, 9L, 9L));
+
+			repository.getATRepository().revertATMapChanges(firstHeight);
+			assertEquals(0, repository.getATRepository().getATMapEntryCount(atAddress));
+			assertNull(repository.getATRepository().getATMapValue(atAddress, -1L, 2L));
+			repository.saveChanges();
+		}
+	}
+
+	@Test
+	public void testATMapBatchRejectsStalePreviousValueWithoutPartialApply() throws DataException {
+		byte[] creationBytes = AtUtils.buildSimpleAT();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes,
+					1_00000000L);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			int height = repository.getBlockRepository().getBlockchainHeight() + 1;
+
+			assertThrows(DataException.class, () -> repository.getATRepository().saveATMapChanges(height, List.of(
+					new ATMapChangeData(atAddress, 1L, 1L, null, 11L),
+					new ATMapChangeData(atAddress, 2L, 2L, 999L, 22L))));
+
+			assertEquals(0, repository.getATRepository().getATMapEntryCount(atAddress));
+			assertNull(repository.getATRepository().getATMapValue(atAddress, 1L, 1L));
+			repository.getATRepository().revertATMapChanges(height);
+			assertEquals(0, repository.getATRepository().getATMapEntryCount(atAddress));
+		}
+	}
+
+	@Test
+	public void testATStateMapRootRoundTrip() throws DataException {
+		byte[] creationBytes = AtUtils.buildSimpleAT();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes,
+					1_00000000L);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			ATStateData original = repository.getATRepository().getLatestATState(atAddress);
+			byte[] mapRoot = new byte[32];
+			mapRoot[0] = 42;
+
+			ATStateData withMapRoot = new ATStateData(original.getATAddress(), original.getHeight(),
+					original.getStateData(), original.getStateHash(), mapRoot, original.getFees(), original.isInitial(),
+					original.getSleepUntilMessageTimestamp());
+			repository.getATRepository().save(withMapRoot);
+
+			ATStateData reloaded = repository.getATRepository().getLatestATState(atAddress);
+			assertArrayEquals(mapRoot, reloaded.getMapRoot());
+			repository.saveChanges();
+		}
+	}
+
+	@Test
+	public void testATMapRejectsZeroAndUnchangedJournalValues() throws DataException {
+		byte[] creationBytes = AtUtils.buildSimpleAT();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			String atAddress = AtUtils.doDeployAT(repository, deployer, creationBytes, 1_00000000L)
+					.getATAccount().getAddress();
+			int height = repository.getBlockRepository().getBlockchainHeight() + 1;
+
+			assertThrows(IllegalArgumentException.class, () -> repository.getATRepository().saveATMapChanges(height,
+					List.of(new ATMapChangeData(atAddress, 1L, 2L, null, 0L))));
+			assertThrows(IllegalArgumentException.class, () -> repository.getATRepository().saveATMapChanges(height,
+					List.of(new ATMapChangeData(atAddress, 1L, 2L, 3L, 3L))));
+		}
+	}
+
+	@Test
+	public void testATMapJournalPrunesOnlyPastOrphanHistory() throws DataException {
+		byte[] creationBytes = AtUtils.buildSimpleAT();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			String atAddress = AtUtils.doDeployAT(repository, deployer, creationBytes, 1_00000000L)
+					.getATAccount().getAddress();
+			int firstHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			int secondHeight = firstHeight + 1;
+			repository.getATRepository().saveATMapChanges(firstHeight,
+					List.of(new ATMapChangeData(atAddress, 1L, 2L, null, 10L)));
+			repository.getATRepository().saveATMapChanges(secondHeight,
+					List.of(new ATMapChangeData(atAddress, 1L, 2L, 10L, 20L)));
+
+			assertEquals(1, repository.getATRepository().pruneATMapChanges(firstHeight, firstHeight));
+			repository.getATRepository().revertATMapChanges(secondHeight);
+			assertEquals(Long.valueOf(10L), repository.getATRepository().getATMapValue(atAddress, 1L, 2L));
+			repository.getATRepository().revertATMapChanges(firstHeight);
+			assertEquals(Long.valueOf(10L), repository.getATRepository().getATMapValue(atAddress, 1L, 2L));
+			repository.discardChanges();
+		}
+	}
+
+	@Test
+	public void testATMapRootVerifierDetectsCorruptServingRows() throws DataException {
+		byte[] creationBytes = AtUtils.buildSimpleAT();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			String atAddress = AtUtils.doDeployAT(repository, deployer, creationBytes, 1_00000000L)
+					.getATAccount().getAddress();
+			repository.getATRepository().verifyATMapRoots();
+
+			int height = repository.getBlockRepository().getBlockchainHeight() + 1;
+			repository.getATRepository().saveATMapChanges(height,
+					List.of(new ATMapChangeData(atAddress, 1L, 2L, null, 3L)));
+			assertThrows(DataException.class, () -> repository.getATRepository().verifyATMapRoots());
+			repository.getATRepository().revertATMapChanges(height);
+			repository.getATRepository().verifyATMapRoots();
+			repository.discardChanges();
 		}
 	}
 }

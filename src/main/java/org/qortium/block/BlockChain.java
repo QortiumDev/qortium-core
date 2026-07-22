@@ -51,6 +51,7 @@ public class BlockChain {
 	private static final Logger LOGGER = LogManager.getLogger(BlockChain.class);
 
 	public static final int REWARD_SHARE_LEVEL_COUNT = 10;
+	public static final int DEFAULT_MAX_MAP_ENTRIES_PER_AT = 500;
 	public static final long FEATURE_TRIGGER_DISABLED_HEIGHT = 9999999999999L;
 
 	private static BlockChain instance = null;
@@ -63,6 +64,7 @@ public class BlockChain {
 	private static final String DEV_GROUP_APPROVAL_SPLIT_TRIGGER = "devGroupApprovalSplitHeight";
 	private static final String DEPLOY_AT_WORKING_ASSET_TRIGGER = "deployAtWorkingAssetHeight";
 	private static final String AT_PAYOUT_SOLVENCY_TRIGGER = "atPayoutSolvencyHeight";
+	private static final String AT_MAP_STORAGE_TRIGGER = "atMapStorageHeight";
 
 	// Properties
 
@@ -567,6 +569,8 @@ public class BlockChain {
 		public int maxStepsPerRound;
 		/** How many steps for calling a function. */
 		public int stepsPerFunctionCall;
+		/** Total steps charged when a persistent-map write creates a live entry. */
+		public int mapEntryStepCost = 100;
 		/** Roughly how many minutes per block. */
 		public int minutesPerBlock;
 	}
@@ -948,6 +952,11 @@ public class BlockChain {
 		return getFeatureTriggerHeight(AT_PAYOUT_SOLVENCY_TRIGGER);
 	}
 
+	/** From this height, persistent AT maps and their state-root commitment are consensus-active. */
+	public long getAtMapStorageHeight() {
+		return getFeatureTriggerHeight(AT_MAP_STORAGE_TRIGGER);
+	}
+
 	public long getFeatureTriggerHeight(String triggerName) {
 		return getFeatureTriggerHeight(triggerName, FEATURE_TRIGGER_DISABLED_HEIGHT);
 	}
@@ -1113,6 +1122,13 @@ public class BlockChain {
 		return this.ciyamAtSettings;
 	}
 
+	public int getMaxMapEntriesPerAt(Repository repository, int height) throws DataException {
+		ChainParameterData update = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.MAX_MAP_ENTRIES_PER_AT.id, height);
+		return update == null ? DEFAULT_MAX_MAP_ENTRIES_PER_AT
+				: ChainParameter.MAX_MAP_ENTRIES_PER_AT.decodeIntValue(update.getValue());
+	}
+
 	// More complex getters for aspects that change by height or timestamp
 
 	public long getRewardAtHeight(int ourHeight) {
@@ -1226,6 +1242,10 @@ public class BlockChain {
 
 		if (this.ciyamAtSettings == null)
 			Settings.throwValidationError("No \"ciyamAtSettings\" entry found in blockchain config");
+
+		if (this.ciyamAtSettings.stepsPerFunctionCall <= 0
+				|| this.ciyamAtSettings.mapEntryStepCost < this.ciyamAtSettings.stepsPerFunctionCall)
+			Settings.throwValidationError("Invalid AT function step costs in blockchain config");
 
 		if (this.mempowSettings == null)
 			Settings.throwValidationError("No \"mempowSettings\" entry found in blockchain config");

@@ -5,8 +5,11 @@ import com.google.common.primitives.Longs;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortium.controller.Controller;
+import org.qortium.at.ATMapExecutionContext;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.at.ATData;
+import org.qortium.data.at.ATMapChangeData;
+import org.qortium.data.at.ATMapEntryData;
 import org.qortium.data.at.ATStateData;
 import org.qortium.repository.ATRepository;
 import org.qortium.repository.DataException;
@@ -15,10 +18,12 @@ import org.qortium.utils.ByteArray;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -404,11 +409,282 @@ public class HSQLDBATRepository implements ATRepository {
 		}
 	}
 
+	// AT map storage
+
+	@Override
+	public List<ATMapEntryData> getATMapEntries(String atAddress) throws DataException {
+		String sql = "SELECT key1, key2, \"VALUE\" FROM ATMapEntries "
+				+ "WHERE AT_address = ? ORDER BY key1 ASC, key2 ASC";
+		List<ATMapEntryData> entries = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddress)) {
+			if (resultSet == null)
+				return entries;
+
+			do {
+				entries.add(new ATMapEntryData(atAddress, resultSet.getLong(1), resultSet.getLong(2),
+						resultSet.getLong(3)));
+			} while (resultSet.next());
+
+			return entries;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch AT map entries from repository", e);
+		}
+	}
+
+	@Override
+	public Long getATMapValue(String atAddress, long key1, long key2) throws DataException {
+		String sql = "SELECT \"VALUE\" FROM ATMapEntries WHERE AT_address = ? AND key1 = ? AND key2 = ? LIMIT 1";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddress, key1, key2)) {
+			return resultSet == null ? null : resultSet.getLong(1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch AT map value from repository", e);
+		}
+	}
+
+	@Override
+	public int getATMapEntryCount(String atAddress) throws DataException {
+		String sql = "SELECT COUNT(*) FROM ATMapEntries WHERE AT_address = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddress)) {
+			if (resultSet == null)
+				throw new DataException("Unable to count AT map entries");
+
+			return resultSet.getInt(1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to count AT map entries", e);
+		}
+	}
+
+	@Override
+	public void saveATMapChanges(int height, List<ATMapChangeData> changes) throws DataException {
+		if (height < 0)
+			throw new IllegalArgumentException("AT map change height cannot be negative");
+
+		if (changes == null)
+			throw new IllegalArgumentException("AT map changes cannot be null");
+
+		if (changes.isEmpty())
+			return;
+
+		try {
+			if (this.repository.exists("ATMapEntryChanges", "height = ?", height))
+				throw new DataException("AT map changes already exist at height " + height);
+		} catch (SQLException e) {
+			throw new DataException("Unable to check existing AT map changes", e);
+		}
+
+		// Validate the complete ordered batch before writing anything. This catches a stale
+		// execution overlay without leaving a partially-applied batch in the transaction.
+		Map<ATMapKey, Long> effectiveValues = new java.util.HashMap<>();
+		Set<ATMapKey> loadedKeys = new java.util.HashSet<>();
+		for (ATMapChangeData change : changes) {
+			validateATMapChange(change);
+
+			ATMapKey key = new ATMapKey(change.getATAddress(), change.getKey1(), change.getKey2());
+			Long currentValue;
+			if (loadedKeys.add(key)) {
+				currentValue = this.getATMapValue(key.atAddress, key.key1, key.key2);
+			} else {
+				currentValue = effectiveValues.get(key);
+			}
+
+			if (!Objects.equals(currentValue, change.getPreviousValue()))
+				throw new DataException(String.format(
+						"AT map previous value mismatch for %s (%d, %d)", key.atAddress, key.key1, key.key2));
+
+			effectiveValues.put(key, change.getNewValue());
+		}
+
+		for (int sequence = 0; sequence < changes.size(); ++sequence) {
+			ATMapChangeData change = changes.get(sequence);
+			HSQLDBSaver changeSaver = new HSQLDBSaver("ATMapEntryChanges");
+			changeSaver.bind("height", height).bind("sequence", sequence)
+					.bind("AT_address", change.getATAddress())
+					.bind("key1", change.getKey1()).bind("key2", change.getKey2())
+					.bind("previous_value", change.getPreviousValue()).bind("new_value", change.getNewValue());
+
+			try {
+				changeSaver.execute(this.repository);
+				setATMapValue(change.getATAddress(), change.getKey1(), change.getKey2(), change.getNewValue());
+			} catch (SQLException e) {
+				throw new DataException("Unable to save AT map changes into repository", e);
+			}
+		}
+	}
+
+	@Override
+	public void revertATMapChanges(int height) throws DataException {
+		String sql = "SELECT AT_address, key1, key2, previous_value, new_value "
+				+ "FROM ATMapEntryChanges WHERE height = ? ORDER BY sequence DESC";
+		List<ATMapChangeData> changes = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, height)) {
+			if (resultSet == null)
+				return;
+
+			do {
+				String atAddress = resultSet.getString(1);
+				long key1 = resultSet.getLong(2);
+				long key2 = resultSet.getLong(3);
+				Long previousValue = resultSet.getLong(4);
+				if (previousValue == 0 && resultSet.wasNull())
+					previousValue = null;
+				Long newValue = resultSet.getLong(5);
+				if (newValue == 0 && resultSet.wasNull())
+					newValue = null;
+
+				changes.add(new ATMapChangeData(atAddress, key1, key2, previousValue, newValue));
+			} while (resultSet.next());
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch AT map changes for orphaning", e);
+		}
+
+		Map<ATMapKey, Long> effectiveValues = new java.util.HashMap<>();
+		Set<ATMapKey> loadedKeys = new java.util.HashSet<>();
+		for (ATMapChangeData change : changes) {
+			ATMapKey key = new ATMapKey(change.getATAddress(), change.getKey1(), change.getKey2());
+			Long currentValue;
+			if (loadedKeys.add(key)) {
+				currentValue = this.getATMapValue(key.atAddress, key.key1, key.key2);
+			} else {
+				currentValue = effectiveValues.get(key);
+			}
+
+			if (!Objects.equals(currentValue, change.getNewValue()))
+				throw new DataException(String.format(
+						"AT map current value mismatch while reverting %s (%d, %d)", key.atAddress, key.key1, key.key2));
+
+			effectiveValues.put(key, change.getPreviousValue());
+		}
+
+		for (ATMapChangeData change : changes) {
+			try {
+				setATMapValue(change.getATAddress(), change.getKey1(), change.getKey2(), change.getPreviousValue());
+			} catch (SQLException e) {
+				throw new DataException("Unable to revert AT map changes", e);
+			}
+		}
+
+		try {
+			this.repository.delete("ATMapEntryChanges", "height = ?", height);
+		} catch (SQLException e) {
+			throw new DataException("Unable to delete reverted AT map changes", e);
+		}
+	}
+
+	@Override
+	public int pruneATMapChanges(int minHeight, int maxHeight) throws DataException {
+		if (minHeight > maxHeight)
+			return 0;
+
+		try {
+			return this.repository.delete("ATMapEntryChanges", "height BETWEEN ? AND ?", minHeight, maxHeight);
+		} catch (SQLException e) {
+			throw new DataException("Unable to prune AT map change journal", e);
+		}
+	}
+
+	@Override
+	public void verifyATMapRoots() throws DataException {
+		String sql = "SELECT states.AT_address, states.map_root FROM ATStates states "
+				+ "WHERE states.height = (SELECT MAX(latest.height) FROM ATStates latest "
+				+ "WHERE latest.AT_address = states.AT_address) ORDER BY states.AT_address";
+		List<ATMapRootRecord> roots = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet != null) {
+				do {
+					roots.add(new ATMapRootRecord(resultSet.getString(1), resultSet.getBytes(2)));
+				} while (resultSet.next());
+			}
+		} catch (SQLException e) {
+			throw new DataException("Unable to load latest AT map roots", e);
+		}
+
+		for (ATMapRootRecord rootRecord : roots) {
+			List<ATMapEntryData> entries = this.getATMapEntries(rootRecord.atAddress);
+			if (rootRecord.mapRoot == null) {
+				if (!entries.isEmpty())
+					throw new DataException("Legacy AT state has persistent map entries: " + rootRecord.atAddress);
+				continue;
+			}
+
+			byte[] calculatedRoot = ATMapExecutionContext.calculateMapRoot(entries);
+			if (!Arrays.equals(rootRecord.mapRoot, calculatedRoot))
+				throw new DataException("AT persistent map root mismatch: " + rootRecord.atAddress);
+		}
+	}
+
+	private void setATMapValue(String atAddress, long key1, long key2, Long value) throws SQLException {
+		if (value == null) {
+			this.repository.delete("ATMapEntries", "AT_address = ? AND key1 = ? AND key2 = ?",
+					atAddress, key1, key2);
+			return;
+		}
+
+		HSQLDBSaver entrySaver = new HSQLDBSaver("ATMapEntries");
+		entrySaver.bind("AT_address", atAddress).bind("key1", key1).bind("key2", key2).bind("\"VALUE\"", value);
+		entrySaver.execute(this.repository);
+	}
+
+	private static void validateATMapChange(ATMapChangeData change) {
+		if (change == null)
+			throw new IllegalArgumentException("AT map change cannot be null");
+		if (change.getATAddress() == null)
+			throw new IllegalArgumentException("AT map change address cannot be null");
+		if (change.getPreviousValue() != null && change.getPreviousValue() == 0L)
+			throw new IllegalArgumentException("AT map previous value cannot be zero");
+		if (change.getNewValue() != null && change.getNewValue() == 0L)
+			throw new IllegalArgumentException("AT map new value cannot be zero");
+		if (Objects.equals(change.getPreviousValue(), change.getNewValue()))
+			throw new IllegalArgumentException("AT map change must alter the effective value");
+	}
+
+	private static final class ATMapRootRecord {
+		private final String atAddress;
+		private final byte[] mapRoot;
+
+		private ATMapRootRecord(String atAddress, byte[] mapRoot) {
+			this.atAddress = atAddress;
+			this.mapRoot = mapRoot;
+		}
+	}
+
+	private static final class ATMapKey {
+		private final String atAddress;
+		private final long key1;
+		private final long key2;
+
+		private ATMapKey(String atAddress, long key1, long key2) {
+			this.atAddress = atAddress;
+			this.key1 = key1;
+			this.key2 = key2;
+		}
+
+		@Override
+		public boolean equals(Object object) {
+			if (this == object)
+				return true;
+			if (!(object instanceof ATMapKey))
+				return false;
+
+			ATMapKey other = (ATMapKey) object;
+			return this.key1 == other.key1 && this.key2 == other.key2 && this.atAddress.equals(other.atAddress);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(this.atAddress, this.key1, this.key2);
+		}
+	}
+
 	// AT State
 
 	@Override
 	public ATStateData getATStateAtHeight(String atAddress, int height) throws DataException {
-		String sql = "SELECT state_data, state_hash, fees, is_initial, sleep_until_message_timestamp "
+		String sql = "SELECT state_data, state_hash, map_root, fees, is_initial, sleep_until_message_timestamp "
 				+ "FROM ATStates "
 				+ "LEFT OUTER JOIN ATStatesData USING (AT_address, height) "
 				+ "WHERE ATStates.AT_address = ? AND ATStates.height = ? "
@@ -420,14 +696,15 @@ public class HSQLDBATRepository implements ATRepository {
 
 			byte[] stateData = resultSet.getBytes(1); // Actually BLOB
 			byte[] stateHash = resultSet.getBytes(2);
-			long fees = resultSet.getLong(3);
-			boolean isInitial = resultSet.getBoolean(4);
+			byte[] mapRoot = resultSet.getBytes(3);
+			long fees = resultSet.getLong(4);
+			boolean isInitial = resultSet.getBoolean(5);
 
-			Long sleepUntilMessageTimestamp = resultSet.getLong(5);
+			Long sleepUntilMessageTimestamp = resultSet.getLong(6);
 			if (sleepUntilMessageTimestamp == 0 && resultSet.wasNull())
 				sleepUntilMessageTimestamp = null;
 
-			return new ATStateData(atAddress, height, stateData, stateHash, fees, isInitial, sleepUntilMessageTimestamp);
+			return new ATStateData(atAddress, height, stateData, stateHash, mapRoot, fees, isInitial, sleepUntilMessageTimestamp);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch AT state from repository", e);
 		}
@@ -435,7 +712,7 @@ public class HSQLDBATRepository implements ATRepository {
 
 	@Override
 	public ATStateData getLatestATState(String atAddress) throws DataException {
-		String sql = "SELECT height, state_data, state_hash, fees, is_initial, sleep_until_message_timestamp "
+		String sql = "SELECT height, state_data, state_hash, map_root, fees, is_initial, sleep_until_message_timestamp "
 				+ "FROM ATStates "
 				+ "JOIN ATStatesData USING (AT_address, height) "
 				+ "WHERE ATStates.AT_address = ? "
@@ -451,14 +728,15 @@ public class HSQLDBATRepository implements ATRepository {
 			int height = resultSet.getInt(1);
 			byte[] stateData = resultSet.getBytes(2); // Actually BLOB
 			byte[] stateHash = resultSet.getBytes(3);
-			long fees = resultSet.getLong(4);
-			boolean isInitial = resultSet.getBoolean(5);
+			byte[] mapRoot = resultSet.getBytes(4);
+			long fees = resultSet.getLong(5);
+			boolean isInitial = resultSet.getBoolean(6);
 
-			Long sleepUntilMessageTimestamp = resultSet.getLong(6);
+			Long sleepUntilMessageTimestamp = resultSet.getLong(7);
 			if (sleepUntilMessageTimestamp == 0 && resultSet.wasNull())
 				sleepUntilMessageTimestamp = null;
 
-			return new ATStateData(atAddress, height, stateData, stateHash, fees, isInitial, sleepUntilMessageTimestamp);
+			return new ATStateData(atAddress, height, stateData, stateHash, mapRoot, fees, isInitial, sleepUntilMessageTimestamp);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch latest AT state from repository", e);
 		}
@@ -466,7 +744,7 @@ public class HSQLDBATRepository implements ATRepository {
 
 	@Override
 	public List<ATStateData> getLatestATStates(List<String> atAddresses) throws DataException{
-		String sql = "SELECT height, state_data, state_hash, fees, is_initial, sleep_until_message_timestamp, AT_address "
+		String sql = "SELECT height, state_data, state_hash, map_root, fees, is_initial, sleep_until_message_timestamp, AT_address "
 				+ "FROM ATStates "
 				+ "JOIN ATStatesData USING (AT_address, height) "
 				+ "WHERE ATStates.AT_address IN ("
@@ -485,15 +763,16 @@ public class HSQLDBATRepository implements ATRepository {
 				int height = resultSet.getInt(1);
 				byte[] stateData = resultSet.getBytes(2); // Actually BLOB
 				byte[] stateHash = resultSet.getBytes(3);
-				long fees = resultSet.getLong(4);
-				boolean isInitial = resultSet.getBoolean(5);
+				byte[] mapRoot = resultSet.getBytes(4);
+				long fees = resultSet.getLong(5);
+				boolean isInitial = resultSet.getBoolean(6);
 
-				Long sleepUntilMessageTimestamp = resultSet.getLong(6);
+				Long sleepUntilMessageTimestamp = resultSet.getLong(7);
 				if (sleepUntilMessageTimestamp == 0 && resultSet.wasNull())
 					sleepUntilMessageTimestamp = null;
 
-				String atAddress = resultSet.getString(7);
-				stateDataList.add(new ATStateData(atAddress, height, stateData, stateHash, fees, isInitial, sleepUntilMessageTimestamp));
+				String atAddress = resultSet.getString(8);
+				stateDataList.add(new ATStateData(atAddress, height, stateData, stateHash, mapRoot, fees, isInitial, sleepUntilMessageTimestamp));
 			} while( resultSet.next());
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch latest AT state from repository", e);
@@ -521,10 +800,10 @@ public class HSQLDBATRepository implements ATRepository {
 		StringBuilder sql = new StringBuilder(1024);
 		List<Object> bindParams = new ArrayList<>();
 
-		sql.append("SELECT AT_address, height, state_data, state_hash, fees, is_initial, FinalATStates.sleep_until_message_timestamp "
+		sql.append("SELECT AT_address, height, state_data, state_hash, map_root, fees, is_initial, FinalATStates.sleep_until_message_timestamp "
 				+ "FROM ATs "
 				+ "CROSS JOIN LATERAL("
-					+ "SELECT height, state_data, state_hash, fees, is_initial, sleep_until_message_timestamp "
+					+ "SELECT height, state_data, state_hash, map_root, fees, is_initial, sleep_until_message_timestamp "
 					+ "FROM ATStates "
 					+ "JOIN ATStatesData USING (AT_address, height) "
 					+ "WHERE ATStates.AT_address = ATs.AT_address ");
@@ -593,14 +872,15 @@ public class HSQLDBATRepository implements ATRepository {
 				int height = resultSet.getInt(2);
 				byte[] stateData = resultSet.getBytes(3); // Actually BLOB
 				byte[] stateHash = resultSet.getBytes(4);
-				long fees = resultSet.getLong(5);
-				boolean isInitial = resultSet.getBoolean(6);
+				byte[] mapRoot = resultSet.getBytes(5);
+				long fees = resultSet.getLong(6);
+				boolean isInitial = resultSet.getBoolean(7);
 
-				Long sleepUntilMessageTimestamp = resultSet.getLong(7);
+				Long sleepUntilMessageTimestamp = resultSet.getLong(8);
 				if (sleepUntilMessageTimestamp == 0 && resultSet.wasNull())
 					sleepUntilMessageTimestamp = null;
 
-				ATStateData atStateData = new ATStateData(atAddress, height, stateData, stateHash, fees, isInitial, sleepUntilMessageTimestamp);
+				ATStateData atStateData = new ATStateData(atAddress, height, stateData, stateHash, mapRoot, fees, isInitial, sleepUntilMessageTimestamp);
 
 				atStates.add(atStateData);
 			} while (resultSet.next());
@@ -631,10 +911,10 @@ public class HSQLDBATRepository implements ATRepository {
 		StringBuilder sql = new StringBuilder(1024);
 		List<Object> bindParams = new ArrayList<>();
 
-		sql.append("SELECT AT_address, height, state_data, state_hash, fees, is_initial, sleep_until_message_timestamp "
+		sql.append("SELECT AT_address, height, state_data, state_hash, map_root, fees, is_initial, sleep_until_message_timestamp "
 				+ "FROM ATs "
 				+ "CROSS JOIN LATERAL("
-					+ "SELECT height, state_data, state_hash, fees, is_initial "
+					+ "SELECT height, state_data, state_hash, map_root, fees, is_initial "
 					+ "FROM ATStates "
 					+ "JOIN ATStatesData USING (AT_address, height) "
 					+ "WHERE ATStates.AT_address = ATs.AT_address ");
@@ -684,11 +964,12 @@ public class HSQLDBATRepository implements ATRepository {
 				int height = resultSet.getInt(2);
 				byte[] stateData = resultSet.getBytes(3); // Actually BLOB
 				byte[] stateHash = resultSet.getBytes(4);
-				long fees = resultSet.getLong(5);
-				boolean isInitial = resultSet.getBoolean(6);
-				Long sleepUntilMessageTimestamp = resultSet.getLong(7);
+				byte[] mapRoot = resultSet.getBytes(5);
+				long fees = resultSet.getLong(6);
+				boolean isInitial = resultSet.getBoolean(7);
+				Long sleepUntilMessageTimestamp = resultSet.getLong(8);
 
-				ATStateData atStateData = new ATStateData(atAddress, height, stateData, stateHash, fees, isInitial,
+				ATStateData atStateData = new ATStateData(atAddress, height, stateData, stateHash, mapRoot, fees, isInitial,
 						sleepUntilMessageTimestamp);
 
 				atStates.add(atStateData);
@@ -702,7 +983,7 @@ public class HSQLDBATRepository implements ATRepository {
 
 	@Override
 	public List<ATStateData> getBlockATStatesAtHeight(int height) throws DataException {
-		String sql = "SELECT AT_address, state_hash, fees, is_initial "
+		String sql = "SELECT AT_address, state_hash, map_root, fees, is_initial "
 				+ "FROM ATs "
 				+ "JOIN ATStates "
 				+ "ON ATStates.AT_address = ATs.AT_address "
@@ -719,10 +1000,11 @@ public class HSQLDBATRepository implements ATRepository {
 			do {
 				String atAddress = resultSet.getString(1);
 				byte[] stateHash = resultSet.getBytes(2);
-				long fees = resultSet.getLong(3);
-				boolean isInitial = resultSet.getBoolean(4);
+				byte[] mapRoot = resultSet.getBytes(3);
+				long fees = resultSet.getLong(4);
+				boolean isInitial = resultSet.getBoolean(5);
 
-				ATStateData atStateData = new ATStateData(atAddress, height, stateHash, fees, isInitial);
+				ATStateData atStateData = new ATStateData(atAddress, height, stateHash, mapRoot, fees, isInitial);
 				atStates.add(atStateData);
 			} while (resultSet.next());
 		} catch (SQLException e) {
@@ -953,6 +1235,7 @@ public class HSQLDBATRepository implements ATRepository {
 
 		atStatesSaver.bind("AT_address", atStateData.getATAddress()).bind("height", atStateData.getHeight())
 				.bind("state_hash", atStateData.getStateHash())
+				.bind("map_root", atStateData.getMapRoot())
 				.bind("fees", atStateData.getFees()).bind("is_initial", atStateData.isInitial())
 				.bind("sleep_until_message_timestamp", atStateData.getSleepUntilMessageTimestamp());
 
