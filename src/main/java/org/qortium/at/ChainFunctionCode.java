@@ -227,6 +227,81 @@ public enum ChainFunctionCode {
 		}
 	},
 	/**
+	 * Returns trust status of account in B.<br>
+	 * <tt>0x0522</tt><br>
+	 * B should contain either chain address or public key,<br>
+	 * e.g. as a result of calling function {@link org.ciyam.at.FunctionCode#PUT_ADDRESS_FROM_TX_IN_A_INTO_B}</code>.
+	 * <p></p>
+	 * Returns the account's stored trust snapshot value:
+	 * SUSPICIOUS = -1, UNVERIFIED = 0, BRONZE = 1, SILVER = 2, GOLD = 3.<br>
+	 * A valid but unknown account naturally returns 0 (UNVERIFIED); an unusable B returns -1.
+	 * <p></p>
+	 * Reads only the trust snapshot materialized by block processing (never a tip-relative live
+	 * derivation), and ATs execute before the containing block's transactions are processed,
+	 * so an AT executing in block H sees trust state as of the end of block H-1.
+	 * <p></p>
+	 * Inactive before the {@code atTrustStatusHeight} feature trigger.
+	 * <p></p>
+	 * @see ChainATAPI#getAccountFromB(MachineState)
+	 */
+	GET_TRUST_STATUS_FROM_ACCOUNT_IN_B(0x0522, 0, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			Account account = api.getAccountFromB(state);
+
+			if (account == null) {
+				functionData.returnValue = -1L;
+				return;
+			}
+
+			try {
+				functionData.returnValue = (long) account.getTrustStatus().getValue();
+			} catch (DataException e) {
+				throw new RuntimeException("AT API unable to fetch account's trust status?", e);
+			}
+		}
+	},
+	/**
+	 * Returns confirmed balance of asset id for account in B.<br>
+	 * <tt>0x0523 asset-id</tt><br>
+	 * B should contain either chain address or public key; asset id 0 is the native coin.
+	 * <p></p>
+	 * Returns the account's confirmed balance in raw 1e8-scaled units,
+	 * or 0 if the account is unknown, holds no balance, or asset id is negative/unknown.
+	 * <p></p>
+	 * Inactive before the {@code atBalanceQueryHeight} feature trigger.
+	 * <p></p>
+	 * @see ChainATAPI#getAccountBalanceFromB(long, MachineState)
+	 */
+	GET_BALANCE_FROM_ACCOUNT_IN_B(0x0523, 1, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getAccountBalanceFromB(functionData.value1, state);
+		}
+	},
+	/**
+	 * Compares code hash of AT in B against expected hash in A.<br>
+	 * <tt>0x0524</tt><br>
+	 * B uses the cross-AT read convention: all-zero means this AT itself, otherwise an AT address.<br>
+	 * A1-A4 hold the expected 32-byte SHA-256 code hash, packed exactly like SHA256-type results.
+	 * <p></p>
+	 * Returns 1 if B identifies an AT whose stored code hash equals A, else 0.
+	 * Never errors: a non-AT or unknown address simply returns 0.
+	 * <p></p>
+	 * Inactive before the {@code atCodeHashCheckHeight} feature trigger.
+	 * <p></p>
+	 * @see ChainATAPI#checkCodeHashOfAtInB(MachineState)
+	 */
+	CHECK_CODE_HASH_OF_AT_IN_B(0x0524, 0, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.checkCodeHashOfAtInB(state);
+		}
+	},
+	/**
 	 * Returns the AT's configured working asset id.<br>
 	 * <tt>0x0530</tt>
 	 */

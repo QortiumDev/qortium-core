@@ -86,7 +86,10 @@
 		"atPayoutSolvencyHeight": 0,
 		"atMapStorageHeight": 8,
 		"atHashingStepCostHeight": 0,
-		"atCheckedArithmeticHeight": 0
+		"atCheckedArithmeticHeight": 0,
+		"atTrustStatusHeight": 8,
+		"atBalanceQueryHeight": 8,
+		"atCodeHashCheckHeight": 8
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

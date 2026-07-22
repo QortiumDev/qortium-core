@@ -93,7 +93,10 @@
 		"atMapStorageHeight": 70000,
 		"atSweepAssetsOnFinishHeight": 70000,
 		"atHashingStepCostHeight": 70000,
-		"atCheckedArithmeticHeight": 70000
+		"atCheckedArithmeticHeight": 70000,
+		"atTrustStatusHeight": 70000,
+		"atBalanceQueryHeight": 70000,
+		"atCodeHashCheckHeight": 70000
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,
