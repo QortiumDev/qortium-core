@@ -38,25 +38,33 @@ own chain.
 
 Three safety improvements to how automated transactions (ATs) handle money,
 leftover assets, and expensive hashing work, in preparation for the pre-70,000
-Previewnet release. First, every place where an AT or a block adds up amounts or
-fees now uses checked arithmetic: if a total ever grew large enough to overflow,
-the AT stops with a clean fatal error and the block is rejected the same way on
-every node, instead of silently wrapping around to a wrong, smaller number. No
-amount reachable on the chain today can trigger this, so it changes nothing for
-current activity — it simply closes the door before applications begin using
-multi-payments and multi-asset payouts. Second, when an AT finishes it now
-returns every asset it still holds to its creator, not just its configured
-working asset and native fee balance, so a third asset an AT received can no
-longer be trapped forever; older behavior is preserved before the activation
-height. Third, AT hashing built-ins (MD5/RIPEMD160/SHA256/HASH160) are priced at
-20 execution steps each instead of a flat 10, so hash-heavy contracts are
-charged fairly; the SMPL faucet's single hash keeps a claim well within one
-execution round (its claim now uses 458 of the 500-step budget). The asset sweep
-and the new hashing price activate at Previewnet block 70,000 alongside the other
-AT features and are switched on immediately on the test chains. These activation
-heights live in the hash-excluded feature-trigger list and the hashing price is a
-built-in default rather than shipped config, so the live Previewnet chain-config
-fingerprint is unchanged and no node needs to re-sync to keep peering.
+Previewnet release. First, every place where amounts or fees are added up
+switches to checked arithmetic at a new activation height,
+`atCheckedArithmeticHeight` (Previewnet block 70,000): from that height, a total
+that would overflow makes the AT stop with a clean fatal error, makes the block
+invalid the same way on every node, or — for the newly hardened multi-payment
+validation — rejects the transaction outright, instead of silently wrapping
+around to a wrong, smaller number. That last part is the root fix: ordinary
+multi-payment validation used to add its per-asset totals with wrapping
+arithmetic, so a crafted payment list summing past the 64-bit limit could wrap
+the required total negative and slip past the sender-balance check; from the
+activation height such a transaction is simply invalid. Below the height, every
+one of these places keeps today's wrapping behavior byte-for-byte — because the
+old overflow is reachable on today's chain, all nodes must keep computing
+identical results until the flag day, and only switch to checked arithmetic
+together. Second, when an AT finishes it now returns every asset it still holds
+to its creator, not just its configured working asset and native fee balance, so
+a third asset an AT received can no longer be trapped forever; older behavior is
+preserved before the activation height. Third, AT hashing built-ins
+(MD5/RIPEMD160/SHA256/HASH160) are priced at 20 execution steps each instead of
+a flat 10, so hash-heavy contracts are charged fairly; the SMPL faucet's single
+hash keeps a claim well within one execution round (its claim now uses 458 of
+the 500-step budget). The checked arithmetic, asset sweep and new hashing price
+all activate at Previewnet block 70,000 alongside the other AT features and are
+switched on immediately on the test chains. These activation heights live in the
+hash-excluded feature-trigger list and the hashing price is a built-in default
+rather than shipped config, so the live Previewnet chain-config fingerprint is
+unchanged and no node needs to re-sync to keep peering.
 
 ### 2026-07-22 - test: end-to-end coverage for the SMPL exactly-once faucet AT
 

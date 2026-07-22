@@ -67,6 +67,7 @@ public class BlockChain {
 	private static final String AT_MAP_STORAGE_TRIGGER = "atMapStorageHeight";
 	private static final String AT_SWEEP_ASSETS_ON_FINISH_TRIGGER = "atSweepAssetsOnFinishHeight";
 	private static final String AT_HASHING_STEP_COST_TRIGGER = "atHashingStepCostHeight";
+	private static final String AT_CHECKED_ARITHMETIC_TRIGGER = "atCheckedArithmeticHeight";
 
 	// Properties
 
@@ -983,6 +984,20 @@ public class BlockChain {
 	 */
 	public long getAtHashingStepCostHeight() {
 		return getFeatureTriggerHeight(AT_HASHING_STEP_COST_TRIGGER);
+	}
+
+	/**
+	 * From this height, monetary/fee aggregation switches from Java's silently wrapping addition and
+	 * multiplication to checked arithmetic with deterministic failure: multi-payment validation totals
+	 * (an overflowing MULTI_PAYMENT total is rejected as invalid), block total-fee and per-block AT-fee
+	 * reconstruction (overflow makes the block invalid on every node), and AT-side multi-payment reads,
+	 * pending platform payouts and final step fees (overflow surfaces on the AT's deterministic
+	 * fatal-error path). Below the trigger, every one of these sites keeps the historic wrapping
+	 * arithmetic byte-for-byte, because pre-existing unchecked multi-payment validation means wrapped
+	 * states are reachable on today's chain and all nodes must keep agreeing on them until the flag day.
+	 */
+	public long getAtCheckedArithmeticHeight() {
+		return getFeatureTriggerHeight(AT_CHECKED_ARITHMETIC_TRIGGER);
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {

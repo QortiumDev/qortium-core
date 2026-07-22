@@ -285,7 +285,16 @@ public class ChainATAPI extends API {
 				return ((TransferAssetTransactionData) transactionData).getAmount();
 
 			case MULTI_PAYMENT:
-				MultiPaymentSummary multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
+				MultiPaymentSummary multiPaymentSummary;
+				try {
+					multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
+				} catch (ExecutionException e) {
+					// Post-trigger checked aggregation overflowed. This stock CIYAM API override cannot
+					// declare a checked throw, so the unrepresentable total deterministically becomes the
+					// same "no single amount" sentinel already returned for mixed-asset multi-payments.
+					// Pre-trigger, summarizing never throws (it wraps, byte-for-byte as before).
+					return 0xffffffffffffffffL;
+				}
 
 				if (multiPaymentSummary.hasSingleAsset())
 					return multiPaymentSummary.amount;
@@ -629,7 +638,7 @@ public class ChainATAPI extends API {
 		}
 	}
 
-	public long getAssetIdFromTransactionInA(MachineState state) {
+	public long getAssetIdFromTransactionInA(MachineState state) throws ExecutionException {
 		TransactionData transactionData = this.getTransactionFromA(state);
 
 		switch (transactionData.getType()) {
@@ -640,6 +649,8 @@ public class ChainATAPI extends API {
 				return ((TransferAssetTransactionData) transactionData).getAssetId();
 
 			case MULTI_PAYMENT:
+				// Post-trigger, an overflowing (unrepresentable) aggregate total propagates as a
+				// deterministic AT fatal error; pre-trigger, summarizing never throws (it wraps as before).
 				MultiPaymentSummary multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
 
 				if (multiPaymentSummary.hasSingleAsset())
@@ -688,11 +699,12 @@ public class ChainATAPI extends API {
 				long amount = 0L;
 				String atAddress = this.atData.getATAddress();
 
-				// Checked accumulation: an overflowing per-asset multi-payment sum must surface as a
-				// deterministic AT fatal error, never wrap into a nonsensical consensus-valid amount.
+				// Height-gated accumulation: pre-trigger this wraps byte-for-byte as before; from the
+				// trigger, an overflowing per-asset multi-payment sum surfaces as a deterministic AT
+				// fatal error instead of wrapping into a nonsensical consensus-valid amount.
 				for (PaymentData paymentData : ((MultiPaymentTransactionData) transactionData).getPayments())
 					if (atAddress.equals(paymentData.getRecipient()) && paymentData.getAssetId() == assetId)
-						amount = checkedAtSum(amount, paymentData.getAmount());
+						amount = this.addAtAmount(amount, paymentData.getAmount());
 
 				return amount;
 
@@ -789,8 +801,9 @@ public class ChainATAPI extends API {
 			// we instead record a pending payout, which onFinished() and the clamps reconcile as before.
 			state.deductFromCurrentBalance(amount);
 		} else {
-			// Checked accumulation: an overflowing pending-payout total for this asset must surface as a
-			// deterministic AT fatal error rather than wrapping into a smaller apparent payout.
+			// Pre-trigger the pending-payout total wraps byte-for-byte as before (and never throws);
+			// from the trigger, an overflowing total surfaces as a deterministic AT fatal error rather
+			// than wrapping into a smaller apparent payout.
 			try {
 				this.addPendingPayout(assetId, amount);
 			} catch (ArithmeticException e) {
@@ -804,9 +817,19 @@ public class ChainATAPI extends API {
 	// Utility methods
 
 	public long calcFinalFees(MachineState state) {
-		// Checked multiplication: an overflowing step-fee total must fail the block deterministically
-		// rather than wrap, since it feeds per-AT and per-block fee accounting that nodes cross-check.
-		return Math.multiplyExact((long) state.getSteps(), this.ciyamAtSettings.feePerStep);
+		return this.calcStepFees(state.getSteps());
+	}
+
+	/**
+	 * Height-gated step-fee multiplication. Pre-trigger this is byte-for-byte the historic (wrapping)
+	 * product; from the trigger, an overflowing step-fee total fails deterministically (it feeds per-AT
+	 * and per-block fee accounting that nodes cross-check) instead of wrapping.
+	 */
+	long calcStepFees(long steps) {
+		if (this.isCheckedArithmeticActive())
+			return Math.multiplyExact(steps, this.ciyamAtSettings.feePerStep);
+
+		return steps * this.ciyamAtSettings.feePerStep;
 	}
 
 	/** Returns partial transaction signature, used to verify we're operating on the same transaction and not naively using block height & sequence. */
@@ -935,21 +958,25 @@ public class ChainATAPI extends API {
 		return amount - (amount % Amounts.MULTIPLIER);
 	}
 
-	private long getPendingPayout(long assetId) {
+	long getPendingPayout(long assetId) {
 		return this.pendingAssetPayouts.getOrDefault(assetId, 0L);
 	}
 
-	private void addPendingPayout(long assetId, long amount) {
-		// Math.addExact as the remapping function throws ArithmeticException on overflow instead of
-		// wrapping; callers convert that into a deterministic AT fatal error.
-		this.pendingAssetPayouts.merge(assetId, amount, Math::addExact);
+	void addPendingPayout(long assetId, long amount) {
+		if (this.isCheckedArithmeticActive())
+			// Math.addExact as the remapping function throws ArithmeticException on overflow instead of
+			// wrapping; callers convert that into a deterministic AT fatal error.
+			this.pendingAssetPayouts.merge(assetId, amount, Math::addExact);
+		else
+			// Pre-trigger: historic silently-wrapping accumulation, byte-for-byte.
+			this.pendingAssetPayouts.merge(assetId, amount, Long::sum);
 	}
 
 	/**
 	 * Checked addition of AT monetary values. Overflow surfaces as a deterministic {@link ExecutionException}
 	 * (the AT's fatal-error path in the VM) instead of silently wrapping into a consensus-valid but
-	 * nonsensical amount. No value reachable on any current chain can overflow these aggregations, so this
-	 * guard is behaviourally identical to a plain sum for every state a live chain can produce today.
+	 * nonsensical amount. Wrapped states ARE reachable on today's chain (pre-existing unchecked
+	 * multi-payment validation), which is why every caller is height-gated via {@link #addAtAmount}.
 	 */
 	static long checkedAtSum(long runningTotal, long addend) throws ExecutionException {
 		try {
@@ -957,6 +984,24 @@ public class ChainATAPI extends API {
 		} catch (ArithmeticException e) {
 			throw new ExecutionException("AT monetary aggregation overflowed", e);
 		}
+	}
+
+	/**
+	 * Height-gated accumulation of AT monetary values. Below {@code atCheckedArithmeticHeight} this is
+	 * byte-for-byte the historic silently-wrapping {@code +}, so every node keeps agreeing on states the
+	 * pre-existing unchecked multi-payment validation can produce. From the trigger height, overflow
+	 * surfaces as a deterministic {@link ExecutionException} — the AT's fatal-error path in the VM.
+	 */
+	long addAtAmount(long runningTotal, long addend) throws ExecutionException {
+		if (this.isCheckedArithmeticActive())
+			return checkedAtSum(runningTotal, addend);
+
+		return runningTotal + addend;
+	}
+
+	/** Whether this execution height has reached the {@code atCheckedArithmeticHeight} feature trigger. */
+	private boolean isCheckedArithmeticActive() {
+		return this.blockHeight >= BlockChain.getInstance().getAtCheckedArithmeticHeight();
 	}
 
 	private boolean isHashingStepCostActive() {
@@ -968,7 +1013,7 @@ public class ChainATAPI extends API {
 		return rawFunctionCode >= (short) 0x0200 && rawFunctionCode <= (short) 0x0207;
 	}
 
-	private MultiPaymentSummary summarizeMultiPaymentToAt(MultiPaymentTransactionData multiPaymentTransactionData) {
+	MultiPaymentSummary summarizeMultiPaymentToAt(MultiPaymentTransactionData multiPaymentTransactionData) throws ExecutionException {
 		MultiPaymentSummary summary = new MultiPaymentSummary();
 		String atAddress = this.atData.getATAddress();
 
@@ -983,11 +1028,12 @@ public class ChainATAPI extends API {
 				summary.hasMixedAssets = true;
 			}
 
-			// Checked accumulation: an overflowing single-asset multi-payment summary must fail
-			// deterministically rather than wrap. This method is reached via stock CIYAM API-override
-			// opcodes whose signatures cannot declare a checked throw, so overflow surfaces as an
-			// (unchecked) ArithmeticException, which the VM propagates to a deterministic block failure.
-			summary.amount = Math.addExact(summary.amount, paymentData.getAmount());
+			// Height-gated accumulation: pre-trigger this wraps byte-for-byte as before (never throwing);
+			// from the trigger, an overflowing summary fails deterministically as an ExecutionException.
+			// Core-function-code callers propagate that to the AT's fatal-error path; the stock
+			// getAmountFromTransactionInA override, which cannot declare a checked throw, converts it to
+			// its existing "no single amount" sentinel.
+			summary.amount = this.addAtAmount(summary.amount, paymentData.getAmount());
 		}
 
 		return summary;
@@ -1100,13 +1146,13 @@ public class ChainATAPI extends API {
 		super.zeroB(state);
 	}
 
-	private static class MultiPaymentSummary {
-		private boolean hasPayment;
-		private boolean hasMixedAssets;
-		private long assetId;
-		private long amount;
+	static class MultiPaymentSummary {
+		boolean hasPayment;
+		boolean hasMixedAssets;
+		long assetId;
+		long amount;
 
-		private boolean hasSingleAsset() {
+		boolean hasSingleAsset() {
 			return this.hasPayment && !this.hasMixedAssets;
 		}
 	}

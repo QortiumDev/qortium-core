@@ -319,12 +319,12 @@ public class Block {
 		// We have to sum fees too
 		for (TransactionData transactionData : transactions) {
 			this.transactions.add(Transaction.fromData(repository, transactionData));
-			totalFees = addCheckedFees(totalFees, transactionData.getFee());
+			totalFees = this.addBlockFees(totalFees, transactionData.getFee());
 		}
 
 		this.atStates = atStates;
 		for (ATStateData atState : atStates)
-			totalFees = addCheckedFees(totalFees, atState.getFees());
+			totalFees = this.addBlockFees(totalFees, atState.getFees());
 
 		this.blockData.setTotalFees(totalFees);
 	}
@@ -349,11 +349,11 @@ public class Block {
 		// We have to sum fees too
 		for (TransactionData transactionData : transactions) {
 			this.transactions.add(Transaction.fromData(repository, transactionData));
-			totalFees = addCheckedFees(totalFees, transactionData.getFee());
+			totalFees = this.addBlockFees(totalFees, transactionData.getFee());
 		}
 
 		this.atStatesHash = atStatesHash;
-		totalFees = addCheckedFees(totalFees, this.blockData.getATFees());
+		totalFees = this.addBlockFees(totalFees, this.blockData.getATFees());
 
 		this.blockData.setTotalFees(totalFees);
 	}
@@ -1579,6 +1579,35 @@ public class Block {
 	}
 
 	/**
+	 * Height-gated accumulation of block fees, used when a block's total fees and per-block AT fees are
+	 * reconstructed from untrusted, network-supplied per-transaction and per-AT fee fields.
+	 * <p>
+	 * Below {@code atCheckedArithmeticHeight} this is byte-for-byte the historic silently-wrapping
+	 * {@code +}: pre-existing unchecked multi-payment validation means wrapped balances (and hence
+	 * overflowing fee sums) are reachable on today's chain, so every node must keep computing the same
+	 * wrapped totals until the flag day. From the trigger height, an overflow instead surfaces as a
+	 * deterministic {@link ArithmeticException} that makes the block invalid on every node, rather than
+	 * yielding a smaller apparent total.
+	 */
+	long addBlockFees(long runningTotal, long fee) {
+		if (this.isCheckedFeeArithmeticActive())
+			return addCheckedFees(runningTotal, fee);
+
+		return runningTotal + fee;
+	}
+
+	/** Checked accumulation of block fees: overflow throws a deterministic {@link ArithmeticException}. */
+	static long addCheckedFees(long runningTotal, long fee) {
+		return Math.addExact(runningTotal, fee);
+	}
+
+	/** Whether this block's height has reached the {@code atCheckedArithmeticHeight} feature trigger. */
+	private boolean isCheckedFeeArithmeticActive() {
+		Integer height = this.blockData.getHeight();
+		return height != null && height >= BlockChain.getInstance().getAtCheckedArithmeticHeight();
+	}
+
+	/**
 	 * Execute CIYAM ATs for this block.
 	 * <p>
 	 * This needs to be done locally for all blocks, regardless of origin.<br>
@@ -1597,18 +1626,6 @@ public class Block {
 	 * @throws DataException
 	 *
 	 */
-	/**
-	 * Checked accumulation of block fees. Reconstructing a block's total fees and per-block AT fees from
-	 * untrusted, network-supplied per-transaction and per-AT fee fields must never silently wrap: an
-	 * overflow surfaces as a deterministic {@link ArithmeticException} that makes the block invalid on
-	 * every node, rather than yielding a smaller apparent total. No sum reachable from a currently valid
-	 * chain (fees are bounded well below {@link Long#MAX_VALUE}) can trip this, so it is behaviourally
-	 * identical to a plain sum for every block a live chain can produce today.
-	 */
-	static long addCheckedFees(long runningTotal, long fee) {
-		return Math.addExact(runningTotal, fee);
-	}
-
 	private void executeATs() throws DataException {
 		// We're expecting a lack of AT state data at this point.
 		if (this.ourAtStates != null)
@@ -1636,7 +1653,7 @@ public class Block {
 
 			allAtTransactions.addAll(atTransactions);
 			this.ourAtStates.add(atStateData);
-			this.ourAtFees = addCheckedFees(this.ourAtFees, atStateData.getFees());
+			this.ourAtFees = this.addBlockFees(this.ourAtFees, atStateData.getFees());
 		}
 
 		// AT Transactions never need approval
