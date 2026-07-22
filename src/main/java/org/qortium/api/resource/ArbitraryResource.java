@@ -131,6 +131,25 @@ public class ArbitraryResource {
 	private static final Logger LOGGER = LogManager.getLogger(ArbitraryResource.class);
 	private static final String RAW_DOWNLOAD_FALLBACK_CONTENT_TYPE = "application/octet-stream";
 	private static final Set<String> RAW_DOWNLOAD_EXECUTABLE_MIME_TYPES = Set.of("text/html", "application/xhtml+xml");
+	/**
+	 * Content-Security-Policy for raw QDN downloads.
+	 * <p>
+	 * These bytes are published by arbitrary accounts and are served verbatim from this node's own
+	 * origin - the same origin the node API is on. The executable-MIME downgrade above only catches
+	 * {@code text/html} and XHTML, and it deliberately stops there: {@code image/svg+xml} and the
+	 * XML family can also carry script, but downgrading those to {@code application/octet-stream}
+	 * would stop legitimate images rendering. So rather than widening the downgrade, deny every
+	 * capability and put the response in an opaque origin. Nothing served by the raw-download
+	 * endpoint is meant to be a live document.
+	 * <p>
+	 * Embedding is unaffected: a subresource load ({@code <img>}, {@code <video>}, {@code fetch})
+	 * is not a browsing context, so this policy does not apply to it. It takes effect when the URL
+	 * is navigated to directly, which is exactly the stored-XSS case.
+	 * <p>
+	 * Mirrors the render path's per-asset policy in
+	 * {@code ArbitraryDataRenderer.contentSecurityPolicyForAsset}.
+	 */
+	private static final String RAW_DOWNLOAD_CONTENT_SECURITY_POLICY = "default-src 'none'; sandbox";
 	private static final String UPLOAD_CHUNK_TOO_LARGE_RESPONSE = "Upload chunk too large";
 	private static final int UPLOAD_COPY_BUFFER_SIZE = 64 * 1024;
 	private static final ConcurrentHashMap<String, AtomicInteger> PUBLIC_CHUNK_UPLOAD_COUNTS = new ConcurrentHashMap<>();
@@ -3746,6 +3765,7 @@ public String finalizeUpload(
 			try {
 				rawOut = response.getOutputStream();
 				response.setHeader("X-Content-Type-Options", "nosniff");
+				response.setHeader("Content-Security-Policy", RAW_DOWNLOAD_CONTENT_SECURITY_POLICY);
 
 				if (encoding != null && "base64".equalsIgnoreCase(encoding)) {
 					// If base64 encoding is requested, override content type
