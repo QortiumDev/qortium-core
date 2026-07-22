@@ -562,6 +562,8 @@ public class ChainATAPI extends API {
 		if (chainFunctionCode.isMapFunction() && !this.isMapStorageActive())
 			throw new IllegalFunctionCodeException("AT map storage is not active at this block height");
 
+		this.checkChainQueryFunctionActive(chainFunctionCode);
+
 		chainFunctionCode.preExecuteCheck(paramCount, returnValueExpected, rawFunctionCode);
 	}
 
@@ -583,7 +585,7 @@ public class ChainATAPI extends API {
 
 	public long getMapValue(MachineState state) {
 		try {
-			String targetAtAddress = this.resolveMapAddressFromB(state);
+			String targetAtAddress = this.resolveAtAddressFromB(state);
 			return targetAtAddress == null ? 0L
 					: this.mapContext.getValue(targetAtAddress, this.getA1(state), this.getA2(state));
 		} catch (DataException e) {
@@ -608,8 +610,37 @@ public class ChainATAPI extends API {
 		return this.mapContext != null && this.getGateBlockHeight() >= BlockChain.getInstance().getAtMapStorageHeight();
 	}
 
-	/** Resolves only the explicit AT-address encoding accepted by map reads; zero means self. */
-	private String resolveMapAddressFromB(MachineState state) {
+	/**
+	 * The chain-query opcodes each activate independently via their own feature trigger; calling one
+	 * before its trigger is an illegal function code, exactly like a pre-activation map call.
+	 */
+	private void checkChainQueryFunctionActive(ChainFunctionCode chainFunctionCode) throws IllegalFunctionCodeException {
+		final long activationHeight;
+
+		switch (chainFunctionCode) {
+			case GET_TRUST_STATUS_FROM_ACCOUNT_IN_B:
+				activationHeight = BlockChain.getInstance().getAtTrustStatusHeight();
+				break;
+
+			case GET_BALANCE_FROM_ACCOUNT_IN_B:
+				activationHeight = BlockChain.getInstance().getAtBalanceQueryHeight();
+				break;
+
+			case CHECK_CODE_HASH_OF_AT_IN_B:
+				activationHeight = BlockChain.getInstance().getAtCodeHashCheckHeight();
+				break;
+
+			default:
+				return;
+		}
+
+		if (this.blockHeight < activationHeight)
+			throw new IllegalFunctionCodeException("Chain function " + chainFunctionCode.name()
+					+ " is not active at this block height");
+	}
+
+	/** Resolves only the explicit AT-address encoding accepted by cross-AT reads (maps, code-hash checks); zero means self. */
+	private String resolveAtAddressFromB(MachineState state) {
 		byte[] bBytes = this.getB(state);
 		boolean allZero = true;
 		for (byte value : bBytes) {
@@ -647,6 +678,64 @@ public class ChainATAPI extends API {
 			return this.getSpendableAssetBalance(assetId, state);
 		} catch (DataException e) {
 			throw new RuntimeException("AT API unable to fetch asset details?", e);
+		}
+	}
+
+	/**
+	 * Returns the confirmed balance of {@code assetId} (0 = native coin) for the account in B,
+	 * in raw 1e8-scaled units, or 0 if the asset is unknown, the asset id is negative,
+	 * or the account is unknown / holds no balance.
+	 * <p>
+	 * This reads live repository state, which during block execution is deterministically the
+	 * <i>parent</i> block's state: every AT in a block runs (in pinned oldest-AT-first order) before
+	 * ANY of that block's transactions - including AT-generated payments - are processed
+	 * (see {@code Block.executeATs()} vs {@code Block.process()}), so every node computes the
+	 * identical value, and a payment included in the same block only becomes visible to
+	 * balance reads from the following block onwards.
+	 */
+	public long getAccountBalanceFromB(long assetId, MachineState state) {
+		if (assetId < 0)
+			return 0L;
+
+		try {
+			if (!this.repository.getAssetRepository().assetExists(assetId))
+				return 0L;
+
+			Account account = this.getAccountFromB(state);
+			if (account == null)
+				return 0L;
+
+			return account.getConfirmedBalance(assetId);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch account's asset balance?", e);
+		}
+	}
+
+	/**
+	 * Returns 1 if B identifies an AT whose stored code hash equals the 32 bytes held in A1-A4, else 0.
+	 * <p>
+	 * B uses the cross-AT read convention shared with map reads (all-zero means this AT itself,
+	 * otherwise an AT address); A holds the expected SHA-256 code hash in the same register packing
+	 * SHA256-type results use. The comparison is against the code hash stored at deploy time
+	 * (see {@code ATData.getCodeHash()}), the same bytes the {@code /at/byfunction} lookups match on.
+	 * Never errors: a non-AT or unknown address simply returns 0.
+	 */
+	public long checkCodeHashOfAtInB(MachineState state) {
+		try {
+			String targetAtAddress = this.resolveAtAddressFromB(state);
+			if (targetAtAddress == null)
+				return 0L;
+
+			ATData targetAtData = targetAtAddress.equals(this.atData.getATAddress())
+					? this.atData
+					: this.repository.getATRepository().fromATAddress(targetAtAddress);
+
+			if (targetAtData == null || targetAtData.getCodeHash() == null)
+				return 0L;
+
+			return Arrays.equals(targetAtData.getCodeHash(), this.getA(state)) ? 1L : 0L;
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch AT's code hash?", e);
 		}
 	}
 

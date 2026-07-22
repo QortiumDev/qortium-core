@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - feat(at): add chain-query opcodes for trust status, balances and code hashes
+
+Added three new read-only query functions that automated transactions (ATs) can
+call, each shipping inactive behind its own scheduled activation height so the
+network can upgrade safely before anything changes: one returns another
+account's trust standing (the same stored rating the chain itself uses, from
+Suspicious through Gold), one returns any account's confirmed balance of any
+asset, and one lets a contract confirm that another contract's code is exactly
+the code it expects (by comparing the fingerprint recorded when that contract
+was deployed). Together these let future contracts — such as a faucet that only
+serves trusted accounts, or a contract that refuses to talk to an impostor
+contract — make decisions from on-chain facts instead of trusting whoever sent
+a message. All three queries are timed so every node computing a block sees
+identical answers: they read the state as of the previous block, so a change
+happening in the same block only becomes visible one block later, and undoing a
+block restores the earlier answers. On Previewnet all three switch on at block
+70,000 (alongside the map-storage feature); they stay off on mainnet, and the
+network's pinned configuration fingerprint is unchanged. No existing behavior
+changes before the activation height.
+
 ### 2026-07-22 - fix(at): route every remaining AT feature gate to the block's true height
 
 Defense-in-depth completion of the height-source fix below. That fix moved the
@@ -113,6 +133,7 @@ switched on immediately on the test chains. These activation heights live in the
 hash-excluded feature-trigger list and the hashing price is a built-in default
 rather than shipped config, so the live Previewnet chain-config fingerprint is
 unchanged and no node needs to re-sync to keep peering.
+
 
 ### 2026-07-22 - test: end-to-end coverage for the SMPL exactly-once faucet AT
 

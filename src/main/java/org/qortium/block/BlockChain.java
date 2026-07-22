@@ -68,6 +68,9 @@ public class BlockChain {
 	private static final String AT_SWEEP_ASSETS_ON_FINISH_TRIGGER = "atSweepAssetsOnFinishHeight";
 	private static final String AT_HASHING_STEP_COST_TRIGGER = "atHashingStepCostHeight";
 	private static final String AT_CHECKED_ARITHMETIC_TRIGGER = "atCheckedArithmeticHeight";
+	private static final String AT_TRUST_STATUS_TRIGGER = "atTrustStatusHeight";
+	private static final String AT_BALANCE_QUERY_TRIGGER = "atBalanceQueryHeight";
+	private static final String AT_CODE_HASH_CHECK_TRIGGER = "atCodeHashCheckHeight";
 
 	// Properties
 
@@ -998,6 +1001,21 @@ public class BlockChain {
 	 */
 	public long getAtCheckedArithmeticHeight() {
 		return getFeatureTriggerHeight(AT_CHECKED_ARITHMETIC_TRIGGER);
+	}
+
+	/** From this height, ATs may query an account's stored trust snapshot via {@code GET_TRUST_STATUS_FROM_ACCOUNT_IN_B}. */
+	public long getAtTrustStatusHeight() {
+		return getFeatureTriggerHeight(AT_TRUST_STATUS_TRIGGER);
+	}
+
+	/** From this height, ATs may query any account's confirmed asset balance via {@code GET_BALANCE_FROM_ACCOUNT_IN_B}. */
+	public long getAtBalanceQueryHeight() {
+		return getFeatureTriggerHeight(AT_BALANCE_QUERY_TRIGGER);
+	}
+
+	/** From this height, ATs may verify another AT's stored code hash via {@code CHECK_CODE_HASH_OF_AT_IN_B}. */
+	public long getAtCodeHashCheckHeight() {
+		return getFeatureTriggerHeight(AT_CODE_HASH_CHECK_TRIGGER);
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {

@@ -142,6 +142,53 @@ public class BlockChainConfigHashTests {
 		assertEquals(100, blockChain.getCiyamAtSettings().mapEntryStepCost);
 	}
 
+	/** The three AT chain-query opcode triggers are scheduled inside "featureTriggers" and so must not move the pinned hash. */
+	@Test
+	public void testAtQueryOpcodeTriggersAreExcludedFromHash() {
+		String firstConfig = "{"
+				+ "\"networkId\":\"qortium-preview\","
+				+ "\"featureTriggers\":{"
+				+ "\"atTrustStatusHeight\":70000,"
+				+ "\"atBalanceQueryHeight\":70000,"
+				+ "\"atCodeHashCheckHeight\":70000"
+				+ "},"
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+		String secondConfig = "{"
+				+ "\"networkId\":\"qortium-preview\","
+				+ "\"featureTriggers\":{"
+				+ "\"atTrustStatusHeight\":80000,"
+				+ "\"atBalanceQueryHeight\":90000"
+				+ "},"
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+		String noTriggersConfig = "{"
+				+ "\"networkId\":\"qortium-preview\","
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+
+		assertEquals(hash(firstConfig), hash(secondConfig));
+		assertEquals(hash(firstConfig), hash(noTriggersConfig));
+	}
+
+	@Test
+	public void testShippedPreviewnetEnablesAtQueryOpcodesAt70000() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("previewchain.json"), StandardCharsets.UTF_8));
+
+		assertEquals(70_000L, blockChain.getAtTrustStatusHeight());
+		assertEquals(70_000L, blockChain.getAtBalanceQueryHeight());
+		assertEquals(70_000L, blockChain.getAtCodeHashCheckHeight());
+	}
+
+	@Test
+	public void testShippedMainnetLeavesAtQueryOpcodesDisabled() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("blockchain.json"), StandardCharsets.UTF_8));
+
+		assertEquals(BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT, blockChain.getAtTrustStatusHeight());
+		assertEquals(BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT, blockChain.getAtBalanceQueryHeight());
+		assertEquals(BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT, blockChain.getAtCodeHashCheckHeight());
+	}
+
 	@Test
 	public void testShippedMainnetLeavesAtMapsDisabled() throws Exception {
 		BlockChain blockChain = unmarshal(new String(readBundledConfig("blockchain.json"), StandardCharsets.UTF_8));
