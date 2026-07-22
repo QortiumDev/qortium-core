@@ -296,6 +296,22 @@ public enum ChainFunctionCode {
 			ChainATAPI api = (ChainATAPI) state.getAPI();
 			functionData.returnValue = api.getPaymentCountFromTransactionInA(state);
 		}
+	},
+	/** Returns the persistent map value for keys in A1/A2 from the AT identified by B, or self if B is zero. */
+	GET_MAP_VALUE_KEYS_IN_A(0x0600, 0, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getMapValue(state);
+		}
+	},
+	/** Stores A4 in the calling AT's persistent map under keys A1/A2; zero deletes the entry. */
+	SET_MAP_VALUE_KEYS_IN_A(0x0601, 0, false) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			api.setMapValue(state);
+		}
 	};
 
 	public final short value;
@@ -315,6 +331,10 @@ public enum ChainFunctionCode {
 
 	public static ChainFunctionCode valueOf(int value) {
 		return map.get((short) value);
+	}
+
+	public boolean isMapFunction() {
+		return this == GET_MAP_VALUE_KEYS_IN_A || this == SET_MAP_VALUE_KEYS_IN_A;
 	}
 
 	public void preExecuteCheck(int paramCount, boolean returnValueExpected, short rawFunctionCode) throws IllegalFunctionCodeException {

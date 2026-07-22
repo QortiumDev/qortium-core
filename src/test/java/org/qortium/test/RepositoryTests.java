@@ -125,6 +125,11 @@ public class RepositoryTests extends Common {
 				assertTrue(resultSet.next());
 			}
 
+			assertColumnExists(connection, "ATSTATES", "MAP_ROOT");
+			assertTableExists(connection, "ATMAPENTRIES");
+			assertTableExists(connection, "ATMAPENTRYCHANGES");
+			assertIndexExists(connection, "ATMAPENTRYCHANGES", "ATMAPENTRYCHANGESADDRESSKEYINDEX");
+
 			assertColumnSize(connection, "POLLS", "POLL_NAME", 400);
 			assertColumnSize(connection, "POLLOPTIONS", "OPTION_NAME", 400);
 			assertColumnExists(connection, "POLLS", "START_WHEN");
@@ -193,23 +198,23 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
-	public void testVersionThreeRepositorySchemaVersionIsUnsupported() throws Exception {
-		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-three-schema-" + System.nanoTime();
+	public void testVersionFourRepositorySchemaVersionIsUnsupported() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-four-schema-" + System.nanoTime();
 
 		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
 			connection.setAutoCommit(false);
 
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("CREATE TABLE DatabaseInfo (version INTEGER NOT NULL)");
-				statement.execute("INSERT INTO DatabaseInfo VALUES (3)");
+				statement.execute("INSERT INTO DatabaseInfo VALUES (4)");
 			}
 			connection.commit();
 
 			try {
 				HSQLDBDatabaseUpdates.updateDatabase(connection);
-				fail("Schema version 3 should not be treated as the Qortium baseline");
+				fail("Schema version 4 should not be treated as the Qortium baseline");
 			} catch (SQLException e) {
-				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 3"));
+				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 4"));
 			}
 
 			try (Statement statement = connection.createStatement()) {
@@ -219,7 +224,7 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
-	public void testQortiumVersionOneRepositoryUpgradesToVersionTwo() throws Exception {
+	public void testQortiumVersionOneRepositoryUpgradesThroughVersionThree() throws Exception {
 		String connectionUrl = "jdbc:hsqldb:mem:qortium-v1-schema-upgrade-" + System.nanoTime();
 
 		byte[] signature = new byte[] {1, 2, 3};
@@ -255,6 +260,9 @@ public class RepositoryTests extends Common {
 			assertColumnExists(connection, "CREATEPOLLTRANSACTIONS", "START_WHEN");
 			assertColumnExists(connection, "UPDATEPOLLTRANSACTIONS", "NEW_START_WHEN");
 			assertColumnExists(connection, "UPDATEPOLLTRANSACTIONS", "PREVIOUS_START_WHEN");
+			assertColumnExists(connection, "ATSTATES", "MAP_ROOT");
+			assertTableExists(connection, "ATMAPENTRIES");
+			assertTableExists(connection, "ATMAPENTRYCHANGES");
 
 			try (PreparedStatement preparedStatement = connection.prepareStatement(
 					"SELECT option_index FROM VoteOnPollTransactionOptions WHERE signature = ?")) {
@@ -283,6 +291,29 @@ public class RepositoryTests extends Common {
 				preparedStatement.setInt(3, 2);
 				preparedStatement.executeUpdate();
 			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
+	public void testQortiumVersionTwoRepositoryUpgradesToVersionThree() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:qortium-v2-schema-upgrade-" + System.nanoTime();
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+			createMinimalVersionTwoAtSchema(connection);
+			connection.commit();
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertEquals(HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION,
+					HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
+			assertColumnExists(connection, "ATSTATES", "MAP_ROOT");
+			assertTableExists(connection, "ATMAPENTRIES");
+			assertTableExists(connection, "ATMAPENTRYCHANGES");
+			assertIndexExists(connection, "ATMAPENTRYCHANGES", "ATMAPENTRYCHANGESADDRESSKEYINDEX");
 
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("SHUTDOWN");
@@ -320,6 +351,8 @@ public class RepositoryTests extends Common {
 		try (Statement statement = connection.createStatement()) {
 			statement.execute("CREATE TYPE PUBLIC.EPOCHMILLIS AS BIGINT");
 			statement.execute("CREATE TYPE PUBLIC.SIGNATURE AS VARBINARY(64)");
+			statement.execute("CREATE TYPE PUBLIC.ACCOUNTADDRESS AS VARCHAR(36)");
+			statement.execute("CREATE TYPE PUBLIC.ATSTATEHASH AS VARBINARY(32)");
 			statement.execute("CREATE TABLE PUBLIC.DATABASEINFO(VERSION INTEGER NOT NULL)");
 			statement.execute("INSERT INTO PUBLIC.DATABASEINFO VALUES(1)");
 			statement.execute("CREATE TABLE PUBLIC.CREATEPOLLTRANSACTIONS(SIGNATURE VARBINARY(64) PRIMARY KEY,POLL_NAME VARCHAR(128))");
@@ -333,6 +366,26 @@ public class RepositoryTests extends Common {
 			statement.execute("CREATE TABLE PUBLIC.UPDATEPOLLTRANSACTIONOPTIONS(SIGNATURE VARBINARY(64),OPTION_INDEX TINYINT,OPTION_NAME VARCHAR(80))");
 			statement.execute("CREATE TABLE PUBLIC.UPDATEPOLLTRANSACTIONPREVIOUSOPTIONS(SIGNATURE VARBINARY(64),OPTION_INDEX TINYINT,OPTION_NAME VARCHAR(80))");
 			statement.execute("CREATE TABLE PUBLIC.VOTEONPOLLTRANSACTIONS(SIGNATURE VARBINARY(64) PRIMARY KEY,OPTION_INDEX TINYINT NOT NULL,PREVIOUS_OPTION_INDEX TINYINT)");
+			statement.execute("CREATE TABLE PUBLIC.ATS(AT_ADDRESS PUBLIC.ACCOUNTADDRESS PRIMARY KEY)");
+			statement.execute("CREATE TABLE PUBLIC.ATSTATES(AT_ADDRESS PUBLIC.ACCOUNTADDRESS,HEIGHT INTEGER NOT NULL,STATE_HASH PUBLIC.ATSTATEHASH NOT NULL,PRIMARY KEY(AT_ADDRESS,HEIGHT),FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
+		}
+	}
+
+	private static void createMinimalVersionTwoAtSchema(Connection connection) throws SQLException {
+		try (Statement statement = connection.createStatement()) {
+			statement.execute("CREATE TYPE PUBLIC.EPOCHMILLIS AS BIGINT");
+			statement.execute("CREATE TYPE PUBLIC.ACCOUNTADDRESS AS VARCHAR(36)");
+			statement.execute("CREATE TYPE PUBLIC.ATSTATEHASH AS VARBINARY(32)");
+			statement.execute("CREATE TABLE PUBLIC.DATABASEINFO(VERSION INTEGER NOT NULL)");
+			statement.execute("INSERT INTO PUBLIC.DATABASEINFO VALUES(2)");
+			statement.execute("CREATE TABLE PUBLIC.ATS(AT_ADDRESS PUBLIC.ACCOUNTADDRESS PRIMARY KEY)");
+			statement.execute("CREATE TABLE PUBLIC.ATSTATES(AT_ADDRESS PUBLIC.ACCOUNTADDRESS,HEIGHT INTEGER NOT NULL,STATE_HASH PUBLIC.ATSTATEHASH NOT NULL,PRIMARY KEY(AT_ADDRESS,HEIGHT),FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
+		}
+	}
+
+	private static void assertTableExists(Connection connection, String tableName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", tableName, null)) {
+			assertTrue("Missing table " + tableName, resultSet.next());
 		}
 	}
 

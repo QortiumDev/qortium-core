@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.github.QortiumDev</groupId>
+	<artifactId>AT</artifactId>
+	<version>33df17d</version>
+	<packaging>jar</packaging>
+	<name>QortiumDev AT</name>
+	<description>Pinned Automated Transactions runtime used by Qortium.</description>
+	<url>https://github.com/QortiumDev/AT</url>
+	<licenses>
+		<license>
+			<name>MIT License</name>
+			<url>https://github.com/QortiumDev/AT/blob/33df17d976af63037ca345b928cc2daf350d9a58/LICENSE</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+	<scm>
+		<connection>scm:git:https://github.com/QortiumDev/AT.git</connection>
+		<developerConnection>scm:git:https://github.com/QortiumDev/AT.git</developerConnection>
+		<url>https://github.com/QortiumDev/AT</url>
+		<tag>33df17d976af63037ca345b928cc2daf350d9a58</tag>
+	</scm>
+</project>

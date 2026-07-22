@@ -90,16 +90,21 @@ public class AtStatesPruner implements Runnable {
 					LOGGER.debug(String.format("Pruning AT states between blocks %d and %d...", pruneStartHeight, upperPruneHeight));
 
 					int numAtStatesPruned = repository.getATRepository().pruneAtStates(pruneStartHeight, upperPruneHeight);
+					int numAtMapChangesPruned = repository.getATRepository()
+							.pruneATMapChanges(pruneStartHeight, upperPruneHeight);
 					repository.saveChanges();
 					int numAtStateDataRowsTrimmed = repository.getATRepository().trimAtStates(
 							pruneStartHeight, upperPruneHeight, Settings.getInstance().getAtStatesTrimLimit());
 					repository.saveChanges();
 
-					if (numAtStatesPruned > 0 || numAtStateDataRowsTrimmed > 0) {
+					if (numAtStatesPruned > 0 || numAtStateDataRowsTrimmed > 0 || numAtMapChangesPruned > 0) {
 						final int finalPruneStartHeight = pruneStartHeight;
 						LOGGER.debug(() -> String.format("Pruned %d AT state%s between blocks %d and %d",
 								numAtStatesPruned, (numAtStatesPruned != 1 ? "s" : ""),
 								finalPruneStartHeight, upperPruneHeight));
+						LOGGER.debug("Pruned {} AT map journal row{} between blocks {} and {}",
+								numAtMapChangesPruned, numAtMapChangesPruned == 1 ? "" : "s",
+								finalPruneStartHeight, upperPruneHeight);
 					} else {
 						// Can we move onto next batch?
 						if (upperPrunableHeight > upperBatchHeight) {

@@ -70,7 +70,11 @@ public enum ChainParameter {
 			"ACCOUNT_TRUST_CATEGORY_POLICIES",
 			"Category-specific account trust thresholds and score caps for SUBJECT, PLAYER, TRAINER, and MANAGER trust derivation.",
 			"/chain-parameters/account-trust/category-policies/update",
-			"/chain-parameters/account-trust/category-policies/{height}");
+			"/chain-parameters/account-trust/category-policies/{height}"),
+	MAX_MAP_ENTRIES_PER_AT(15, Integer.BYTES, "INTEGER",
+			"Maximum live persistent-map entries per automated transaction. Updates can only raise this limit.",
+			"/chain-parameters/at-map/max-entries/update",
+			"/chain-parameters/at-map/max-entries/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
@@ -149,6 +153,7 @@ public enum ChainParameter {
 			case ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT:
 			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT:
 			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE:
+			case MAX_MAP_ENTRIES_PER_AT:
 				return 1;
 
 			default:
@@ -262,6 +267,9 @@ public enum ChainParameter {
 				int confidence = decodeIntValue(value);
 				return confidence >= 1 && confidence <= 4;
 
+			case MAX_MAP_ENTRIES_PER_AT:
+				return decodeIntValue(value) > 0;
+
 			case REWARD_SHARE_WEIGHTS:
 				int[] weights = decodeIntArrayValue(value);
 				long totalWeight = 0;
@@ -309,6 +317,11 @@ public enum ChainParameter {
 				int effectiveSuspiciousMinRaterCount = BlockChain.getInstance()
 						.getAccountTrustSuspiciousMinRaterCount(repository, activationHeight);
 				return AccountTrustCategoryPolicyCodec.isValid(value, effectiveSuspiciousMinRaterCount);
+
+			case MAX_MAP_ENTRIES_PER_AT:
+				int previousLimit = BlockChain.getInstance().getMaxMapEntriesPerAt(repository,
+						Math.max(0, activationHeight - 1));
+				return decodeIntValue(value) >= previousLimit;
 
 			default:
 				return true;

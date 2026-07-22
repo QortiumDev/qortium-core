@@ -19,7 +19,7 @@ public class HSQLDBDatabaseUpdates {
 
 	private static final Logger LOGGER = LogManager.getLogger(HSQLDBDatabaseUpdates.class);
 
-	public static final int CURRENT_SCHEMA_VERSION = 2;
+	public static final int CURRENT_SCHEMA_VERSION = 3;
 
 	private static final String BASELINE_SCHEMA_RESOURCE = "/repository/hsqldb-baseline.sql";
 
@@ -45,6 +45,11 @@ public class HSQLDBDatabaseUpdates {
 
 		if (databaseVersion == 1) {
 			upgradeFromVersion1(connection);
+			databaseVersion = 2;
+		}
+
+		if (databaseVersion == 2) {
+			upgradeFromVersion2(connection);
 			ensureLocalTables(connection);
 			ensureArbitraryTransactionCreatedWhen(connection);
 			connection.commit();
@@ -156,10 +161,42 @@ public class HSQLDBDatabaseUpdates {
 			stmt.execute("ALTER TABLE PUBLIC.POLLFROZENVOTEDETAILS DROP PRIMARY KEY");
 			stmt.execute("ALTER TABLE PUBLIC.POLLFROZENVOTEDETAILS ADD PRIMARY KEY(POLL_ID,VOTER,OPTION_INDEX)");
 
+			stmt.execute("UPDATE PUBLIC.DATABASEINFO SET VERSION = 2");
+		}
+
+		LOGGER.info("Upgraded Qortium HSQLDB repository schema from version 1 to version 2");
+	}
+
+	private static void upgradeFromVersion2(Connection connection) throws SQLException {
+		StartupStatus.update("Upgrading Qortium database to schema v3, please wait...");
+
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("ALTER TABLE PUBLIC.ATSTATES ADD COLUMN MAP_ROOT PUBLIC.ATSTATEHASH");
+			stmt.execute("CREATE TABLE PUBLIC.ATMAPENTRIES("
+					+ "AT_ADDRESS PUBLIC.ACCOUNTADDRESS NOT NULL, "
+					+ "KEY1 BIGINT NOT NULL, "
+					+ "KEY2 BIGINT NOT NULL, "
+					+ "\"VALUE\" BIGINT NOT NULL CHECK (\"VALUE\" <> 0), "
+					+ "PRIMARY KEY(AT_ADDRESS,KEY1,KEY2), "
+					+ "FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
+			stmt.execute("CREATE TABLE PUBLIC.ATMAPENTRYCHANGES("
+					+ "HEIGHT INTEGER NOT NULL, "
+					+ "SEQUENCE INTEGER NOT NULL, "
+					+ "AT_ADDRESS PUBLIC.ACCOUNTADDRESS NOT NULL, "
+					+ "KEY1 BIGINT NOT NULL, "
+					+ "KEY2 BIGINT NOT NULL, "
+					+ "PREVIOUS_VALUE BIGINT, "
+					+ "NEW_VALUE BIGINT, "
+					+ "CHECK (PREVIOUS_VALUE IS NULL OR PREVIOUS_VALUE <> 0), "
+					+ "CHECK (NEW_VALUE IS NULL OR NEW_VALUE <> 0), "
+					+ "PRIMARY KEY(HEIGHT,SEQUENCE), "
+					+ "FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
+			stmt.execute("CREATE INDEX PUBLIC.ATMAPENTRYCHANGESADDRESSKEYINDEX "
+					+ "ON PUBLIC.ATMAPENTRYCHANGES(AT_ADDRESS,KEY1,KEY2,HEIGHT)");
 			stmt.execute("UPDATE PUBLIC.DATABASEINFO SET VERSION = " + CURRENT_SCHEMA_VERSION);
 		}
 
-		LOGGER.info("Upgraded Qortium HSQLDB repository schema from version 1 to version {}", CURRENT_SCHEMA_VERSION);
+		LOGGER.info("Upgraded Qortium HSQLDB repository schema from version 2 to version {}", CURRENT_SCHEMA_VERSION);
 	}
 
 	/**

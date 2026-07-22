@@ -27,6 +27,7 @@ import org.qortium.api.model.ChainParameterMetadata;
 import org.qortium.api.model.ChainParameterUpdateSummary;
 import org.qortium.api.model.ChainParameterValidationMetadata;
 import org.qortium.api.model.IntegerChainParameterUpdateRequest;
+import org.qortium.api.model.MaxMapEntriesPerAtUpdateRequest;
 import org.qortium.api.model.NameRegistrationUnitFeeUpdateRequest;
 import org.qortium.api.model.RewardShareWeightsUpdateRequest;
 import org.qortium.api.model.TrustStatusVoteWeightsUpdateRequest;
@@ -231,6 +232,18 @@ public class ChainParametersResource {
 	public int getMinAccountsToActivateShareBin(@PathParam("height") int height) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return BlockChain.getInstance().getMinAccountsToActivateShareBin(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/at-map/max-entries/{height}")
+	@Operation(summary = "Fetch the effective persistent-map entry limit per AT at a height")
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int getMaxMapEntriesPerAt(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getMaxMapEntriesPerAt(repository, height);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -579,6 +592,34 @@ public class ChainParametersResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildIntegerTransactionData(
 					updateRequest, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/at-map/max-entries/update")
+	@Operation(
+			summary = "Build raw, unsigned, MAX_MAP_ENTRIES_PER_AT chain-parameter update transaction",
+			requestBody = @RequestBody(required = true, content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(implementation = MaxMapEntriesPerAtUpdateRequest.class))))
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID,
+			ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateMaxMapEntriesPerAt(MaxMapEntriesPerAtUpdateRequest updateRequest) {
+		checkChainParameterBuilderAllowed();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+					updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee,
+					updateRequest.nonce, null);
+			ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+					baseTransactionData, ChainParameter.MAX_MAP_ENTRIES_PER_AT.id, updateRequest.activationHeight,
+					ChainParameter.MAX_MAP_ENTRIES_PER_AT.encodeIntValue(updateRequest.maxEntries));
 			return validateAndTransformUpdate(repository, transactionData);
 		} catch (TransformationException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
@@ -1266,6 +1307,9 @@ public class ChainParametersResource {
 
 			case ACCOUNT_TRUST_CATEGORY_POLICIES:
 				return BlockChain.getInstance().getAccountTrustCategoryPoliciesValue();
+
+			case MAX_MAP_ENTRIES_PER_AT:
+				return parameter.encodeIntValue(BlockChain.DEFAULT_MAX_MAP_ENTRIES_PER_AT);
 
 			case UNIT_FEE:
 				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));

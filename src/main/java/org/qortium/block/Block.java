@@ -12,6 +12,7 @@ import org.qortium.account.PrivateKeyAccount;
 import org.qortium.account.PublicKeyAccount;
 import org.qortium.asset.Asset;
 import org.qortium.at.AT;
+import org.qortium.at.ATMapExecutionContext;
 import org.qortium.block.BlockChain.AccountLevelShareBin;
 import org.qortium.block.BlockChain.BlockTimingByHeight;
 import org.qortium.controller.OnlineAccountsManager;
@@ -136,6 +137,8 @@ public class Block {
 	protected List<ATStateData> ourAtStates;
 	/** Locally-generated AT fees */
 	protected long ourAtFees; // Generated locally
+	/** Block-scoped persistent-map overlay produced alongside {@link #ourAtStates}. */
+	protected ATMapExecutionContext atMapExecutionContext;
 
 	/** Cached online accounts validation decision, to avoid revalidating when true */
 	private boolean onlineAccountsAlreadyValid = false;
@@ -578,6 +581,7 @@ public class Block {
 		newBlock.ourAtStates = this.ourAtStates;
 		newBlock.atStates = newBlock.ourAtStates;
 		newBlock.ourAtFees = this.ourAtFees;
+		newBlock.atMapExecutionContext = this.atMapExecutionContext;
 
 		// Calculate new block timestamp
 		int version = this.blockData.getVersion();
@@ -1603,6 +1607,7 @@ public class Block {
 
 		this.ourAtStates = new ArrayList<>();
 		this.ourAtFees = 0;
+		this.atMapExecutionContext = new ATMapExecutionContext(this.repository);
 
 		// Find all executable ATs, ordered by earliest creation date first
 		List<ATData> executableATs = this.repository.getATRepository().getAllExecutableATs();
@@ -1610,7 +1615,8 @@ public class Block {
 		// Run each AT, appends AT-Transactions and corresponding AT states, to our lists
 		for (ATData atData : executableATs) {
 			AT at = new AT(this.repository, atData);
-			List<AtTransaction> atTransactions = at.run(this.blockData.getHeight(), this.blockData.getTimestamp());
+			List<AtTransaction> atTransactions = at.run(this.blockData.getHeight(), this.blockData.getTimestamp(),
+					this.atMapExecutionContext);
 			ATStateData atStateData = at.getATStateData();
 			// Didn't execute? (e.g. sleeping)
 			if (atStateData == null)
@@ -2044,6 +2050,9 @@ public class Block {
 			AT at = new AT(repository, atData, atStateData);
 			at.update(this.blockData.getHeight(), this.blockData.getTimestamp());
 		}
+
+		if (this.atMapExecutionContext != null)
+			atRepository.saveATMapChanges(this.blockData.getHeight(), this.atMapExecutionContext.getChanges());
 	}
 
 	protected void linkTransactionsToBlock() throws DataException {
@@ -2268,6 +2277,8 @@ public class Block {
 
 	protected void orphanAtFeesAndStates() throws DataException {
 		ATRepository atRepository = this.repository.getATRepository();
+		atRepository.revertATMapChanges(this.blockData.getHeight());
+
 		for (ATStateData atStateData : this.getATStates()) {
 			Account atAccount = new Account(this.repository, atStateData.getATAddress());
 

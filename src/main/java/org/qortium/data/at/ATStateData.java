@@ -7,6 +7,7 @@ public class ATStateData {
 	private Integer height;
 	private byte[] stateData;
 	private byte[] stateHash;
+	private byte[] mapRoot;
 	private Long fees;
 	private boolean isInitial;
 
@@ -18,10 +19,17 @@ public class ATStateData {
 	/** Create new ATStateData */
 	public ATStateData(String ATAddress, Integer height, byte[] stateData, byte[] stateHash, Long fees,
 			boolean isInitial, Long sleepUntilMessageTimestamp) {
+		this(ATAddress, height, stateData, stateHash, null, fees, isInitial, sleepUntilMessageTimestamp);
+	}
+
+	/** Create new ATStateData with a committed AT map root. */
+	public ATStateData(String ATAddress, Integer height, byte[] stateData, byte[] stateHash, byte[] mapRoot, Long fees,
+			boolean isInitial, Long sleepUntilMessageTimestamp) {
 		this.ATAddress = ATAddress;
 		this.height = height;
 		this.stateData = stateData;
 		this.stateHash = stateHash;
+		this.mapRoot = mapRoot;
 		this.fees = fees;
 		this.isInitial = isInitial;
 		this.sleepUntilMessageTimestamp = sleepUntilMessageTimestamp;
@@ -30,6 +38,11 @@ public class ATStateData {
 	/** For recreating per-block ATStateData from repository where not all info is needed */
 	public ATStateData(String ATAddress, int height, byte[] stateHash, Long fees, boolean isInitial) {
 		this(ATAddress, height, null, stateHash, fees, isInitial, null);
+	}
+
+	/** For recreating per-block ATStateData with a committed AT map root. */
+	public ATStateData(String ATAddress, int height, byte[] stateHash, byte[] mapRoot, Long fees, boolean isInitial) {
+		this(ATAddress, height, null, stateHash, mapRoot, fees, isInitial, null);
 	}
 
 	/** For creating ATStateData from serialized bytes when we don't have all the info */
@@ -59,6 +72,10 @@ public class ATStateData {
 
 	public byte[] getStateHash() {
 		return this.stateHash;
+	}
+
+	public byte[] getMapRoot() {
+		return this.mapRoot;
 	}
 
 	public Long getFees() {

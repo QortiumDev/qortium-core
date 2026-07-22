@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-21 - feat(at): add persistent maps and cross-AT reads
+
+Added consensus-backed persistent key/value maps for automated transactions so
+contracts can keep registries, claim records, and other state beyond their small
+machine data segment. Contracts can write only their own map and can read another
+AT's map synchronously, including an earlier writer in the same block. Map changes
+stay in a block-local overlay until validation succeeds, commit atomically with AT
+state, and reverse with the block on a reorg. Every AT state now commits a canonical
+hash of its current map contents so nodes cannot silently disagree about stored
+values.
+
+The feature activates on Previewnet at block 70,000. Creating a live entry costs
+100 execution steps; reads, overwrites, deletes, no-ops, and cap-rejected writes
+retain the normal 10-step function cost. Each AT starts with a 500-entry ceiling
+that development-group governance may only raise. Core now pins the matching
+QortiumDev AT runtime that exposes the backward-compatible pre-execution pricing
+hook and enforces platform-function signature/activation checks before execution.
+The repository schema advances to version 3 with current map rows, rollback
+journals, and nullable map roots on AT states.
+
 ### 2026-07-21 - chore(at): pin the independent QortiumDev AT runtime
 
 Moved the automated-transaction dependency to the independent `QortiumDev/AT`

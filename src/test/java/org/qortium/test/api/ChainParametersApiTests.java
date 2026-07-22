@@ -19,6 +19,7 @@ import org.qortium.api.model.ChainParameterEffectiveValue;
 import org.qortium.api.model.ChainParameterMetadata;
 import org.qortium.api.model.ChainParameterUpdateSummary;
 import org.qortium.api.model.IntegerChainParameterUpdateRequest;
+import org.qortium.api.model.MaxMapEntriesPerAtUpdateRequest;
 import org.qortium.api.model.NameRegistrationUnitFeeUpdateRequest;
 import org.qortium.api.model.RewardShareWeightsUpdateRequest;
 import org.qortium.api.model.TrustStatusVoteWeightsUpdateRequest;
@@ -80,7 +81,7 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(14, parameters.size());
+		assertEquals(15, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
@@ -108,6 +109,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES),
 				ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MAX_MAP_ENTRIES_PER_AT),
+				ChainParameter.MAX_MAP_ENTRIES_PER_AT);
 
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.BLOCK_REWARD).validation.minimumLongValue);
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.UNIT_FEE).validation.minimumLongValue);
@@ -132,6 +135,8 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(Integer.valueOf(4),
 				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE)
 						.validation.maximumIntegerValue);
+		assertEquals(Integer.valueOf(1),
+				findMetadata(parameters, ChainParameter.MAX_MAP_ENTRIES_PER_AT).validation.minimumIntegerValue);
 
 		ChainParameterMetadata rewardWeights = findMetadata(parameters, ChainParameter.REWARD_SHARE_WEIGHTS);
 		assertEquals(Integer.valueOf(10), rewardWeights.validation.integerListLength);
@@ -412,6 +417,36 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testBuildMaxMapEntriesPerAtUpdateUsesNamedValue() throws DataException, TransformationException {
+		MaxMapEntriesPerAtUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			request = new MaxMapEntriesPerAtUpdateRequest();
+			request.timestamp = System.currentTimeMillis();
+			request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+			request.updaterPublicKey = alice.getPublicKey();
+			request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+					+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay() + 100;
+			request.maxEntries = 1000;
+		}
+
+		String rawTransaction = this.chainParametersResource.updateMaxMapEntriesPerAt(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.MAX_MAP_ENTRIES_PER_AT.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertArrayEquals(ChainParameter.MAX_MAP_ENTRIES_PER_AT.encodeIntValue(request.maxEntries),
+				transactionData.getValue());
+	}
+
+	@Test
+	public void testGetMaxMapEntriesPerAtReturnsDefault() {
+		assertEquals(BlockChain.DEFAULT_MAX_MAP_ENTRIES_PER_AT,
+				this.chainParametersResource.getMaxMapEntriesPerAt(1));
+	}
+
+	@Test
 	public void testBuildAccountRatingCooldownUpdateUsesCooldownBlocksValue() throws DataException, TransformationException {
 		AccountRatingCooldownUpdateRequest request;
 
@@ -609,7 +644,7 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
 
-		assertEquals(14, values.size());
+		assertEquals(15, values.size());
 		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
 				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
 		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
@@ -648,6 +683,8 @@ public class ChainParametersApiTests extends ApiCommon {
 						BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence()));
 		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES, height,
 				BlockChain.getInstance().getAccountTrustCategoryPoliciesValue());
+		assertConfigEffectiveValue(values, ChainParameter.MAX_MAP_ENTRIES_PER_AT, height,
+				ChainParameter.MAX_MAP_ENTRIES_PER_AT.encodeIntValue(BlockChain.DEFAULT_MAX_MAP_ENTRIES_PER_AT));
 	}
 
 	@Test

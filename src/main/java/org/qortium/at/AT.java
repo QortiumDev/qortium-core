@@ -1,5 +1,6 @@
 package org.qortium.at;
 
+import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.ciyam.at.MachineState;
@@ -54,7 +55,7 @@ public class AT {
 		ATData skeletonAtData = new ATData(atAddress, creatorPublicKey, creation, assetId);
 
 		long blockTimestamp = Timestamp.toLong(height, 0);
-		ChainATAPI api = new ChainATAPI(repository, skeletonAtData, blockTimestamp);
+		ChainATAPI api = new ChainATAPI(repository, skeletonAtData, height, blockTimestamp, null);
 		ChainAtLoggerFactory loggerFactory = ChainAtLoggerFactory.getInstance();
 
 		MachineState machineState = new MachineState(api, loggerFactory, deployATTransactionData.getCreationBytes());
@@ -67,9 +68,12 @@ public class AT {
 				machineState.isFrozen(), machineState.getFrozenBalance(), null);
 
 		byte[] stateData = machineState.toBytes();
-		byte[] stateHash = Crypto.digest(stateData);
+		byte[] mapRoot = height >= BlockChain.getInstance().getAtMapStorageHeight()
+				? ATMapExecutionContext.emptyMapRoot()
+				: null;
+		byte[] stateHash = calculateStateHash(stateData, mapRoot);
 
-		this.atStateData = new ATStateData(atAddress, height, stateData, stateHash, 0L, true, null);
+		this.atStateData = new ATStateData(atAddress, height, stateData, stateHash, mapRoot, 0L, true, null);
 	}
 
 	// Getters / setters
@@ -106,9 +110,18 @@ public class AT {
 	 * @throws DataException
 	 */
 	public List<AtTransaction> run(int blockHeight, long blockTimestamp) throws DataException {
-		String atAddress = this.atData.getATAddress();
+		return this.run(blockHeight, blockTimestamp, null);
+	}
 
-		ChainATAPI api = new ChainATAPI(repository, this.atData, blockTimestamp);
+	/** Potentially execute AT using the block-scoped persistent-map overlay. */
+	public List<AtTransaction> run(int blockHeight, long blockTimestamp, ATMapExecutionContext mapContext)
+			throws DataException {
+		String atAddress = this.atData.getATAddress();
+		boolean mapStorageActive = blockHeight >= BlockChain.getInstance().getAtMapStorageHeight();
+		if (mapStorageActive && mapContext == null)
+			throw new IllegalArgumentException("Active AT map storage requires a block execution context");
+
+		ChainATAPI api = new ChainATAPI(repository, this.atData, blockHeight, blockTimestamp, mapContext);
 		ChainAtLoggerFactory loggerFactory = ChainAtLoggerFactory.getInstance();
 
 		if (!api.willExecute(blockHeight))
@@ -125,10 +138,15 @@ public class AT {
 		// [Re]create AT machine state using AT state data or from scratch as applicable
 		byte[] codeBytes = this.atData.getCodeBytes();
 		MachineState state = MachineState.fromBytes(api, loggerFactory, latestAtStateData.getStateData(), codeBytes);
+		if (mapStorageActive)
+			mapContext.beginRound(atAddress);
+
 		try {
 			api.preExecute(state);
 			state.execute();
 		} catch (Exception e) {
+			if (mapStorageActive)
+				mapContext.rollbackRound();
 			throw new DataException(String.format("Uncaught exception while running AT '%s'", atAddress), e);
 		}
 
@@ -145,25 +163,41 @@ public class AT {
 				&& blockHeight >= BlockChain.getInstance().getAtPayoutSolvencyHeight()) {
 			LOGGER.error(String.format("AT %s produced oversized state (%d bytes, limit %d) - skipping round",
 					atAddress, stateData.length, DeployAtTransaction.MAX_AT_STATE_LENGTH));
+			if (mapStorageActive)
+				mapContext.rollbackRound();
 			// this.atStateData stays null
 			return Collections.emptyList();
 		}
 
-		byte[] stateHash = Crypto.digest(stateData);
+		byte[] mapRoot = mapStorageActive ? mapContext.getMapRoot(atAddress) : null;
+		byte[] stateHash = calculateStateHash(stateData, mapRoot);
 
 		// Nothing happened?
-		if (state.getSteps() == 0 && Arrays.equals(stateHash, latestAtStateData.getStateHash()))
+		if (state.getSteps() == 0 && Arrays.equals(stateHash, latestAtStateData.getStateHash())) {
 			// We currently want to execute frozen ATs, to maintain backwards support.
-			if (!state.isFrozen())
+			if (!state.isFrozen()) {
 				// this.atStateData will be null
+				if (mapStorageActive)
+					mapContext.rollbackRound();
+				// No accepted state means no map changes from this round can survive.
 				return Collections.emptyList();
+			}
+		}
 
 		long atFees = api.calcFinalFees(state);
 		Long sleepUntilMessageTimestamp = this.atData.getSleepUntilMessageTimestamp();
 
-		this.atStateData = new ATStateData(atAddress, blockHeight, stateData, stateHash, atFees, false, sleepUntilMessageTimestamp);
+		this.atStateData = new ATStateData(atAddress, blockHeight, stateData, stateHash, mapRoot, atFees, false,
+				sleepUntilMessageTimestamp);
+
+		if (mapStorageActive)
+			mapContext.commitRound();
 
 		return api.getTransactions();
+	}
+
+	private static byte[] calculateStateHash(byte[] stateData, byte[] mapRoot) {
+		return mapRoot == null ? Crypto.digest(stateData) : Crypto.digest(Bytes.concat(stateData, mapRoot));
 	}
 
 	public void update(int blockHeight, long blockTimestamp) throws DataException {

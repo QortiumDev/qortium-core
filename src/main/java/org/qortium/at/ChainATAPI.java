@@ -42,7 +42,9 @@ public class ChainATAPI extends API {
 	// Properties
 	private Repository repository;
 	private ATData atData;
+	private final int blockHeight;
 	private long blockTimestamp;
+	private final ATMapExecutionContext mapContext;
 	private final CiyamAtSettings ciyamAtSettings;
 
 	/** List of generated AT transactions */
@@ -54,11 +56,18 @@ public class ChainATAPI extends API {
 	// Constructors
 
 	public ChainATAPI(Repository repository, ATData atData, long blockTimestamp) {
+		this(repository, atData, getNextBlockHeight(repository), blockTimestamp, null);
+	}
+
+	public ChainATAPI(Repository repository, ATData atData, int blockHeight, long blockTimestamp,
+			ATMapExecutionContext mapContext) {
 		this.repository = repository;
 		this.atData = atData;
+		this.blockHeight = blockHeight;
 		this.transactions = new ArrayList<>();
 		this.pendingAssetPayouts = new HashMap<>();
 		this.blockTimestamp = blockTimestamp;
+		this.mapContext = mapContext;
 
 		this.ciyamAtSettings = BlockChain.getInstance().getCiyamAtSettings();
 	}
@@ -131,6 +140,25 @@ public class ChainATAPI extends API {
 			return this.ciyamAtSettings.stepsPerFunctionCall;
 
 		return 1;
+	}
+
+	@Override
+	public int getOpCodeSteps(OpCode opcode, short rawFunctionCode, MachineState state) {
+		int ordinarySteps = this.getOpCodeSteps(opcode);
+		if (!this.isMapStorageActive() || opcode != OpCode.EXT_FUN
+				|| rawFunctionCode != ChainFunctionCode.SET_MAP_VALUE_KEYS_IN_A.value)
+			return ordinarySteps;
+
+		try {
+			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.blockHeight);
+			if (this.mapContext.wouldCreateEntry(this.atData.getATAddress(), this.getA1(state), this.getA2(state),
+					this.getA4(state), maxEntries))
+				return this.ciyamAtSettings.mapEntryStepCost;
+
+			return ordinarySteps;
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to price persistent map write", e);
+		}
 	}
 
 	@Override
@@ -469,6 +497,9 @@ public class ChainATAPI extends API {
 		if (chainFunctionCode == null)
 			throw new IllegalFunctionCodeException("Unknown chain function code 0x" + String.format("%04x", rawFunctionCode) + " encountered");
 
+		if (chainFunctionCode.isMapFunction() && !this.isMapStorageActive())
+			throw new IllegalFunctionCodeException("AT map storage is not active at this block height");
+
 		chainFunctionCode.preExecuteCheck(paramCount, returnValueExpected, rawFunctionCode);
 	}
 
@@ -486,6 +517,61 @@ public class ChainATAPI extends API {
 
 	public long getConfiguredAssetId() {
 		return this.atData.getAssetId();
+	}
+
+	public long getMapValue(MachineState state) {
+		try {
+			String targetAtAddress = this.resolveMapAddressFromB(state);
+			return targetAtAddress == null ? 0L
+					: this.mapContext.getValue(targetAtAddress, this.getA1(state), this.getA2(state));
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to read persistent map value", e);
+		}
+	}
+
+	public void setMapValue(MachineState state) {
+		try {
+			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.blockHeight);
+			this.mapContext.setValue(this.atData.getATAddress(), this.getA1(state), this.getA2(state),
+					this.getA4(state), maxEntries);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to write persistent map value", e);
+		}
+	}
+
+	private boolean isMapStorageActive() {
+		return this.mapContext != null && this.blockHeight >= BlockChain.getInstance().getAtMapStorageHeight();
+	}
+
+	/** Resolves only the explicit AT-address encoding accepted by map reads; zero means self. */
+	private String resolveMapAddressFromB(MachineState state) {
+		byte[] bBytes = this.getB(state);
+		boolean allZero = true;
+		for (byte value : bBytes) {
+			if (value != 0) {
+				allZero = false;
+				break;
+			}
+		}
+
+		if (allZero)
+			return this.atData.getATAddress();
+
+		if (bBytes[0] != Crypto.AT_ADDRESS_VERSION
+				|| Arrays.mismatch(bBytes, Account.ADDRESS_LENGTH, bBytes.length,
+						ADDRESS_PADDING, 0, ADDRESS_PADDING.length) != -1)
+			return null;
+
+		byte[] addressBytes = Arrays.copyOf(bBytes, Account.ADDRESS_LENGTH);
+		return Crypto.isValidAddress(addressBytes) ? Base58.encode(addressBytes) : null;
+	}
+
+	private static int getNextBlockHeight(Repository repository) {
+		try {
+			return repository.getBlockRepository().getBlockchainHeight() + 1;
+		} catch (DataException e) {
+			throw new IllegalStateException("AT API unable to determine execution height", e);
+		}
 	}
 
 	public long getAssetBalance(long assetId, MachineState state) {
