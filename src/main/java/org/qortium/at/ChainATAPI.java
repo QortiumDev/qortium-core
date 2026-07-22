@@ -44,6 +44,13 @@ public class ChainATAPI extends API {
 	// Properties
 	private Repository repository;
 	private ATData atData;
+	/**
+	 * The block height threaded in by the caller (for a network block, the peer-supplied, non-canonical
+	 * {@link org.qortium.data.block.BlockData#getHeight()}). Retained for the constructor contract and any
+	 * legitimate execution-height read; it is deliberately NOT used for any feature-activation or pricing
+	 * gate — those key off {@link #getGateBlockHeight()} (the locally-derived, consensus-anchored height).
+	 */
+	@SuppressWarnings("unused")
 	private final int blockHeight;
 	private long blockTimestamp;
 	private final ATMapExecutionContext mapContext;
@@ -160,7 +167,7 @@ public class ChainATAPI extends API {
 			return ordinarySteps;
 
 		try {
-			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.blockHeight);
+			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.getGateBlockHeight());
 			if (this.mapContext.wouldCreateEntry(this.atData.getATAddress(), this.getA1(state), this.getA2(state),
 					this.getA4(state), maxEntries))
 				return this.ciyamAtSettings.mapEntryStepCost;
@@ -508,7 +515,9 @@ public class ChainATAPI extends API {
 		// balance) and the native fee balance (above, net of final fees) are already handled, so they
 		// are skipped here. Ordering is deterministic (ascending assetId). Indivisible assets move as
 		// whole raw balances, which they always are on-chain.
-		if (this.blockHeight >= BlockChain.getInstance().getAtSweepAssetsOnFinishHeight())
+		// Gate off the locally-derived block height (see getGateBlockHeight), not the peer-supplied
+		// this.blockHeight, so a non-canonical claimed height cannot toggle the finish sweep.
+		if (this.getGateBlockHeight() >= BlockChain.getInstance().getAtSweepAssetsOnFinishHeight())
 			this.sweepRemainingAssetsToCreator(configuredAssetId, state);
 	}
 
@@ -584,7 +593,7 @@ public class ChainATAPI extends API {
 
 	public void setMapValue(MachineState state) {
 		try {
-			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.blockHeight);
+			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.getGateBlockHeight());
 			this.mapContext.setValue(this.atData.getATAddress(), this.getA1(state), this.getA2(state),
 					this.getA4(state), maxEntries);
 		} catch (DataException e) {
@@ -593,7 +602,10 @@ public class ChainATAPI extends API {
 	}
 
 	private boolean isMapStorageActive() {
-		return this.mapContext != null && this.blockHeight >= BlockChain.getInstance().getAtMapStorageHeight();
+		// Gate off the locally-derived block height (see getGateBlockHeight), not the peer-supplied
+		// this.blockHeight. Honest wire height == local height so this is byte-identical for honest blocks,
+		// and maps do not activate until block 70,000 (after every node runs this release).
+		return this.mapContext != null && this.getGateBlockHeight() >= BlockChain.getInstance().getAtMapStorageHeight();
 	}
 
 	/** Resolves only the explicit AT-address encoding accepted by map reads; zero means self. */
@@ -928,6 +940,25 @@ public class ChainATAPI extends API {
 		}
 	}
 
+	/**
+	 * The block height that AT feature-activation and pricing gates MUST key off: the block being built,
+	 * derived locally as parent height + 1 (== {@link #getCurrentBlockHeight()} + 1 == repository
+	 * blockchain height + 1), i.e. the block's true, consensus-anchored chain position. During AT
+	 * execution {@code getCurrentBlockHeight()} returns the parent block's height (the block being built
+	 * is not yet persisted), so + 1 yields this block's real height.
+	 * <p>
+	 * This is deliberately NOT {@code this.blockHeight}, which is threaded in from the block being
+	 * validated and, for a network block, is the peer-supplied, non-canonical, attacker-influenceable
+	 * {@link org.qortium.data.block.BlockData#getHeight()} (null in the signed serialization, filled
+	 * separately from the network message). Selecting activation/pricing behaviour on that value would
+	 * let the same signed block fork nodes on a claimed height that disagrees with its real position.
+	 * {@code this.blockHeight} is retained only for legitimate execution-height reads. For an honest
+	 * block the two values are equal, so this is byte-identical for honest operation.
+	 */
+	private int getGateBlockHeight() {
+		return this.getCurrentBlockHeight() + 1;
+	}
+
 	/** Whether this AT is executing at or beyond the payout-solvency feature trigger. */
 	private boolean isPayoutSolvencyEnforced() {
 		// During AT execution getCurrentBlockHeight() returns the parent block's height, since the block
@@ -1012,7 +1043,10 @@ public class ChainATAPI extends API {
 	}
 
 	private boolean isHashingStepCostActive() {
-		return this.blockHeight >= BlockChain.getInstance().getAtHashingStepCostHeight();
+		// Gate off the locally-derived block height (see getGateBlockHeight), not the peer-supplied
+		// this.blockHeight, so the same signed block cannot price hashing differently on a non-canonical
+		// claimed height. Honest wire height == local height, so this is byte-identical for honest blocks.
+		return this.getGateBlockHeight() >= BlockChain.getInstance().getAtHashingStepCostHeight();
 	}
 
 	/** Whether a raw external-function code is one of the hashing built-ins (0x0200-0x0207). */
