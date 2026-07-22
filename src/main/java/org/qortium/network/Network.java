@@ -348,6 +348,11 @@ public class Network {
         // Start dedicated I/O thread (select/read/write only) and scheduler (feeds worker pool)
         this.ioThread = new Thread(this::runIOLoop, "Network-IO");
         this.ioThread.setDaemon(false);
+        // There is exactly one I/O thread and nothing restarts it, so anything that escapes
+        // runIOLoop silently ends all P2P traffic while the process stays up and otherwise healthy -
+        // no error, no reconnect, nothing for a health check to notice. Make that loud.
+        this.ioThread.setUncaughtExceptionHandler((thread, throwable) ->
+                LOGGER.error("[{}] Network I/O thread died - this node can no longer send or receive P2P traffic", thread.getName(), throwable));
         this.ioThread.start();
         this.schedulerThread = new Thread(this::runSchedulerLoop, "Network-Scheduler");
         this.schedulerThread.setDaemon(false);
@@ -1309,6 +1314,15 @@ public class Network {
                                         LOGGER.trace("[{}] Network I/O thread encountered I/O error: {}", peer.getPeerConnectionId(), e.getMessage(), e);
                                         peer.disconnect("I/O error");
                                     }
+                                } catch (RuntimeException e) {
+                                    // Decoding runs on this single shared thread, so an unchecked exception from one
+                                    // peer's bytes would otherwise end all P2P traffic for the whole node. Malformed
+                                    // input is that peer's problem: drop the peer, keep the loop alive. The specific
+                                    // negative-length bugs this was added for are fixed at their source, but the
+                                    // decode surface is wide and this stops the next one being fatal.
+                                    LOGGER.warn("[{}] Dropping peer after unexpected error decoding its data: {}",
+                                            peer.getPeerConnectionId(), e.getMessage(), e);
+                                    peer.disconnect("Malformed data");
                                 }
                             }
                         } else if (key.isWritable()) {

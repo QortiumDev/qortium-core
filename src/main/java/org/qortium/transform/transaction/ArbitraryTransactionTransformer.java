@@ -125,9 +125,11 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		DataType dataType = isRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
 
 		int dataSize = byteBuffer.getInt();
-		// Don't allow invalid dataSize here to avoid run-time issues
-		if (dataSize > ArbitraryTransaction.MAX_DATA_SIZE)
-			throw new TransformationException("ArbitraryTransaction data size too large");
+		// Don't allow invalid dataSize here to avoid run-time issues. A negative length reaches the
+		// allocation below and throws NegativeArraySizeException, which nothing on the P2P decode
+		// path catches.
+		if (dataSize < 0 || dataSize > ArbitraryTransaction.MAX_DATA_SIZE)
+			throw new TransformationException("ArbitraryTransaction data size invalid");
 
 		byte[] data = new byte[dataSize];
 		byteBuffer.get(data);

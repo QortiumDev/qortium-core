@@ -63,9 +63,11 @@ public class ChatTransactionTransformer extends TransactionTransformer {
 		String recipient = hasRecipient ? Serialization.deserializeAddress(byteBuffer) : null;
 
 		int dataSize = byteBuffer.getInt();
-		// Don't allow invalid dataSize here to avoid run-time issues
-		if (dataSize > ChatTransaction.MAX_DATA_SIZE)
-			throw new TransformationException("ChatTransaction data size too large");
+		// Don't allow invalid dataSize here to avoid run-time issues. A negative length is not just
+		// "not too large" - it reaches the allocation below and throws NegativeArraySizeException,
+		// which no caller on the P2P decode path catches.
+		if (dataSize < 0 || dataSize > ChatTransaction.MAX_DATA_SIZE)
+			throw new TransformationException("ChatTransaction data size invalid");
 
 		byte[] data = new byte[dataSize];
 		byteBuffer.get(data);

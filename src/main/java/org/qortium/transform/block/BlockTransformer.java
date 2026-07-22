@@ -138,8 +138,10 @@ public class BlockTransformer extends Transformer {
 		} else {
 			// V1: AT info byte length, then per-AT entries of AT address + state hash + fees
 			int atBytesLength = byteBuffer.getInt();
-			if (atBytesLength > BlockChain.getInstance().getMaxBlockSize())
-				throw new TransformationException("Byte data too long for Block's AT info");
+			// A negative length passes the upper bound, and a negative multiple of AT_ENTRY_LENGTH
+			// also passes the modulo check below, reaching ByteBuffer.limit() with a negative value.
+			if (atBytesLength < 0 || atBytesLength > BlockChain.getInstance().getMaxBlockSize())
+				throw new TransformationException("Byte data invalid length for Block's AT info");
 
 			// Read AT-address, SHA256 hash and fees
 			if (atBytesLength % AT_ENTRY_LENGTH != 0)
@@ -186,6 +188,11 @@ public class BlockTransformer extends Transformer {
 
 			int transactionLength = byteBuffer.getInt();
 
+			// remaining() is never negative, so the underflow check below cannot reject a negative
+			// length - it would reach the allocation and throw NegativeArraySizeException.
+			if (transactionLength < 0)
+				throw new TransformationException("Negative length for Block Transaction");
+
 			if (byteBuffer.remaining() < transactionLength)
 				throw new TransformationException("Byte data too short for Block Transaction");
 
@@ -211,8 +218,10 @@ public class BlockTransformer extends Transformer {
 
 		int conciseSetLength = byteBuffer.getInt();
 
-		if (conciseSetLength > BlockChain.getInstance().getMaxBlockSize())
-			throw new TransformationException("Byte data too long for online account info");
+		// A negative length passes the upper bound, and a negative multiple of 4 also passes the
+		// alignment check below, reaching the allocation with a negative size.
+		if (conciseSetLength < 0 || conciseSetLength > BlockChain.getInstance().getMaxBlockSize())
+			throw new TransformationException("Byte data invalid length for online account info");
 
 		if ((conciseSetLength & 3) != 0)
 			throw new TransformationException("Byte data length not multiple of 4 for online account info");
@@ -232,9 +241,15 @@ public class BlockTransformer extends Transformer {
 			// Online accounts timestamp is only present if there are also signatures
 			onlineAccountsTimestamp = byteBuffer.getLong();
 
-			final int signaturesByteLength = (onlineAccountsSignaturesCount * Transformer.SIGNATURE_LENGTH) + (onlineAccountsCount * INT_LENGTH);
-			if (signaturesByteLength > BlockChain.getInstance().getMaxBlockSize())
-				throw new TransformationException("Byte data too long for online accounts signatures");
+			// Both counts are attacker-controlled ints, so computing this in int arithmetic can
+			// overflow to a negative value that then passes the upper bound and reaches the
+			// allocation. Compute in long, bound it, and only then narrow.
+			final long signaturesByteLengthAsLong = ((long) onlineAccountsSignaturesCount * Transformer.SIGNATURE_LENGTH)
+					+ ((long) onlineAccountsCount * INT_LENGTH);
+			if (signaturesByteLengthAsLong < 0 || signaturesByteLengthAsLong > BlockChain.getInstance().getMaxBlockSize())
+				throw new TransformationException("Byte data invalid length for online accounts signatures");
+
+			final int signaturesByteLength = (int) signaturesByteLengthAsLong;
 
 			onlineAccountsSignatures = new byte[signaturesByteLength];
 			byteBuffer.get(onlineAccountsSignatures);
