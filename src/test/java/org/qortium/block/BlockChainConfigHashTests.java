@@ -151,6 +151,50 @@ public class BlockChainConfigHashTests {
 	}
 
 	@Test
+	public void testShippedPreviewnetSchedulesNewAtSafetyTriggersAtSeventyThousand() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("previewchain.json"), StandardCharsets.UTF_8));
+
+		// New pre-70,000 hardening triggers ride the same activation height as the other AT features.
+		assertEquals(70_000L, blockChain.getAtSweepAssetsOnFinishHeight());
+		assertEquals(70_000L, blockChain.getAtHashingStepCostHeight());
+		// Hashing step cost is a Java-default chain parameter, never a shipped-JSON key.
+		assertEquals(20, blockChain.getCiyamAtSettings().hashingStepCost);
+	}
+
+	@Test
+	public void testNewAtSafetyTriggersDoNotChangeTheLivePreviewnetHash() throws Exception {
+		// The shipped previewnet config, with the two new featureTriggers present, must still hash to
+		// exactly the value the live network advertises: featureTriggers are excluded from the hash, so
+		// scheduling atSweepAssetsOnFinishHeight / atHashingStepCostHeight is not a peering flag day.
+		assertEquals(LIVE_PREVIEWNET_CONFIG_HASH,
+				BlockChain.computeChainConfigHash(readBundledConfig("previewchain.json")));
+	}
+
+	@Test
+	public void testAddingTheNewSafetyTriggersToFeatureTriggersLeavesHashUnchanged() {
+		String withoutNewTriggers = "{"
+				+ "\"networkId\":\"qortium-preview\","
+				+ "\"featureTriggers\":{"
+				+ "\"atPayoutSolvencyHeight\":70000,"
+				+ "\"atMapStorageHeight\":70000"
+				+ "},"
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+		String withNewTriggers = "{"
+				+ "\"networkId\":\"qortium-preview\","
+				+ "\"featureTriggers\":{"
+				+ "\"atPayoutSolvencyHeight\":70000,"
+				+ "\"atMapStorageHeight\":70000,"
+				+ "\"atSweepAssetsOnFinishHeight\":70000,"
+				+ "\"atHashingStepCostHeight\":70000"
+				+ "},"
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+
+		assertEquals(hash(withoutNewTriggers), hash(withNewTriggers));
+	}
+
+	@Test
 	public void testOtherConfigChangesStillAffectHash() {
 		String firstConfig = "{"
 				+ "\"networkId\":\"qortium-preview\","

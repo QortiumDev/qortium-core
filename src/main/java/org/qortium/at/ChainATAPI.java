@@ -12,12 +12,14 @@ import org.qortium.block.BlockChain;
 import org.qortium.block.BlockChain.CiyamAtSettings;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.PaymentData;
+import org.qortium.data.account.AccountBalanceData;
 import org.qortium.data.asset.AssetData;
 import org.qortium.data.at.ATData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
 import org.qortium.data.transaction.*;
 import org.qortium.group.Group;
+import org.qortium.repository.AccountRepository;
 import org.qortium.repository.ATRepository;
 import org.qortium.repository.ATRepository.NextTransactionInfo;
 import org.qortium.repository.DataException;
@@ -145,6 +147,14 @@ public class ChainATAPI extends API {
 	@Override
 	public int getOpCodeSteps(OpCode opcode, short rawFunctionCode, MachineState state) {
 		int ordinarySteps = this.getOpCodeSteps(opcode);
+
+		// Hashing built-ins (MD5/RMD160/SHA256/HASH160 families) are priced up once the trigger is
+		// active. The pinned AT jar routes every external-function opcode that carries a raw function
+		// code — including these hash functions — through this overload before charging steps, so this
+		// is the Core-side hook. Below the trigger they keep the flat per-function cost above.
+		if (this.isHashingStepCostActive() && isHashingFunctionCode(rawFunctionCode))
+			return this.ciyamAtSettings.hashingStepCost;
+
 		if (!this.isMapStorageActive() || opcode != OpCode.EXT_FUN
 				|| rawFunctionCode != ChainFunctionCode.SET_MAP_VALUE_KEYS_IN_A.value)
 			return ordinarySteps;
@@ -482,6 +492,40 @@ public class ChainATAPI extends API {
 			if (nativeRefund > 0)
 				this.addPaymentToCreator(nativeRefund, Asset.NATIVE);
 		}
+
+		// From the sweep trigger, also return every OTHER asset the AT still holds with a positive
+		// spendable balance to the creator, so a third asset an AT received or was left holding can
+		// never be stranded forever. The configured working asset (above, from the exact machine
+		// balance) and the native fee balance (above, net of final fees) are already handled, so they
+		// are skipped here. Ordering is deterministic (ascending assetId). Indivisible assets move as
+		// whole raw balances, which they always are on-chain.
+		if (this.blockHeight >= BlockChain.getInstance().getAtSweepAssetsOnFinishHeight())
+			this.sweepRemainingAssetsToCreator(configuredAssetId, state);
+	}
+
+	/** Sweeps every non-configured, non-native asset with a positive spendable balance to the creator, ascending assetId. */
+	private void sweepRemainingAssetsToCreator(long configuredAssetId, MachineState state) {
+		List<AccountBalanceData> balances;
+		try {
+			balances = this.repository.getAccountRepository().getAssetBalances(
+					java.util.Collections.singletonList(this.atData.getATAddress()), null,
+					AccountRepository.BalanceOrdering.ACCOUNT_ASSET, true, null, null, false);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to enumerate AT asset balances for finish sweep?", e);
+		}
+
+		for (AccountBalanceData balanceData : balances) {
+			long assetId = balanceData.getAssetId();
+
+			// Configured working asset and native fee balance are refunded above with their exact,
+			// fee-aware spendable amounts; do not double-pay them here.
+			if (assetId == configuredAssetId || assetId == Asset.NATIVE)
+				continue;
+
+			long spendable = this.getSpendableAssetBalance(assetId, state);
+			if (spendable > 0)
+				this.addPaymentToCreator(spendable, assetId);
+		}
 	}
 
 	@Override
@@ -622,7 +666,7 @@ public class ChainATAPI extends API {
 		}
 	}
 
-	public long getAmountFromTransactionInAForAsset(long assetId, MachineState state) {
+	public long getAmountFromTransactionInAForAsset(long assetId, MachineState state) throws ExecutionException {
 		try {
 			if (!this.repository.getAssetRepository().assetExists(assetId))
 				return -1L;
@@ -644,9 +688,11 @@ public class ChainATAPI extends API {
 				long amount = 0L;
 				String atAddress = this.atData.getATAddress();
 
+				// Checked accumulation: an overflowing per-asset multi-payment sum must surface as a
+				// deterministic AT fatal error, never wrap into a nonsensical consensus-valid amount.
 				for (PaymentData paymentData : ((MultiPaymentTransactionData) transactionData).getPayments())
 					if (atAddress.equals(paymentData.getRecipient()) && paymentData.getAssetId() == assetId)
-						amount += paymentData.getAmount();
+						amount = checkedAtSum(amount, paymentData.getAmount());
 
 				return amount;
 
@@ -703,7 +749,7 @@ public class ChainATAPI extends API {
 		}
 	}
 
-	public long payAssetAmountToB(long assetId, long requestedAmount, MachineState state) {
+	public long payAssetAmountToB(long assetId, long requestedAmount, MachineState state) throws ExecutionException {
 		if (requestedAmount < 0)
 			return -1L;
 
@@ -743,7 +789,13 @@ public class ChainATAPI extends API {
 			// we instead record a pending payout, which onFinished() and the clamps reconcile as before.
 			state.deductFromCurrentBalance(amount);
 		} else {
-			this.addPendingPayout(assetId, amount);
+			// Checked accumulation: an overflowing pending-payout total for this asset must surface as a
+			// deterministic AT fatal error rather than wrapping into a smaller apparent payout.
+			try {
+				this.addPendingPayout(assetId, amount);
+			} catch (ArithmeticException e) {
+				throw new ExecutionException("AT pending payout aggregation overflowed", e);
+			}
 		}
 
 		return amount;
@@ -752,7 +804,9 @@ public class ChainATAPI extends API {
 	// Utility methods
 
 	public long calcFinalFees(MachineState state) {
-		return state.getSteps() * this.ciyamAtSettings.feePerStep;
+		// Checked multiplication: an overflowing step-fee total must fail the block deterministically
+		// rather than wrap, since it feeds per-AT and per-block fee accounting that nodes cross-check.
+		return Math.multiplyExact((long) state.getSteps(), this.ciyamAtSettings.feePerStep);
 	}
 
 	/** Returns partial transaction signature, used to verify we're operating on the same transaction and not naively using block height & sequence. */
@@ -886,7 +940,32 @@ public class ChainATAPI extends API {
 	}
 
 	private void addPendingPayout(long assetId, long amount) {
-		this.pendingAssetPayouts.merge(assetId, amount, Long::sum);
+		// Math.addExact as the remapping function throws ArithmeticException on overflow instead of
+		// wrapping; callers convert that into a deterministic AT fatal error.
+		this.pendingAssetPayouts.merge(assetId, amount, Math::addExact);
+	}
+
+	/**
+	 * Checked addition of AT monetary values. Overflow surfaces as a deterministic {@link ExecutionException}
+	 * (the AT's fatal-error path in the VM) instead of silently wrapping into a consensus-valid but
+	 * nonsensical amount. No value reachable on any current chain can overflow these aggregations, so this
+	 * guard is behaviourally identical to a plain sum for every state a live chain can produce today.
+	 */
+	static long checkedAtSum(long runningTotal, long addend) throws ExecutionException {
+		try {
+			return Math.addExact(runningTotal, addend);
+		} catch (ArithmeticException e) {
+			throw new ExecutionException("AT monetary aggregation overflowed", e);
+		}
+	}
+
+	private boolean isHashingStepCostActive() {
+		return this.blockHeight >= BlockChain.getInstance().getAtHashingStepCostHeight();
+	}
+
+	/** Whether a raw external-function code is one of the hashing built-ins (0x0200-0x0207). */
+	private static boolean isHashingFunctionCode(short rawFunctionCode) {
+		return rawFunctionCode >= (short) 0x0200 && rawFunctionCode <= (short) 0x0207;
 	}
 
 	private MultiPaymentSummary summarizeMultiPaymentToAt(MultiPaymentTransactionData multiPaymentTransactionData) {
@@ -904,7 +983,11 @@ public class ChainATAPI extends API {
 				summary.hasMixedAssets = true;
 			}
 
-			summary.amount += paymentData.getAmount();
+			// Checked accumulation: an overflowing single-asset multi-payment summary must fail
+			// deterministically rather than wrap. This method is reached via stock CIYAM API-override
+			// opcodes whose signatures cannot declare a checked throw, so overflow surfaces as an
+			// (unchecked) ArithmeticException, which the VM propagates to a deterministic block failure.
+			summary.amount = Math.addExact(summary.amount, paymentData.getAmount());
 		}
 
 		return summary;

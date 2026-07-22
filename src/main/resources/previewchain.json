@@ -90,7 +90,9 @@
 		"devGroupApprovalSplitHeight": 60000,
 		"deployAtWorkingAssetHeight": 60000,
 		"atPayoutSolvencyHeight": 70000,
-		"atMapStorageHeight": 70000
+		"atMapStorageHeight": 70000,
+		"atSweepAssetsOnFinishHeight": 70000,
+		"atHashingStepCostHeight": 70000
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

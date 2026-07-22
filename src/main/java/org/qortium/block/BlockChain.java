@@ -65,6 +65,8 @@ public class BlockChain {
 	private static final String DEPLOY_AT_WORKING_ASSET_TRIGGER = "deployAtWorkingAssetHeight";
 	private static final String AT_PAYOUT_SOLVENCY_TRIGGER = "atPayoutSolvencyHeight";
 	private static final String AT_MAP_STORAGE_TRIGGER = "atMapStorageHeight";
+	private static final String AT_SWEEP_ASSETS_ON_FINISH_TRIGGER = "atSweepAssetsOnFinishHeight";
+	private static final String AT_HASHING_STEP_COST_TRIGGER = "atHashingStepCostHeight";
 
 	// Properties
 
@@ -571,6 +573,13 @@ public class BlockChain {
 		public int stepsPerFunctionCall;
 		/** Total steps charged when a persistent-map write creates a live entry. */
 		public int mapEntryStepCost = 100;
+		/**
+		 * Steps charged per hashing built-in call (MD5/RMD160/SHA256/HASH160 families, raw function
+		 * codes 0x0200-0x0207) once {@code atHashingStepCostHeight} is active; below the trigger these
+		 * functions keep the flat {@code stepsPerFunctionCall} cost. Deliberately a Java-default field
+		 * with no shipped-JSON key, so enabling the pricing does not alter the chain-config hash.
+		 */
+		public int hashingStepCost = 20;
 		/** Roughly how many minutes per block. */
 		public int minutesPerBlock;
 	}
@@ -955,6 +964,25 @@ public class BlockChain {
 	/** From this height, persistent AT maps and their state-root commitment are consensus-active. */
 	public long getAtMapStorageHeight() {
 		return getFeatureTriggerHeight(AT_MAP_STORAGE_TRIGGER);
+	}
+
+	/**
+	 * From this height, a finishing AT refunds/sweeps EVERY asset it holds with a positive spendable
+	 * balance back to its creator (deterministic ascending-assetId order), not only its configured
+	 * working asset plus native fee balance. Below the trigger, behaviour is byte-for-byte the legacy
+	 * two-asset refund so historic execution replays identically.
+	 */
+	public long getAtSweepAssetsOnFinishHeight() {
+		return getFeatureTriggerHeight(AT_SWEEP_ASSETS_ON_FINISH_TRIGGER);
+	}
+
+	/**
+	 * From this height, AT hashing built-ins (MD5/RMD160/SHA256/HASH160 families) are charged
+	 * {@link CiyamAtSettings#hashingStepCost} steps per call instead of the flat
+	 * {@code stepsPerFunctionCall}. Below the trigger, hashing keeps the flat cost.
+	 */
+	public long getAtHashingStepCostHeight() {
+		return getFeatureTriggerHeight(AT_HASHING_STEP_COST_TRIGGER);
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {
