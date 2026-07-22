@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - test: end-to-end coverage for the SMPL exactly-once faucet AT
+
+Added end-to-end tests that run the real SMPL faucet contract — the canonical
+"one free sample per account" automated transaction built for Previewnet —
+against the map-enabled test chain, using the exact deployed bytecode
+(hash-verified) rather than a rebuilt copy. The tests deploy the faucet with a
+freshly issued indivisible test asset and drive it with real claim messages,
+covering the promises the faucet makes: each account is paid exactly once (even
+when it sends two claims in the same block), an account is never marked as
+claimed without being paid (claims pause while the faucet is empty and resume
+after a top-up), claims stop safely when the per-contract map storage limit is
+full and resume after governance raises the limit, the creator can shut the
+faucet down and reclaim the remaining balance, a rolled-back claim block cleanly
+restores balances and claim records before replaying identically, and the map
+feature's activation height is enforced — claims fail cleanly before it and work
+from the trigger block onward. No behavior changes; this is test coverage only.
+
 ### 2026-07-21 - feat(at): add persistent maps and cross-AT reads
 
 Added consensus-backed persistent key/value maps for automated transactions so
