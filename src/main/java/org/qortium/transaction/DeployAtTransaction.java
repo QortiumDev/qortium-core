@@ -37,6 +37,10 @@ public class DeployAtTransaction extends Transaction {
 	public static final int MAX_CREATION_BYTES_SIZE = 8192;
 	public static final int MAX_CODE_BYTES_LENGTH = 8192;
 	public static final int MAX_AT_STATE_LENGTH = 2048;
+	/** Bytes of creation data needed before the version field can be read. */
+	public static final int AT_VERSION_HEADER_LENGTH = 2;
+	/** Highest AT creation version the pinned runtime understands. */
+	public static final short MAX_AT_CREATION_VERSION = 3;
 
 	// Constructors
 
@@ -159,8 +163,25 @@ public class DeployAtTransaction extends Transaction {
 				return ValidationResult.NO_BALANCE;
 		}
 
+		// getVersion() reads the first two bytes, but the transformer only enforces a length of at
+		// least one, so a one-byte payload would throw ArrayIndexOutOfBoundsException here. That is
+		// not a fork - every node throws identically - but it is unhandled above us: the transaction
+		// importer and the synchronizer both catch only DataException, so a single unauthenticated
+		// transaction would kill those threads for the life of the process. Reject it cleanly.
+		byte[] rawCreationBytes = this.deployAtTransactionData.getCreationBytes();
+		if (rawCreationBytes == null || rawCreationBytes.length < AT_VERSION_HEADER_LENGTH)
+			return ValidationResult.INVALID_CREATION_BYTES;
+
 		// Check version from creation bytes
 		if (this.getVersion() < 2)
+			return ValidationResult.INVALID_CREATION_BYTES;
+
+		// Creation versions no runtime here understands are rejected explicitly rather than being
+		// left to the pinned runtime to refuse. Without this bound, the version-3 gate below would
+		// pass a future version-4 AT straight to MachineState, whose accept/reject answer depends on
+		// which jar the node happens to carry - exactly the split this gate exists to close, and it
+		// would reopen silently at the next repin rather than needing a new trigger to trip it.
+		if (this.getVersion() > MAX_AT_CREATION_VERSION)
 			return ValidationResult.INVALID_CREATION_BYTES;
 
 		// The deciding height is derived locally - this repository's chain tip plus one - and never

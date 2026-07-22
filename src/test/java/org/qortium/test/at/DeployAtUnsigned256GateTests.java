@@ -132,6 +132,71 @@ public class DeployAtUnsigned256GateTests extends Common {
 		}
 	}
 
+	/**
+	 * Block validation calls {@code transaction.isValid()} directly (Block.areTransactionsValid),
+	 * not {@code isValidUnconfirmed()}. Assert the gate on that exact entry point too, so a
+	 * version-3 AT cannot reach a block through a path the mempool assertions do not cover.
+	 */
+	@Test
+	public void testVersion3RejectedOnTheBlockValidationEntryPointBelowTrigger() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintUpToTipHeight(repository, TRIGGER_HEIGHT - 2);
+
+			assertEquals("Block-level validation must reject a version-3 AT below the trigger",
+					Transaction.ValidationResult.AT_VERSION_NOT_YET_ACTIVE,
+					buildDeploy(repository, AtUtils.buildSimpleAT((short) 3)).isValid());
+		}
+	}
+
+	@Test
+	public void testVersion3AcceptedOnTheBlockValidationEntryPointAtTrigger() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintUpToTipHeight(repository, TRIGGER_HEIGHT - 1);
+
+			assertEquals("Block-level validation must accept a version-3 AT at the trigger",
+					Transaction.ValidationResult.OK,
+					buildDeploy(repository, AtUtils.buildSimpleAT((short) 3)).isValid());
+		}
+	}
+
+	/**
+	 * The version field is read from the first two creation bytes, but the transformer accepts a
+	 * length of one. That must be a clean rejection, not an ArrayIndexOutOfBoundsException - the
+	 * transaction importer and synchronizer catch only DataException, so an escaping runtime
+	 * exception would kill those threads for the life of the process.
+	 */
+	@Test
+	public void testSingleByteCreationBytesRejectedCleanly() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintUpToTipHeight(repository, TRIGGER_HEIGHT + 3);
+
+			assertEquals("One-byte creation bytes must be rejected, not throw",
+					Transaction.ValidationResult.INVALID_CREATION_BYTES,
+					buildDeploy(repository, new byte[] {0}).isValid());
+		}
+	}
+
+	/**
+	 * A creation version beyond anything the pinned runtime knows must be refused here, not left to
+	 * MachineState - otherwise the accept/reject answer depends on which jar a node carries, which
+	 * is the very split this gate exists to close.
+	 */
+	@Test
+	public void testUnknownFutureCreationVersionRejectedEvenAboveTrigger() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintUpToTipHeight(repository, TRIGGER_HEIGHT + 3);
+
+			// Take valid version-3 bytes and relabel the header as version 4.
+			byte[] futureVersionBytes = AtUtils.buildSimpleAT((short) 3);
+			futureVersionBytes[0] = 0;
+			futureVersionBytes[1] = 4;
+
+			assertEquals("An unknown future creation version must be rejected regardless of height",
+					Transaction.ValidationResult.INVALID_CREATION_BYTES,
+					buildDeploy(repository, futureVersionBytes).isValid());
+		}
+	}
+
 	/** Mints until the chain tip sits exactly at {@code targetTipHeight}. */
 	private static void mintUpToTipHeight(Repository repository, int targetTipHeight) throws DataException {
 		TestChainBootstrapUtils.ensureDefaultTestChainBootstrap(repository);
@@ -151,6 +216,12 @@ public class DeployAtUnsigned256GateTests extends Common {
 	 */
 	private static Transaction.ValidationResult validateDeploy(Repository repository, byte[] creationBytes)
 			throws DataException {
+		return buildDeploy(repository, creationBytes).isValidUnconfirmed();
+	}
+
+	/** Builds an unsigned, unminted DEPLOY_AT so either validation entry point can be exercised. */
+	private static DeployAtTransaction buildDeploy(Repository repository, byte[] creationBytes)
+			throws DataException {
 		PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
 
 		DeployAtTransactionData transactionData = new DeployAtTransactionData(
@@ -167,7 +238,7 @@ public class DeployAtUnsigned256GateTests extends Common {
 		DeployAtTransaction transaction = new DeployAtTransaction(repository, transactionData);
 		transactionData.setFee(transaction.calcRecommendedFee());
 
-		return transaction.isValidUnconfirmed();
+		return transaction;
 	}
 
 	@Test
