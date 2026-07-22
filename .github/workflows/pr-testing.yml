@@ -12,6 +12,9 @@ permissions:
 jobs:
   mavenTesting:
     runs-on: ubuntu-latest
+    # The full suite is ~2,750 tests and takes roughly 10-15 minutes; this is a runaway guard,
+    # not a target. Raise it rather than narrowing the suite if it is ever legitimately hit.
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v6
     - name: Cache local Maven repository
@@ -35,6 +38,21 @@ jobs:
       run: |
         mvn -B clean package --file pom.xml
 
-    - name: Run API and translation regression tests
+    # Runs the whole JUnit suite. This deliberately replaces the previous
+    # `-Dtest=CorsFilterTests,TranslationsTests` filter: that filter meant CI green proved only
+    # that the package built and two classes passed, so consensus, repository-schema and
+    # serialization regressions could - and did - reach main unnoticed.
+    #
+    # GUI display tests stay excluded here (they need a display and have their own workflow);
+    # surefire runs headless via the pom's test.awt.headless property.
+    - name: Run full test suite
       run: |
-        mvn -B test -DskipJUnitTests=false -Dtest=CorsFilterTests,TranslationsTests --file pom.xml
+        mvn -B test -DskipJUnitTests=false --file pom.xml
+
+    - name: Upload surefire reports on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: surefire-reports
+        path: target/surefire-reports/
+        retention-days: 7

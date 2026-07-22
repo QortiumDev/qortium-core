@@ -13,6 +13,8 @@ public class TransactionTypeTests {
 		assertEquals(TransactionType.PUBLICIZE, TransactionType.valueOf(19));
 		assertEquals(TransactionType.AT, TransactionType.valueOf(21));
 		assertEquals(TransactionType.CHAIN_PARAMETER_UPDATE, TransactionType.valueOf(48));
+		assertEquals(TransactionType.SET_GROUP_AVATAR, TransactionType.valueOf(49));
+		assertEquals(TransactionType.SET_ACCOUNT_AVATAR, TransactionType.valueOf(50));
 	}
 
 	@Test
@@ -29,9 +31,10 @@ public class TransactionTypeTests {
 		assertFalse(TransactionType.isReservedId(0));
 		assertNull(TransactionType.getReservedIdDescription(0));
 
-		assertNull(TransactionType.valueOf(49));
-		assertFalse(TransactionType.isReservedId(49));
-		assertNull(TransactionType.getReservedIdDescription(49));
+		// 49 and 50 are now SET_GROUP_AVATAR / SET_ACCOUNT_AVATAR; 51 is the first free id.
+		assertNull(TransactionType.valueOf(51));
+		assertFalse(TransactionType.isReservedId(51));
+		assertNull(TransactionType.getReservedIdDescription(51));
 	}
 
 	private static void assertReservedInactive(int value, String historicalName) {
