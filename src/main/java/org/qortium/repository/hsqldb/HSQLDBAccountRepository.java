@@ -90,6 +90,21 @@ public class HSQLDBAccountRepository implements AccountRepository {
 	}
 
 	@Override
+	public byte[] getAvatarSignature(String address) throws DataException {
+		try (ResultSet resultSet = this.repository.checkedExecute("SELECT avatar_signature FROM AccountAvatars WHERE account = ?", address)) {
+			return resultSet == null ? null : resultSet.getBytes(1);
+		} catch (SQLException e) { throw new DataException("Unable to fetch account avatar", e); }
+	}
+
+	@Override
+	public void setAvatarSignature(String address, byte[] avatarSignature) throws DataException {
+		try {
+			if (avatarSignature == null) this.repository.delete("AccountAvatars", "account = ?", address);
+			else { HSQLDBSaver saver = new HSQLDBSaver("AccountAvatars"); saver.bind("account", address).bind("avatar_signature", avatarSignature); saver.execute(this.repository); }
+		} catch (SQLException e) { throw new DataException("Unable to save account avatar", e); }
+	}
+
+	@Override
 	public void ensureAccount(AccountData accountData) throws DataException {
 		String sql = "INSERT INTO Accounts (account, public_key) VALUES (?, ?) "
 				+ "ON DUPLICATE KEY UPDATE public_key = IFNULL(public_key, ?)"; // MySQL syntax

@@ -18,14 +18,20 @@ import org.qortium.api.model.GroupMembers;
 import org.qortium.api.model.GroupMembers.MemberInfo;
 import org.qortium.api.model.GroupWithJoinRequests;
 import org.qortium.block.BlockChain;
+import org.qortium.arbitrary.ArbitraryDataReader;
+import org.qortium.arbitrary.ArbitraryDataFile.ResourceIdType;
+import org.qortium.arbitrary.misc.Service;
+import org.qortium.avatar.AvatarResource;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.group.*;
+import org.qortium.data.avatar.AvatarData;
 import org.qortium.data.transaction.*;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
 import org.qortium.transaction.Transaction;
+import org.qortium.transaction.SetGroupAvatarTransaction;
 import org.qortium.transaction.Transaction.ValidationResult;
 import org.qortium.transform.TransformationException;
 import org.qortium.transform.transaction.*;
@@ -36,6 +42,9 @@ import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -45,6 +54,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Path("/groups")
 @Tag(name = "Groups")
@@ -52,6 +62,75 @@ public class GroupsResource {
 
 	@Context
 	HttpServletRequest request;
+
+	@GET
+	@Path("/{groupId}/avatar/info")
+	@Operation(summary = "Return the exact explicitly authorized group-avatar descriptor")
+	@ApiErrors({ApiError.GROUP_UNKNOWN, ApiError.FILE_NOT_FOUND, ApiError.REPOSITORY_ISSUE})
+	public AvatarData getGroupAvatarInfo(@PathParam("groupId") int groupId) {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			if (groupData == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.GROUP_UNKNOWN);
+			byte[] signature = groupData.getAvatarSignature();
+			if (signature == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
+			AvatarData descriptor = AvatarResource.descriptor(repository, signature);
+			if (descriptor == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
+			return descriptor;
+		} catch (DataException e) { throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e); }
+	}
+
+	@GET
+	@Path("/{groupId}/avatar")
+	@Operation(summary = "Fetch the exact immutable QDN revision authorized as this group's avatar",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "avatar image bytes"),
+			@ApiResponse(responseCode = "202", description = "avatar data requested and loading; retry this same URL"),
+			@ApiResponse(responseCode = "404", description = "group or authorized avatar not found")
+		})
+	@ApiErrors({ApiError.GROUP_UNKNOWN, ApiError.FILE_NOT_FOUND, ApiError.REPOSITORY_ISSUE})
+	public Response getGroupAvatar(@PathParam("groupId") int groupId) {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			if (groupData == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.GROUP_UNKNOWN);
+			byte[] signature = groupData.getAvatarSignature();
+			if (signature == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
+			AvatarData descriptor = AvatarResource.descriptor(repository, signature);
+			if (descriptor == null) return Response.status(422).build();
+			ArbitraryDataReader reader = new ArbitraryDataReader(Base58.encode(signature), ResourceIdType.SIGNATURE, descriptor.getService(),
+					descriptor.getIdentifier());
+			if (!reader.isCachedDataAvailable()) {
+				reader.loadAsynchronously(false, 10);
+				return avatarHeaders(Response.status(Response.Status.ACCEPTED).header("Retry-After", "2"), descriptor).build();
+			}
+			java.nio.file.Path avatarPath = singleAvatarFile(reader.getFilePath());
+			String contentType = AvatarResource.detectRasterImageContentType(avatarPath);
+			if (contentType == null) return avatarHeaders(Response.status(415), descriptor).build();
+			return avatarHeaders(Response.ok(Files.readAllBytes(avatarPath), contentType), descriptor)
+					.header("Cache-Control", "public, max-age=31536000, immutable").build();
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	private static Response.ResponseBuilder avatarHeaders(Response.ResponseBuilder response, AvatarData descriptor) {
+		return response.header("X-Qortium-Avatar-Signature", Base58.encode(descriptor.getSignature()))
+				.header("X-Qortium-Avatar-Service", descriptor.getService())
+				.header("X-Qortium-Avatar-Name", descriptor.getName())
+				.header("X-Qortium-Avatar-Identifier", descriptor.getIdentifier())
+				.header("X-Qortium-Avatar-Source", "authorized");
+	}
+
+
+	private static java.nio.file.Path singleAvatarFile(java.nio.file.Path cachedPath) throws IOException {
+		if (cachedPath == null) throw new IOException("Avatar cache path missing");
+		if (!Files.isDirectory(cachedPath)) return cachedPath;
+		try (Stream<java.nio.file.Path> files = Files.list(cachedPath)) {
+			return files.filter(path -> !path.getFileName().toString().equals(".qdn")).filter(Files::isRegularFile).findFirst()
+					.orElseThrow(() -> new IOException("Avatar image missing from cache"));
+		}
+	}
 
 	private enum GroupSearchVisibility {
 		ALL(null),
@@ -559,6 +638,32 @@ public class GroupsResource {
 
 			byte[] bytes = UpdateGroupTransactionTransformer.toBytes(transactionData);
 			return Base58.encode(bytes);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/avatar")
+	@Operation(
+		summary = "Build raw, unsigned, SET_GROUP_AVATAR transaction",
+		requestBody = @RequestBody(required = true, content = @Content(mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(implementation = SetGroupAvatarTransactionData.class))),
+		responses = @ApiResponse(description = "raw, unsigned SET_GROUP_AVATAR transaction encoded in Base58",
+				content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string")))
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String setGroupAvatar(SetGroupAvatarTransactionData transactionData) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
+			if (result != ValidationResult.OK)
+				throw TransactionsResource.createTransactionInvalidException(request, result);
+			return Base58.encode(SetGroupAvatarTransactionTransformer.toBytes(transactionData));
 		} catch (TransformationException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
 		} catch (DataException e) {
