@@ -137,6 +137,11 @@ public class ArbitraryMetadataMessage extends Message {
 
 		int dataLength = byteBuffer.getInt();
 
+		// See ArbitraryDataMessage: remaining() is never negative, so the underflow check alone
+		// lets a negative length through to the allocation below.
+		if (dataLength < 0)
+			throw new MessageException("Negative data length in ARBITRARY_METADATA message: " + dataLength);
+
 		if (byteBuffer.remaining() < dataLength)
 			throw new BufferUnderflowException();
 

@@ -66,9 +66,11 @@ public class MessageTransactionTransformer extends TransactionTransformer {
 		Long assetId = amount != 0 ? byteBuffer.getLong() : null;
 
 		int dataSize = byteBuffer.getInt();
-		// Don't allow invalid dataSize here to avoid run-time issues
-		if (dataSize > MessageTransaction.MAX_DATA_SIZE)
-			throw new TransformationException("MessageTransaction data size too large");
+		// Don't allow invalid dataSize here to avoid run-time issues. A negative length reaches the
+		// allocation below and throws NegativeArraySizeException, which nothing on the P2P decode
+		// path catches.
+		if (dataSize < 0 || dataSize > MessageTransaction.MAX_DATA_SIZE)
+			throw new TransformationException("MessageTransaction data size invalid");
 
 		byte[] data = new byte[dataSize];
 		byteBuffer.get(data);

@@ -34,6 +34,38 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - fix(network): reject negative declared lengths instead of killing the network thread
+
+Closes a way for anyone on the internet to silently switch off a node's
+networking with a single small message, without needing an account, a key, or
+any prior relationship with that node.
+
+Messages between nodes describe how much data they carry. A node read that
+declared size and immediately reserved that much memory. The checks meant to
+catch a bad size only asked "is this bigger than we allow?" and "do we have that
+many bytes?" — neither of which rejects a size that is *negative*. A peer could
+therefore declare a negative size, and the node would try to reserve a negative
+amount of memory and fail in a way nothing was prepared to handle.
+
+The consequence was disproportionate: all of a node's network traffic is handled
+by one thread, and this failure escaped every safety net around it, so that
+thread stopped for good. The node kept running and looked healthy — it just
+silently stopped talking to the network, and only a restart brought it back.
+
+Every place that reads a declared length now rejects a negative one outright,
+across peer messages, block decoding and transaction decoding. Two of these were
+subtler than a plain negative check would catch: a length could be negative *and*
+still satisfy an alignment rule, and a signature-count could be multiplied into a
+negative total, so both are now bounded before anything is reserved.
+
+Two further changes make this class of bug non-fatal rather than merely fixed.
+Unexpected failures while reading one peer's data now disconnect just that peer
+instead of ending the shared network loop, and if the network thread ever does
+die it now says so loudly in the log rather than disappearing in silence.
+
+Nothing about valid traffic changes, and no activation height is involved: this
+is purely rejecting malformed input that no honest node ever sends.
+
 ### 2026-07-22 - feat(at): gate version-3 AT deployment behind an activation height
 
 Updates the pinned automated-transactions runtime to the version that adds

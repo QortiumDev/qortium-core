@@ -120,6 +120,11 @@ public abstract class Message {
 
 			int dataSize = readOnlyBuffer.getInt();
 
+			if (dataSize < 0)
+				// Declared length is signed and attacker-controlled: a negative value slips past every
+				// size check below and would be silently treated as an empty payload.
+				throw new MessageException(String.format("Declared data length %d is negative", dataSize));
+
 			if (dataSize > MAX_DATA_SIZE)
 				// Too large
 				throw new MessageException(String.format("Declared data length %d larger than max allowed %d", dataSize, MAX_DATA_SIZE));
