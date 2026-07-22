@@ -97,7 +97,8 @@
 		"atTrustStatusHeight": 70000,
 		"atBalanceQueryHeight": 70000,
 		"atCodeHashCheckHeight": 70000,
-		"avatarTransactionsHeight": 70000
+		"avatarTransactionsHeight": 70000,
+		"atUnsigned256ArithmeticHeight": 70000
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

@@ -37,6 +37,10 @@ public class DeployAtTransaction extends Transaction {
 	public static final int MAX_CREATION_BYTES_SIZE = 8192;
 	public static final int MAX_CODE_BYTES_LENGTH = 8192;
 	public static final int MAX_AT_STATE_LENGTH = 2048;
+	/** Bytes of creation data needed before the version field can be read. */
+	public static final int AT_VERSION_HEADER_LENGTH = 2;
+	/** Highest AT creation version the pinned runtime understands. */
+	public static final short MAX_AT_CREATION_VERSION = 3;
 
 	// Constructors
 
@@ -159,9 +163,45 @@ public class DeployAtTransaction extends Transaction {
 				return ValidationResult.NO_BALANCE;
 		}
 
+		// getVersion() reads the first two bytes, but the transformer only enforces a length of at
+		// least one, so a one-byte payload would throw ArrayIndexOutOfBoundsException here. That is
+		// not a fork - every node throws identically - but it is unhandled above us: the transaction
+		// importer and the synchronizer both catch only DataException, so a single unauthenticated
+		// transaction would kill those threads for the life of the process. Reject it cleanly.
+		byte[] rawCreationBytes = this.deployAtTransactionData.getCreationBytes();
+		if (rawCreationBytes == null || rawCreationBytes.length < AT_VERSION_HEADER_LENGTH)
+			return ValidationResult.INVALID_CREATION_BYTES;
+
 		// Check version from creation bytes
 		if (this.getVersion() < 2)
 			return ValidationResult.INVALID_CREATION_BYTES;
+
+		// Creation versions no runtime here understands are rejected explicitly rather than being
+		// left to the pinned runtime to refuse. Without this bound, the version-3 gate below would
+		// pass a future version-4 AT straight to MachineState, whose accept/reject answer depends on
+		// which jar the node happens to carry - exactly the split this gate exists to close, and it
+		// would reopen silently at the next repin rather than needing a new trigger to trip it.
+		if (this.getVersion() > MAX_AT_CREATION_VERSION)
+			return ValidationResult.INVALID_CREATION_BYTES;
+
+		// The deciding height is derived locally - this repository's chain tip plus one - and never
+		// from the height a block claims for itself. That claimed height is not covered by the block
+		// signature, so a peer can relabel the very same signed block; two honest nodes handed the
+		// same block with different claimed heights would then gate differently and split the chain.
+		// During block validation the block being validated is not yet persisted, so the tip is its
+		// parent and tip + 1 is this block's true position. Same rule as the payout-solvency and
+		// checked-arithmetic gates.
+		int height = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+
+		// Creation version 3 unlocks the unsigned 256-bit A/B arithmetic function codes. The AT
+		// runtime gates *execution* of those codes on the AT's creation version, but nothing gated
+		// *deployment*: once any node ran a runtime that understands version 3, a version-3 DEPLOY_AT
+		// would be accepted by upgraded nodes and rejected as invalid creation bytes by every node
+		// still on the older runtime - a chain split. Gating deployment on an agreed height makes the
+		// decision identical everywhere. This check deliberately sits before the MachineState
+		// construction below so it does not depend on what the pinned runtime happens to accept.
+		if (this.getVersion() >= 3 && height < BlockChain.getInstance().getAtUnsigned256ArithmeticHeight())
+			return ValidationResult.AT_VERSION_NOT_YET_ACTIVE;
 
 		// Check creation bytes are valid (for v2+)
 		ensureATAddress(this.deployAtTransactionData);
@@ -172,7 +212,6 @@ public class DeployAtTransaction extends Transaction {
 		long creation = this.deployAtTransactionData.getTimestamp();
 		ATData skeletonAtData = new ATData(atAddress, creatorPublicKey, creation, assetId);
 
-		int height = this.repository.getBlockRepository().getBlockchainHeight() + 1;
 		long blockTimestamp = Timestamp.toLong(height, 0);
 
 		ChainATAPI api = new ChainATAPI(repository, skeletonAtData, blockTimestamp);

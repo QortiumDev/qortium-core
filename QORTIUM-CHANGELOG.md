@@ -34,6 +34,45 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - feat(at): gate version-3 AT deployment behind an activation height
+
+Updates the pinned automated-transactions runtime to the version that adds
+256-bit arithmetic for contracts, and — in the same change — closes the upgrade
+hazard that update would otherwise create.
+
+The new runtime introduces a third "creation version" for contracts. Contracts
+written at the older versions 1 and 2 behave exactly as before; only a contract
+created at version 3 can use the new arithmetic. The runtime already refuses to
+run the new arithmetic for older contracts, but that protection covers only
+*running* a contract, not *creating* one — and the two runtime versions disagree
+about whether a version-3 contract is even well-formed. The older runtime does
+not recognise version 3 at all and rejects such a deployment as malformed, while
+the newer one accepts it. So had the runtime simply been updated on its own, the
+first person to deploy a version-3 contract would have been accepted by updated
+nodes and rejected by every node that had not updated yet, and the network would
+have split in two over a single transaction.
+
+This change therefore adds an agreed switch-on height for *deploying* version-3
+contracts, `atUnsigned256ArithmeticHeight`, set to Previewnet block 70,000
+alongside the other automated-transaction features and left off entirely on
+mainnet. Before that block every node rejects a version-3 deployment for the
+same stated reason, and from that block every node accepts it; deployments at
+versions 1 and 2 are unaffected on both sides of the boundary. The check runs
+before the runtime ever inspects the submitted contract, so the decision does
+not depend on which runtime a node happens to be carrying. It also decides the
+height the same way the other consensus gates do — from the node's own copy of
+the chain rather than from the height a block claims for itself, because that
+claimed height is not covered by the block's signature and a peer could
+otherwise relabel the same block to make two honest nodes disagree.
+
+Rejected deployments now report "AT creation version not yet active at this
+block height" instead of the generic malformed-contract error, so the reason is
+visible to whoever submitted it. These activation heights live in the
+hash-excluded feature-trigger list, so the live Previewnet chain-config
+fingerprint is unchanged and no node needs to re-sync to keep peering — but
+every node does need this release before block 70,000, because a node that
+misses it will keep peering normally and then disagree at that height.
+
 ### 2026-07-22 - feat(avatars): authorize immutable QDN group and account avatars
 
 Added a Previewnet-gated standard for immutable group and account avatars. A signer authorizes, replaces, or clears only one exact public single-file QDN image revision; Core verifies the confirmed resource transaction, retains it across reorgs, and exposes its signature and resource tuple without trusting a mutable name URL. Null-owned groups retain their normal group-approval rules. Previewnet activates both avatar transaction types at height 70,000; Mainnet remains safely disabled until a separately coordinated activation height is set.

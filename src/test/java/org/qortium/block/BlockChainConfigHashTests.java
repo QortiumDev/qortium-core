@@ -196,6 +196,30 @@ public class BlockChainConfigHashTests {
 	}
 
 	@Test
+	public void testShippedPreviewnetSchedulesUnsigned256ArithmeticAtSeventyThousand() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("previewchain.json"), StandardCharsets.UTF_8));
+
+		// AT creation version 3 becomes deployable alongside the other AT features.
+		assertEquals(70_000L, blockChain.getAtUnsigned256ArithmeticHeight());
+	}
+
+	@Test
+	public void testShippedMainnetLeavesUnsigned256ArithmeticDisabled() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("blockchain.json"), StandardCharsets.UTF_8));
+
+		// The key is deliberately absent from mainnet config; absent must mean disabled, not zero.
+		assertEquals(BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT, blockChain.getAtUnsigned256ArithmeticHeight());
+	}
+
+	@Test
+	public void testUnsigned256ArithmeticTriggerDoesNotChangeTheLivePreviewnetHash() throws Exception {
+		// Scheduling AT creation-version-3 deployment adds a key inside featureTriggers, which is
+		// excluded from the hashed bytes, so this must NOT be a peering flag day.
+		assertEquals(LIVE_PREVIEWNET_CONFIG_HASH,
+				BlockChain.computeChainConfigHash(readBundledConfig("previewchain.json")));
+	}
+
+	@Test
 	public void testShippedMainnetLeavesAtMapsDisabled() throws Exception {
 		BlockChain blockChain = unmarshal(new String(readBundledConfig("blockchain.json"), StandardCharsets.UTF_8));
 
