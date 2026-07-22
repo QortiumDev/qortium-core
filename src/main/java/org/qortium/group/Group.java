@@ -314,7 +314,7 @@ public class Group {
 	// "un"-methods are the orphaning versions. e.g. "uncreate" undoes "create" processing.
 
 	/*
-	 * GroupData records can be changed by CREATE_GROUP or UPDATE_GROUP transactions.
+	 * GroupData records can be changed by CREATE_GROUP, UPDATE_GROUP or SET_GROUP_AVATAR transactions.
 	 * 
 	 * GroupData stores the signature of the last transaction that caused a change to its contents
 	 * in a field called "reference".
@@ -388,6 +388,22 @@ public class Group {
 		updateGroupTransactionData.setGroupReference(null);
 	}
 
+	public void setAvatar(SetGroupAvatarTransactionData transactionData) throws DataException {
+		transactionData.setGroupReference(this.groupData.getReference());
+		this.groupData.setReference(transactionData.getSignature());
+		this.groupData.setAvatarSignature(transactionData.getAvatarSignature());
+		this.groupData.setUpdated(transactionData.getTimestamp());
+		groupRepository.save(this.groupData);
+	}
+
+	public void unsetAvatar(SetGroupAvatarTransactionData transactionData) throws DataException {
+		this.groupData.setReference(transactionData.getGroupReference());
+		this.groupData.setAvatarSignature(this.findAvatarSignature(this.groupData.getReference()));
+		this.revertGroupUpdate();
+		groupRepository.save(this.groupData);
+		transactionData.setGroupReference(null);
+	}
+
 	/** Reverts groupData using previous values stored in referenced transaction. */
 	private void revertGroupUpdate() throws DataException {
 		TransactionData previousTransactionData = this.repository.getTransactionRepository().fromSignature(this.groupData.getReference());
@@ -409,6 +425,7 @@ public class Group {
 				this.groupData.setMinimumBlockDelay(previousCreateGroupTransactionData.getMinimumBlockDelay());
 				this.groupData.setMaximumBlockDelay(previousCreateGroupTransactionData.getMaximumBlockDelay());
 				this.groupData.setUpdated(null);
+				this.groupData.setAvatarSignature(null);
 				break;
 			}
 
@@ -426,6 +443,15 @@ public class Group {
 				this.groupData.setMinimumBlockDelay(previousUpdateGroupTransactionData.getNewMinimumBlockDelay());
 				this.groupData.setMaximumBlockDelay(previousUpdateGroupTransactionData.getNewMaximumBlockDelay());
 				this.groupData.setUpdated(previousUpdateGroupTransactionData.getTimestamp());
+				this.groupData.setAvatarSignature(this.findAvatarSignature(previousUpdateGroupTransactionData.getSignature()));
+				break;
+			}
+
+			case SET_GROUP_AVATAR: {
+				SetGroupAvatarTransactionData previousAvatar = (SetGroupAvatarTransactionData) previousTransactionData;
+				this.groupData.setAvatarSignature(previousAvatar.getAvatarSignature());
+				this.groupData.setUpdated(previousAvatar.getTimestamp());
+				this.restoreGroupSettingsFromReference(previousAvatar.getGroupReference());
 				break;
 			}
 
@@ -434,6 +460,46 @@ public class Group {
 		}
 
 		// Previous owner will still be admin and member at this point
+	}
+
+	/** SET_GROUP_AVATAR is transparent to the other mutable group settings during an orphan. */
+	private void restoreGroupSettingsFromReference(byte[] groupReference) throws DataException {
+		TransactionData tx = this.repository.getTransactionRepository().fromSignature(groupReference);
+		if (tx == null) throw new DataException("Unable to restore group settings as referenced transaction not found in repository");
+		if (tx.getType() == TransactionType.SET_GROUP_AVATAR) {
+			restoreGroupSettingsFromReference(((SetGroupAvatarTransactionData) tx).getGroupReference());
+			return;
+		}
+		if (tx.getType() == TransactionType.CREATE_GROUP) {
+			CreateGroupTransactionData create = (CreateGroupTransactionData) tx;
+			this.groupData.setOwner(Crypto.toAddress(create.getCreatorPublicKey())); this.groupData.setGroupName(create.getGroupName());
+			this.groupData.setReducedGroupName(create.getReducedGroupName()); this.groupData.setDescription(create.getDescription()); this.groupData.setIsOpen(create.isOpen());
+			this.groupData.setApprovalThreshold(create.getApprovalThreshold()); this.groupData.setMinimumBlockDelay(create.getMinimumBlockDelay()); this.groupData.setMaximumBlockDelay(create.getMaximumBlockDelay());
+			return;
+		}
+		if (tx.getType() == TransactionType.UPDATE_GROUP) {
+			UpdateGroupTransactionData update = (UpdateGroupTransactionData) tx;
+			if (!update.getNewName().isEmpty()) { this.groupData.setGroupName(update.getNewName()); this.groupData.setReducedGroupName(update.getReducedNewName()); }
+			else this.revertGroupName(update.getGroupReference());
+			this.groupData.setDescription(update.getNewDescription()); this.groupData.setIsOpen(update.getNewIsOpen()); this.groupData.setApprovalThreshold(update.getNewApprovalThreshold());
+			this.groupData.setMinimumBlockDelay(update.getNewMinimumBlockDelay()); this.groupData.setMaximumBlockDelay(update.getNewMaximumBlockDelay());
+			return;
+		}
+		throw new DataException("Unsupported group transaction in settings reference chain");
+	}
+
+	private byte[] findAvatarSignature(byte[] groupReference) throws DataException {
+		while (groupReference != null) {
+			TransactionData tx = this.repository.getTransactionRepository().fromSignature(groupReference);
+			if (tx == null) throw new DataException("Unable to rebuild group avatar as referenced transaction not found in repository");
+			switch (tx.getType()) {
+				case SET_GROUP_AVATAR: return ((SetGroupAvatarTransactionData) tx).getAvatarSignature();
+				case CREATE_GROUP: return null;
+				case UPDATE_GROUP: groupReference = ((UpdateGroupTransactionData) tx).getGroupReference(); break;
+				default: throw new DataException("Unsupported group transaction in avatar reference chain");
+			}
+		}
+		return null;
 	}
 
 	private void revertGroupName(byte[] groupReference) throws DataException {

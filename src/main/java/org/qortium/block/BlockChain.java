@@ -1018,6 +1018,11 @@ public class BlockChain {
 		return getFeatureTriggerHeight(AT_CODE_HASH_CHECK_TRIGGER);
 	}
 
+	/** From this height, SET_GROUP_AVATAR transactions are consensus-active. Disabled unless configured. */
+	public long getAvatarTransactionsHeight() {
+		return getFeatureTriggerHeight("avatarTransactionsHeight");
+	}
+
 	public long getFeatureTriggerHeight(String triggerName) {
 		return getFeatureTriggerHeight(triggerName, FEATURE_TRIGGER_DISABLED_HEIGHT);
 	}

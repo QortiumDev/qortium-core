@@ -29,7 +29,7 @@ import java.util.Arrays;
 	CreateAssetOrderTransactionData.class, CancelAssetOrderTransactionData.class,
 	SellAssetOwnershipTransactionData.class, CancelSellAssetOwnershipTransactionData.class, BuyAssetOwnershipTransactionData.class,
 	MultiPaymentTransactionData.class, DeployAtTransactionData.class, MessageTransactionData.class, ATTransactionData.class,
-	CreateGroupTransactionData.class, UpdateGroupTransactionData.class,
+	CreateGroupTransactionData.class, UpdateGroupTransactionData.class, SetGroupAvatarTransactionData.class, SetAccountAvatarTransactionData.class,
 	AddGroupAdminTransactionData.class, RemoveGroupAdminTransactionData.class,
 	GroupBanTransactionData.class, CancelGroupBanTransactionData.class,
 	GroupKickTransactionData.class, GroupInviteTransactionData.class,

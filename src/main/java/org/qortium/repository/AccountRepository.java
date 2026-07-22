@@ -22,6 +22,10 @@ public interface AccountRepository {
 	/** Returns whether account exists. */
 	public boolean accountExists(String address) throws DataException;
 
+	/** Current explicitly authorized avatar ARBITRARY signature, or null. */
+	public byte[] getAvatarSignature(String address) throws DataException;
+	public void setAvatarSignature(String address, byte[] avatarSignature) throws DataException;
+
 	/**
 	 * Ensures at least minimal account info in repository.
 	 * <p>

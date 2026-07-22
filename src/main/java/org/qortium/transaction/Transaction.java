@@ -89,7 +89,10 @@ public abstract class Transaction {
 		RATE_RESOURCE(45, false),
 		RATE_ACCOUNT(46, false),
 		UPDATE_POLL(47, true),
-		CHAIN_PARAMETER_UPDATE(48, true);
+		CHAIN_PARAMETER_UPDATE(48, true),
+		/** Chain-authorizes one immutable public QDN THUMBNAIL revision as a group's avatar. */
+		SET_GROUP_AVATAR(49, true),
+		SET_ACCOUNT_AVATAR(50, false);
 
 		public final int value;
 		public final boolean needsApproval;
@@ -306,6 +309,7 @@ public abstract class Transaction {
 		INVALID_POLL_OWNER(114),
 		ACCOUNT_RATING_CHANGE_TOO_SOON(115),
 		POLL_NOT_STARTED(116),
+		INVALID_AVATAR_OWNER(117),
 		INVALID_BUT_OK(999),
 		NOT_YET_RELEASED(1000),
 		NOT_SUPPORTED(1001);

@@ -19,7 +19,7 @@ public class HSQLDBDatabaseUpdates {
 
 	private static final Logger LOGGER = LogManager.getLogger(HSQLDBDatabaseUpdates.class);
 
-	public static final int CURRENT_SCHEMA_VERSION = 3;
+	public static final int CURRENT_SCHEMA_VERSION = 5;
 
 	private static final String BASELINE_SCHEMA_RESOURCE = "/repository/hsqldb-baseline.sql";
 
@@ -50,6 +50,15 @@ public class HSQLDBDatabaseUpdates {
 
 		if (databaseVersion == 2) {
 			upgradeFromVersion2(connection);
+			databaseVersion = 3;
+		}
+
+		if (databaseVersion == 3) {
+			upgradeFromVersion3(connection);
+			databaseVersion = 4;
+		}
+		if (databaseVersion == 4) {
+			upgradeFromVersion4(connection);
 			ensureLocalTables(connection);
 			ensureArbitraryTransactionCreatedWhen(connection);
 			connection.commit();
@@ -193,10 +202,31 @@ public class HSQLDBDatabaseUpdates {
 					+ "FOREIGN KEY(AT_ADDRESS) REFERENCES PUBLIC.ATS(AT_ADDRESS) ON DELETE CASCADE)");
 			stmt.execute("CREATE INDEX PUBLIC.ATMAPENTRYCHANGESADDRESSKEYINDEX "
 					+ "ON PUBLIC.ATMAPENTRYCHANGES(AT_ADDRESS,KEY1,KEY2,HEIGHT)");
-			stmt.execute("UPDATE PUBLIC.DATABASEINFO SET VERSION = " + CURRENT_SCHEMA_VERSION);
+			stmt.execute("UPDATE PUBLIC.DATABASEINFO SET VERSION = 3");
 		}
 
-		LOGGER.info("Upgraded Qortium HSQLDB repository schema from version 2 to version {}", CURRENT_SCHEMA_VERSION);
+		LOGGER.info("Upgraded Qortium HSQLDB repository schema from version 2 to version 3");
+	}
+
+	private static void upgradeFromVersion3(Connection connection) throws SQLException {
+		StartupStatus.update("Upgrading Qortium database to schema v4, please wait...");
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("ALTER TABLE PUBLIC.\"GROUPS\" ADD COLUMN AVATAR_SIGNATURE PUBLIC.SIGNATURE");
+			stmt.execute("CREATE TABLE PUBLIC.SETGROUPAVATARTRANSACTIONS("
+					+ "SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY, OWNER PUBLIC.ACCOUNTPUBLICKEY NOT NULL, GROUP_ID PUBLIC.GROUPID NOT NULL, "
+					+ "AVATAR_SIGNATURE PUBLIC.SIGNATURE, GROUP_REFERENCE PUBLIC.SIGNATURE, "
+					+ "FOREIGN KEY(SIGNATURE) REFERENCES PUBLIC.TRANSACTIONS(SIGNATURE) ON DELETE CASCADE)");
+			stmt.execute("UPDATE PUBLIC.DATABASEINFO SET VERSION = 4");
+		}
+		LOGGER.info("Upgraded Qortium HSQLDB repository schema from version 3 to version 4");
+	}
+
+	private static void upgradeFromVersion4(Connection connection) throws SQLException {
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("CREATE TABLE PUBLIC.ACCOUNTAVATARS(ACCOUNT PUBLIC.ACCOUNTADDRESS PRIMARY KEY, AVATAR_SIGNATURE PUBLIC.SIGNATURE NOT NULL, FOREIGN KEY(ACCOUNT) REFERENCES PUBLIC.ACCOUNTS(ACCOUNT) ON DELETE CASCADE)");
+			stmt.execute("CREATE TABLE PUBLIC.SETACCOUNTAVATARTRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY, OWNER PUBLIC.ACCOUNTPUBLICKEY NOT NULL, AVATAR_SIGNATURE PUBLIC.SIGNATURE, PREVIOUS_AVATAR_SIGNATURE PUBLIC.SIGNATURE, FOREIGN KEY(SIGNATURE) REFERENCES PUBLIC.TRANSACTIONS(SIGNATURE) ON DELETE CASCADE)");
+			stmt.execute("UPDATE PUBLIC.DATABASEINFO SET VERSION = 5");
+		}
 	}
 
 	/**

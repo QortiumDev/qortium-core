@@ -190,6 +190,12 @@ public class BlockChainConfigHashTests {
 	}
 
 	@Test
+	public void testShippedPreviewnetSchedulesGroupAvatarActivationWithoutChangingPeerHash() throws Exception {
+		BlockChain blockChain = unmarshal(new String(readBundledConfig("previewchain.json"), StandardCharsets.UTF_8));
+		assertEquals(70_000L, blockChain.getAvatarTransactionsHeight());
+	}
+
+	@Test
 	public void testShippedMainnetLeavesAtMapsDisabled() throws Exception {
 		BlockChain blockChain = unmarshal(new String(readBundledConfig("blockchain.json"), StandardCharsets.UTF_8));
 

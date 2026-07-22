@@ -9,7 +9,8 @@ public enum GroupApprovalCategory {
 
 	public static GroupApprovalCategory fromTransactionType(TransactionType transactionType) {
 		switch (transactionType) {
-			case UPDATE_GROUP:
+		case UPDATE_GROUP:
+		case SET_GROUP_AVATAR:
 			case ADD_GROUP_ADMIN:
 			case REMOVE_GROUP_ADMIN:
 			case GROUP_KICK:

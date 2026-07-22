@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - feat(avatars): authorize immutable QDN group and account avatars
+
+Added a Previewnet-gated standard for immutable group and account avatars. A signer authorizes, replaces, or clears only one exact public single-file QDN image revision; Core verifies the confirmed resource transaction, retains it across reorgs, and exposes its signature and resource tuple without trusting a mutable name URL. Null-owned groups retain their normal group-approval rules. Previewnet activates both avatar transaction types at height 70,000; Mainnet remains safely disabled until a separately coordinated activation height is set.
+
 ### 2026-07-22 - feat(at): add chain-query opcodes for trust status, balances and code hashes
 
 Added three new read-only query functions that automated transactions (ATs) can

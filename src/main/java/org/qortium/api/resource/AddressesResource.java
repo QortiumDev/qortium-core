@@ -17,10 +17,15 @@ import org.qortium.api.*;
 import org.qortium.api.model.ApiOnlineAccount;
 import org.qortium.api.model.RewardShareKeyRequest;
 import org.qortium.asset.Asset;
+import org.qortium.arbitrary.ArbitraryDataReader;
+import org.qortium.arbitrary.ArbitraryDataFile.ResourceIdType;
+import org.qortium.avatar.AvatarResource;
 import org.qortium.controller.LiteNode;
 import org.qortium.controller.OnlineAccountsManager;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.account.*;
+import org.qortium.data.avatar.AvatarData;
+import org.qortium.data.transaction.SetAccountAvatarTransactionData;
 import org.qortium.data.network.OnlineAccountData;
 import org.qortium.data.network.OnlineAccountLevel;
 import org.qortium.data.transaction.PublicizeTransactionData;
@@ -41,6 +46,7 @@ import org.qortium.transform.transaction.PublicizeTransactionTransformer;
 import org.qortium.transform.transaction.RewardShareTransactionTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.transform.transaction.TransferPrivsTransactionTransformer;
+import org.qortium.transform.transaction.SetAccountAvatarTransactionTransformer;
 import org.qortium.utils.Amounts;
 import org.qortium.utils.Base58;
 
@@ -48,11 +54,15 @@ import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Path("/addresses")
 @Tag(name = "Addresses")
@@ -60,6 +70,91 @@ public class AddressesResource {
 
 	@Context
 	HttpServletRequest request;
+
+	@POST
+	@Path("/avatar")
+	@Operation(summary = "Build raw, unsigned, SET_ACCOUNT_AVATAR transaction")
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String setAccountAvatar(SetAccountAvatarTransactionData transactionData) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		try (Repository repository = RepositoryManager.getRepository()) {
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
+			if (result != ValidationResult.OK)
+				throw TransactionsResource.createTransactionInvalidException(request, result);
+			return Base58.encode(SetAccountAvatarTransactionTransformer.toBytes(transactionData));
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/{address}/avatar/info")
+	@Operation(summary = "Return the exact explicitly authorized account-avatar descriptor")
+	public AvatarData getAccountAvatarInfo(@PathParam("address") String address) {
+		if (!Crypto.isValidAddress(address))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+		try (Repository repository = RepositoryManager.getRepository()) {
+			byte[] signature = repository.getAccountRepository().getAvatarSignature(address);
+			if (signature == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
+			AvatarData descriptor = AvatarResource.descriptor(repository, signature);
+			if (descriptor == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
+			return descriptor;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/{address}/avatar")
+	@Operation(summary = "Fetch the exact immutable QDN revision authorized as this account's avatar")
+	public Response getAccountAvatar(@PathParam("address") String address) {
+		if (!Crypto.isValidAddress(address))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+		try (Repository repository = RepositoryManager.getRepository()) {
+			byte[] signature = repository.getAccountRepository().getAvatarSignature(address);
+			if (signature == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
+			AvatarData descriptor = AvatarResource.descriptor(repository, signature);
+			if (descriptor == null)
+				return Response.status(422).build();
+			ArbitraryDataReader reader = new ArbitraryDataReader(Base58.encode(signature), ResourceIdType.SIGNATURE, descriptor.getService(), descriptor.getIdentifier());
+			if (!reader.isCachedDataAvailable()) {
+				reader.loadAsynchronously(false, 10);
+				return avatarHeaders(Response.status(202).header("Retry-After", "2"), descriptor).build();
+			}
+			java.nio.file.Path file = singleAvatarFile(reader.getFilePath());
+			String contentType = AvatarResource.detectRasterImageContentType(file);
+			if (contentType == null)
+				return avatarHeaders(Response.status(415), descriptor).build();
+			return avatarHeaders(Response.ok(Files.readAllBytes(file), contentType), descriptor)
+					.header("Cache-Control", "public, max-age=31536000, immutable").build();
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	private static Response.ResponseBuilder avatarHeaders(Response.ResponseBuilder response, AvatarData descriptor) {
+		return response.header("X-Qortium-Avatar-Signature", Base58.encode(descriptor.getSignature()))
+				.header("X-Qortium-Avatar-Service", descriptor.getService()).header("X-Qortium-Avatar-Name", descriptor.getName())
+				.header("X-Qortium-Avatar-Identifier", descriptor.getIdentifier()).header("X-Qortium-Avatar-Source", "authorized");
+	}
+
+	private static java.nio.file.Path singleAvatarFile(java.nio.file.Path cachedPath) throws IOException {
+		if (cachedPath == null) throw new IOException("Avatar cache path missing");
+		if (!Files.isDirectory(cachedPath)) return cachedPath;
+		try (Stream<java.nio.file.Path> files = Files.list(cachedPath)) {
+			return files.filter(path -> !path.getFileName().toString().equals(".qdn")).filter(Files::isRegularFile).findFirst()
+					.orElseThrow(() -> new IOException("Avatar image missing from cache"));
+		}
+	}
 	
 	@GET
 	@Path("/{address}")

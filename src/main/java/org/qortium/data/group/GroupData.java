@@ -2,6 +2,7 @@ package org.qortium.data.group;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortium.group.Group.ApprovalThreshold;
+import org.qortium.data.avatar.AvatarData;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -22,6 +23,12 @@ public class GroupData {
 	private ApprovalThreshold approvalThreshold;
 	private int minimumBlockDelay;
 	private int maximumBlockDelay;
+	/** Immutable QDN revision currently authorized as this group's avatar, or null. */
+	@XmlTransient
+	@Schema(hidden = true)
+	private byte[] avatarSignature;
+	/** API-facing immutable QDN avatar descriptor. */
+	private AvatarData avatar;
 	public int memberCount;
 
 	/** Reference to CREATE_GROUP or UPDATE_GROUP transaction, used to rebuild group during orphaning. */
@@ -170,6 +177,13 @@ public class GroupData {
 	public void setMaximumBlockDelay(int maximumBlockDelay) {
 		this.maximumBlockDelay = maximumBlockDelay;
 	}
+
+	public byte[] getAvatarSignature() { return this.avatarSignature; }
+	public void setAvatarSignature(byte[] avatarSignature) {
+		this.avatarSignature = avatarSignature;
+		this.avatar = null;
+	}
+	public void setAvatar(AvatarData avatar) { this.avatar = avatar; }
 
 	public int getCreationGroupId() {
 		return this.creationGroupId;
