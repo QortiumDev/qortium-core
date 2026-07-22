@@ -790,6 +790,40 @@ public class ArbitraryApiTests extends ApiCommon {
 		}
 	}
 
+	/**
+	 * Raw QDN downloads are attacker-published bytes served from the node's own origin, which is
+	 * also the API's origin. The executable-MIME downgrade only covers text/html and XHTML, so a
+	 * published SVG or XML document carrying script would otherwise run against the node API when
+	 * the URL is navigated to directly. The response must deny script and land in an opaque origin.
+	 */
+	@Test
+	public void testGetDownloadResponseSendsLockedDownContentSecurityPolicyForRawContent() throws Exception {
+		String name = "qdn-csp-raw";
+		registerName(name);
+		publishTestResource(name, null);
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class);
+			DownloadExchange exchange = new DownloadExchange();
+			exchange.requestHeaders.put("X-API-KEY", ApiCommon.TEST_API_KEY);
+			FieldUtils.writeField(resource, "request", exchange.request, true);
+			FieldUtils.writeField(resource, "response", exchange.response, true);
+			FieldUtils.writeField(resource, "context", exchange.context, true);
+
+			resource.get(Service.APP, name, null, null, false, false, 5, false, null);
+
+			String contentSecurityPolicy = exchange.getResponseHeader("Content-Security-Policy");
+			assertNotNull("Raw downloads must carry a Content-Security-Policy", contentSecurityPolicy);
+			assertTrue("Raw downloads must not be allowed to load anything: " + contentSecurityPolicy,
+					contentSecurityPolicy.contains("default-src 'none'"));
+			assertTrue("Raw downloads must be sandboxed into an opaque origin: " + contentSecurityPolicy,
+					contentSecurityPolicy.contains("sandbox"));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
 	@Test
 	public void testGetDownloadResponseUsesNoSniffHeaderForZeroByteRawContent() throws Exception {
 		String name = "qdn-nosniff-raw-zero-byte";
