@@ -439,6 +439,40 @@ public class SmplFaucetAtTests extends Common {
 		}
 	}
 
+	// Case 10: budget regression for the raised hashing step cost. The default test chain runs with
+	// atHashingStepCostHeight active, so the faucet's single SHA256 claim is charged the raised cost.
+	// A successful claim must still settle inside one 500-step round; this asserts the exact settling
+	// step count so a future pricing change that pushes a claim over budget is caught immediately.
+	@Test
+	public void testClaimStepCountUnderRaisedHashingCostStaysWithinOneRound() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			// This regression only means anything with the raised hashing cost actually in force.
+			assertEquals("default test chain must run with the raised hashing step cost active",
+					0L, BlockChain.getInstance().getAtHashingStepCostHeight());
+
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			long smplAssetId = issueSmpl(repository);
+
+			DeployAtTransaction deploy = deployFaucet(repository, alice, smplAssetId, PREFUND_AMOUNT);
+			String atAddress = deploy.getATAccount().getAddress();
+			long[] bobKey = claimKeyForAddress(bob.getAddress());
+
+			sendClaimMessage(repository, bob, atAddress);
+			assertTrue("claim must settle within the round budget", mintUntilMarker(repository, atAddress, bobKey));
+
+			long feePerStep = BlockChain.getInstance().getCiyamAtSettings().feePerStep;
+			int maxStepsPerRound = BlockChain.getInstance().getCiyamAtSettings().maxStepsPerRound;
+			long settlingFees = repository.getATRepository().getLatestATState(atAddress).getFees();
+			long settlingSteps = settlingFees / feePerStep;
+
+			// The claim performs exactly one SHA256, so the raised cost adds exactly 10 steps versus the
+			// flat 448-step claim: 458 steps, comfortably inside the 500-step round.
+			assertEquals("faucet claim step count under the raised hashing cost", 458L, settlingSteps);
+			assertTrue("a claim must still fit inside one 500-step round", settlingSteps <= maxStepsPerRound);
+		}
+	}
+
 	// Artifact plumbing
 
 	/** Decodes the embedded creation bytes, insisting on the canonical SHA-256 first. */

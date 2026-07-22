@@ -84,7 +84,9 @@
 	"featureTriggers": {
 		"devGroupApprovalSplitHeight": 1000,
 		"atPayoutSolvencyHeight": 0,
-		"atMapStorageHeight": 8
+		"atMapStorageHeight": 8,
+		"atHashingStepCostHeight": 0,
+		"atCheckedArithmeticHeight": 0
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

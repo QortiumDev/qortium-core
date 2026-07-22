@@ -1,10 +1,10 @@
 {
-	"networkId": "qortium-preview",
-	"blockTimestampMargin": 2000,
+	"isTestChain": true,
+	"blockTimestampMargin": 500,
 	"transactionExpiryPeriod": 86400000,
 	"maxBlockSize": 2097152,
 	"maxBytesPerUnitFee": 1024,
-	"chainParameterUpdateMinActivationDelay": 20,
+	"chainParameterUpdateMinActivationDelay": 10,
 	"mainnetMessageMagic": "QRTM",
 	"testnetMessageMagic": "qrtm",
 	"accountTrustSettings": {
@@ -71,29 +71,20 @@
 	"nameRegistrationUnitFees": [
 		{ "timestamp": 0, "fee": "1.25" }
 	],
-	"checkpoints": [
-		{ "height": 30000, "signature": "8SiSpBpV43ZNdSKyKQvNxy1nTyuhQXnbhSEzth8xYhsAqM6DzpM5x3tn7DT1EHPfGKy9LH872c1A7MbdKUfv8mZQm9JkTWSMFkkj4t5twwKWr3vyzvEcWLnMrcSr6UAKTzokWEZEaAR3Hb9xhJow7QKrnaV48Bp8MFSkD1TZh671Qrq" }
-	],
 	"requireGroupForApproval": false,
-	"defaultGroupId": 0,
 	"minAccountLevelToMint": 0,
 	"minAccountLevelForBlockSubmissions": 0,
 	"maxRewardSharesByTimestamp": [
 		{ "timestamp": 0, "maxShares": 100 }
 	],
-	"onlineAccountSignaturesMinLifetime": 43200000,
+	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
+	"onlineAccountsSignatureV2Height": 9999999999999,
+	"assetOrderBoundsHeight": 10,
 	"featureTriggers": {
-		"onlineAccountsSignatureV2Height": 32000,
-		"assetOrderBoundsHeight": 32000,
-		"blockRewardBatchStartHeight": 55000,
-		"devGroupApprovalSplitHeight": 60000,
-		"deployAtWorkingAssetHeight": 60000,
-		"atPayoutSolvencyHeight": 70000,
-		"atMapStorageHeight": 70000,
-		"atSweepAssetsOnFinishHeight": 70000,
-		"atHashingStepCostHeight": 70000,
-		"atCheckedArithmeticHeight": 70000
+		"devGroupApprovalSplitHeight": 1000,
+		"atPayoutSolvencyHeight": 0,
+		"atHashingStepCostHeight": 8
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,
@@ -102,29 +93,19 @@
 		"messageConfirmableDifficulty": 12,
 		"messageUnconfirmableDifficulty": 10
 	},
-	"blockRewardBatchStartHeight": 1508000,
-	"blockRewardBatchSize": 100,
-	"blockRewardBatchAccountsBlockCount": 10,
+	"blockRewardBatchStartHeight": 999999000,
+	"blockRewardBatchSize": 10,
+	"blockRewardBatchAccountsBlockCount": 3,
 	"mintingGroupIds": [
-		{ "height": 0, "ids": [ 2 ]}
+		{ "height": 0, "ids": [2]}
 	],
 	"devGroupIds": [
-		{ "height": 0, "ids": [ 1 ]}
+		{ "height": 0, "ids": [1]}
 	],
 	"rewardsByHeight": [
-		{ "height": 1, "reward": 5.00 },
-		{ "height": 2593, "reward": 4.75 },
-		{ "height": 5185, "reward": 4.50 },
-		{ "height": 7777, "reward": 4.25 },
-		{ "height": 10369, "reward": 4.00 },
-		{ "height": 12961, "reward": 3.75 },
-		{ "height": 15553, "reward": 3.50 },
-		{ "height": 18145, "reward": 3.25 },
-		{ "height": 20737, "reward": 3.00 },
-		{ "height": 23329, "reward": 2.75 },
-		{ "height": 25921, "reward": 2.50 },
-		{ "height": 28513, "reward": 2.25 },
-		{ "height": 31105, "reward": 2.00 }
+		{ "height": 1, "reward": 100 },
+		{ "height": 11, "reward": 10 },
+		{ "height": 21, "reward": 1 }
 	],
 	"sharesByLevel": [
 		{ "id": 1, "levels": [ 1 ], "share": 0.01818182 },
@@ -138,26 +119,33 @@
 		{ "id": 9, "levels": [ 9 ], "share": 0.16363636 },
 		{ "id": 10, "levels": [ 10 ], "share": 0.18181818 }
 	],
-	"minAccountsToActivateShareBin": 5,
+	"minAccountsToActivateShareBin": 30,
 	"shareBinActivationMinLevel": 1,
-	"blocksNeededByLevel": [ 720, 6480, 12960, 17280, 24400, 34560, 51840, 69120, 86400, 103680 ],
+	"blocksNeededByLevel": [ 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 ],
 	"blockTimingsByHeight": [
 		{ "height": 1, "target": 60000, "deviation": 30000, "power": 0.2 }
 	],
 	"ciyamAtSettings": {
-		"feePerStep": "0.00000001",
+		"feePerStep": "0.0001",
 		"maxStepsPerRound": 500,
 		"stepsPerFunctionCall": 10,
 		"minutesPerBlock": 1
 	},
 	"genesisInfo": {
-		"timestamp": "1779819592023",
+		"timestamp": 0,
 		"transactions": [
+			{ "type": "ISSUE_ASSET", "requestedAssetId": 0, "assetName": "NATIVE", "description": "Native test asset", "data": "", "quantity": 0, "isDivisible": true, "fee": 0 },
+			{ "type": "GENESIS", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "amount": "1000000000" },
+			{ "type": "GENESIS", "recipient": "QixPbJUwsaHsVEofJdozU9zgVqkK6aYhrK", "amount": "1000000" },
+			{ "type": "GENESIS", "recipient": "QaUpHNhT3Ygx6avRiKobuLdusppR5biXjL", "amount": "1000000" },
+			{ "type": "GENESIS", "recipient": "Qci5m9k4rcwe4ruKrZZQKka4FzUUMut3er", "amount": "1000000" },
+
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq", "groupId": 2, "mintingPublicKey": "6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov" },
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "EAv9tuEizRrTwYZtXobfo49sgRDrHvieRrmnGq1PwzQ7", "groupId": 2, "mintingPublicKey": "7cJcjBD9Vpmwugf8jMhnYJB8yFHhrBZGBzJDV8WnSYNz" },
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY", "groupId": 2, "mintingPublicKey": "6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV" }
+
+			{ "type": "ISSUE_ASSET", "issuerPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "assetName": "TEST", "description": "test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },
+			{ "type": "ISSUE_ASSET", "issuerPublicKey": "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry", "assetName": "OTHER", "description": "other test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },
+			{ "type": "ISSUE_ASSET", "issuerPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "assetName": "GOLD", "description": "gold test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 }
 
 		]
 	}

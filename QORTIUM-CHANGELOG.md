@@ -34,6 +34,86 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-22 - fix(at): route every remaining AT feature gate to the block's true height
+
+Defense-in-depth completion of the height-source fix below. That fix moved the
+checked-arithmetic and block-fee activation gates off the height field that
+travels *alongside* a block over the network (which a peer can relabel on the
+very same signed block) and onto the block's real, locally-derived position
+(parent height + 1). The remaining AT feature gates — persistent-map activation,
+the persistent-map new-entry step price, the finish-time asset sweep, and the
+hashing step-cost — were still keyed on that peer-supplied height. They were
+already latent-safe (their effects fold into the strictly cross-checked AT state
+hash, so a relabelled block self-invalidates rather than forking), but while the
+pre-70,000 flag day is open we remove the pattern entirely: every AT
+feature-activation and pricing gate now reads the same locally-derived height the
+payout-solvency and checked-arithmetic gates use. The `blockHeight` value a block
+claims is retained only for legitimate execution-height reads (the AT state
+record, sleep-until-height wake logic), never for a feature decision.
+
+Behavior before block 70,000 — and for any honest block, where the claimed height
+equals the true height — is byte-for-byte identical: all existing map, faucet,
+sweep and hashing tests pass unchanged (the SMPL faucet still settles a claim in
+448 steps below the hashing trigger and 458 above it). No JSON changed, so the
+live Previewnet chain-config fingerprint is unchanged and no node needs to
+re-sync. New source-of-height tests mint the chain across each trigger boundary
+and prove the map-storage and hashing gates follow the true chain position even
+when handed a deliberately mismatched claimed height.
+
+### 2026-07-22 - fix(at): key the checked-arithmetic activation on the block's true height, not the claimed one
+
+Follow-up to the checked-arithmetic hardening below, closing a subtle way two
+honest nodes could still disagree. The switch from wrapping to checked
+arithmetic turns on at a block height (`atCheckedArithmeticHeight`, Previewnet
+block 70,000). The previous version decided that height from the height field
+that travels *alongside* a block over the network — but that field is not part
+of what the block's signature covers, so a peer can relabel the very same signed
+block with a different height. Two nodes handed the same block with different
+claimed heights could then pick different arithmetic and split the chain on a
+height that isn't the block's real position.
+
+This fix makes every node compute the deciding height the same way, purely from
+information it already trusts: a block's real position is its parent's height
+plus one. The block-fee check now runs during block validation (where the parent,
+and therefore the true height, is known) instead of during network decoding
+(where a block can arrive with no chain context at all), and the AT-side money
+checks now read the same locally-derived height that the existing payout-solvency
+rule already uses. Nothing about the arithmetic itself changed, and behavior
+before block 70,000 is byte-for-byte identical to before, so the live Previewnet
+chain-config fingerprint is unchanged and no node needs to re-sync.
+
+### 2026-07-22 - feat(at): consensus-safety hardening for AT money, asset sweeps and hashing cost
+
+Three safety improvements to how automated transactions (ATs) handle money,
+leftover assets, and expensive hashing work, in preparation for the pre-70,000
+Previewnet release. First, every place where amounts or fees are added up
+switches to checked arithmetic at a new activation height,
+`atCheckedArithmeticHeight` (Previewnet block 70,000): from that height, a total
+that would overflow makes the AT stop with a clean fatal error, makes the block
+invalid the same way on every node, or — for the newly hardened multi-payment
+validation — rejects the transaction outright, instead of silently wrapping
+around to a wrong, smaller number. That last part is the root fix: ordinary
+multi-payment validation used to add its per-asset totals with wrapping
+arithmetic, so a crafted payment list summing past the 64-bit limit could wrap
+the required total negative and slip past the sender-balance check; from the
+activation height such a transaction is simply invalid. Below the height, every
+one of these places keeps today's wrapping behavior byte-for-byte — because the
+old overflow is reachable on today's chain, all nodes must keep computing
+identical results until the flag day, and only switch to checked arithmetic
+together. Second, when an AT finishes it now returns every asset it still holds
+to its creator, not just its configured working asset and native fee balance, so
+a third asset an AT received can no longer be trapped forever; older behavior is
+preserved before the activation height. Third, AT hashing built-ins
+(MD5/RIPEMD160/SHA256/HASH160) are priced at 20 execution steps each instead of
+a flat 10, so hash-heavy contracts are charged fairly; the SMPL faucet's single
+hash keeps a claim well within one execution round (its claim now uses 458 of
+the 500-step budget). The checked arithmetic, asset sweep and new hashing price
+all activate at Previewnet block 70,000 alongside the other AT features and are
+switched on immediately on the test chains. These activation heights live in the
+hash-excluded feature-trigger list and the hashing price is a built-in default
+rather than shipped config, so the live Previewnet chain-config fingerprint is
+unchanged and no node needs to re-sync to keep peering.
+
 ### 2026-07-22 - test: end-to-end coverage for the SMPL exactly-once faucet AT
 
 Added end-to-end tests that run the real SMPL faucet contract — the canonical

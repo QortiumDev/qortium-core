@@ -3,6 +3,7 @@ package org.qortium.payment;
 import org.qortium.account.Account;
 import org.qortium.account.PublicKeyAccount;
 import org.qortium.asset.Asset;
+import org.qortium.block.BlockChain;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.PaymentData;
 import org.qortium.data.asset.AssetData;
@@ -45,6 +46,13 @@ public class Payment {
 		Map<Long, Long> amountsByAssetId = new HashMap<>();
 		// Add transaction fee to start with
 		amountsByAssetId.put(Asset.NATIVE, fee);
+
+		// From atCheckedArithmeticHeight, per-asset totals are accumulated with checked arithmetic so a
+		// crafted payment list can no longer wrap the required total negative and slip past the balance
+		// check below. Below the trigger, the historic silently-wrapping accumulation is preserved
+		// byte-for-byte so every node keeps agreeing on already-reachable states until the flag day.
+		boolean checkedArithmetic = this.repository.getBlockRepository().getBlockchainHeight() + 1
+				>= BlockChain.getInstance().getAtCheckedArithmeticHeight();
 
 		// Grab sender info
 		Account sender = new PublicKeyAccount(this.repository, senderPublicKey);
@@ -95,7 +103,17 @@ public class Payment {
 				return ValidationResult.INVALID_AMOUNT;
 
 			// Set or add amount into amounts-by-asset map
-			amountsByAssetId.compute(paymentData.getAssetId(), (assetId, amount) -> amount == null ? paymentData.getAmount() : amount + paymentData.getAmount());
+			if (checkedArithmetic) {
+				try {
+					amountsByAssetId.merge(paymentData.getAssetId(), paymentData.getAmount(), Math::addExact);
+				} catch (ArithmeticException e) {
+					// The required per-asset total is not representable, so no sender balance could ever
+					// cover it: reject deterministically within the normal validation-result contract.
+					return ValidationResult.NO_BALANCE;
+				}
+			} else {
+				amountsByAssetId.compute(paymentData.getAssetId(), (assetId, amount) -> amount == null ? paymentData.getAmount() : amount + paymentData.getAmount());
+			}
 		}
 
 		// Check sender has enough of each asset

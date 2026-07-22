@@ -12,12 +12,14 @@ import org.qortium.block.BlockChain;
 import org.qortium.block.BlockChain.CiyamAtSettings;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.PaymentData;
+import org.qortium.data.account.AccountBalanceData;
 import org.qortium.data.asset.AssetData;
 import org.qortium.data.at.ATData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
 import org.qortium.data.transaction.*;
 import org.qortium.group.Group;
+import org.qortium.repository.AccountRepository;
 import org.qortium.repository.ATRepository;
 import org.qortium.repository.ATRepository.NextTransactionInfo;
 import org.qortium.repository.DataException;
@@ -42,6 +44,13 @@ public class ChainATAPI extends API {
 	// Properties
 	private Repository repository;
 	private ATData atData;
+	/**
+	 * The block height threaded in by the caller (for a network block, the peer-supplied, non-canonical
+	 * {@link org.qortium.data.block.BlockData#getHeight()}). Retained for the constructor contract and any
+	 * legitimate execution-height read; it is deliberately NOT used for any feature-activation or pricing
+	 * gate — those key off {@link #getGateBlockHeight()} (the locally-derived, consensus-anchored height).
+	 */
+	@SuppressWarnings("unused")
 	private final int blockHeight;
 	private long blockTimestamp;
 	private final ATMapExecutionContext mapContext;
@@ -145,12 +154,20 @@ public class ChainATAPI extends API {
 	@Override
 	public int getOpCodeSteps(OpCode opcode, short rawFunctionCode, MachineState state) {
 		int ordinarySteps = this.getOpCodeSteps(opcode);
+
+		// Hashing built-ins (MD5/RMD160/SHA256/HASH160 families) are priced up once the trigger is
+		// active. The pinned AT jar routes every external-function opcode that carries a raw function
+		// code — including these hash functions — through this overload before charging steps, so this
+		// is the Core-side hook. Below the trigger they keep the flat per-function cost above.
+		if (this.isHashingStepCostActive() && isHashingFunctionCode(rawFunctionCode))
+			return this.ciyamAtSettings.hashingStepCost;
+
 		if (!this.isMapStorageActive() || opcode != OpCode.EXT_FUN
 				|| rawFunctionCode != ChainFunctionCode.SET_MAP_VALUE_KEYS_IN_A.value)
 			return ordinarySteps;
 
 		try {
-			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.blockHeight);
+			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.getGateBlockHeight());
 			if (this.mapContext.wouldCreateEntry(this.atData.getATAddress(), this.getA1(state), this.getA2(state),
 					this.getA4(state), maxEntries))
 				return this.ciyamAtSettings.mapEntryStepCost;
@@ -275,7 +292,16 @@ public class ChainATAPI extends API {
 				return ((TransferAssetTransactionData) transactionData).getAmount();
 
 			case MULTI_PAYMENT:
-				MultiPaymentSummary multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
+				MultiPaymentSummary multiPaymentSummary;
+				try {
+					multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
+				} catch (ExecutionException e) {
+					// Post-trigger checked aggregation overflowed. This stock CIYAM API override cannot
+					// declare a checked throw, so the unrepresentable total deterministically becomes the
+					// same "no single amount" sentinel already returned for mixed-asset multi-payments.
+					// Pre-trigger, summarizing never throws (it wraps, byte-for-byte as before).
+					return 0xffffffffffffffffL;
+				}
 
 				if (multiPaymentSummary.hasSingleAsset())
 					return multiPaymentSummary.amount;
@@ -482,6 +508,42 @@ public class ChainATAPI extends API {
 			if (nativeRefund > 0)
 				this.addPaymentToCreator(nativeRefund, Asset.NATIVE);
 		}
+
+		// From the sweep trigger, also return every OTHER asset the AT still holds with a positive
+		// spendable balance to the creator, so a third asset an AT received or was left holding can
+		// never be stranded forever. The configured working asset (above, from the exact machine
+		// balance) and the native fee balance (above, net of final fees) are already handled, so they
+		// are skipped here. Ordering is deterministic (ascending assetId). Indivisible assets move as
+		// whole raw balances, which they always are on-chain.
+		// Gate off the locally-derived block height (see getGateBlockHeight), not the peer-supplied
+		// this.blockHeight, so a non-canonical claimed height cannot toggle the finish sweep.
+		if (this.getGateBlockHeight() >= BlockChain.getInstance().getAtSweepAssetsOnFinishHeight())
+			this.sweepRemainingAssetsToCreator(configuredAssetId, state);
+	}
+
+	/** Sweeps every non-configured, non-native asset with a positive spendable balance to the creator, ascending assetId. */
+	private void sweepRemainingAssetsToCreator(long configuredAssetId, MachineState state) {
+		List<AccountBalanceData> balances;
+		try {
+			balances = this.repository.getAccountRepository().getAssetBalances(
+					java.util.Collections.singletonList(this.atData.getATAddress()), null,
+					AccountRepository.BalanceOrdering.ACCOUNT_ASSET, true, null, null, false);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to enumerate AT asset balances for finish sweep?", e);
+		}
+
+		for (AccountBalanceData balanceData : balances) {
+			long assetId = balanceData.getAssetId();
+
+			// Configured working asset and native fee balance are refunded above with their exact,
+			// fee-aware spendable amounts; do not double-pay them here.
+			if (assetId == configuredAssetId || assetId == Asset.NATIVE)
+				continue;
+
+			long spendable = this.getSpendableAssetBalance(assetId, state);
+			if (spendable > 0)
+				this.addPaymentToCreator(spendable, assetId);
+		}
 	}
 
 	@Override
@@ -531,7 +593,7 @@ public class ChainATAPI extends API {
 
 	public void setMapValue(MachineState state) {
 		try {
-			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.blockHeight);
+			int maxEntries = BlockChain.getInstance().getMaxMapEntriesPerAt(this.repository, this.getGateBlockHeight());
 			this.mapContext.setValue(this.atData.getATAddress(), this.getA1(state), this.getA2(state),
 					this.getA4(state), maxEntries);
 		} catch (DataException e) {
@@ -540,7 +602,10 @@ public class ChainATAPI extends API {
 	}
 
 	private boolean isMapStorageActive() {
-		return this.mapContext != null && this.blockHeight >= BlockChain.getInstance().getAtMapStorageHeight();
+		// Gate off the locally-derived block height (see getGateBlockHeight), not the peer-supplied
+		// this.blockHeight. Honest wire height == local height so this is byte-identical for honest blocks,
+		// and maps do not activate until block 70,000 (after every node runs this release).
+		return this.mapContext != null && this.getGateBlockHeight() >= BlockChain.getInstance().getAtMapStorageHeight();
 	}
 
 	/** Resolves only the explicit AT-address encoding accepted by map reads; zero means self. */
@@ -585,7 +650,7 @@ public class ChainATAPI extends API {
 		}
 	}
 
-	public long getAssetIdFromTransactionInA(MachineState state) {
+	public long getAssetIdFromTransactionInA(MachineState state) throws ExecutionException {
 		TransactionData transactionData = this.getTransactionFromA(state);
 
 		switch (transactionData.getType()) {
@@ -596,6 +661,8 @@ public class ChainATAPI extends API {
 				return ((TransferAssetTransactionData) transactionData).getAssetId();
 
 			case MULTI_PAYMENT:
+				// Post-trigger, an overflowing (unrepresentable) aggregate total propagates as a
+				// deterministic AT fatal error; pre-trigger, summarizing never throws (it wraps as before).
 				MultiPaymentSummary multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
 
 				if (multiPaymentSummary.hasSingleAsset())
@@ -622,7 +689,7 @@ public class ChainATAPI extends API {
 		}
 	}
 
-	public long getAmountFromTransactionInAForAsset(long assetId, MachineState state) {
+	public long getAmountFromTransactionInAForAsset(long assetId, MachineState state) throws ExecutionException {
 		try {
 			if (!this.repository.getAssetRepository().assetExists(assetId))
 				return -1L;
@@ -644,9 +711,12 @@ public class ChainATAPI extends API {
 				long amount = 0L;
 				String atAddress = this.atData.getATAddress();
 
+				// Height-gated accumulation: pre-trigger this wraps byte-for-byte as before; from the
+				// trigger, an overflowing per-asset multi-payment sum surfaces as a deterministic AT
+				// fatal error instead of wrapping into a nonsensical consensus-valid amount.
 				for (PaymentData paymentData : ((MultiPaymentTransactionData) transactionData).getPayments())
 					if (atAddress.equals(paymentData.getRecipient()) && paymentData.getAssetId() == assetId)
-						amount += paymentData.getAmount();
+						amount = this.addAtAmount(amount, paymentData.getAmount());
 
 				return amount;
 
@@ -703,7 +773,7 @@ public class ChainATAPI extends API {
 		}
 	}
 
-	public long payAssetAmountToB(long assetId, long requestedAmount, MachineState state) {
+	public long payAssetAmountToB(long assetId, long requestedAmount, MachineState state) throws ExecutionException {
 		if (requestedAmount < 0)
 			return -1L;
 
@@ -743,7 +813,14 @@ public class ChainATAPI extends API {
 			// we instead record a pending payout, which onFinished() and the clamps reconcile as before.
 			state.deductFromCurrentBalance(amount);
 		} else {
-			this.addPendingPayout(assetId, amount);
+			// Pre-trigger the pending-payout total wraps byte-for-byte as before (and never throws);
+			// from the trigger, an overflowing total surfaces as a deterministic AT fatal error rather
+			// than wrapping into a smaller apparent payout.
+			try {
+				this.addPendingPayout(assetId, amount);
+			} catch (ArithmeticException e) {
+				throw new ExecutionException("AT pending payout aggregation overflowed", e);
+			}
 		}
 
 		return amount;
@@ -752,7 +829,19 @@ public class ChainATAPI extends API {
 	// Utility methods
 
 	public long calcFinalFees(MachineState state) {
-		return state.getSteps() * this.ciyamAtSettings.feePerStep;
+		return this.calcStepFees(state.getSteps());
+	}
+
+	/**
+	 * Height-gated step-fee multiplication. Pre-trigger this is byte-for-byte the historic (wrapping)
+	 * product; from the trigger, an overflowing step-fee total fails deterministically (it feeds per-AT
+	 * and per-block fee accounting that nodes cross-check) instead of wrapping.
+	 */
+	long calcStepFees(long steps) {
+		if (this.isCheckedArithmeticActive())
+			return Math.multiplyExact(steps, this.ciyamAtSettings.feePerStep);
+
+		return steps * this.ciyamAtSettings.feePerStep;
 	}
 
 	/** Returns partial transaction signature, used to verify we're operating on the same transaction and not naively using block height & sequence. */
@@ -851,6 +940,25 @@ public class ChainATAPI extends API {
 		}
 	}
 
+	/**
+	 * The block height that AT feature-activation and pricing gates MUST key off: the block being built,
+	 * derived locally as parent height + 1 (== {@link #getCurrentBlockHeight()} + 1 == repository
+	 * blockchain height + 1), i.e. the block's true, consensus-anchored chain position. During AT
+	 * execution {@code getCurrentBlockHeight()} returns the parent block's height (the block being built
+	 * is not yet persisted), so + 1 yields this block's real height.
+	 * <p>
+	 * This is deliberately NOT {@code this.blockHeight}, which is threaded in from the block being
+	 * validated and, for a network block, is the peer-supplied, non-canonical, attacker-influenceable
+	 * {@link org.qortium.data.block.BlockData#getHeight()} (null in the signed serialization, filled
+	 * separately from the network message). Selecting activation/pricing behaviour on that value would
+	 * let the same signed block fork nodes on a claimed height that disagrees with its real position.
+	 * {@code this.blockHeight} is retained only for legitimate execution-height reads. For an honest
+	 * block the two values are equal, so this is byte-identical for honest operation.
+	 */
+	private int getGateBlockHeight() {
+		return this.getCurrentBlockHeight() + 1;
+	}
+
 	/** Whether this AT is executing at or beyond the payout-solvency feature trigger. */
 	private boolean isPayoutSolvencyEnforced() {
 		// During AT execution getCurrentBlockHeight() returns the parent block's height, since the block
@@ -881,15 +989,72 @@ public class ChainATAPI extends API {
 		return amount - (amount % Amounts.MULTIPLIER);
 	}
 
-	private long getPendingPayout(long assetId) {
+	long getPendingPayout(long assetId) {
 		return this.pendingAssetPayouts.getOrDefault(assetId, 0L);
 	}
 
-	private void addPendingPayout(long assetId, long amount) {
-		this.pendingAssetPayouts.merge(assetId, amount, Long::sum);
+	void addPendingPayout(long assetId, long amount) {
+		if (this.isCheckedArithmeticActive())
+			// Math.addExact as the remapping function throws ArithmeticException on overflow instead of
+			// wrapping; callers convert that into a deterministic AT fatal error.
+			this.pendingAssetPayouts.merge(assetId, amount, Math::addExact);
+		else
+			// Pre-trigger: historic silently-wrapping accumulation, byte-for-byte.
+			this.pendingAssetPayouts.merge(assetId, amount, Long::sum);
 	}
 
-	private MultiPaymentSummary summarizeMultiPaymentToAt(MultiPaymentTransactionData multiPaymentTransactionData) {
+	/**
+	 * Checked addition of AT monetary values. Overflow surfaces as a deterministic {@link ExecutionException}
+	 * (the AT's fatal-error path in the VM) instead of silently wrapping into a consensus-valid but
+	 * nonsensical amount. Wrapped states ARE reachable on today's chain (pre-existing unchecked
+	 * multi-payment validation), which is why every caller is height-gated via {@link #addAtAmount}.
+	 */
+	static long checkedAtSum(long runningTotal, long addend) throws ExecutionException {
+		try {
+			return Math.addExact(runningTotal, addend);
+		} catch (ArithmeticException e) {
+			throw new ExecutionException("AT monetary aggregation overflowed", e);
+		}
+	}
+
+	/**
+	 * Height-gated accumulation of AT monetary values. Below {@code atCheckedArithmeticHeight} this is
+	 * byte-for-byte the historic silently-wrapping {@code +}, so every node keeps agreeing on states the
+	 * pre-existing unchecked multi-payment validation can produce. From the trigger height, overflow
+	 * surfaces as a deterministic {@link ExecutionException} — the AT's fatal-error path in the VM.
+	 */
+	long addAtAmount(long runningTotal, long addend) throws ExecutionException {
+		if (this.isCheckedArithmeticActive())
+			return checkedAtSum(runningTotal, addend);
+
+		return runningTotal + addend;
+	}
+
+	/** Whether this execution height has reached the {@code atCheckedArithmeticHeight} feature trigger. */
+	private boolean isCheckedArithmeticActive() {
+		// Key the gate off the locally-derived block height (parent height + 1), exactly like
+		// isPayoutSolvencyEnforced above, NOT the peer-supplied BlockData.height threaded in through
+		// this.blockHeight during block validation. That height field is null in the signed block and is
+		// filled separately from the network message, so it is attacker-influenced; selecting checked vs
+		// wrapping arithmetic on it would let the same signed block fork nodes on a non-canonical height.
+		// During AT execution getCurrentBlockHeight() returns the parent block's height (the block being
+		// built is not yet persisted), so + 1 gives this block's true, consensus-derived height.
+		return this.getCurrentBlockHeight() + 1 >= BlockChain.getInstance().getAtCheckedArithmeticHeight();
+	}
+
+	private boolean isHashingStepCostActive() {
+		// Gate off the locally-derived block height (see getGateBlockHeight), not the peer-supplied
+		// this.blockHeight, so the same signed block cannot price hashing differently on a non-canonical
+		// claimed height. Honest wire height == local height, so this is byte-identical for honest blocks.
+		return this.getGateBlockHeight() >= BlockChain.getInstance().getAtHashingStepCostHeight();
+	}
+
+	/** Whether a raw external-function code is one of the hashing built-ins (0x0200-0x0207). */
+	private static boolean isHashingFunctionCode(short rawFunctionCode) {
+		return rawFunctionCode >= (short) 0x0200 && rawFunctionCode <= (short) 0x0207;
+	}
+
+	MultiPaymentSummary summarizeMultiPaymentToAt(MultiPaymentTransactionData multiPaymentTransactionData) throws ExecutionException {
 		MultiPaymentSummary summary = new MultiPaymentSummary();
 		String atAddress = this.atData.getATAddress();
 
@@ -904,7 +1069,12 @@ public class ChainATAPI extends API {
 				summary.hasMixedAssets = true;
 			}
 
-			summary.amount += paymentData.getAmount();
+			// Height-gated accumulation: pre-trigger this wraps byte-for-byte as before (never throwing);
+			// from the trigger, an overflowing summary fails deterministically as an ExecutionException.
+			// Core-function-code callers propagate that to the AT's fatal-error path; the stock
+			// getAmountFromTransactionInA override, which cannot declare a checked throw, converts it to
+			// its existing "no single amount" sentinel.
+			summary.amount = this.addAtAmount(summary.amount, paymentData.getAmount());
 		}
 
 		return summary;
@@ -1017,13 +1187,13 @@ public class ChainATAPI extends API {
 		super.zeroB(state);
 	}
 
-	private static class MultiPaymentSummary {
-		private boolean hasPayment;
-		private boolean hasMixedAssets;
-		private long assetId;
-		private long amount;
+	static class MultiPaymentSummary {
+		boolean hasPayment;
+		boolean hasMixedAssets;
+		long assetId;
+		long amount;
 
-		private boolean hasSingleAsset() {
+		boolean hasSingleAsset() {
 			return this.hasPayment && !this.hasMixedAssets;
 		}
 	}

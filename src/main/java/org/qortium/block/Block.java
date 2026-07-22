@@ -89,6 +89,7 @@ public class Block {
 		TRANSACTION_NEEDS_APPROVAL(55),
 		TRANSACTION_NOT_CONFIRMABLE(56),
 		AT_STATES_MISMATCH(61),
+		BLOCK_FEE_OVERFLOW(62),
 		ONLINE_ACCOUNTS_INVALID(70),
 		ONLINE_ACCOUNT_UNKNOWN(71),
 		ONLINE_ACCOUNT_SIGNATURES_MISSING(72),
@@ -1366,6 +1367,13 @@ public class Block {
 		if (parentBlock.getChild() != null)
 			return ValidationResult.PARENT_HAS_EXISTING_CHILD;
 
+		// Consensus fee-arithmetic gate, keyed on the locally-derived height (parent height + 1), never
+		// the peer-supplied BlockData.height: at/after atCheckedArithmeticHeight a block whose
+		// reconstructed total fees overflow a long is invalid deterministically on every node.
+		ValidationResult feeArithmeticResult = this.validateReconstructedFees(parentBlockData.getHeight() + 1);
+		if (feeArithmeticResult != ValidationResult.OK)
+			return feeArithmeticResult;
+
 		// Check timestamp is newer than parent timestamp
 		if (this.blockData.getTimestamp() <= parentBlockData.getTimestamp())
 			return ValidationResult.TIMESTAMP_OLDER_THAN_PARENT;
@@ -1573,6 +1581,50 @@ public class Block {
 
 			if (!ourAtState.getFees().equals(theirAtState.getFees()))
 				return ValidationResult.AT_STATES_MISMATCH;
+		}
+
+		return ValidationResult.OK;
+	}
+
+	/** Checked accumulation of block fees: overflow throws a deterministic {@link ArithmeticException}. */
+	static long addCheckedFees(long runningTotal, long fee) {
+		return Math.addExact(runningTotal, fee);
+	}
+
+	/**
+	 * Height-gated consensus validation of a block's reconstructed total fees.
+	 * <p>
+	 * A block's total fees are rebuilt from untrusted, network-supplied per-transaction and per-AT fee
+	 * fields (see the network-block constructors, which sum them with plain wrapping addition). Below
+	 * {@code atCheckedArithmeticHeight} an overflowing sum wraps byte-for-byte as on the base branch —
+	 * wrapped balances/fees are reachable on today's chain via the pre-existing unchecked multi-payment
+	 * validation, so every node must keep agreeing on the same wrapped totals until the flag day. From
+	 * the trigger height, an overflowing reconstruction instead makes the block invalid deterministically
+	 * on every node.
+	 * <p>
+	 * The gate keys off {@code height}, which callers derive locally as {@code parent height + 1} (the
+	 * block's true, consensus-anchored chain position, matching the AT-side {@code getCurrentBlockHeight()
+	 * + 1} gate), NEVER the peer-supplied, non-canonical {@link BlockData#getHeight()}. The reconstruction
+	 * runs here — during {@link #isValid()}, with a repository attached — rather than in the network-block
+	 * constructor, because that constructor can be invoked with a null repository (bulk-sync
+	 * deserialization) where no local height is available; the same signed block must not select different
+	 * arithmetic semantics on different nodes.
+	 */
+	private ValidationResult validateReconstructedFees(int height) throws DataException {
+		if (height < BlockChain.getInstance().getAtCheckedArithmeticHeight())
+			return ValidationResult.OK;
+
+		try {
+			// getTransactions() returns the constructor-populated list for a network block (no repository
+			// round-trip) and lazy-loads for a repository-backed block, so this mirrors exactly the fee
+			// set the network constructors reconstruct, regardless of how this Block was built.
+			long totalFees = 0L;
+			for (Transaction transaction : this.getTransactions())
+				totalFees = addCheckedFees(totalFees, transaction.getTransactionData().getFee());
+
+			addCheckedFees(totalFees, this.blockData.getATFees());
+		} catch (ArithmeticException e) {
+			return ValidationResult.BLOCK_FEE_OVERFLOW;
 		}
 
 		return ValidationResult.OK;

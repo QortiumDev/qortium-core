@@ -117,7 +117,15 @@ public class AT {
 	public List<AtTransaction> run(int blockHeight, long blockTimestamp, ATMapExecutionContext mapContext)
 			throws DataException {
 		String atAddress = this.atData.getATAddress();
-		boolean mapStorageActive = blockHeight >= BlockChain.getInstance().getAtMapStorageHeight();
+		// Feature-activation gates key off the locally-derived block height (parent height + 1 = the block
+		// being built, its true consensus-anchored chain position), NEVER the peer-supplied blockHeight
+		// threaded in from BlockData.height. During AT execution the repository sits at the parent height
+		// (the block is not yet processed), so getBlockchainHeight() + 1 is this block's real height. The
+		// blockHeight parameter is retained for legitimate execution-height reads only (the AT state record
+		// below, and sleep-until-height wake logic in willExecute). For an honest block the two are equal,
+		// so this is byte-identical for honest operation.
+		int gateBlockHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+		boolean mapStorageActive = gateBlockHeight >= BlockChain.getInstance().getAtMapStorageHeight();
 		if (mapStorageActive && mapContext == null)
 			throw new IllegalArgumentException("Active AT map storage requires a block execution context");
 
@@ -160,7 +168,7 @@ public class AT {
 		// block containing such an AT. Below the trigger we fall through to the old behaviour (persist the
 		// oversized state), matching un-updated nodes.
 		if (stateData.length > DeployAtTransaction.MAX_AT_STATE_LENGTH
-				&& blockHeight >= BlockChain.getInstance().getAtPayoutSolvencyHeight()) {
+				&& gateBlockHeight >= BlockChain.getInstance().getAtPayoutSolvencyHeight()) {
 			LOGGER.error(String.format("AT %s produced oversized state (%d bytes, limit %d) - skipping round",
 					atAddress, stateData.length, DeployAtTransaction.MAX_AT_STATE_LENGTH));
 			if (mapStorageActive)
