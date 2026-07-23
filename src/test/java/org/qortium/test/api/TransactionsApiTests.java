@@ -394,6 +394,22 @@ public class TransactionsApiTests extends ApiCommon {
 		}
 	}
 
+	/**
+	 * A non-base58 body used to escape /convert as an uncaught NumberFormatException, which the caller
+	 * saw as a bare 500. /decode has always reported the same input as INVALID_DATA.
+	 */
+	@Test
+	public void testConvertTransactionForSigningRejectsNonBase58Body() {
+		for (String nonBase58Body : new String[] { "not base58!", "0OIl", "{\"type\":\"PAYMENT\"}" }) {
+			assertApiError(ApiError.INVALID_DATA,
+					() -> this.transactionsResource.convertTransactionForSigning(nonBase58Body));
+
+			// /convert must agree with its sibling endpoint on the same input.
+			assertApiError(ApiError.INVALID_DATA,
+					() -> this.transactionsResource.decodeTransaction(nonBase58Body, false));
+		}
+	}
+
 	private void assertProtectedWindowDelay(Repository repository, String rawTransaction, TransactionType transactionType)
 			throws DataException {
 		TransactionConfirmationTimingData timing = this.transactionsResource

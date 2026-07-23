@@ -34,6 +34,34 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - fix(api): answer malformed request bodies with a clear 400 instead of a blank 500
+
+Makes the node explain itself when an API caller sends a request body it cannot
+read, instead of returning a blank error page.
+
+Several POST endpoints take a transaction as JSON. If that JSON was wrong in
+certain ways — naming a transaction type that does not exist, or naming a real
+transaction type that is not the one the endpoint expects, or sending a list
+where an object was required — the node failed while reading the body, before
+any of the code that produces a readable error message had a chance to run. The
+caller received a bare "internal server error" page with no explanation, which
+looks like a fault in the node rather than a mistake in the request.
+
+The node now checks the request body at the one point where it is being read,
+and answers those cases with the same plain "400 Invalid request body" reply it
+already gave for JSON that was outright unparseable. The check is deliberately
+kept at that single point rather than at the node's general error handler,
+because the same kind of internal failure can also happen much later, while
+writing a reply for a transaction that has already been accepted and sent to the
+network. Blaming the caller's request body at that stage would be misleading and
+worse than the original problem, so genuine node faults still report as server
+errors exactly as before.
+
+Separately, the endpoint that converts a raw transaction into the bytes to be
+signed now reports unreadable input as a normal "invalid data" error, matching
+the sibling endpoint that decodes a raw transaction. Previously that one input
+mistake also escaped as a blank error page.
+
 ### 2026-07-23 - fix(api): restore transaction building for twenty transaction types
 
 Repairs a set of API endpoints that were unusable, and made their failure
