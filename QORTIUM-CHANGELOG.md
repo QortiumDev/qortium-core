@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - test(api): pin the request-body catch to binding failures only
+
+Adds a test that protects the promise made by the change below, so a later edit
+cannot quietly undo it.
+
+That change answers an unreadable request body with a plain "400 Invalid request
+body", and it is safe only because it looks for failures at the single moment the
+body is being read. If someone later widened it to catch every kind of failure at
+that moment, the node would start blaming the caller's request for problems that
+are really its own - the exact outcome the original change was written to avoid.
+None of the existing tests noticed that difference, because they provoke node
+faults from a later stage that this check never sees.
+
+The new test causes an unrelated failure at the precise moment the body is read,
+and requires the node to still report it as a server error rather than as a bad
+request. Nothing changes for anyone using the API.
+
 ### 2026-07-23 - fix(api): answer malformed request bodies with a clear 400 instead of a blank 500
 
 Makes the node explain itself when an API caller sends a request body it cannot

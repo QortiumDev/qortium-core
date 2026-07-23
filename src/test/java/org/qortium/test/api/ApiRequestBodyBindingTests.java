@@ -16,11 +16,15 @@ import org.qortium.data.transaction.PaymentTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.test.common.Common;
 
+import javax.annotation.Priority;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.ext.ReaderInterceptor;
+import javax.ws.rs.ext.ReaderInterceptorContext;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.Assert.assertEquals;
@@ -139,6 +143,35 @@ public class ApiRequestBodyBindingTests extends Common {
 		}
 	}
 
+	/**
+	 * The catch around {@code proceed()} must stay as narrow as the class's own safety argument claims.
+	 * <p>
+	 * {@link #testServerSideEclipseLinkFaultsRemainServerErrors} cannot cover this: those faults are raised
+	 * from a resource method body, which is outside {@code proceed()} altogether, so widening the catch to
+	 * {@code RuntimeException} leaves that test green. Without this check nothing distinguishes catching
+	 * {@link org.eclipse.persistence.exceptions.EclipseLinkException} from catching every runtime failure,
+	 * and a later edit could quietly start blaming the caller's body for an unrelated server fault raised
+	 * while reading it.
+	 */
+	@Test
+	public void testNonBindingRuntimeFaultDuringReadIsNotBlamedOnTheBody() throws Exception {
+		try (HandlerServer server = new HandlerServer(NonBindingFaultInterceptor.class)) {
+			assertStatus(500, server.post("/test-binding/payment", VALID_PAYMENT_BODY));
+		}
+	}
+
+	/**
+	 * Runs <i>inside</i> {@link ApiRequestBodyInterceptor}'s {@code proceed()} - a higher priority value
+	 * means later in the reader-interceptor chain - and fails the way a non-binding defect would.
+	 */
+	@Priority(6000)
+	public static class NonBindingFaultInterceptor implements ReaderInterceptor {
+		@Override
+		public Object aroundReadFrom(ReaderInterceptorContext context) throws IOException {
+			throw new IllegalStateException("not a binding failure");
+		}
+	}
+
 	private static void assertBadRequestBody(String response) {
 		assertStatus(400, response);
 		assertTrue("expected \"Invalid request body\", got:\n" + response,
@@ -155,11 +188,14 @@ public class ApiRequestBodyBindingTests extends Common {
 		private final Server server = new Server();
 		private final LocalConnector connector = new LocalConnector(this.server);
 
-		private HandlerServer() throws Exception {
+		private HandlerServer(Class<?>... extraProviders) throws Exception {
 			// Registers the same two providers ApiService picks up by scanning org.qortium.api.resource
 			// (see testInterceptorIsRegisteredByPackageScanning), without dragging in every real resource.
 			ResourceConfig config = new ResourceConfig(TestBindingResource.class);
 			config.registerClasses(ApiExceptionMapper.class, ApiRequestBodyInterceptor.class);
+
+			for (Class<?> extraProvider : extraProviders)
+				config.register(extraProvider);
 
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
 			context.setContextPath("/");
