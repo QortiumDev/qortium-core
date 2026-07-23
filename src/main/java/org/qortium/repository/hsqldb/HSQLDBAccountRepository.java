@@ -2,7 +2,9 @@ package org.qortium.repository.hsqldb;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.arbitrary.misc.Service;
 import org.qortium.data.account.*;
+import org.qortium.data.avatar.AvatarData;
 import org.qortium.repository.AccountRepository;
 import org.qortium.repository.DataException;
 
@@ -90,17 +92,23 @@ public class HSQLDBAccountRepository implements AccountRepository {
 	}
 
 	@Override
-	public byte[] getAvatarSignature(String address) throws DataException {
-		try (ResultSet resultSet = this.repository.checkedExecute("SELECT avatar_signature FROM AccountAvatars WHERE account = ?", address)) {
-			return resultSet == null ? null : resultSet.getBytes(1);
+	public AvatarData getAvatar(String address) throws DataException {
+		try (ResultSet resultSet = this.repository.checkedExecute("SELECT avatar_service, avatar_name, avatar_identifier FROM AccountAvatars WHERE account = ?", address)) {
+			if (resultSet == null) return null;
+			return new AvatarData(Service.valueOf(resultSet.getInt(1)), resultSet.getString(2), resultSet.getString(3));
 		} catch (SQLException e) { throw new DataException("Unable to fetch account avatar", e); }
 	}
 
 	@Override
-	public void setAvatarSignature(String address, byte[] avatarSignature) throws DataException {
+	public void setAvatar(String address, AvatarData avatar) throws DataException {
 		try {
-			if (avatarSignature == null) this.repository.delete("AccountAvatars", "account = ?", address);
-			else { HSQLDBSaver saver = new HSQLDBSaver("AccountAvatars"); saver.bind("account", address).bind("avatar_signature", avatarSignature); saver.execute(this.repository); }
+			if (avatar == null) this.repository.delete("AccountAvatars", "account = ?", address);
+			else {
+				HSQLDBSaver saver = new HSQLDBSaver("AccountAvatars");
+				saver.bind("account", address).bind("avatar_service", avatar.getService().value)
+						.bind("avatar_name", avatar.getName()).bind("avatar_identifier", avatar.getIdentifier() == null ? "" : avatar.getIdentifier());
+				saver.execute(this.repository);
+			}
 		} catch (SQLException e) { throw new DataException("Unable to save account avatar", e); }
 	}
 

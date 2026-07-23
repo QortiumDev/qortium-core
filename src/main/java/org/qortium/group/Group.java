@@ -5,6 +5,7 @@ import org.qortium.account.PublicKeyAccount;
 import org.qortium.block.BlockChain;
 import org.qortium.controller.Controller;
 import org.qortium.crypto.Crypto;
+import org.qortium.data.avatar.AvatarData;
 import org.qortium.data.group.*;
 import org.qortium.data.transaction.*;
 import org.qortium.repository.DataException;
@@ -391,14 +392,14 @@ public class Group {
 	public void setAvatar(SetGroupAvatarTransactionData transactionData) throws DataException {
 		transactionData.setGroupReference(this.groupData.getReference());
 		this.groupData.setReference(transactionData.getSignature());
-		this.groupData.setAvatarSignature(transactionData.getAvatarSignature());
+		this.groupData.setAvatar(transactionData.getAvatar());
 		this.groupData.setUpdated(transactionData.getTimestamp());
 		groupRepository.save(this.groupData);
 	}
 
 	public void unsetAvatar(SetGroupAvatarTransactionData transactionData) throws DataException {
 		this.groupData.setReference(transactionData.getGroupReference());
-		this.groupData.setAvatarSignature(this.findAvatarSignature(this.groupData.getReference()));
+		this.groupData.setAvatar(this.findAvatar(this.groupData.getReference()));
 		this.revertGroupUpdate();
 		groupRepository.save(this.groupData);
 		transactionData.setGroupReference(null);
@@ -425,7 +426,7 @@ public class Group {
 				this.groupData.setMinimumBlockDelay(previousCreateGroupTransactionData.getMinimumBlockDelay());
 				this.groupData.setMaximumBlockDelay(previousCreateGroupTransactionData.getMaximumBlockDelay());
 				this.groupData.setUpdated(null);
-				this.groupData.setAvatarSignature(null);
+				this.groupData.setAvatar(null);
 				break;
 			}
 
@@ -443,13 +444,13 @@ public class Group {
 				this.groupData.setMinimumBlockDelay(previousUpdateGroupTransactionData.getNewMinimumBlockDelay());
 				this.groupData.setMaximumBlockDelay(previousUpdateGroupTransactionData.getNewMaximumBlockDelay());
 				this.groupData.setUpdated(previousUpdateGroupTransactionData.getTimestamp());
-				this.groupData.setAvatarSignature(this.findAvatarSignature(previousUpdateGroupTransactionData.getSignature()));
+				this.groupData.setAvatar(this.findAvatar(previousUpdateGroupTransactionData.getSignature()));
 				break;
 			}
 
 			case SET_GROUP_AVATAR: {
 				SetGroupAvatarTransactionData previousAvatar = (SetGroupAvatarTransactionData) previousTransactionData;
-				this.groupData.setAvatarSignature(previousAvatar.getAvatarSignature());
+				this.groupData.setAvatar(previousAvatar.getAvatar());
 				this.groupData.setUpdated(previousAvatar.getTimestamp());
 				this.restoreGroupSettingsFromReference(previousAvatar.getGroupReference());
 				break;
@@ -488,12 +489,12 @@ public class Group {
 		throw new DataException("Unsupported group transaction in settings reference chain");
 	}
 
-	private byte[] findAvatarSignature(byte[] groupReference) throws DataException {
+	private AvatarData findAvatar(byte[] groupReference) throws DataException {
 		while (groupReference != null) {
 			TransactionData tx = this.repository.getTransactionRepository().fromSignature(groupReference);
 			if (tx == null) throw new DataException("Unable to rebuild group avatar as referenced transaction not found in repository");
 			switch (tx.getType()) {
-				case SET_GROUP_AVATAR: return ((SetGroupAvatarTransactionData) tx).getAvatarSignature();
+				case SET_GROUP_AVATAR: return ((SetGroupAvatarTransactionData) tx).getAvatar();
 				case CREATE_GROUP: return null;
 				case UPDATE_GROUP: groupReference = ((UpdateGroupTransactionData) tx).getGroupReference(); break;
 				default: throw new DataException("Unsupported group transaction in avatar reference chain");
@@ -527,6 +528,13 @@ public class Group {
 					}
 
 					groupReference = previousUpdateGroupTransactionData.getGroupReference();
+					break;
+				}
+
+				case SET_GROUP_AVATAR: {
+					SetGroupAvatarTransactionData previousAvatarTransactionData =
+							(SetGroupAvatarTransactionData) previousTransactionData;
+					groupReference = previousAvatarTransactionData.getGroupReference();
 					break;
 				}
 

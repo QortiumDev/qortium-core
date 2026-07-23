@@ -1,6 +1,7 @@
 package org.qortium.repository;
 
 import org.qortium.data.account.*;
+import org.qortium.data.avatar.AvatarData;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,9 +23,9 @@ public interface AccountRepository {
 	/** Returns whether account exists. */
 	public boolean accountExists(String address) throws DataException;
 
-	/** Current explicitly authorized avatar ARBITRARY signature, or null. */
-	public byte[] getAvatarSignature(String address) throws DataException;
-	public void setAvatarSignature(String address, byte[] avatarSignature) throws DataException;
+	/** Current avatar pointer for the account, or null if unset. */
+	public AvatarData getAvatar(String address) throws DataException;
+	public void setAvatar(String address, AvatarData avatar) throws DataException;
 
 	/**
 	 * Ensures at least minimal account info in repository.

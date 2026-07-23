@@ -1,19 +1,23 @@
 package org.qortium.avatar;
 
+import com.google.common.base.Utf8;
 import org.qortium.arbitrary.misc.Service;
-import org.qortium.crypto.Crypto;
-import org.qortium.data.avatar.AvatarData;
-import org.qortium.data.transaction.ArbitraryTransactionData;
-import org.qortium.data.transaction.TransactionData;
-import org.qortium.repository.DataException;
-import org.qortium.repository.Repository;
-import org.qortium.transform.Transformer;
+import org.qortium.naming.Name;
+import org.qortium.transaction.ArbitraryTransaction;
 import org.qortium.transaction.Transaction.ValidationResult;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Shared consensus and API representation rules for explicitly authorized avatar resources. */
+/** Shared consensus and API representation rules for account and group avatars.
+ *
+ * <p>An avatar is a plain pointer to a QDN resource — a (service, name, identifier)
+ * tuple. It is validated for shape only: any registered name's resource is allowed
+ * (no owner restriction), the target need not already exist, and the image is
+ * resolved to the resource's latest revision when served. The raster-image type and
+ * {@link #MAX_SIZE} bound are enforced at serve time, not here, because the target
+ * resource is mutable. */
 public final class AvatarResource {
 
 	public static final long MAX_SIZE = 500L * 1024L;
@@ -21,30 +25,16 @@ public final class AvatarResource {
 	private AvatarResource() {
 	}
 
-	public static ValidationResult validate(Repository repository, byte[] signature, String requiredCreatorAddress) throws DataException {
-		if (signature == null || signature.length != Transformer.SIGNATURE_LENGTH)
-			return ValidationResult.INVALID_DATA_LENGTH;
-		TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
-		if (!(transactionData instanceof ArbitraryTransactionData) || transactionData.getBlockHeight() == null)
+	/** Validates the shape of an avatar pointer. Owner-agnostic and existence-agnostic. */
+	public static ValidationResult validate(Service service, String name, String identifier) {
+		if (service == null || service.isPrivate() || !service.isSingle())
 			return ValidationResult.INVALID_RESOURCE;
-		ArbitraryTransactionData arbitrary = (ArbitraryTransactionData) transactionData;
-		Service service = arbitrary.getService();
-		if (arbitrary.getMethod() != ArbitraryTransactionData.Method.PUT || arbitrary.getSecret() != null || service == null
-				|| service.isPrivate() || !service.isSingle() || arbitrary.getName() == null || arbitrary.getName().isBlank()
-				|| arbitrary.getIdentifier() == null || arbitrary.getIdentifier().isBlank() || arbitrary.getSize() > MAX_SIZE)
+		if (name == null || name.isBlank() || Utf8.encodedLength(name) > Name.MAX_NAME_SIZE)
 			return ValidationResult.INVALID_RESOURCE;
-		return requiredCreatorAddress != null && !requiredCreatorAddress.equals(Crypto.toAddress(arbitrary.getCreatorPublicKey()))
-				? ValidationResult.INVALID_AVATAR_OWNER : ValidationResult.OK;
-	}
-
-	public static AvatarData descriptor(Repository repository, byte[] signature) throws DataException {
-		if (signature == null)
-			return null;
-		TransactionData tx = repository.getTransactionRepository().fromSignature(signature);
-		if (!(tx instanceof ArbitraryTransactionData))
-			return null;
-		ArbitraryTransactionData arbitrary = (ArbitraryTransactionData) tx;
-		return new AvatarData(signature, arbitrary.getService(), arbitrary.getName(), arbitrary.getIdentifier());
+		// Identifier is optional (empty selects the default resource) but is length-bounded like ARBITRARY.
+		if (identifier != null && Utf8.encodedLength(identifier) > ArbitraryTransaction.MAX_IDENTIFIER_LENGTH)
+			return ValidationResult.INVALID_RESOURCE;
+		return ValidationResult.OK;
 	}
 
 	/** Returns a supported raster MIME type only after inspecting bytes and enforcing the avatar bound. */

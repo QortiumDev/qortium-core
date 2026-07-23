@@ -318,8 +318,10 @@ public class RepositoryTests extends Common {
 			assertTableExists(connection, "ATMAPENTRIES");
 			assertTableExists(connection, "ATMAPENTRYCHANGES");
 			assertIndexExists(connection, "ATMAPENTRYCHANGES", "ATMAPENTRYCHANGESADDRESSKEYINDEX");
-			// Schema 3 -> 4 -> 5: group and account avatar state.
-			assertColumnExists(connection, "GROUPS", "AVATAR_SIGNATURE");
+			// Schema 3 -> 4 -> 5: group and account avatar pointer state.
+			assertColumnExists(connection, "GROUPS", "AVATAR_SERVICE");
+			assertColumnExists(connection, "GROUPS", "AVATAR_NAME");
+			assertColumnExists(connection, "GROUPS", "AVATAR_IDENTIFIER");
 			assertTableExists(connection, "SETGROUPAVATARTRANSACTIONS");
 			assertTableExists(connection, "ACCOUNTAVATARS");
 			assertTableExists(connection, "SETACCOUNTAVATARTRANSACTIONS");
