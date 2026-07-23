@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - chore(release): prepare Core 1.6.0
+
+Marks the version for the next preview release. Since 1.5.1 the node gained
+immutable QDN avatars for accounts and groups; a major expansion of the
+automated-transaction engine, including version-3 ATs with persistent key/value
+maps, the ability for one AT to read another's state, and new opcodes that let
+an AT query trust status, balances and code hashes on chain; and a round of
+consensus-safety hardening for AT execution (checked arithmetic, asset sweep on
+finish, hashing-step costs, and payout-solvency enforcement). On the QDN and API
+side it added read-only QDN actions and browsing through the public gateway, let
+QDN apps inherit the host's interface style, sandboxed raw QDN downloads against
+stored cross-site scripting, and fixed transaction building across twenty
+transaction types along with clearer error responses and more robust network
+handling.
+
+The new automated-transaction and avatar behaviours are gated behind an
+activation height (70000) so they switch on together across the network. This is
+a chain-configuration change, so every preview seed must move to 1.6.0 as a
+coordinated update.
+
 ### 2026-07-23 - fix(qdn): trust the filename over content sniffing when publishing a single file
 
 When a single file is published to QDN, the node records what kind of file it
