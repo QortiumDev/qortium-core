@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - fix(gateway): expose the public avatar bridge actions
+
+Brings QDN apps opened through a Core-hosted public gateway in step with
+Qortium Home by adding the read-only account and group avatar actions to the
+gateway bridge and its advertised action list. Gateway apps now receive the
+same bounded base64 image response, pointer metadata, loading state, and legacy
+fallback as Home without gaining signing, account, or cross-origin access. An
+account address remains mandatory because a public gateway has no selected
+wallet.
+
 ### 2026-07-23 - refactor(avatars): make avatars a plain resource pointer, not a pinned signature
 
 Supersedes the first avatar design below before it activates. An account or

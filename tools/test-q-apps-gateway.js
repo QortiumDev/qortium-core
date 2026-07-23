@@ -36,6 +36,30 @@ function check(name, condition, detail) {
   }
 }
 
+function response(options) {
+  const status = options.status === undefined ? 200 : options.status;
+  const bytes = options.bytes || Buffer.from(options.body || "");
+  const headerValues = {};
+  for (const [name, value] of Object.entries(options.headers || {}))
+    headerValues[name.toLowerCase()] = String(value);
+  if (options.json !== undefined) {
+    headerValues["content-type"] = "application/json";
+  }
+  const body = options.json === undefined ? bytes : Buffer.from(JSON.stringify(options.json));
+  if (headerValues["content-length"] === undefined)
+    headerValues["content-length"] = String(body.byteLength);
+
+  return {
+    headers: { get: (name) => headerValues[String(name).toLowerCase()] || null },
+    text: () => Promise.resolve(body.toString("utf8")),
+    arrayBuffer: () =>
+      Promise.resolve(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)),
+    ok: status >= 200 && status < 300,
+    status: status,
+    statusText: options.statusText || "",
+  };
+}
+
 // Load only the bridge IIFE; the rest of the file needs a full DOM.
 function loadBridge() {
   const src = fs.readFileSync(SOURCE, "utf8");
@@ -44,26 +68,27 @@ function loadBridge() {
   if (start === -1) throw new Error("installReadOnlyQdnBridge not found in " + SOURCE);
 
   const fetched = [];
+  let responder = () => response({ json: { status: "READY" } });
 
   global.window = { location: { origin: ORIGIN } };
-  global.fetch = function (url) {
+  global.fetch = function (url, options) {
     fetched.push(String(url));
-    return Promise.resolve({
-      headers: { get: (header) => (header === "content-type" ? "application/json" : null) },
-      text: () => Promise.resolve(JSON.stringify({ status: "READY" })),
-      ok: true,
-      status: 200,
-      statusText: "OK",
-    });
+    return Promise.resolve(responder(String(url), options || {}));
   };
 
   eval(src.slice(start));
 
-  return { qdnRequest: global.window.qdnRequest, fetched: fetched };
+  return {
+    qdnRequest: global.window.qdnRequest,
+    fetched: fetched,
+    setResponder: (nextResponder) => {
+      responder = nextResponder;
+    },
+  };
 }
 
 async function main() {
-  const { qdnRequest, fetched } = loadBridge();
+  const { qdnRequest, fetched, setResponder } = loadBridge();
   const lastUrl = () => fetched[fetched.length - 1];
 
   console.log("\n[1] read-only actions resolve to their documented endpoints");
@@ -168,6 +193,153 @@ async function main() {
     "every advertised action has a handler",
     unimplemented.length === 0,
     unimplemented.join(", "),
+  );
+
+  console.log("\n[8] avatar actions preserve Home's public read contract");
+  check(
+    "advertises both avatar reads",
+    advertised.includes("FETCH_ACCOUNT_AVATAR") && advertised.includes("FETCH_GROUP_AVATAR"),
+  );
+
+  try {
+    await qdnRequest({ action: "FETCH_ACCOUNT_AVATAR" });
+    check("account avatar requires an explicit address", false);
+  } catch (e) {
+    check("account avatar requires an explicit address", /Address is required/.test(e.message), e.message);
+  }
+
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  setResponder((url) => {
+    if (url.endsWith("/addresses/Qabc/avatar/info"))
+      return response({ json: { service: "THUMBNAIL", name: "Alice", identifier: "avatar-v2" } });
+    if (url.endsWith("/addresses/Qabc/avatar"))
+      return response({
+        bytes: png,
+        headers: {
+          "content-type": "application/octet-stream",
+          "x-qortium-avatar-service": "THUMBNAIL",
+          "x-qortium-avatar-name": "Alice",
+          "x-qortium-avatar-identifier": "avatar-v2",
+        },
+      });
+    return response({ status: 404 });
+  });
+  const accountAvatar = await qdnRequest({ action: "FETCH_ACCOUNT_AVATAR", address: "Qabc" });
+  check(
+    "account pointer avatar returns bounded base64 and descriptor",
+    accountAvatar.address === "Qabc" &&
+      accountAvatar.encoding === "base64" &&
+      accountAvatar.contentType === "image/png" &&
+      accountAvatar.body === png.toString("base64") &&
+      accountAvatar.source === "POINTER" &&
+      accountAvatar.descriptor.identifier === "avatar-v2",
+    JSON.stringify(accountAvatar),
+  );
+
+  setResponder((url) => {
+    if (url.endsWith("/groups/7/avatar/info"))
+      return response({ json: { service: "THUMBNAIL", name: "GroupArtist", identifier: "" } });
+    if (url.endsWith("/groups/7/avatar"))
+      return response({ status: 202, headers: { "retry-after": "2" } });
+    return response({ status: 404 });
+  });
+  const pendingGroup = await qdnRequest({ action: "FETCH_GROUP_AVATAR", payload: { txGroupId: 7 } });
+  check(
+    "group pointer avatar preserves pending state",
+    pendingGroup.groupId === 7 &&
+      pendingGroup.status === "PENDING" &&
+      pendingGroup.retryAfterSeconds === 2 &&
+      pendingGroup.source === "POINTER" &&
+      pendingGroup.descriptor.name === "GroupArtist",
+    JSON.stringify(pendingGroup),
+  );
+
+  try {
+    await qdnRequest({ action: "FETCH_GROUP_AVATAR", groupId: 7.5 });
+    check("group avatar rejects fractional ids", false);
+  } catch (e) {
+    check("group avatar rejects fractional ids", /positive integer/.test(e.message), e.message);
+  }
+
+  setResponder((url) => {
+    if (url.endsWith("/addresses/Qlegacy/avatar/info")) return response({ status: 404 });
+    if (url.endsWith("/names/primary/Qlegacy")) return response({ json: { name: "LegacyUser" } });
+    if (url.endsWith("/arbitrary/THUMBNAIL/LegacyUser/avatar?async=true"))
+      return response({ bytes: png });
+    return response({ status: 404 });
+  });
+  const legacyAccount = await qdnRequest({
+    action: "FETCH_ACCOUNT_AVATAR",
+    payload: { address: "Qlegacy" },
+  });
+  check(
+    "account legacy fallback runs only when pointer info is missing",
+    legacyAccount.source === "LEGACY" &&
+      legacyAccount.descriptor === null &&
+      legacyAccount.contentType === "image/png",
+    JSON.stringify(legacyAccount),
+  );
+
+  let legacyWasFetched = false;
+  setResponder((url) => {
+    if (url.endsWith("/addresses/Qbroken/avatar/info"))
+      return response({ json: { service: "THUMBNAIL", name: "Alice", identifier: "missing" } });
+    if (url.endsWith("/addresses/Qbroken/avatar")) return response({ status: 404 });
+    if (url.includes("/arbitrary/THUMBNAIL/")) legacyWasFetched = true;
+    return response({ status: 404 });
+  });
+  try {
+    await qdnRequest({ action: "FETCH_ACCOUNT_AVATAR", address: "Qbroken" });
+    check("an unavailable explicit pointer fails closed", false);
+  } catch (e) {
+    check(
+      "an unavailable explicit pointer fails closed",
+      /Avatar request failed with HTTP 404/.test(e.message) && !legacyWasFetched,
+      e.message,
+    );
+  }
+
+  setResponder((url) => {
+    if (url.endsWith("/groups/8/avatar/info"))
+      return response({ json: { service: "THUMBNAIL", name: "GroupArtist", identifier: "large" } });
+    if (url.endsWith("/groups/8/avatar"))
+      return response({ bytes: png, headers: { "content-length": "600000" } });
+    return response({ status: 404 });
+  });
+  try {
+    await qdnRequest({ action: "FETCH_GROUP_AVATAR", groupId: 8 });
+    check("avatar response limits are enforced before buffering", false);
+  } catch (e) {
+    check(
+      "avatar response limits are enforced before buffering",
+      /exceeded the 512000 byte limit/.test(e.message),
+      e.message,
+    );
+  }
+
+  let oversizedLegacyFallbackFetched = false;
+  setResponder((url) => {
+    if (url.endsWith("/addresses/Qlegacylarge/avatar/info")) return response({ status: 404 });
+    if (url.endsWith("/names/primary/Qlegacylarge"))
+      return response({ json: { name: "LegacyLarge" } });
+    if (url.endsWith("/arbitrary/THUMBNAIL/LegacyLarge/avatar?async=true"))
+      return response({ bytes: png, headers: { "content-length": "600000" } });
+    if (url.endsWith("/arbitrary/THUMBNAIL/LegacyLarge/qortal_avatar?async=true")) {
+      oversizedLegacyFallbackFetched = true;
+      return response({ bytes: png });
+    }
+    return response({ status: 404 });
+  });
+  const legacyAfterOversize = await qdnRequest({
+    action: "FETCH_ACCOUNT_AVATAR",
+    address: "Qlegacylarge",
+  });
+  check(
+    "account legacy fallback skips an advertised oversized candidate",
+    oversizedLegacyFallbackFetched &&
+      legacyAfterOversize.source === "LEGACY" &&
+      legacyAfterOversize.contentType === "image/png",
+    JSON.stringify(legacyAfterOversize),
   );
 
   console.log("\n=== " + passed + " passed, " + failed + " failed ===");
