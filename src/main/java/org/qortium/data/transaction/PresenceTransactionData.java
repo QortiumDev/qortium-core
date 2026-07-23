@@ -1,6 +1,7 @@
 package org.qortium.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorValue;
 import org.qortium.transaction.PresenceTransaction.PresenceType;
 import org.qortium.transaction.Transaction.TransactionType;
 
@@ -11,6 +12,8 @@ import javax.xml.bind.annotation.XmlAccessorType;
 // All properties to be converted to JSON via JAXB
 @XmlAccessorType(XmlAccessType.FIELD)
 @Schema(allOf = { TransactionData.class })
+// JAXB: use this subclass if XmlDiscriminatorNode matches XmlDiscriminatorValue below:
+@XmlDiscriminatorValue("PRESENCE")
 public class PresenceTransactionData extends TransactionData {
 
 	// Properties

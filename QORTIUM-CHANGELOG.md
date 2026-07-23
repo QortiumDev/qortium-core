@@ -34,6 +34,35 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - fix(api): restore transaction building for twenty transaction types
+
+Repairs a set of API endpoints that were unusable, and made their failure
+impossible to diagnose from the outside.
+
+Building an unsigned transaction through the API means sending its details as
+JSON and getting the prepared transaction back. To read that JSON, the node has
+to work out which kind of transaction it is being handed, and it does that by
+looking at a label each transaction type is supposed to carry. Twenty of the
+forty-six transaction types had never been given that label, inherited that way
+from Qortal Core rather than introduced here.
+
+For those twenty, the node could not identify the transaction at all. It gave up
+before reaching any of the code that produces a normal, readable error message,
+so the caller received a blank "internal server error" page with nothing in it,
+and — unless extra logging had been switched on beforehand — nothing was written
+to the node's log either. Anyone hitting this had no way to tell what was wrong.
+Payments, name updates, name sales and seventeen other transaction types were
+affected.
+
+All twenty now carry the correct label, so those endpoints build transactions
+normally again, and genuinely invalid requests get the usual explanatory error
+instead of a blank page. One transaction type, cancelling a group invite, was
+also missing from the list the node consults when describing a transaction it
+already holds, which is fixed too. A new test walks every transaction type there
+is and checks it can survive this conversion in both directions, so any
+transaction type added in future is covered automatically rather than having to
+be remembered.
+
 ### 2026-07-22 - fix(network): reject negative declared lengths instead of killing the network thread
 
 Closes a way for anyone on the internet to silently switch off a node's

@@ -32,7 +32,7 @@ import java.util.Arrays;
 	CreateGroupTransactionData.class, UpdateGroupTransactionData.class, SetGroupAvatarTransactionData.class, SetAccountAvatarTransactionData.class,
 	AddGroupAdminTransactionData.class, RemoveGroupAdminTransactionData.class,
 	GroupBanTransactionData.class, CancelGroupBanTransactionData.class,
-	GroupKickTransactionData.class, GroupInviteTransactionData.class,
+	GroupKickTransactionData.class, GroupInviteTransactionData.class, CancelGroupInviteTransactionData.class,
 	JoinGroupTransactionData.class, LeaveGroupTransactionData.class,
 	GroupApprovalTransactionData.class, SetGroupTransactionData.class,
 	UpdateAssetTransactionData.class,
