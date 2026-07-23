@@ -32,7 +32,17 @@ import static org.junit.Assert.*;
 public class MessageTests extends Common {
 
 	private static final int TEST_POW_BUFFER_SIZE = 8 * 1024;
-	private static final int TEST_POW_DIFFICULTY = 4;
+	/**
+	 * Difficulty is a leading-zero-bit count ({@code MemoryPoW.verify2} ends in
+	 * {@code Long.numberOfLeadingZeros(result) >= difficulty}), so an UNMINED nonce still passes by
+	 * chance with probability 2^-difficulty. The negative cases here assert that an unmined nonce is
+	 * rejected, and at the previous value of 4 that assertion was simply wrong one run in sixteen -
+	 * a test that failed ~6% of the time by construction, not by timing.
+	 * <p>
+	 * 18 makes an accidental pass a 1-in-262,144 event while still mining in roughly 0.4s, because
+	 * the cost here is dominated by filling the work buffer rather than by the nonce search.
+	 */
+	private static final int TEST_POW_DIFFICULTY = 18;
 	private static final String recipient = Common.getTestAccount(null, "bob").getAddress();
 
 
