@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - fix(qdn): trust the filename over content sniffing when publishing a single file
+
+When a single file is published to QDN, the node records what kind of file it
+is, and viewers use that label to decide how to show it. The node used to guess
+the kind by peeking at the file's first bytes, and only looked at the filename
+when the peek found nothing. That guess is wrong surprisingly often: a perfectly
+ordinary text file that happens to open with the right couple of characters
+would be labeled as an obscure image format, and then refuse to display
+properly. Roughly one in three hundred files was mislabeled this way.
+
+Now the filename comes first: a file called `notes.txt` is labeled as text
+because that is what its publisher named it. The byte-peeking still exists, but
+only for files whose name gives no answer — a file with no extension at all is
+still recognized by its contents. Files already published keep the label they
+were published with; this changes new publishes only.
+
 ### 2026-07-23 - test(api): pin the request-body catch to binding failures only
 
 Adds a test that protects the promise made by the change below, so a later edit
