@@ -869,10 +869,18 @@ public class TransactionsResource {
 			}
 	)
 	@ApiErrors({
-			ApiError.NON_PRODUCTION, ApiError.TRANSFORMATION_ERROR
+			ApiError.NON_PRODUCTION, ApiError.INVALID_DATA, ApiError.TRANSFORMATION_ERROR
 	})
 	public String convertTransactionForSigning(String rawInputBytes58) {
-		byte[] rawInputBytes = Base58.decode(rawInputBytes58);
+		// Base58.decode throws an unchecked NumberFormatException for a non-base58 body, which would
+		// otherwise escape as a bare 500. The sibling /decode endpoint reports this as INVALID_DATA.
+		byte[] rawInputBytes;
+		try {
+			rawInputBytes = Base58.decode(rawInputBytes58);
+		} catch (NumberFormatException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA, e);
+		}
+
 		if (rawInputBytes.length == 0)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.JSON);
 
