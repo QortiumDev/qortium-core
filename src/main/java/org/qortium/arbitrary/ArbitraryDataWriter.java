@@ -248,18 +248,34 @@ public class ArbitraryDataWriter {
 
         if (singleFilePath != null) {
             // Single file resource, so try and determine the MIME type
-            ContentInfoUtil util = new ContentInfoUtil();
-            ContentInfo info = util.findMatch(singleFilePath.toFile());
-            String detectedMimeType = info == null ? null : info.getMimeType();
-            if (detectedMimeType == null || detectedMimeType.isBlank()) {
-                // Fall back to using the filename
-                FileNameMap fileNameMap = URLConnection.getFileNameMap();
-                this.mimeType = fileNameMap.getContentTypeFor(singleFilePath.toFile().getName());
-            } else {
-                // Attempt to extract MIME type from file contents
-                this.mimeType = detectedMimeType;
-            }
+            this.mimeType = determineSingleFileMimeType(singleFilePath.toFile());
         }
+    }
+
+    /**
+     * The MIME type a single-file resource should be published with.
+     * <p>
+     * The publisher-chosen filename is the stronger signal: content sniffing is a
+     * heuristic meant for unnamed byte streams, and trusting it first mislabels
+     * real files whose leading bytes happen to match some magic signature (a .txt
+     * that starts with "P5" is not a greymap image). Sniffing is only consulted
+     * when the filename's extension is missing or unrecognized.
+     */
+    static String determineSingleFileMimeType(File file) throws IOException {
+        FileNameMap fileNameMap = URLConnection.getFileNameMap();
+        String nameMimeType = fileNameMap.getContentTypeFor(file.getName());
+        if (nameMimeType != null && !nameMimeType.isBlank()) {
+            return nameMimeType;
+        }
+
+        ContentInfoUtil util = new ContentInfoUtil();
+        ContentInfo info = util.findMatch(file);
+        String detectedMimeType = info == null ? null : info.getMimeType();
+        if (detectedMimeType != null && !detectedMimeType.isBlank()) {
+            return detectedMimeType;
+        }
+
+        return null;
     }
 
     private void validateEntryPoint() throws DataException {
