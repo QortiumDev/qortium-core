@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 
 public class ResourceListManager {
@@ -19,11 +20,23 @@ public class ResourceListManager {
     private static final Logger LOGGER = LogManager.getLogger(ResourceListManager.class);
 
     private static ResourceListManager instance;
-    private List<ResourceList> lists = Collections.synchronizedList(new ArrayList<>());
+    /**
+     * Copy-on-write because every read of this collection is a traversal, and those traversals run
+     * on API threads: a chat search reaches here through {@code ListUtils.blockedChatNames} while
+     * another thread may be adding a list. Copy-on-write iterates a snapshot, so it cannot throw
+     * {@link java.util.ConcurrentModificationException} and needs no lock at the call sites.
+     * <p>
+     * The previous declaration wrapped an {@code ArrayList} in {@code Collections.synchronizedList},
+     * which was not enough for two separate reasons. That wrapper only makes individual operations
+     * atomic - traversal still requires the caller to hold the list's monitor - and the constructor
+     * immediately replaced the field with the plain {@code ArrayList} returned by {@code fetchLists()},
+     * so the wrapper did not survive construction at all.
+     */
+    private final List<ResourceList> lists = new CopyOnWriteArrayList<>();
 
 
     public ResourceListManager() {
-        this.lists = this.fetchLists();
+        this.lists.addAll(this.fetchLists());
     }
 
     public static synchronized ResourceListManager getInstance() {
@@ -68,7 +81,13 @@ public class ResourceListManager {
         return lists;
     }
 
-    private ResourceList getList(String listName) {
+    /**
+     * Synchronized for the check-then-act below, not for the traversal - copy-on-write already makes
+     * that safe. Without it two threads asking for the same not-yet-loaded list can both miss and
+     * both add, leaving two ResourceList objects backed by the same file, where writes through one
+     * are silently lost to the other.
+     */
+    private synchronized ResourceList getList(String listName) {
         for (ResourceList list : this.lists) {
             if (Objects.equals(list.getName(), listName)) {
                 return list;
@@ -177,11 +196,12 @@ public class ResourceListManager {
     public List<String> getListNames() {
         List<String> listNames = new ArrayList<>();
 
-        synchronized (this.lists) {
-            for (ResourceList list : this.lists) {
-                if (list != null && list.getName() != null) {
-                    listNames.add(list.getName());
-                }
+        // No lock needed: copy-on-write iterates a snapshot. The previous synchronized block was
+        // the only correctly-guarded traversal in this class, but it guarded against writers that
+        // never took the same monitor, so it protected nothing.
+        for (ResourceList list : this.lists) {
+            if (list != null && list.getName() != null) {
+                listNames.add(list.getName());
             }
         }
 
