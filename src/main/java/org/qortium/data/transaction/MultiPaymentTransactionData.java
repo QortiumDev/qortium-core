@@ -1,6 +1,7 @@
 package org.qortium.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorValue;
 import org.qortium.data.PaymentData;
 import org.qortium.transaction.Transaction;
 import org.qortium.transaction.Transaction.TransactionType;
@@ -13,6 +14,8 @@ import java.util.List;
 // All properties to be converted to JSON via JAXB
 @XmlAccessorType(XmlAccessType.FIELD)
 @Schema(allOf = { TransactionData.class })
+// JAXB: use this subclass if XmlDiscriminatorNode matches XmlDiscriminatorValue below:
+@XmlDiscriminatorValue("MULTI_PAYMENT")
 public class MultiPaymentTransactionData extends TransactionData {
 
 	// Properties
