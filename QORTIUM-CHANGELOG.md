@@ -34,10 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - refactor(avatars): make avatars a plain resource pointer, not a pinned signature
+
+Supersedes the first avatar design below before it activates. An account or
+group avatar is now a plain pointer to a public single-file QDN resource:
+service, registered name, and optional identifier. The pointer may target a
+resource controlled by someone else, so an avatar designer can update the
+image by republishing that resource without requiring another avatar
+transaction. Authorization to set an account or group avatar is unchanged.
+
+Core stores and signs the resource tuple directly, resolves its latest revision
+when the image is requested, and checks the 500 KB limit and supported raster
+image format at serve time. Short revalidation caching replaces the old
+year-long immutable cache. The transaction wire limits are enforced in UTF-8
+bytes, unknown service IDs are rejected during decoding, and group rollback
+coverage now protects avatar chains that cross group updates and clears.
+
 ### 2026-07-23 - chore(release): prepare Core 1.6.0
 
 Marks the version for the next preview release. Since 1.5.1 the node gained
-immutable QDN avatars for accounts and groups; a major expansion of the
+plain QDN resource-pointer avatars for accounts and groups; a major expansion of the
 automated-transaction engine, including version-3 ATs with persistent key/value
 maps, the ability for one AT to read another's state, and new opcodes that let
 an AT query trust status, balances and code hashes on chain; and a round of

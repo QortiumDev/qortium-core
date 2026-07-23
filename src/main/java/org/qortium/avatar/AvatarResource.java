@@ -1,5 +1,6 @@
 package org.qortium.avatar;
 
+import com.google.common.base.Utf8;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.naming.Name;
 import org.qortium.transaction.ArbitraryTransaction;
@@ -28,10 +29,10 @@ public final class AvatarResource {
 	public static ValidationResult validate(Service service, String name, String identifier) {
 		if (service == null || service.isPrivate() || !service.isSingle())
 			return ValidationResult.INVALID_RESOURCE;
-		if (name == null || name.isBlank() || name.length() > Name.MAX_NAME_SIZE)
+		if (name == null || name.isBlank() || Utf8.encodedLength(name) > Name.MAX_NAME_SIZE)
 			return ValidationResult.INVALID_RESOURCE;
 		// Identifier is optional (empty selects the default resource) but is length-bounded like ARBITRARY.
-		if (identifier != null && identifier.length() > ArbitraryTransaction.MAX_IDENTIFIER_LENGTH)
+		if (identifier != null && Utf8.encodedLength(identifier) > ArbitraryTransaction.MAX_IDENTIFIER_LENGTH)
 			return ValidationResult.INVALID_RESOURCE;
 		return ValidationResult.OK;
 	}

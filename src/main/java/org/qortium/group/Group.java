@@ -531,6 +531,13 @@ public class Group {
 					break;
 				}
 
+				case SET_GROUP_AVATAR: {
+					SetGroupAvatarTransactionData previousAvatarTransactionData =
+							(SetGroupAvatarTransactionData) previousTransactionData;
+					groupReference = previousAvatarTransactionData.getGroupReference();
+					break;
+				}
+
 				default:
 					throw new IllegalStateException("Unable to revert group name due to unsupported referenced transaction");
 			}

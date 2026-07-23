@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.naming.Name;
 import org.qortium.test.common.Common;
+import org.qortium.transaction.ArbitraryTransaction;
 import org.qortium.transaction.Transaction.ValidationResult;
 
 import java.nio.file.Files;
@@ -34,6 +35,15 @@ public class AvatarResourceValidationTests extends Common {
 		assertEquals(ValidationResult.INVALID_RESOURCE, AvatarResource.validate(Service.IMAGE, "", "custom"));
 		assertEquals(ValidationResult.INVALID_RESOURCE, AvatarResource.validate(Service.IMAGE, "a".repeat(Name.MAX_NAME_SIZE + 1), "custom"));
 		assertEquals(ValidationResult.INVALID_RESOURCE, AvatarResource.validate(Service.IMAGE, "alice-avatar", "i".repeat(65)));
+
+		// Wire limits are UTF-8 bytes, not Java characters.
+		assertEquals(ValidationResult.OK, AvatarResource.validate(Service.IMAGE, "é".repeat(Name.MAX_NAME_SIZE / 2), "custom"));
+		assertEquals(ValidationResult.INVALID_RESOURCE,
+				AvatarResource.validate(Service.IMAGE, "é".repeat(Name.MAX_NAME_SIZE / 2 + 1), "custom"));
+		assertEquals(ValidationResult.OK,
+				AvatarResource.validate(Service.IMAGE, "alice-avatar", "é".repeat(ArbitraryTransaction.MAX_IDENTIFIER_LENGTH / 2)));
+		assertEquals(ValidationResult.INVALID_RESOURCE,
+				AvatarResource.validate(Service.IMAGE, "alice-avatar", "é".repeat(ArbitraryTransaction.MAX_IDENTIFIER_LENGTH / 2 + 1)));
 	}
 
 	@Test

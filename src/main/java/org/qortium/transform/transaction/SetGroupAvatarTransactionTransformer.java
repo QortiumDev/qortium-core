@@ -38,6 +38,8 @@ public class SetGroupAvatarTransactionTransformer extends TransactionTransformer
 		AvatarData avatar = null;
 		if (present) {
 			Service service = Service.valueOf(b.getInt());
+			if (service == null)
+				throw new TransformationException("Invalid avatar service");
 			String name = Serialization.deserializeSizedString(b, Name.MAX_NAME_SIZE);
 			String identifier = Serialization.deserializeSizedString(b, ArbitraryTransaction.MAX_IDENTIFIER_LENGTH);
 			avatar = new AvatarData(service, name, identifier);

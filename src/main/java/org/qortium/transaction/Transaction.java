@@ -90,7 +90,7 @@ public abstract class Transaction {
 		RATE_ACCOUNT(46, false),
 		UPDATE_POLL(47, true),
 		CHAIN_PARAMETER_UPDATE(48, true),
-		/** Chain-authorizes one immutable public QDN THUMBNAIL revision as a group's avatar. */
+		/** Points a group's avatar at a public single-file QDN resource. */
 		SET_GROUP_AVATAR(49, true),
 		SET_ACCOUNT_AVATAR(50, false);
 

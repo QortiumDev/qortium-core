@@ -49,6 +49,8 @@ public class SetAccountAvatarTransactionTransformer extends TransactionTransform
 		AvatarData avatar = null;
 		if (present) {
 			Service service = Service.valueOf(byteBuffer.getInt());
+			if (service == null)
+				throw new TransformationException("Invalid avatar service");
 			String name = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
 			String identifier = Serialization.deserializeSizedString(byteBuffer, ArbitraryTransaction.MAX_IDENTIFIER_LENGTH);
 			avatar = new AvatarData(service, name, identifier);
