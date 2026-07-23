@@ -4,6 +4,7 @@ import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.SetAccountAvatarTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.DataException;
+import org.qortium.repository.hsqldb.HSQLDBAvatars;
 import org.qortium.repository.hsqldb.HSQLDBRepository;
 import org.qortium.repository.hsqldb.HSQLDBSaver;
 
@@ -17,10 +18,10 @@ public class HSQLDBSetAccountAvatarTransactionRepository extends HSQLDBTransacti
 	}
 
 	TransactionData fromBase(BaseTransactionData base) throws DataException {
-		String sql = "SELECT avatar_signature, previous_avatar_signature FROM SetAccountAvatarTransactions WHERE signature = ?";
+		String sql = "SELECT avatar_service, avatar_name, avatar_identifier, previous_avatar_service, previous_avatar_name, previous_avatar_identifier FROM SetAccountAvatarTransactions WHERE signature = ?";
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, base.getSignature())) {
 			if (resultSet == null) return null;
-			return new SetAccountAvatarTransactionData(base, resultSet.getBytes(1), resultSet.getBytes(2));
+			return new SetAccountAvatarTransactionData(base, HSQLDBAvatars.read(resultSet, 1), HSQLDBAvatars.read(resultSet, 4));
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch set account avatar transaction", e);
 		}
@@ -30,8 +31,9 @@ public class HSQLDBSetAccountAvatarTransactionRepository extends HSQLDBTransacti
 	public void save(TransactionData transactionData) throws DataException {
 		SetAccountAvatarTransactionData tx = (SetAccountAvatarTransactionData) transactionData;
 		HSQLDBSaver save = new HSQLDBSaver("SetAccountAvatarTransactions");
-		save.bind("signature", tx.getSignature()).bind("owner", tx.getOwnerPublicKey())
-				.bind("avatar_signature", tx.getAvatarSignature()).bind("previous_avatar_signature", tx.getPreviousAvatarSignature());
+		save.bind("signature", tx.getSignature()).bind("owner", tx.getOwnerPublicKey());
+		HSQLDBAvatars.bind(save, "avatar", tx.getAvatar());
+		HSQLDBAvatars.bind(save, "previous_avatar", tx.getPreviousAvatar());
 		try {
 			save.execute(this.repository);
 		} catch (SQLException e) {

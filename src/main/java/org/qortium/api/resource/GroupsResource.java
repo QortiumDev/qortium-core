@@ -65,39 +65,35 @@ public class GroupsResource {
 
 	@GET
 	@Path("/{groupId}/avatar/info")
-	@Operation(summary = "Return the exact explicitly authorized group-avatar descriptor")
+	@Operation(summary = "Return this group's avatar pointer (service, name, identifier)")
 	@ApiErrors({ApiError.GROUP_UNKNOWN, ApiError.FILE_NOT_FOUND, ApiError.REPOSITORY_ISSUE})
 	public AvatarData getGroupAvatarInfo(@PathParam("groupId") int groupId) {
 		try (Repository repository = RepositoryManager.getRepository()) {
 			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
 			if (groupData == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.GROUP_UNKNOWN);
-			byte[] signature = groupData.getAvatarSignature();
-			if (signature == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
-			AvatarData descriptor = AvatarResource.descriptor(repository, signature);
-			if (descriptor == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
+			AvatarData descriptor = groupData.getAvatar();
+			if (descriptor == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
 			return descriptor;
 		} catch (DataException e) { throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e); }
 	}
 
 	@GET
 	@Path("/{groupId}/avatar")
-	@Operation(summary = "Fetch the exact immutable QDN revision authorized as this group's avatar",
+	@Operation(summary = "Fetch this group's avatar image (latest revision of the pointed-at QDN resource)",
 		responses = {
 			@ApiResponse(responseCode = "200", description = "avatar image bytes"),
 			@ApiResponse(responseCode = "202", description = "avatar data requested and loading; retry this same URL"),
-			@ApiResponse(responseCode = "404", description = "group or authorized avatar not found")
+			@ApiResponse(responseCode = "404", description = "group or avatar not found")
 		})
 	@ApiErrors({ApiError.GROUP_UNKNOWN, ApiError.FILE_NOT_FOUND, ApiError.REPOSITORY_ISSUE})
 	public Response getGroupAvatar(@PathParam("groupId") int groupId) {
 		try (Repository repository = RepositoryManager.getRepository()) {
 			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
 			if (groupData == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.GROUP_UNKNOWN);
-			byte[] signature = groupData.getAvatarSignature();
-			if (signature == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
-			AvatarData descriptor = AvatarResource.descriptor(repository, signature);
-			if (descriptor == null) return Response.status(422).build();
-			ArbitraryDataReader reader = new ArbitraryDataReader(Base58.encode(signature), ResourceIdType.SIGNATURE, descriptor.getService(),
-					descriptor.getIdentifier());
+			AvatarData descriptor = groupData.getAvatar();
+			if (descriptor == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FILE_NOT_FOUND);
+			String readerIdentifier = (descriptor.getIdentifier() == null || descriptor.getIdentifier().isBlank()) ? null : descriptor.getIdentifier();
+			ArbitraryDataReader reader = new ArbitraryDataReader(descriptor.getName(), ResourceIdType.NAME, descriptor.getService(), readerIdentifier);
 			if (!reader.isCachedDataAvailable()) {
 				reader.loadAsynchronously(false, 10);
 				return avatarHeaders(Response.status(Response.Status.ACCEPTED).header("Retry-After", "2"), descriptor).build();
@@ -106,7 +102,7 @@ public class GroupsResource {
 			String contentType = AvatarResource.detectRasterImageContentType(avatarPath);
 			if (contentType == null) return avatarHeaders(Response.status(415), descriptor).build();
 			return avatarHeaders(Response.ok(Files.readAllBytes(avatarPath), contentType), descriptor)
-					.header("Cache-Control", "public, max-age=31536000, immutable").build();
+					.header("Cache-Control", "public, max-age=60, must-revalidate").build();
 		} catch (IOException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		} catch (DataException e) {
@@ -115,11 +111,10 @@ public class GroupsResource {
 	}
 
 	private static Response.ResponseBuilder avatarHeaders(Response.ResponseBuilder response, AvatarData descriptor) {
-		return response.header("X-Qortium-Avatar-Signature", Base58.encode(descriptor.getSignature()))
-				.header("X-Qortium-Avatar-Service", descriptor.getService())
+		return response.header("X-Qortium-Avatar-Service", descriptor.getService())
 				.header("X-Qortium-Avatar-Name", descriptor.getName())
-				.header("X-Qortium-Avatar-Identifier", descriptor.getIdentifier())
-				.header("X-Qortium-Avatar-Source", "authorized");
+				.header("X-Qortium-Avatar-Identifier", descriptor.getIdentifier() == null ? "" : descriptor.getIdentifier())
+				.header("X-Qortium-Avatar-Source", "pointer");
 	}
 
 

@@ -23,11 +23,7 @@ public class GroupData {
 	private ApprovalThreshold approvalThreshold;
 	private int minimumBlockDelay;
 	private int maximumBlockDelay;
-	/** Immutable QDN revision currently authorized as this group's avatar, or null. */
-	@XmlTransient
-	@Schema(hidden = true)
-	private byte[] avatarSignature;
-	/** API-facing immutable QDN avatar descriptor. */
+	/** Pointer to the QDN resource chosen as this group's avatar, or null if unset. */
 	private AvatarData avatar;
 	public int memberCount;
 
@@ -178,11 +174,7 @@ public class GroupData {
 		this.maximumBlockDelay = maximumBlockDelay;
 	}
 
-	public byte[] getAvatarSignature() { return this.avatarSignature; }
-	public void setAvatarSignature(byte[] avatarSignature) {
-		this.avatarSignature = avatarSignature;
-		this.avatar = null;
-	}
+	public AvatarData getAvatar() { return this.avatar; }
 	public void setAvatar(AvatarData avatar) { this.avatar = avatar; }
 
 	public int getCreationGroupId() {

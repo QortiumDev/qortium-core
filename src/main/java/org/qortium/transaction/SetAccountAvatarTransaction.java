@@ -3,6 +3,7 @@ import org.qortium.account.Account;
 import org.qortium.asset.Asset;
 import org.qortium.avatar.AvatarResource;
 import org.qortium.block.BlockChain;
+import org.qortium.data.avatar.AvatarData;
 import org.qortium.data.transaction.SetAccountAvatarTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.group.Group;
@@ -27,9 +28,9 @@ public class SetAccountAvatarTransaction extends Transaction {
 		if (this.repository.getBlockRepository().getBlockchainHeight() + 1L < BlockChain.getInstance().getAvatarTransactionsHeight())
 			return ValidationResult.NOT_YET_RELEASED;
 		Account account = this.getCreator();
-		byte[] avatar = this.data.getAvatarSignature();
+		AvatarData avatar = this.data.getAvatar();
 		if (avatar != null) {
-			ValidationResult result = AvatarResource.validate(this.repository, avatar, account.getAddress());
+			ValidationResult result = AvatarResource.validate(avatar.getService(), avatar.getName(), avatar.getIdentifier());
 			if (result != ValidationResult.OK) return result;
 		}
 		return account.getConfirmedBalance(Asset.NATIVE) < this.data.getFee() ? ValidationResult.NO_BALANCE : ValidationResult.OK;
@@ -40,15 +41,15 @@ public class SetAccountAvatarTransaction extends Transaction {
 	@Override
 	public void process() throws DataException {
 		String address = this.getCreator().getAddress();
-		this.data.setPreviousAvatarSignature(this.repository.getAccountRepository().getAvatarSignature(address));
-		this.repository.getAccountRepository().setAvatarSignature(address, this.data.getAvatarSignature());
+		this.data.setPreviousAvatar(this.repository.getAccountRepository().getAvatar(address));
+		this.repository.getAccountRepository().setAvatar(address, this.data.getAvatar());
 		this.repository.getTransactionRepository().save(this.data);
 	}
 
 	@Override
 	public void orphan() throws DataException {
-		this.repository.getAccountRepository().setAvatarSignature(this.getCreator().getAddress(), this.data.getPreviousAvatarSignature());
-		this.data.setPreviousAvatarSignature(null);
+		this.repository.getAccountRepository().setAvatar(this.getCreator().getAddress(), this.data.getPreviousAvatar());
+		this.data.setPreviousAvatar(null);
 		this.repository.getTransactionRepository().save(this.data);
 	}
 }

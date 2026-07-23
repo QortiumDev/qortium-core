@@ -4,20 +4,19 @@ import org.qortium.account.Account;
 import org.qortium.avatar.AvatarResource;
 import org.qortium.asset.Asset;
 import org.qortium.block.BlockChain;
-import org.qortium.crypto.Crypto;
+import org.qortium.data.avatar.AvatarData;
 import org.qortium.data.group.GroupData;
-import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.SetGroupAvatarTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.group.Group;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
-import org.qortium.transform.Transformer;
 
 import java.util.Collections;
 import java.util.List;
 
-/** Consensus authorization of an exact confirmed public THUMBNAIL transaction. */
+/** Points a group's avatar at a QDN resource. The setter must be the group owner
+ *  (or group approval for a null-owner group); the target resource is unrestricted. */
 public class SetGroupAvatarTransaction extends Transaction {
 	private final SetGroupAvatarTransactionData setGroupAvatarTransactionData;
 	public SetGroupAvatarTransaction(Repository repository, TransactionData transactionData) {
@@ -25,8 +24,6 @@ public class SetGroupAvatarTransaction extends Transaction {
 	}
 	@Override public List<String> getRecipientAddresses() { return Collections.emptyList(); }
 	public Account getOwner() { return this.getCreator(); }
-
-	public static String identifierFor(int groupId) { return "qortium-group-avatar-v1-" + groupId; }
 
 	@Override public ValidationResult isValid() throws DataException {
 		long nextHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1L;
@@ -39,9 +36,9 @@ public class SetGroupAvatarTransaction extends Transaction {
 		if (!nullOwner && groupData.getCreationGroupId() != this.setGroupAvatarTransactionData.getTxGroupId()) return ValidationResult.TX_GROUP_ID_MISMATCH;
 		Account owner = this.getOwner();
 		if (!nullOwner && !owner.getAddress().equals(groupData.getOwner())) return ValidationResult.INVALID_GROUP_OWNER;
-		byte[] avatarSignature = this.setGroupAvatarTransactionData.getAvatarSignature();
-		if (avatarSignature != null) {
-			ValidationResult avatarResult = AvatarResource.validate(this.repository, avatarSignature, nullOwner ? null : groupData.getOwner());
+		AvatarData avatar = this.setGroupAvatarTransactionData.getAvatar();
+		if (avatar != null) {
+			ValidationResult avatarResult = AvatarResource.validate(avatar.getService(), avatar.getName(), avatar.getIdentifier());
 			if (avatarResult != ValidationResult.OK) return avatarResult;
 		}
 		return owner.getConfirmedBalance(Asset.NATIVE) < this.setGroupAvatarTransactionData.getFee() ? ValidationResult.NO_BALANCE : ValidationResult.OK;

@@ -1,6 +1,8 @@
 package org.qortium.test.common.transaction;
 
 import org.qortium.account.PrivateKeyAccount;
+import org.qortium.arbitrary.misc.Service;
+import org.qortium.data.avatar.AvatarData;
 import org.qortium.data.transaction.SetAccountAvatarTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.DataException;
@@ -11,10 +13,8 @@ import java.util.Random;
 public class SetAccountAvatarTestTransaction extends TestTransaction {
 
 	public static TransactionData randomTransaction(Repository repository, PrivateKeyAccount account, boolean wantValid) throws DataException {
-		byte[] avatarSignature = new byte[64];
-		new Random().nextBytes(avatarSignature);
-
-		return new SetAccountAvatarTransactionData(generateBase(account), avatarSignature);
+		AvatarData avatar = new AvatarData(Service.IMAGE, "test-avatar", "avatar-" + new Random().nextInt(1_000_000));
+		return new SetAccountAvatarTransactionData(generateBase(account), avatar);
 	}
 
 }

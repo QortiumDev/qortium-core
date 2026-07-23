@@ -1,7 +1,6 @@
 package org.qortium.repository.hsqldb;
 
 import org.qortium.data.group.*;
-import org.qortium.avatar.AvatarResource;
 import org.qortium.group.Group;
 import org.qortium.group.Group.ApprovalThreshold;
 import org.qortium.repository.DataException;
@@ -31,7 +30,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	@Override
 	public GroupData fromGroupId(int groupId) throws DataException {
 		String sql = "SELECT group_name, owner, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups WHERE group_id = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, groupId)) {
@@ -61,7 +60,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 			GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 					approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-			groupData.setAvatarSignature(resultSet.getBytes(13)); hydrateAvatar(groupData); return groupData;
+			groupData.setAvatar(HSQLDBAvatars.read(resultSet, 13)); return groupData;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch group info from repository", e);
 		}
@@ -70,7 +69,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	@Override
 	public GroupData fromGroupName(String groupName) throws DataException {
 		String sql = "SELECT group_id, owner, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups WHERE group_name = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, groupName)) {
@@ -100,7 +99,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 			GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 					approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-			groupData.setAvatarSignature(resultSet.getBytes(13)); hydrateAvatar(groupData); return groupData;
+			groupData.setAvatar(HSQLDBAvatars.read(resultSet, 13)); return groupData;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch group info from repository", e);
 		}
@@ -109,7 +108,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	@Override
 	public GroupData fromReducedGroupName(String reducedGroupName) throws DataException {
 		String sql = "SELECT group_id, owner, group_name, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups WHERE reduced_group_name = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, reducedGroupName)) {
@@ -139,7 +138,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 			GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 					approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-			groupData.setAvatarSignature(resultSet.getBytes(13)); hydrateAvatar(groupData); return groupData;
+			groupData.setAvatar(HSQLDBAvatars.read(resultSet, 13)); return groupData;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch group info from repository", e);
 		}
@@ -177,7 +176,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 		StringBuilder sql = new StringBuilder(512);
 
 		sql.append("SELECT group_id, owner, group_name, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups ORDER BY group_name");
 
 		if (reverse != null && reverse)
@@ -216,7 +215,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 				GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 						approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-				groupData.setAvatarSignature(resultSet.getBytes(14)); hydrateAvatar(groupData); groups.add(groupData);
+				groupData.setAvatar(HSQLDBAvatars.read(resultSet, 14)); groups.add(groupData);
 			} while (resultSet.next());
 
 			return groups;
@@ -231,7 +230,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 		List<Object> bindParams = new ArrayList<>();
 
 		sql.append("SELECT group_id, owner, group_name, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups");
 
 		List<String> conditions = new ArrayList<>();
@@ -282,7 +281,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 		StringBuilder sql = new StringBuilder(512);
 
 		sql.append("SELECT group_id, group_name, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups WHERE owner = ? ORDER BY group_name");
 
 		if (reverse != null && reverse)
@@ -320,7 +319,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 				GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 						approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-				groupData.setAvatarSignature(resultSet.getBytes(13)); hydrateAvatar(groupData); groups.add(groupData);
+				groupData.setAvatar(HSQLDBAvatars.read(resultSet, 13)); groups.add(groupData);
 			} while (resultSet.next());
 
 			return groups;
@@ -334,7 +333,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 		StringBuilder sql = new StringBuilder(512);
 
 		sql.append("SELECT group_id, owner, group_name, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature, admin FROM Groups "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier, admin FROM Groups "
 				+ "JOIN GroupMembers USING (group_id) "
 				+ "LEFT OUTER JOIN GroupAdmins ON GroupAdmins.group_id = GroupMembers.group_id AND GroupAdmins.admin = GroupMembers.address "
 				+ "WHERE address = ? ORDER BY group_name");
@@ -373,12 +372,12 @@ public class HSQLDBGroupRepository implements GroupRepository {
 				int creationGroupId = resultSet.getInt(12);
 				String reducedGroupName = resultSet.getString(13);
 
-				resultSet.getString(15); // 'admin'
+				resultSet.getString(17); // 'admin'
 				boolean isAdmin = !resultSet.wasNull();
 
 				GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 						approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-				groupData.setAvatarSignature(resultSet.getBytes(14)); hydrateAvatar(groupData);
+				groupData.setAvatar(HSQLDBAvatars.read(resultSet, 14));
 				groupData.setIsAdmin(isAdmin);
 
 				groups.add(groupData);
@@ -395,7 +394,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 		StringBuilder sql = new StringBuilder(512);
 
 		sql.append("SELECT group_id, owner, group_name, description, created_when, updated_when, reference, is_open, "
-				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_signature "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id, reduced_group_name, avatar_service, avatar_name, avatar_identifier "
 				+ "FROM Groups JOIN GroupAdmins ON Groups.group_id = GroupAdmins.group_id "
 				+ "WHERE GroupAdmins.admin = ? ORDER BY group_name");
 
@@ -434,7 +433,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 				GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 						approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-				groupData.setAvatarSignature(resultSet.getBytes(14)); hydrateAvatar(groupData); groups.add(groupData);
+				groupData.setAvatar(HSQLDBAvatars.read(resultSet, 14)); groups.add(groupData);
 			} while (resultSet.next());
 
 			return groups;
@@ -467,13 +466,8 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 		GroupData groupData = new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
 				approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
-		groupData.setAvatarSignature(resultSet.getBytes(14));
-		try { hydrateAvatar(groupData); } catch (DataException e) { throw new SQLException("Unable to hydrate group avatar", e); }
+		groupData.setAvatar(HSQLDBAvatars.read(resultSet, 14));
 		return groupData;
-	}
-
-	private void hydrateAvatar(GroupData groupData) throws DataException {
-		if (groupData.getAvatarSignature() != null) groupData.setAvatar(AvatarResource.descriptor(this.repository, groupData.getAvatarSignature()));
 	}
 
 	@Override
@@ -484,8 +478,8 @@ public class HSQLDBGroupRepository implements GroupRepository {
 				.bind("description", groupData.getDescription()).bind("created_when", groupData.getCreated()).bind("updated_when", groupData.getUpdated())
 				.bind("reference", groupData.getReference()).bind("is_open", groupData.isOpen()).bind("approval_threshold", groupData.getApprovalThreshold().value)
 				.bind("min_block_delay", groupData.getMinimumBlockDelay()).bind("max_block_delay", groupData.getMaximumBlockDelay())
-				.bind("creation_group_id", groupData.getCreationGroupId()).bind("reduced_group_name", groupData.getReducedGroupName())
-				.bind("avatar_signature", groupData.getAvatarSignature());
+				.bind("creation_group_id", groupData.getCreationGroupId()).bind("reduced_group_name", groupData.getReducedGroupName());
+		HSQLDBAvatars.bind(saveHelper, "avatar", groupData.getAvatar());
 
 		try {
 			saveHelper.execute(this.repository);
