@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class PublicApiProtectionHandlerTests extends Common {
 
@@ -104,23 +105,66 @@ public class PublicApiProtectionHandlerTests extends Common {
 
 		PublicApiProtectionHandler handler = new PublicApiProtectionHandler(() -> 0L);
 		try (HandlerServer server = new HandlerServer(handler)) {
-			assertTrue(server.request(fixedBody("abc")).startsWith("HTTP/1.1 204"));
+			// This runs with publicApiBuilderMaxConcurrentRequests = 1, and the permit is released
+			// from an asynchronous callback rather than when getResponse() returns. So every request
+			// has to wait for the previous permit to come back before the next one is sent -
+			// otherwise, under load, admission control rejects it with 429 before the body-size check
+			// it is actually asserting on ever runs. That was a real intermittent failure, not a
+			// theoretical one: without these waits this test fails roughly 1 run in 60 on a busy
+			// machine, reporting a 429 where a 413 was expected.
+			assertResponseStatus("HTTP/1.1 204", "declared body within the limit",
+					server.request(fixedBody("abc")));
 			awaitNoActiveBuilders(handler);
-			assertTrue("A second sequential request proves callback permit release",
-					server.request(fixedBody("abc")).startsWith("HTTP/1.1 204"));
-			assertTrue(server.request(fixedBody("abcd")).startsWith("HTTP/1.1 413"));
-			assertTrue(server.request(chunkedBody("abc")).startsWith("HTTP/1.1 204"));
-			assertTrue(server.request(chunkedBody("abcd")).startsWith("HTTP/1.1 413"));
+			assertResponseStatus("HTTP/1.1 204", "a second sequential request proves callback permit release",
+					server.request(fixedBody("abc")));
+			awaitNoActiveBuilders(handler);
+			assertResponseStatus("HTTP/1.1 413", "declared body over the limit",
+					server.request(fixedBody("abcd")));
+			awaitNoActiveBuilders(handler);
+			assertResponseStatus("HTTP/1.1 204", "chunked body within the limit",
+					server.request(chunkedBody("abc")));
+			awaitNoActiveBuilders(handler);
+			// Unlike the declared-length cases, a chunked body has no size in its headers, so the
+			// handler must consume chunks before it can know the body is oversize.
+			assertResponseStatus("HTTP/1.1 413", "chunked body over the limit",
+					server.request(chunkedBody("abcd")));
 			awaitNoActiveBuilders(handler);
 		}
 	}
 
+	/**
+	 * Asserts a response status and, on failure, reports what actually came back.
+	 * <p>
+	 * A bare {@code assertTrue(response.startsWith(...))} reports only "AssertionError" with no
+	 * response at all, which is what made an intermittent failure here undiagnosable. "The
+	 * connector returned nothing before giving up" and "the limit was genuinely not enforced" are
+	 * completely different problems — one a test-harness timing artefact, one a real hole in the
+	 * public API's body-size protection — and they looked identical in the failure report.
+	 */
+	private static void assertResponseStatus(String expectedStatusLine, String description, String response) {
+		if (response == null)
+			fail(String.format("%s: expected %s but the connector returned no response at all,"
+					+ " so the handler had not replied before LocalConnector.getResponse gave up",
+					description, expectedStatusLine));
+
+		if (!response.startsWith(expectedStatusLine))
+			fail(String.format("%s: expected %s but got %d bytes:%n---%n%s%n---",
+					description, expectedStatusLine, response.length(), response));
+	}
+
+	/**
+	 * Waits for the handler's concurrency permits to come back before the next request is sent.
+	 * <p>
+	 * The deadline is generous on purpose: this returns as soon as the count reaches zero, so a
+	 * longer limit costs nothing when the machine is idle and is the difference between a reliable
+	 * test and an intermittent one when it is not.
+	 */
 	private static void awaitNoActiveBuilders(PublicApiProtectionHandler handler) throws Exception {
 		AtomicInteger active = (AtomicInteger) FieldUtils.readField(handler, "activeBuilders", true);
-		long deadline = System.nanoTime() + Duration.ofSeconds(1).toNanos();
+		long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
 		while (active.get() != 0 && System.nanoTime() < deadline)
 			Thread.sleep(5L);
-		assertEquals(0, active.get());
+		assertEquals("Handler did not release its concurrency permits", 0, active.get());
 	}
 
 	@Test
@@ -131,10 +175,11 @@ public class PublicApiProtectionHandlerTests extends Common {
 
 		PublicApiProtectionHandler handler = new PublicApiProtectionHandler(() -> 0L);
 		try (HandlerServer server = new HandlerServer(handler)) {
-			assertTrue(server.request(fixedBody("a")).startsWith("HTTP/1.1 204"));
+			assertResponseStatus("HTTP/1.1 204", "first request inside the burst", server.request(fixedBody("a")));
 			String limited = server.request(fixedBody("a"));
-			assertTrue(limited.startsWith("HTTP/1.1 429"));
-			assertTrue(limited.contains("Retry-After: 1"));
+			assertResponseStatus("HTTP/1.1 429", "second request exceeds the burst", limited);
+			assertTrue("Rate-limited response should carry Retry-After, got:\n" + limited,
+					limited.contains("Retry-After: 1"));
 		}
 	}
 
