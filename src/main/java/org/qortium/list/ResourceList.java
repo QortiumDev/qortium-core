@@ -13,15 +13,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ResourceList {
 
     private static final Logger LOGGER = LogManager.getLogger(ResourceList.class);
 
     private String name;
-    private List<String> list = Collections.synchronizedList(new ArrayList<>());
+    /**
+     * Copy-on-write, and volatile so {@link #load()} can swap the whole list in one reference
+     * assignment: a reader either sees the previous contents or the new ones, never a half-loaded
+     * list. getList() hands this straight to callers who iterate it - a chat search reaches it via
+     * ListUtils.blockedChatNames - so iteration has to be safe without the caller holding a lock.
+     * <p>
+     * The previous synchronized-list wrapper had the same two problems as the one in
+     * ResourceListManager: it does not make traversal safe, only individual operations, and load()
+     * replaced the field with the plain ArrayList from listFromJSONString(), discarding the wrapper.
+     */
+    private volatile List<String> list = new CopyOnWriteArrayList<>();
 
     /**
      * ResourceList
@@ -86,7 +96,11 @@ public class ResourceList {
 
         try {
             String jsonString = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
-            this.list = ResourceList.listFromJSONString(jsonString);
+            List<String> loaded = ResourceList.listFromJSONString(jsonString);
+            // Swap the reference rather than mutating in place, so a concurrent reader never sees a
+            // partially-reloaded list. Null is preserved rather than turned into an empty list to
+            // keep the existing null handling in add/remove/clear meaningful.
+            this.list = loaded == null ? null : new CopyOnWriteArrayList<>(loaded);
         } catch (IOException e) {
             throw new IOException(String.format("Couldn't read contents from file %s", path.toString()));
         }
