@@ -50,9 +50,14 @@ transaction types along with clearer error responses and more robust network
 handling.
 
 The new automated-transaction and avatar behaviours are gated behind an
-activation height (70000) so they switch on together across the network. This is
-a chain-configuration change, so every preview seed must move to 1.6.0 as a
-coordinated update.
+activation height (70000) so they switch on together across the network. These
+triggers sit in the part of the chain configuration that is left out of the
+peer-handshake identity hash, so nodes on 1.6.0 still connect normally to nodes
+on 1.5.x — at the network level this is an ordinary rolling update. The
+coordination it needs is at consensus rather than connection: every node that
+helps produce blocks — the seeds and any minters — should be running 1.6.0
+before the chain reaches height 70000, otherwise it would fall out of step with
+the rest of the network once the new rules switch on.
 
 ### 2026-07-23 - fix(qdn): trust the filename over content sniffing when publishing a single file
 
