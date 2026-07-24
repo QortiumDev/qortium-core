@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-24 - fix(api): clarify QDN publish input errors
+
+QDN publishing now rejects identifiers over the 64-byte UTF-8 transaction limit before any data is staged or an unsigned transaction is built, clearly naming both the field and limit; malformed Unicode input receives a stable client error too. Local publish sources that are missing, unreadable, or not valid filesystem paths now return a stable client-facing API error instead of a generic repository failure containing a raw local path. This applies consistently to path, streamed, base64, ZIP, string, chunked, and transaction-JSON publish routes.
+
 ### 2026-07-24 - test(render): cover HTTP byte-range edge cases
 
 Adds render-path checks for empty files, complete-file suffix requests, a sparse file larger than the integer content-length limit, the largest valid range end, overflowing range values, and reversed bounds. These tests lock down the exact status, range headers, advertised length, and bytes a browser or media player receives at the edges of QDN's seeking contract.
