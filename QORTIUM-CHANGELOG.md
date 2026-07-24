@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-24 - fix(api): canonicalize authenticated QDN publish paths
+
+Path-based QDN publishing remains available to API-key-authorized local clients, but the selected file or directory is now resolved to its canonical, existing filesystem path before Core checks or processes it. This prevents traversal and alias components from propagating through the publishing pipeline while preserving stable missing, unreadable, invalid, and inaccessible path errors.
+
+### 2026-07-24 - fix(api): clarify QDN publish input errors
+
+QDN publishing now rejects identifiers over the 64-byte UTF-8 transaction limit before any data is staged or an unsigned transaction is built, clearly naming both the field and limit; malformed Unicode input receives a stable client error too. Local publish sources that are missing, unreadable, or not valid filesystem paths now return a stable client-facing API error instead of a generic repository failure containing a raw local path. This applies consistently to path, streamed, base64, ZIP, string, chunked, and transaction-JSON publish routes.
+
+### 2026-07-24 - test(render): cover HTTP byte-range edge cases
+
+Adds render-path checks for empty files, complete-file suffix requests, a sparse file larger than the integer content-length limit, the largest valid range end, overflowing range values, and reversed bounds. These tests lock down the exact status, range headers, advertised length, and bytes a browser or media player receives at the edges of QDN's seeking contract.
+
+### 2026-07-24 - fix(render): detect HTML extensions case-insensitively
+
+Rendered QDN documents with uppercase or mixed-case `.HTML` and `.HTM` extensions now take the same safe rewrite path as lowercase files, so a publisher's filename casing cannot accidentally make a document behave like a raw asset.
+
+### 2026-07-24 - fix(settings): reject colliding listener ports before startup
+
+Core now checks the resolved API, chain-peer, and QDN data listener ports together before it starts any service. A hand-edited settings file or a settings update can no longer accidentally reuse a port that was supplied by a network default, avoiding a node that starts only partly before one listener fails to bind. The error names both conflicting settings and the port to change, and an explicitly configured API port is now checked for the normal valid port range too.
+
 ### 2026-07-23 - fix(network): make peer rotation safe and activity-aware
 
 Makes the controller's existing two-minute startup delay and 90-second

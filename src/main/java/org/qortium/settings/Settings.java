@@ -1764,8 +1764,10 @@ public class Settings {
 			}
 		}
 
+		validateOptionalPort("apiPort", this.apiPort);
 		validateOptionalPort("listenPort", this.listenPort);
 		validateOptionalPort("listenDataPort", this.listenDataPort);
+		validateDistinctListenerPorts();
 
 		if (this.maxPeers < 1)
 			throwValidationError("maxPeers must be at least 1");
@@ -1837,6 +1839,26 @@ public class Settings {
 
 		if (port <= 0 || port > 65535)
 			throwValidationError(settingName + " must be between 1 and 65535");
+	}
+
+	/**
+	 * All three services bind the same address by default, so their resolved ports
+	 * must differ. Use the getters here because a missing setting still resolves to
+	 * a network-specific default listener port.
+	 */
+	private void validateDistinctListenerPorts() {
+		int apiPort = this.getApiPort();
+		int listenPort = this.getListenPort();
+		int qdnListenPort = this.getQDNListenPort();
+
+		validateDistinctListenerPorts("apiPort", apiPort, "listenPort", listenPort);
+		validateDistinctListenerPorts("apiPort", apiPort, "listenDataPort", qdnListenPort);
+		validateDistinctListenerPorts("listenPort", listenPort, "listenDataPort", qdnListenPort);
+	}
+
+	private static void validateDistinctListenerPorts(String firstSetting, int firstPort, String secondSetting, int secondPort) {
+		if (firstPort == secondPort)
+			throwValidationError(firstSetting + " and " + secondSetting + " must not use the same listener port: " + firstPort);
 	}
 
 	private static Map<String, String> defaultBitcoinyNetworks() {

@@ -1,5 +1,6 @@
 package org.qortium.api.resource;
 
+import com.google.common.base.Utf8;
 import com.google.common.primitives.Bytes;
 import com.j256.simplemagic.ContentInfo;
 import com.j256.simplemagic.ContentInfoUtil;
@@ -615,13 +616,15 @@ public class ArbitraryResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.INVALID_DATA, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.INVALID_CRITERIA, ApiError.INVALID_DATA, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String createArbitrary(ArbitraryTransactionData transactionData) {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
 		if (transactionData.getDataType() == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		validatePublishIdentifier(transactionData.getIdentifier());
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
@@ -1797,6 +1800,7 @@ public class ArbitraryResource {
 		if (checkApiKey) {
 			Security.checkApiCallAllowed(request);
 		}
+		validatePublishIdentifier(identifier);
 
 		String uploadKey = null;
 		if (limitPublicConcurrency) {
@@ -2147,6 +2151,7 @@ public String finalizeUpload(
 	@QueryParam("isZip") Boolean isZip
 ) {
     Security.checkApiCallAllowed(request);
+    validatePublishIdentifier(identifier);
 	    java.nio.file.Path tempFile = null;
 	    java.nio.file.Path tempDir = null;
 		java.nio.file.Path chunkDir = null;
@@ -2326,6 +2331,8 @@ public String finalizeUpload(
 	private String finalizeChunkedUpload(String serviceString, String name, String identifier, String title,
 										 String description, List<String> tags, Category category, String filename,
 										 Long fee, String entryPoint, Boolean preview, Boolean isZip, Long maxUploadSize) {
+		validatePublishIdentifier(identifier);
+
 		java.nio.file.Path tempDir = null;
 		java.nio.file.Path chunkDir = null;
 
@@ -2588,6 +2595,8 @@ public String finalizeUpload(
 	private String uploadStream(Service service, String name, String identifier, String filename, boolean zipped,
 								Long fee, String title, String description, List<String> tags, Category category,
 								String entryPoint, Boolean preview, InputStream uploadStream, Long maxUploadSize) {
+		validatePublishIdentifier(identifier);
+
 		if (uploadStream == null) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
 		}
@@ -3337,6 +3346,8 @@ public String finalizeUpload(
 						  String path, String string, String base64, boolean zipped, Long fee, String filename,
 						  String title, String description, List<String> tags, Category category,
 						  String entryPoint, Boolean preview, Long maxUploadSize) {
+		validatePublishIdentifier(identifier);
+
 		// Fetch public key from registered name
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData = repository.getNameRepository().fromName(name);
@@ -3376,11 +3387,19 @@ public String finalizeUpload(
 					}
 				}
 
-				enforceUploadPathSize(Paths.get(path), maxUploadSize);
+				java.nio.file.Path publishPath = validatePublishPath(path);
+				try {
+					enforceUploadPathSize(publishPath, maxUploadSize);
 
-				if (zipped) {
-					path = uploadStaging.stageUnzip(path, maxUploadSize).toString();
-					enforceUploadPathSize(Paths.get(path), maxUploadSize);
+					if (zipped) {
+						path = uploadStaging.stageUnzip(publishPath.toString(), maxUploadSize).toString();
+						publishPath = validatePublishPath(path);
+						enforceUploadPathSize(publishPath, maxUploadSize);
+					}
+				} catch (java.nio.file.NoSuchFileException e) {
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FILE_NOT_FOUND, "Publish path does not exist");
+				} catch (java.nio.file.AccessDeniedException e) {
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not readable");
 				}
 
 				// Finish here if user has requested a preview
@@ -3395,7 +3414,7 @@ public String finalizeUpload(
 
 				try {
 					ArbitraryDataTransactionBuilder transactionBuilder = new ArbitraryDataTransactionBuilder(
-							repository, publicKey58, fee, Paths.get(path), name, null, service, identifier,
+							repository, publicKey58, fee, publishPath, name, null, service, identifier,
 							title, description, tags, category, entryPoint
 					);
 
@@ -3406,6 +3425,9 @@ public String finalizeUpload(
 					return Base58.encode(ArbitraryTransactionTransformer.toBytes(transactionData));
 
 				} catch (DataException | TransformationException | IllegalStateException e) {
+					// A source can disappear or lose read access after preflight. Recheck it so
+					// that this race remains client-safe instead of exposing a local path.
+					revalidatePublishPath(publishPath);
 					LOGGER.info("Unable to upload data: {}", e.getMessage());
 					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, e.getMessage());
 				}
@@ -3417,6 +3439,66 @@ public String finalizeUpload(
 			LOGGER.info("Exception when publishing data: ", e);
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
 		}
+	}
+
+	private void validatePublishIdentifier(String identifier) {
+		if (identifier == null) {
+			return;
+		}
+
+		final int encodedLength;
+		try {
+			encodedLength = Utf8.encodedLength(identifier);
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					"identifier must be valid UTF-8");
+		}
+
+		if (encodedLength > ArbitraryTransaction.MAX_IDENTIFIER_LENGTH) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					String.format("identifier must not exceed %d UTF-8 bytes", ArbitraryTransaction.MAX_IDENTIFIER_LENGTH));
+		}
+	}
+
+	private java.nio.file.Path validatePublishPath(String path) {
+		final java.nio.file.Path requestedPath;
+		try {
+			requestedPath = Paths.get(path);
+		} catch (java.nio.file.InvalidPathException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is invalid");
+		}
+
+		return canonicalizePublishPath(requestedPath);
+	}
+
+	private void revalidatePublishPath(java.nio.file.Path publishPath) {
+		canonicalizePublishPath(publishPath);
+	}
+
+	/**
+	 * Path-based publishing is deliberately available only after the caller has
+	 * passed the API-key check in the public resource method. Resolve the
+	 * caller-selected source to its canonical, existing path before inspecting
+	 * or handing it to the data writer so aliases and traversal components do
+	 * not propagate through the publishing pipeline.
+	 */
+	private java.nio.file.Path canonicalizePublishPath(java.nio.file.Path publishPath) {
+		final java.nio.file.Path canonicalPath;
+		try {
+			canonicalPath = publishPath.toRealPath();
+		} catch (java.nio.file.NoSuchFileException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FILE_NOT_FOUND, "Publish path does not exist");
+		} catch (java.nio.file.AccessDeniedException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not readable");
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not accessible");
+		}
+
+		if (!Files.isReadable(canonicalPath)) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not readable");
+		}
+
+		return canonicalPath;
 	}
 
 	private static long estimateBase64DecodedSize(String base64) {

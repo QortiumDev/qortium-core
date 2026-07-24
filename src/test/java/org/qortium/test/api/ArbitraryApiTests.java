@@ -4,10 +4,12 @@ import com.google.common.primitives.Bytes;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
+import org.junit.Assume;
 import org.junit.Test;
 import org.json.JSONObject;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.api.ApiError;
+import org.qortium.api.ApiException;
 import org.qortium.api.resource.ArbitraryResource;
 import org.qortium.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortium.arbitrary.ArbitraryDataResource;
@@ -18,6 +20,7 @@ import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
 import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.data.transaction.RegisterNameTransactionData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
+import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -36,23 +39,27 @@ import org.qortium.utils.FilesystemUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -183,8 +190,111 @@ public class ArbitraryApiTests extends ApiCommon {
 		assertApiError(ApiError.UNAUTHORIZED, () -> this.arbitraryResource.previewPath(null, "VIDEO", "/tmp/preview"));
 	}
 
+	@Test
+	public void testPublishRejectsIdentifierOver64Utf8BytesBeforeBuildingTransaction() {
+		String identifier = "é".repeat(33);
+		String expectedMessage = "identifier must not exceed 64 UTF-8 bytes";
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+				() -> this.arbitraryResource.createArbitrary(arbitraryTransactionWithIdentifier(identifier)));
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+				() -> this.arbitraryResource.postBase64EncodedDataPublic(
+						"APP", "unregistered-name-is-never-looked-up", identifier, null, null, null, null, "index.html", 0L,
+						base64("body".getBytes(StandardCharsets.UTF_8))));
+	}
+
+	@Test
+	public void testPublishIdentifierUtf8ByteBoundary() throws Exception {
+		String name = "qdn-identifier-boundary";
+		registerName(name);
+
+		String acceptedIdentifier = "a".repeat(64);
+		assertUnsignedArbitraryTransaction(this.arbitraryResource.postBase64EncodedDataPublic(
+				"APP", name, acceptedIdentifier, null, null, null, null, "index.html", 0L,
+				base64("body".getBytes(StandardCharsets.UTF_8))));
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, "identifier must not exceed 64 UTF-8 bytes",
+				() -> this.arbitraryResource.postBase64EncodedDataPublic(
+						"APP", name, "a".repeat(65), null, null, null, null, "index.html", 0L,
+						base64("body".getBytes(StandardCharsets.UTF_8))));
+	}
+
+	@Test
+	public void testPublishRejectsMalformedUtf16IdentifierClearly() {
+		String malformedIdentifier = "\uD800";
+		String expectedMessage = "identifier must be valid UTF-8";
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+				() -> this.arbitraryResource.createArbitrary(arbitraryTransactionWithIdentifier(malformedIdentifier)));
+	}
+
+	@Test
+	public void testPathPublishReportsMissingAndInvalidSourcesClearly() throws Exception {
+		ApiCommon.installTestApiKey();
+		Path temporaryDirectory = Files.createTempDirectory("qdn-missing-source");
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+			String name = "qdn-missing-invalid-source";
+			registerName(name);
+
+			Path missingPath = temporaryDirectory.resolve("does-not-exist");
+			assertApiErrorMessage(ApiError.FILE_NOT_FOUND, "Publish path does not exist",
+					() -> resource.post(ApiCommon.TEST_API_KEY, "APP", name, "missing-source", null, null, null, null, 0L,
+							null, false, missingPath.toString()));
+			assertApiErrorMessage(ApiError.INVALID_CRITERIA, "Publish path is invalid",
+					() -> resource.post(ApiCommon.TEST_API_KEY, "APP", name, "invalid-source", null, null, null, null, 0L,
+							null, false, "\u0000"));
+		} finally {
+			FileUtils.deleteDirectory(temporaryDirectory.toFile());
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPathPublishReportsUnreadableSourceClearly() throws Exception {
+		Assume.assumeTrue("unreadable-source fixture requires POSIX file permissions",
+				FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+
+		ApiCommon.installTestApiKey();
+		Path unreadableDirectory = Files.createTempDirectory("qdn-unreadable-source");
+		Set<PosixFilePermission> originalPermissions = Files.getPosixFilePermissions(unreadableDirectory);
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+			String name = "qdn-unreadable-source";
+			registerName(name);
+
+			Files.setPosixFilePermissions(unreadableDirectory, Collections.emptySet());
+			assertFalse("test fixture must be unreadable", Files.isReadable(unreadableDirectory));
+			assertApiErrorMessage(ApiError.INVALID_CRITERIA, "Publish path is not readable",
+					() -> resource.post(ApiCommon.TEST_API_KEY, "APP", name, "unreadable-source", null, null, null, null, 0L,
+							null, false, unreadableDirectory.toString()));
+		} finally {
+			Files.setPosixFilePermissions(unreadableDirectory, originalPermissions);
+			FileUtils.deleteDirectory(unreadableDirectory.toFile());
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
 	private static String base64(byte[] content) {
 		return Base64.getEncoder().encodeToString(content);
+	}
+
+	private static ArbitraryTransactionData arbitraryTransactionWithIdentifier(String identifier) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(0L, 0, new byte[32], 0L, null);
+		return new ArbitraryTransactionData(baseTransactionData, 1, Service.APP.value, 0, 1,
+				"name", identifier, ArbitraryTransactionData.Method.PUT, null, ArbitraryTransactionData.Compression.NONE,
+				new byte[] { 1 }, ArbitraryTransactionData.DataType.RAW_DATA, null, Collections.emptyList());
+	}
+
+	private static void assertApiErrorMessage(ApiError expectedError, String expectedMessage, Runnable apiCall) {
+		try {
+			apiCall.run();
+			org.junit.Assert.fail("ApiException expected: " + expectedError);
+		} catch (ApiException e) {
+			assertEquals(expectedError, ApiError.fromCode(e.error));
+			assertEquals(expectedMessage, e.message);
+		}
 	}
 
 	private static ByteArrayInputStream stream(String content) {
@@ -193,6 +303,26 @@ public class ArbitraryApiTests extends ApiCommon {
 
 	private static ByteArrayInputStream stream(byte[] content) {
 		return new ByteArrayInputStream(content);
+	}
+
+	private static InputStream inputStreamThatFailsOnRead() {
+		return new InputStream() {
+			@Override
+			public int read() {
+				throw new AssertionError("overlong identifier must be rejected before reading the upload stream");
+			}
+		};
+	}
+
+	private static long uploadStagingDirectoryCount() throws IOException {
+		Path stagingBase = Paths.get(Settings.getInstance().getTempDataPath(), "staging");
+		if (!Files.isDirectory(stagingBase)) {
+			return 0L;
+		}
+
+		try (Stream<Path> stagingDirectories = Files.list(stagingBase)) {
+			return stagingDirectories.count();
+		}
 	}
 
 	private static byte[] zipWebsite(String html) throws IOException {
@@ -549,6 +679,46 @@ public class ArbitraryApiTests extends ApiCommon {
 		String transaction = this.arbitraryResource.finalizeUploadNoIdentifierPublic(
 				"APP", name, null, null, null, null, "index.html", 0L, null, false, false);
 		assertUnsignedArbitraryTransaction(transaction);
+	}
+
+	@Test
+	public void testChunkedPublishRejectsOverlongIdentifierBeforeStaging() throws Exception {
+		String identifier = "é".repeat(33);
+		String expectedMessage = "identifier must not exceed 64 UTF-8 bytes";
+		String name = "qdn-long-chunk-identifier";
+		Path chunkDirectory = Paths.get("uploads-temp", "APP", name, identifier);
+		FileUtils.deleteDirectory(chunkDirectory.toFile());
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+				() -> this.arbitraryResource.uploadChunkPublic("APP", name, identifier, stream("chunk"), 0));
+		assertFalse("overlong identifier must not create a chunk directory", Files.exists(chunkDirectory));
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+				() -> this.arbitraryResource.finalizeUploadPublic("APP", name, identifier, null, null, null, null,
+						null, 0L, null, false, false));
+		assertFalse("overlong identifier must not create staging during finalization", Files.exists(chunkDirectory));
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource privateResource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+			assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+					() -> privateResource.finalizeUpload(ApiCommon.TEST_API_KEY, "APP", name, identifier, null, null, null, null,
+							null, 0L, null, false, false));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testStreamedPublishRejectsOverlongIdentifierBeforeStaging() throws Exception {
+		String identifier = "é".repeat(33);
+		String expectedMessage = "identifier must not exceed 64 UTF-8 bytes";
+		long stagingDirectoriesBefore = uploadStagingDirectoryCount();
+
+		assertApiErrorMessage(ApiError.INVALID_CRITERIA, expectedMessage,
+				() -> this.arbitraryResource.postUploadPublic("APP", "qdn-long-stream-identifier", identifier,
+						null, null, null, null, "index.html", 0L, null, false, false, inputStreamThatFailsOnRead()));
+		assertEquals("overlong identifier must not create upload staging", stagingDirectoriesBefore, uploadStagingDirectoryCount());
 	}
 
 	@Test

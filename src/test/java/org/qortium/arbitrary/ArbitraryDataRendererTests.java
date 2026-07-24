@@ -95,6 +95,29 @@ public class ArbitraryDataRendererTests {
     }
 
     @Test
+    public void testEmptyMediaResponseWithoutRangeHasAnEmptyFullBody() throws Exception {
+        Exchange exchange = streamMedia(new byte[0], null);
+
+        assertEquals(HttpServletResponse.SC_OK, exchange.status);
+        assertEquals("bytes", exchange.responseHeaders.get("Accept-Ranges"));
+        assertNull(exchange.responseHeaders.get("Content-Range"));
+        assertEquals(0, exchange.contentLength);
+        assertArrayEquals(new byte[0], exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testEmptyMediaResponseRejectsRangeRequest() throws Exception {
+        Exchange exchange = streamMedia(new byte[0], "bytes=0-0");
+
+        assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
+        assertEquals("bytes", exchange.responseHeaders.get("Accept-Ranges"));
+        assertEquals("bytes */0", exchange.responseHeaders.get("Content-Range"));
+        assertEquals(0, exchange.contentLength);
+        assertArrayEquals(new byte[0], exchange.outputStream.toByteArray());
+        exchange.callIndex("flushBuffer");
+    }
+
+    @Test
     public void testMediaResponseServesBoundedRange() throws Exception {
         byte[] body = mediaBody();
         Exchange exchange = streamMedia(body, "bytes=5-9");
@@ -134,6 +157,17 @@ public class ArbitraryDataRendererTests {
     }
 
     @Test
+    public void testMediaResponseServesWholeFileForOversizedSuffixRange() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=-999999");
+
+        assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+        assertEquals("bytes 0-" + (body.length - 1) + "/" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(body.length, exchange.contentLength);
+        assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
+    @Test
     public void testMediaResponseClampsRangeEndToFileSize() throws Exception {
         byte[] body = mediaBody();
         Exchange exchange = streamMedia(body, "bytes=60-999999");
@@ -142,6 +176,87 @@ public class ArbitraryDataRendererTests {
         assertEquals("bytes 60-" + (body.length - 1) + "/" + body.length, exchange.responseHeaders.get("Content-Range"));
         assertEquals(body.length - 60, exchange.contentLength);
         assertArrayEquals(slice(body, 60, body.length - 1), exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testMediaResponseClampsLongMaxRangeEndToFileSize() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=125-9223372036854775807");
+
+        assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+        assertEquals("bytes 125-" + (body.length - 1) + "/" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(3, exchange.contentLength);
+        assertArrayEquals(slice(body, 125, body.length - 1), exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testMediaResponseUsesLongFileSizeForTailRange() throws Exception {
+        long fileSize = (long) Integer.MAX_VALUE + 3;
+        byte[] tail = new byte[] { 10, 11, 12 };
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("large-clip.mp3");
+
+        try (RandomAccessFile randomAccessFile = new RandomAccessFile(filePath.toFile(), "rw")) {
+            // Sparse allocation keeps this boundary test fast while still making the open channel
+            // report a size that cannot be represented by HttpServletResponse#setContentLength.
+            randomAccessFile.setLength(fileSize);
+            randomAccessFile.seek(fileSize - tail.length);
+            randomAccessFile.write(tail);
+        }
+
+        try {
+            Exchange exchange = new Exchange("audio/mpeg", "bytes=" + (fileSize - tail.length) + "-");
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(
+                    exchange.request, exchange.response, exchange.context, filePath, "large-clip.mp3");
+
+            assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, exchange.status);
+            assertEquals("bytes " + (fileSize - tail.length) + "-" + (fileSize - 1) + "/" + fileSize,
+                    exchange.responseHeaders.get("Content-Range"));
+            assertEquals(tail.length, exchange.contentLength);
+            assertArrayEquals(tail, exchange.outputStream.toByteArray());
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testLargeMediaResponseUsesLongContentLengthBeforeStreaming() throws Exception {
+        long fileSize = (long) Integer.MAX_VALUE + 1;
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("large-clip.mp3");
+
+        try (RandomAccessFile randomAccessFile = new RandomAccessFile(filePath.toFile(), "rw")) {
+            randomAccessFile.setLength(fileSize);
+        }
+
+        try {
+            Exchange exchange = new Exchange("audio/mpeg", null);
+            // Abort at the first attempted body write. The response headers have already been
+            // selected at that point, so this proves the full >2 GiB response selects the long
+            // Content-Length path without allocating or streaming the sparse file.
+            exchange.outputStream.onFirstWrite = () -> {
+                throw new StopAfterHeadersException();
+            };
+
+            try {
+                ArbitraryDataRenderer.streamNonHtmlFileResponse(
+                        exchange.request, exchange.response, exchange.context, filePath, "large-clip.mp3");
+                fail("Expected test stream to stop after response headers");
+            } catch (StopAfterHeadersException e) {
+                // Expected: this test deliberately does not send a multi-gigabyte body.
+            }
+
+            assertEquals(HttpServletResponse.SC_OK, exchange.status);
+            assertEquals("bytes", exchange.responseHeaders.get("Accept-Ranges"));
+            assertNull(exchange.responseHeaders.get("Content-Range"));
+            assertEquals(fileSize, exchange.contentLength);
+            exchange.callIndex("setContentLengthLong");
+            assertArrayEquals(new byte[0], exchange.outputStream.toByteArray());
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
     }
 
     @Test
@@ -156,6 +271,30 @@ public class ArbitraryDataRendererTests {
 
         // The 416 must be committed here. Without this the caller returns an uncommitted response
         // to Jersey, which marshals it as an entity, fails, and ships a 400 instead.
+        exchange.callIndex("flushBuffer");
+    }
+
+    @Test
+    public void testMediaResponseRejectsReversedRange() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=9-5");
+
+        assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
+        assertEquals("bytes */" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(0, exchange.contentLength);
+        assertArrayEquals(new byte[0], exchange.outputStream.toByteArray());
+        exchange.callIndex("flushBuffer");
+    }
+
+    @Test
+    public void testMediaResponseRejectsOverflowingRangeValue() throws Exception {
+        byte[] body = mediaBody();
+        Exchange exchange = streamMedia(body, "bytes=999999999999999999999999999999-");
+
+        assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, exchange.status);
+        assertEquals("bytes */" + body.length, exchange.responseHeaders.get("Content-Range"));
+        assertEquals(0, exchange.contentLength);
+        assertArrayEquals(new byte[0], exchange.outputStream.toByteArray());
         exchange.callIndex("flushBuffer");
     }
 
@@ -617,6 +756,9 @@ public class ArbitraryDataRendererTests {
         private byte[] toByteArray() {
             return this.outputStream.toByteArray();
         }
+    }
+
+    private static class StopAfterHeadersException extends RuntimeException {
     }
 
 
