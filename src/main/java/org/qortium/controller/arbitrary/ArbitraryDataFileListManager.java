@@ -571,9 +571,6 @@ public class ArbitraryDataFileListManager {
 
             for (PeerMessage peerMessage : messagesToProcess) {
                 Peer peer = peerMessage.getPeer();
-                // Mark peer as actively used for QDN (they're sending us file lists)
-                peer.QDNUse();
-                
                 Message message = peerMessage.getMessage();
 
                 ArbitraryDataFileListMessage arbitraryDataFileListMessage = (ArbitraryDataFileListMessage) message;
@@ -856,9 +853,6 @@ public class ArbitraryDataFileListManager {
 
                 Message message = messagePeer.message;
                 Peer peer = messagePeer.peer;
-                // Mark peer as actively used for QDN (we're serving them file lists)
-                peer.QDNUse();
-
                 GetArbitraryDataFileListMessage getArbitraryDataFileListMessage = (GetArbitraryDataFileListMessage) message;
                 byte[] signature = getArbitraryDataFileListMessage.getSignature();
                 String signature58 = Base58.encode(signature);

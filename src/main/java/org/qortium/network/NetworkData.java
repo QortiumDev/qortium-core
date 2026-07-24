@@ -57,6 +57,7 @@ public class NetworkData {
     // How long before retrying after a connection failure, in milliseconds.
     private static final long CONNECT_FAILURE_BACKOFF = 2 * 60 * 1000L; // ms
     private static final long I2P_CONNECT_FAILURE_BACKOFF = 15 * 60 * 1000L; // ms
+    private static final long ROTATION_RECONNECT_COOLDOWN_NANOS = TimeUnit.MINUTES.toNanos(10);
 
     /**
      * After dropping a working I2P fallback peer to retry direct TCP, don't drop another
@@ -78,8 +79,6 @@ public class NetworkData {
     private static final long I2P_DATA_START_RETRY_DELAY = 60 * 1000L; // ms
 
     private static final long NETWORK_EPC_KEEPALIVE = 5L; // seconds
-
-    private static final long DISCONNECTION_CHECK_INTERVAL = 180 * 1000L; // milliseconds - 3min
 
     // ---- Data-layer gossip (PEERS) bounds ----
     // The data overlay has NO compensating age-prune for allKnownPeers (unlike the chain layer's
@@ -114,10 +113,16 @@ public class NetworkData {
 
     private final int maxMessageSize;
     private final int minOutboundPeers;
-    private final int maxPeers;
+    /**
+     * Effective QDN/data connection capacity for this NetworkData instance.
+     * maxDataPeers is restart-required, so all admission and recovery decisions
+     * deliberately use this startup snapshot rather than a later Settings
+     * singleton replacement.
+     */
+    private final int maxDataPeers;
 
-    private long nextDisconnectionCheck = 0L;
     private long nextHandshakeCleanup = 0L;
+    private final Map<String, Long> voluntaryRotationCooldowns = new ConcurrentHashMap<>();
 
     private final List<PeerData> allKnownPeers = new ArrayList<>();
     
@@ -228,6 +233,20 @@ public class NetworkData {
      * Used to ensure peer additions/removals are atomic across both connectedPeers and handshakedPeers.
      */
     private final Object peerListsLock = new Object();
+    /** Admissions which have reserved a bounded provisional slot but have not yet joined connectedPeers. */
+    private int pendingPeerAdmissions = 0;
+
+    /**
+     * Opaque, one-use reservation for a data connection. A reservation is made
+     * before opening/queueing a socket and is consumed when that Peer joins the
+     * connected list, or released on every failed path.
+     */
+    public static final class PeerAdmission {
+        private boolean settled = false;
+
+        private PeerAdmission() {
+        }
+    }
 
     private final List<String> ourExternalIpAddressHistory = new ArrayList<>();
     private String ourExternalIpAddress = null;
@@ -240,7 +259,7 @@ public class NetworkData {
         maxMessageSize = BlocksMessage.maxMessageSizeForMaxBlockSize(BlockChain.getInstance().getMaxBlockSize());
 
         minOutboundPeers = Settings.getInstance().getMinOutboundPeers();
-        maxPeers = Settings.getInstance().getMaxPeers();
+        maxDataPeers = Settings.getInstance().getMaxDataPeers();
 
         int networkDataPriority = Settings.getInstance().getNetworkThreadPriority();
         if (networkDataPriority > 1)
@@ -501,8 +520,8 @@ public class NetworkData {
         return this.bindAddress;
     }
 
-    public int getMaxPeers() {
-        return this.maxPeers;
+    public int getMaxDataPeers() {
+        return this.maxDataPeers;
     }
 
     public byte[] getMessageMagic() {
@@ -658,7 +677,7 @@ public class NetworkData {
 
     /**
      * Periodically clean up stale outbound failure records to prevent memory accumulation.
-     * Called from checkLongestConnection during prunePeers() (every 90 seconds).
+     * Called from the controller-cadenced idle-rotation pass during prunePeers().
      */
     private void cleanupStaleOutboundFailures() {
         int removed = this.peerDirectionState.cleanupStaleOutboundFailures();
@@ -811,6 +830,8 @@ public class NetworkData {
         diagnostics.connectedCount = this.getImmutableConnectedPeers().size();
         diagnostics.handshakedCount = this.getImmutableHandshakedPeers().size();
         diagnostics.outboundHandshakedCount = this.getImmutableOutboundHandshakedPeers().size();
+        diagnostics.dataPeerCapacity = this.maxDataPeers;
+        diagnostics.pendingDataPeerAdmissions = this.getPendingPeerAdmissions();
         diagnostics.i2pSessionUp = this.getI2PDataDestination() != null;
         diagnostics.allowedTransports = Settings.getInstance().getAllowedTransports().stream()
                 .map(Enum::name)
@@ -967,6 +988,57 @@ public class NetworkData {
         return new PeerList(this.connectedPeers);
     }
 
+    /**
+     * Reserves one provisional data-admission slot. There can be at most one
+     * extra connected-or-pending peer beyond the completed data-peer capacity:
+     * it lets a candidate prove a duplicate/direction replacement without
+     * allowing an inbound flood to grow socket or handshake work without bound.
+     */
+    public PeerAdmission tryReservePeerAdmission() {
+        synchronized (this.peerListsLock) {
+            synchronized (this.connectedPeers) {
+                if (this.connectedPeers.size() + this.pendingPeerAdmissions >= this.maxDataPeers + 1)
+                    return null;
+
+                this.pendingPeerAdmissions++;
+                return new PeerAdmission();
+            }
+        }
+    }
+
+    /** Consume a reservation while atomically adding its peer to connectedPeers. */
+    public void addReservedConnectedPeer(PeerAdmission admission, Peer peer) {
+        synchronized (this.peerListsLock) {
+            if (admission == null || admission.settled)
+                throw new IllegalStateException("Data peer admission was already settled");
+
+            synchronized (this.connectedPeers) {
+                admission.settled = true;
+                this.pendingPeerAdmissions--;
+                this.connectedPeers.add(peer);
+            }
+        }
+    }
+
+    /** Release a failed or rejected provisional admission exactly once. */
+    public void releasePeerAdmission(PeerAdmission admission) {
+        if (admission == null)
+            return;
+
+        synchronized (this.peerListsLock) {
+            if (admission.settled)
+                return;
+
+            admission.settled = true;
+            this.pendingPeerAdmissions--;
+        }
+    }
+
+    int getPendingPeerAdmissions() {
+        synchronized (this.peerListsLock) {
+            return this.pendingPeerAdmissions;
+        }
+    }
 
     public void addConnectedPeer(Peer peer) {
         // ATOMIC: Synchronize for consistency with removeConnectedPeer()
@@ -1472,10 +1544,18 @@ public class NetworkData {
             if (socketChannel == null)
                 return;
 
+            PeerAdmission admission = this.tryReservePeerAdmission();
+            if (admission == null) {
+                LOGGER.debug("I2P data connection discarded because data peer capacity is full");
+                closeQuietly(socketChannel);
+                return;
+            }
+
             try {
-                networkDataWorkerPool.execute(() -> processI2PForwardedPeer(socketChannel));
+                networkDataWorkerPool.execute(() -> processI2PForwardedPeer(socketChannel, admission));
             } catch (RejectedExecutionException e) {
                 LOGGER.debug("NetworkData worker pool rejected I2P forwarded peer setup");
+                this.releasePeerAdmission(admission);
                 closeQuietly(socketChannel);
             }
         } catch (IOException e) {
@@ -1483,8 +1563,9 @@ public class NetworkData {
         }
     }
 
-    private void processI2PForwardedPeer(SocketChannel socketChannel) {
+    private void processI2PForwardedPeer(SocketChannel socketChannel, PeerAdmission admission) {
         PeerAddress peerAddress = null;
+        boolean admitted = false;
 
         try {
             Long now = NTP.getTime();
@@ -1512,12 +1593,16 @@ public class NetworkData {
 
             Peer newPeer = new Peer(socketChannel, Peer.NETWORKDATA, peerAddress);
             newPeer.setIsDataPeer(true);
-            this.addConnectedPeer(newPeer);
+            this.addReservedConnectedPeer(admission, newPeer);
+            admitted = true;
             this.onPeerReady(newPeer);
         } catch (IllegalArgumentException | IOException e) {
             LOGGER.debug("I2P data connection failed from peer {}: {}",
                     peerAddress != null ? peerAddress : "unknown", e.getMessage());
             closeQuietly(socketChannel);
+        } finally {
+            if (!admitted)
+                this.releasePeerAdmission(admission);
         }
     }
 
@@ -2049,6 +2134,7 @@ public class NetworkData {
             return null;
         }
 
+        peers = preferPeersOutsideRotationCooldown(peers);
         peers = preferConfiguredTransport(peers);
 
         // Pick random peer
@@ -2064,6 +2150,19 @@ public class NetworkData {
         // Update connection attempt info
         peerData.setLastAttempted(now);
         return newPeer;
+    }
+
+    private List<PeerData> preferPeersOutsideRotationCooldown(List<PeerData> peers) {
+        long nowNanos = System.nanoTime();
+        this.voluntaryRotationCooldowns.entrySet().removeIf(entry -> entry.getValue() <= nowNanos);
+        Set<PeerData> coolingDown = peers.stream()
+                .filter(peerData -> this.voluntaryRotationCooldowns.containsKey(peerData.getAddress().toString()))
+                .collect(Collectors.toSet());
+        List<PeerData> preferred = PeerMaintenancePolicy.preferOutsideRotationCooldown(peers, coolingDown);
+        if (!coolingDown.isEmpty())
+            LOGGER.debug("Data voluntary rotation reconnect policy: coolingDown={}, alternativesUsed={}, fallbackAllowed={}",
+                    coolingDown.size(), preferred.size(), preferred == peers);
+        return preferred;
     }
 
     static String formatNoConnectableDataPeersWarning(KnownPeerDiagnostics diagnostics) {
@@ -2110,6 +2209,11 @@ public class NetworkData {
     }
 
     public boolean connectPeer(Peer newPeer) throws InterruptedException {
+        PeerAdmission admission = this.tryReservePeerAdmission();
+        if (admission == null)
+            return false;
+
+        boolean admitted = false;
         try {
             // Also checked before creating PeerConnectTask
             if (getImmutableOutboundHandshakedPeers().size() >= minOutboundPeers) {
@@ -2138,20 +2242,29 @@ public class NetworkData {
 
             if (Thread.currentThread().isInterrupted()) {
                 LOGGER.debug("Thread is interrupted");
+                newPeer.disconnect("connection interrupted");
                 return false;
             }
 
-            this.addConnectedPeer(newPeer);
+            this.addReservedConnectedPeer(admission, newPeer);
+            admitted = true;
             this.onPeerReady(newPeer);
 
             return true;
         } finally {
+            if (!admitted)
+                this.releasePeerAdmission(admission);
             removeConnectingI2PPeer(newPeer);
         }
     }
 
-    /* Same as connectPeer except it ignores the max peer count */
+    /* Same as connectPeer except it ignores the outbound-target check, not data capacity. */
     public boolean forceConnectPeer(Peer newPeer) {
+        PeerAdmission admission = this.tryReservePeerAdmission();
+        if (admission == null)
+            return false;
+
+        boolean admitted = false;
         try {
 
             SocketChannel socketChannel = newPeer.connect(Peer.NETWORKDATA);
@@ -2160,14 +2273,18 @@ public class NetworkData {
             }
 
             if (Thread.currentThread().isInterrupted()) {
+                newPeer.disconnect("connection interrupted");
                 return false;
             }
 
-            this.addConnectedPeer(newPeer);
+            this.addReservedConnectedPeer(admission, newPeer);
+            admitted = true;
             this.onPeerReady(newPeer);
 
             return true;
         } finally {
+            if (!admitted)
+                this.releasePeerAdmission(admission);
             removeConnectingI2PPeer(newPeer);
         }
     }
@@ -2225,45 +2342,59 @@ public class NetworkData {
         return null;
     }
 
-    private void checkLongestConnection(Long now) {
-        if (now == null || now < nextDisconnectionCheck) {
-            return;
-        }
+    private void rotateIdleOutboundPeer() {
+        PeerList handshakedPeers = this.getImmutableHandshakedPeers();
+        int handshakedCount = handshakedPeers.size();
+        int minDataPeers = Settings.getInstance().getMinDataPeers();
+        int outboundCount = (int) handshakedPeers.stream().filter(Peer::isOutbound).count();
+        int minOutboundPeers = Settings.getInstance().getMinOutboundPeers();
+        long idleThresholdMillis = Settings.getInstance().getMaxDataPeerIdleTime() * 1000L;
+        long nowNanos = System.nanoTime();
+        ArbitraryDataFileManager fileManager = ArbitraryDataFileManager.getExistingInstance();
 
-        // Find peers that have reached their maximum connection age, and disconnect them
-        List<Peer> agedPeers = this.getImmutableConnectedPeers().stream()
-                .filter(peer -> !peer.isSyncInProgress())
-                .filter(peer -> peer.hasReachedMaxConnectionAge())
-                .sorted(Comparator.comparingLong(Peer::getConnectionAge).reversed())
+        List<PeerMaintenancePolicy.DataCandidate<Peer>> candidates = handshakedPeers.stream()
+                .map(peer -> {
+                    PeerSendManager sendManager = PeerSendManagement.getInstance().getSendManager(peer);
+                    boolean activeWork = peer.hasPendingQdnOutput()
+                            || (sendManager != null && sendManager.hasPendingMessages())
+                            || (fileManager != null && fileManager.hasActiveWorkForPeer(peer));
+                    return new PeerMaintenancePolicy.DataCandidate<>(
+                            peer, peer.isOutbound(), peer.getMeaningfulQdnIdleMillis(nowNanos), activeWork);
+                })
                 .collect(Collectors.toList());
 
-        if (!agedPeers.isEmpty()) {
-            int handshakedCount = this.getImmutableHandshakedPeers().size();
-            int minDataPeers = Settings.getInstance().getMinDataPeers();
+        PeerMaintenancePolicy.selectDataRotation(candidates, handshakedCount, minDataPeers,
+                        outboundCount, minOutboundPeers, idleThresholdMillis)
+                .ifPresent(candidate -> {
+                    Peer peer = candidate.peer;
+                    this.voluntaryRotationCooldowns.put(peer.getPeerData().getAddress().toString(),
+                            System.nanoTime() + ROTATION_RECONNECT_COOLDOWN_NANOS);
+                    LOGGER.info("Peer maintenance rotation: policy=data-idle, peer={}, direction=outbound, " +
+                                    "transport={}, connectionAgeMs={}, idleMs={}, idleThresholdMs={}, handshakedCount={}, protectionThreshold={}, " +
+                                    "outboundCount={}, outboundProtectionThreshold={}, reconnectCooldownMinutes={}",
+                            peer,
+                            peer.getPeerData().getAddress().isI2P() ? "I2P" : "IP",
+                            peer.getConnectionAge(), candidate.idleMillis, idleThresholdMillis,
+                            handshakedCount, minDataPeers, outboundCount, minOutboundPeers,
+                            TimeUnit.NANOSECONDS.toMinutes(ROTATION_RECONNECT_COOLDOWN_NANOS));
+                    peer.disconnect("Voluntary data-idle rotation");
+                });
 
-            if (handshakedCount <= minDataPeers) {
-                // Low-peer node: keep aged data connections rather than dropping peers we may
-                // not be able to replace, which would hurt QDN availability
-                LOGGER.debug("Preserving {} aged data peer(s): only {} handshaked data peer(s), at or below minDataPeers ({})",
-                        agedPeers.size(), handshakedCount, minDataPeers);
-            } else {
-                // Disconnect at most one aged peer per check so shuffling never mass-evicts,
-                // even when many connections age out at the same time
-                Peer peer = agedPeers.get(0);
-                LOGGER.debug("Forcing disconnection of data peer {} ({}, {}) because connection age ({} ms) " +
-                        "has reached the maximum ({} ms); handshaked data peers: {}",
-                        peer, peer.isOutbound() ? "outbound" : "inbound",
-                        peer.getPeerData().getAddress().isI2P() ? "I2P" : "IP",
-                        peer.getConnectionAge(), peer.getMaxConnectionAge(), handshakedCount);
-                peer.disconnect("Connection age too old");
-            }
-        }
+        if (handshakedCount <= minDataPeers
+                && candidates.stream().anyMatch(candidate -> candidate.idleMillis > idleThresholdMillis))
+            LOGGER.debug("Data-idle rotation protected by minDataPeers: handshakedCount={}, threshold={}",
+                    handshakedCount, minDataPeers);
+        if (outboundCount < minOutboundPeers
+                && candidates.stream().anyMatch(candidate -> candidate.idleMillis > idleThresholdMillis))
+            LOGGER.debug("Data-idle rotation protected by minOutboundPeers: outboundCount={}, threshold={}",
+                    outboundCount, minOutboundPeers);
+        candidates.stream()
+                .filter(candidate -> candidate.idleMillis > idleThresholdMillis && candidate.activeWork)
+                .forEach(candidate -> LOGGER.debug("Data-idle rotation protected active QDN work for peer {} (idleMs={})",
+                        candidate.peer, candidate.idleMillis));
 
-        // Clean up stale outbound failure records
+        // This housekeeping is intentionally controller-cadenced, not hidden behind a layer timer.
         cleanupStaleOutboundFailures();
-
-        // Check again after a minimum fixed interval
-        nextDisconnectionCheck = now + DISCONNECTION_CHECK_INTERVAL;
     }
 
     // SocketChannel interest-ops manipulations
@@ -2440,7 +2571,9 @@ public class NetworkData {
         }
 
         this.removeConnectedPeer(peer);
-        this.channelsPendingWrite.remove(peer.getSocketChannel());
+        SocketChannel socketChannel = peer.getSocketChannel();
+        if (socketChannel != null)
+            this.channelsPendingWrite.remove(socketChannel);
         
         // Clean up PeerSendManager immediately when peer disconnects
         // This prevents messages from being queued to a dead manager
@@ -2449,18 +2582,6 @@ public class NetworkData {
         if (this.isShuttingDown)
             // No need to do any further processing, like re-enabling listen socket or notifying Controller
             return;
-
-        if (getImmutableConnectedPeers().size() < maxPeers - 1
-                && serverSelectionKey != null
-                && serverSelectionKey.isValid()
-                && (serverSelectionKey.interestOps() & SelectionKey.OP_ACCEPT) == 0) {
-            try {
-                LOGGER.debug("Re-enabling accepting incoming connections because the server is no longer full");
-                setInterestOps(serverSelectionKey, SelectionKey.OP_ACCEPT);
-            } catch (CancelledKeyException e) {
-                LOGGER.error("Failed to re-enable accepting of incoming connections: {}", e.getMessage());
-            }
-        }
 
         // Notify Controller
         Controller.getInstance().onPeerDisconnect(peer);
@@ -2828,8 +2949,15 @@ public class NetworkData {
                             }
                         }
                     }
+                } else if (this.handshakedPeers.size() >= this.maxDataPeers) {
+                    // The one provisional connected slot exists only to prove a
+                    // duplicate/direction replacement. An otherwise unknown
+                    // newcomer must not evict an established data peer merely
+                    // by completing a handshake while the layer is full.
+                    peerToDisconnect = peer;
+                    disconnectReason = "data peer capacity reached";
                 } else {
-                    // No duplicate - proceed with adding
+                    // No duplicate and completed-peer capacity remains.
                     shouldAddPeer = true;
                 }
 
@@ -3352,10 +3480,12 @@ public class NetworkData {
             return;
         }
         
-        final Long now = NTP.getTime();
-        if (now == null) {
+        final Long ntpNow = NTP.getTime();
+        if (ntpNow == null) {
+            this.rotateIdleOutboundPeer();
             return;
         }
+        final long now = ntpNow;
 
         // Repair any orphaned peers (bidirectional check between connectedPeers and handshakedPeers)
         try {
@@ -3448,13 +3578,11 @@ public class NetworkData {
             peer.disconnect("write stuck: " + stuckInfo);
         }
 
-        // Disconnect peers that have exceeded their maximum connection age
-        // (also cleans up stale outbound failure records)
-        this.checkLongestConnection(now);
+        // Rotate at most one safely idle outbound data peer and clean up stale failure records.
+        this.rotateIdleOutboundPeer();
 
-        // Prune 'old' peers from if we are over the count
-        // getImmutableHandshakedPeers().size() works fine as PeerList has a size() method.
-        int overCount = this.getImmutableHandshakedPeers().size() - Settings.getInstance().getMaxDataPeers();
+        // Recover any legacy or race-created completed-peer state above the startup capacity.
+        int overCount = this.getImmutableHandshakedPeers().size() - this.maxDataPeers;
         if (overCount > 0) { // Too Many peers we need to trim some out
             List<Peer> listDisconnectPeers = findOldPeers(overCount);
             for (Peer disconnectPeer : listDisconnectPeers) {

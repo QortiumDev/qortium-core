@@ -1232,6 +1232,7 @@ public class ArbitraryDataFileRequestThread {
                     peer.getDownloadSpeedTracker().recordChunkAssigned();
                     
                     // Pass fileHash for tracking in PeerSendManager pipeline
+                    peer.markMeaningfulQdnUse();
                     PeerSendManagement.getInstance().getOrCreateSendManager(peer, true).queueMessage(message, fileHash);
                     
                     adfm.recordChunkRequested(fileHash, batch.signature58, peer.getPeerData().getAddress().toString());

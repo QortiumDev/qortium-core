@@ -11,6 +11,7 @@ import org.qortium.test.common.Common;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -161,6 +162,13 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview.json"));
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed.json"));
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed-netcup.json"));
+	}
+
+	@Test
+	public void testPreviewSettingsUseMainnetChainPeerRotationContract() throws Exception {
+		assertPreviewChainPeerRotationContract(Path.of("preview/settings-preview.json"));
+		assertPreviewChainPeerRotationContract(Path.of("preview/settings-preview-seed.json"));
+		assertPreviewChainPeerRotationContract(Path.of("preview/settings-preview-seed-netcup.json"));
 	}
 
 	@Test
@@ -333,6 +341,15 @@ public class PublicApiAccessHandlerTests extends Common {
 				jsonArrayContains(publicApiPaths, "POST /arbitrary/*"));
 		assertFalse(settingsPath + " should not expose server-side transaction signing",
 				jsonArrayContains(publicApiPaths, "POST /transactions/sign"));
+	}
+
+	private static void assertPreviewChainPeerRotationContract(Path settingsPath) throws Exception {
+		JSONObject settingsJson = new JSONObject(Files.readString(settingsPath));
+
+		assertEquals(settingsPath + " should set a two-hour minimum chain peer lifetime",
+				7200, settingsJson.getInt("minPeerConnectionTime"));
+		assertEquals(settingsPath + " should set a six-hour maximum chain peer lifetime",
+				21600, settingsJson.getInt("maxPeerConnectionTime"));
 	}
 
 	private static boolean jsonArrayContains(JSONArray array, String value) {

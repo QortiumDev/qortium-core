@@ -39,6 +39,8 @@ public class ChannelAcceptTask implements Task {
         Network network = Network.getInstance();
         NetworkData datanetwork = NetworkData.getInstance();
         SocketChannel socketChannel;
+        NetworkData.PeerAdmission dataAdmission = null;
+        boolean dataPeerAdded = false;
 
         try {  // Only Check maxPeers for P2P
             if (this.networkType == Peer.NETWORK && network.getImmutableConnectedPeers().size() >= network.getMaxPeers()) {
@@ -48,6 +50,18 @@ public class ChannelAcceptTask implements Task {
             }
 
             socketChannel = serverSocketChannel.accept();
+
+            // Always accept one pending data socket before deciding. Leaving it
+            // queued at capacity would immediately re-trigger OP_ACCEPT and
+            // spin; accepting and closing it keeps the listener drainable.
+            if (this.networkType == Peer.NETWORKDATA && socketChannel != null) {
+                dataAdmission = datanetwork.tryReservePeerAdmission();
+                if (dataAdmission == null) {
+                    LOGGER.debug("Connection discarded from data peer because data capacity is full");
+                    socketChannel.close();
+                    return;
+                }
+            }
 
             switch (this.networkType) {
                 case Peer.NETWORK:
@@ -59,71 +73,78 @@ public class ChannelAcceptTask implements Task {
             }
                 
         } catch (IOException e) {
+            datanetwork.releasePeerAdmission(dataAdmission);
             return;
         }
-
-        // No connection actually accepted?
-        if (socketChannel == null) {
-            return;
-        }
-
-        PeerAddress address = PeerAddress.fromSocket(socketChannel.socket());
-
-        // Only check fixed network for NETWORK
-        if(networkType == Peer.NETWORK) {
-            List<String> fixedNetwork = Settings.getInstance().getFixedNetwork();
-            if (fixedNetwork != null && !fixedNetwork.isEmpty() && network.ipNotInFixedList(address, fixedNetwork)) {
-                try {
-                    LOGGER.debug("Connection discarded from peer {} as not in the fixed network list", address);
-                    socketChannel.close();
-                } catch (IOException e) {
-                    // IGNORE
-                }
-                return;
-            }
-        }
-
-        final Long now = NTP.getTime();
-        Peer newPeer;
 
         try {
-            if (now == null) {
-                LOGGER.debug("Connection discarded from peer {} due to lack of NTP sync", address);
-                socketChannel.close();
+            // No connection actually accepted?
+            if (socketChannel == null) {
                 return;
             }
 
-            LOGGER.debug("Connection accepted from peer {}", address);
+            PeerAddress address = PeerAddress.fromSocket(socketChannel.socket());
 
-            newPeer = new Peer(socketChannel, this.networkType);
-
-            switch (this.networkType) {
-                case Peer.NETWORK:
-                    network.addConnectedPeer(newPeer);
-                    break;
-                case Peer.NETWORKDATA:
-                    datanetwork.addConnectedPeer(newPeer);
-                    break;
-            }
-
-        } catch (IOException e) {
-            if (socketChannel.isOpen()) {
-                try {
-                    LOGGER.debug("Connection failed from peer {} while connecting/closing", address);
-                    socketChannel.close();
-                } catch (IOException ce) {
-                    // Couldn't close?
+            // Only check fixed network for NETWORK
+            if(networkType == Peer.NETWORK) {
+                List<String> fixedNetwork = Settings.getInstance().getFixedNetwork();
+                if (fixedNetwork != null && !fixedNetwork.isEmpty() && network.ipNotInFixedList(address, fixedNetwork)) {
+                    try {
+                        LOGGER.debug("Connection discarded from peer {} as not in the fixed network list", address);
+                        socketChannel.close();
+                    } catch (IOException e) {
+                        // IGNORE
+                    }
+                    return;
                 }
             }
-            return;
-        }
-        switch (this.networkType) {
-            case Peer.NETWORK:
-                network.onPeerReady(newPeer);
-                break;
-            case Peer.NETWORKDATA:
-                datanetwork.onPeerReady(newPeer);
-                break;
+
+            final Long now = NTP.getTime();
+            Peer newPeer;
+
+            try {
+                if (now == null) {
+                    LOGGER.debug("Connection discarded from peer {} due to lack of NTP sync", address);
+                    socketChannel.close();
+                    return;
+                }
+
+                LOGGER.debug("Connection accepted from peer {}", address);
+
+                newPeer = new Peer(socketChannel, this.networkType);
+
+                switch (this.networkType) {
+                    case Peer.NETWORK:
+                        network.addConnectedPeer(newPeer);
+                        break;
+                    case Peer.NETWORKDATA:
+                        datanetwork.addReservedConnectedPeer(dataAdmission, newPeer);
+                        dataPeerAdded = true;
+                        break;
+                }
+
+            } catch (IOException e) {
+                if (socketChannel.isOpen()) {
+                    try {
+                        LOGGER.debug("Connection failed from peer {} while connecting/closing", address);
+                        socketChannel.close();
+                    } catch (IOException ce) {
+                        // Couldn't close?
+                    }
+                }
+                return;
+            }
+            switch (this.networkType) {
+                case Peer.NETWORK:
+                    network.onPeerReady(newPeer);
+                    break;
+                case Peer.NETWORKDATA:
+                    datanetwork.onPeerReady(newPeer);
+                    break;
+            }
+        } finally {
+            if (!dataPeerAdded)
+                datanetwork.releasePeerAdmission(dataAdmission);
         }
     }
 }
