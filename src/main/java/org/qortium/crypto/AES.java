@@ -25,6 +25,13 @@
 
 package org.qortium.crypto;
 
+import org.bouncycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.modes.GCMBlockCipher;
+import org.bouncycastle.crypto.modes.GCMModeCipher;
+import org.bouncycastle.crypto.params.AEADParameters;
+import org.bouncycastle.crypto.params.KeyParameter;
+
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
@@ -143,30 +150,47 @@ public class AES {
             if (nonce.length != GCM_NONCE_LENGTH)
                 throw new IOException("Failed to read AES-GCM nonce");
 
-            Cipher cipher = createGcmCipher(Cipher.DECRYPT_MODE, key, nonce);
+            // SunJCE buffers the full plaintext during GCM decryption until it verifies the tag.
+            // The lightweight BC engine streams tentative plaintext to our private temp file; the
+            // file is only moved to its final path after doFinal() authenticates the whole resource.
+            GCMModeCipher cipher = GCMBlockCipher.newInstance(AESEngine.newInstance());
+            cipher.init(false, new AEADParameters(new KeyParameter(key.getEncoded()), GCM_TAG_LENGTH_BITS, nonce));
 
             byte[] buffer = new byte[BUFFER_SIZE];
+            byte[] outputBuffer = new byte[BUFFER_SIZE + GCM_TAG_LENGTH];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
-                byte[] output = cipher.update(buffer, 0, bytesRead);
-                if (output != null)
-                    outputStream.write(output);
+                int outputLength = cipher.processBytes(buffer, 0, bytesRead, outputBuffer, 0);
+                if (outputLength > 0)
+                    outputStream.write(outputBuffer, 0, outputLength);
             }
 
-            byte[] output = cipher.doFinal();
-            if (output != null)
-                outputStream.write(output);
-        } catch (IOException | NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException
-                 | InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
-            Files.deleteIfExists(tempPath);
+            int outputLength = cipher.doFinal(outputBuffer, 0);
+            if (outputLength > 0)
+                outputStream.write(outputBuffer, 0, outputLength);
+        } catch (InvalidCipherTextException e) {
+            BadPaddingException authenticationFailure = new BadPaddingException("AES-GCM authentication failed");
+            authenticationFailure.initCause(e);
+            deleteTempFile(tempPath, authenticationFailure);
+            throw authenticationFailure;
+        } catch (IOException | RuntimeException e) {
+            deleteTempFile(tempPath, e);
             throw e;
         }
 
         try {
             Files.move(tempPath, decryptedPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            Files.deleteIfExists(tempPath);
+            deleteTempFile(tempPath, e);
             throw e;
+        }
+    }
+
+    private static void deleteTempFile(Path tempPath, Throwable originalFailure) {
+        try {
+            Files.deleteIfExists(tempPath);
+        } catch (IOException cleanupFailure) {
+            originalFailure.addSuppressed(cleanupFailure);
         }
     }
 

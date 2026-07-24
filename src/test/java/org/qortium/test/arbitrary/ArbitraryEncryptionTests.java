@@ -12,6 +12,7 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,11 +21,16 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Random;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 public class ArbitraryEncryptionTests extends Common {
+
+    private static final String RUN_LARGE_AES_FILE_TESTS_PROPERTY = "qortium.runLargeAesFileTests";
+    private static final long LARGE_AES_FILE_SIZE = 512L * 1024L * 1024L;
 
     @Before
     public void beforeTest() throws DataException {
@@ -155,6 +161,64 @@ public class ArbitraryEncryptionTests extends Common {
             fail("Tampered AES-GCM ciphertext should fail authentication");
         } catch (BadPaddingException e) {
             assertFalse(Files.exists(decryptedFile));
+            try (java.util.stream.Stream<Path> files = Files.list(decryptedDirectory)) {
+                assertEquals("Authentication failure left tentative plaintext behind", 0, files.count());
+            }
+        }
+    }
+
+    @Test
+    public void testLargeFileDecryptsWithinBoundedHeap() throws Exception {
+        assumeTrue("Set -D" + RUN_LARGE_AES_FILE_TESTS_PROPERTY + "=true to run the large AES file test",
+                Boolean.getBoolean(RUN_LARGE_AES_FILE_TESTS_PROPERTY));
+
+        Path tempDirectory = Files.createTempDirectory("qortium-aes-heap-test");
+        Path inputFile = tempDirectory.resolve("input");
+        Path encryptedFile = tempDirectory.resolve("encrypted");
+        Path decryptedFile = tempDirectory.resolve("decrypted");
+
+        try {
+            writeDeterministicFile(inputFile, LARGE_AES_FILE_SIZE);
+
+            SecretKey key = AES.generateKey(256);
+            AES.encryptFile(key, inputFile.toString(), encryptedFile.toString());
+
+            String javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+            Process process = new ProcessBuilder(
+                    javaExecutable,
+                    "-Xmx96m",
+                    "-cp",
+                    System.getProperty("java.class.path"),
+                    AESFileDecryptHarness.class.getName(),
+                    Base64.getEncoder().encodeToString(key.getEncoded()),
+                    encryptedFile.toString(),
+                    decryptedFile.toString())
+                    .inheritIO()
+                    .start();
+
+            assertEquals("Large AES-GCM decryption exceeded its bounded heap or failed", 0, process.waitFor());
+            assertArrayEquals(Crypto.digestFileStream(inputFile.toFile()),
+                    Crypto.digestFileStream(decryptedFile.toFile()));
+        } finally {
+            Files.deleteIfExists(decryptedFile);
+            Files.deleteIfExists(encryptedFile);
+            Files.deleteIfExists(inputFile);
+            Files.deleteIfExists(tempDirectory);
+        }
+    }
+
+    private static void writeDeterministicFile(Path path, long size) throws IOException {
+        byte[] buffer = new byte[256 * 1024];
+        for (int i = 0; i < buffer.length; ++i)
+            buffer[i] = (byte) (i * 31);
+
+        long remaining = size;
+        try (OutputStream outputStream = Files.newOutputStream(path)) {
+            while (remaining > 0) {
+                int bytesToWrite = (int) Math.min(buffer.length, remaining);
+                outputStream.write(buffer, 0, bytesToWrite);
+                remaining -= bytesToWrite;
+            }
         }
     }
 
