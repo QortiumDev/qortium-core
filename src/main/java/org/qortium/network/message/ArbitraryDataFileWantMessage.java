@@ -19,7 +19,7 @@ import java.util.List;
  */
 public class ArbitraryDataFileWantMessage extends Message {
 
-	private static final int MAX_HASHES = 100_000;
+	public static final int MAX_HASHES_PER_MESSAGE = 10_000;
 
 	private byte[] signature;
 	private List<byte[]> hashes;
@@ -70,7 +70,7 @@ public class ArbitraryDataFileWantMessage extends Message {
 		bytes.get(signature);
 
 		int hashCount = bytes.getInt();
-		if (hashCount < 0 || hashCount > MAX_HASHES)
+		if (hashCount < 0 || hashCount > MAX_HASHES_PER_MESSAGE)
 			throw new MessageException("Invalid hash count in ArbitraryDataFileWantMessage: " + hashCount);
 
 		List<byte[]> hashes = new ArrayList<>(hashCount);

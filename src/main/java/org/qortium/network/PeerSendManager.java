@@ -9,11 +9,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.network.message.ArbitraryDataFileWantMessage;
 import org.qortium.network.message.Message;
 import org.qortium.network.message.MessageException;
 import org.qortium.network.message.MessageType;
@@ -27,20 +29,35 @@ public class PeerSendManager {
     // Two-stage pipeline architecture: disk I/O threads -> sender threads
     private static final int DISK_IO_THREAD_COUNT_NETWORK = 1; // Blockchain peers: low chunk volume
     private static final int DISK_IO_THREAD_COUNT_DATA = 2; // NetworkData peers: chunk streams (25–50/sec)
-    private static final int PREFETCH_QUEUE_SIZE = 8; // 4MB memory overhead (8 × 500KB chunks) - balanced for single peer
+    private static final int PREFETCH_QUEUE_SIZE = 8; // ~4MB memory overhead (8 × 500KB chunks) before Peer byte admission
     private static final int SENDER_THREAD_COUNT = 2; // Number of parallel sender threads per peer
+    static final int MAX_PENDING_ORDINARY_FACTORY_MESSAGES = 2000;
+    static final int MAX_PENDING_RELIABLE_MESSAGES =
+            ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE;
+    private static final long BACKPRESSURE_LOG_INTERVAL_MS = 5_000L;
+    private static final long BACKPRESSURE_RETRY_DELAY_MS = 25L;
 
     private final Peer peer;
     private final int diskIOThreadCount;
-    private final BlockingQueue<TimedMessage> queue = new PriorityBlockingQueue<>(2000); // Thread-safe priority queue for lazy loading
+    private final BlockingQueue<TimedMessage> queue =
+            new PriorityBlockingQueue<>(MAX_PENDING_ORDINARY_FACTORY_MESSAGES);
     private final BlockingQueue<PreloadedMessage> preloadedQueue = new LinkedBlockingQueue<>(PREFETCH_QUEUE_SIZE); // Queue of pre-loaded chunks ready to send
     private final ExecutorService diskIOExecutor; // Stage 1: Parallel disk I/O
     private final ExecutorService executor; // Stage 2: Network send (non-blocking)
     private static final AtomicInteger threadCount = new AtomicInteger(1);
     
     // Hash tracking for efficient cleanup checks across all pipeline stages
-    // Maps hash58 → timestamp when queued (allows O(1) lookup instead of O(n) queue scanning)
-    private final ConcurrentHashMap<String, Long> queuedHashes = new ConcurrentHashMap<>();
+    // Maps raw hash58 → reference count and latest queue time for O(1) lookup.
+    private final ConcurrentHashMap<String, QueuedHashState> queuedHashes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ReliableReservation> reliableReservationsByKey =
+            new ConcurrentHashMap<>();
+    private final Set<ReliableReservation> reliableReservations = ConcurrentHashMap.newKeySet();
+    private final Object admissionLock = new Object();
+    private final AtomicBoolean acceptingMessages = new AtomicBoolean(true);
+    private final AtomicInteger pendingOrdinaryFactoryMessages = new AtomicInteger();
+    private final AtomicInteger pendingReliableMessages = new AtomicInteger();
+    private final AtomicLong lastBackpressureLogTime = new AtomicLong();
+    private final AtomicInteger activeSenderMessages = new AtomicInteger();
 
     private volatile long lastUsed = System.currentTimeMillis();
 
@@ -55,8 +72,8 @@ public class PeerSendManager {
      *
      * <p><b>Two-Stage Pipeline Architecture:</b>
      * <ul>
-     *   <li><b>Stage 1 - Disk I/O:</b> 1 thread (network peer) or 4 threads (data peer) read chunks from disk in parallel</li>
-     *   <li><b>Stage 2 - Network Send:</b> 2 threads send pre-loaded chunks over network with zero disk blocking</li>
+     *   <li><b>Stage 1 - Disk I/O:</b> 1 thread (network peer) or 2 threads (data peer) read chunks from disk in parallel</li>
+     *   <li><b>Stage 2 - Network Send:</b> 2 threads offer pre-loaded chunks to the peer's byte-bounded network queue</li>
      * </ul>
      *
      * <p>This class implements <b>lazy loading</b> for large messages (like chunk data).
@@ -70,8 +87,8 @@ public class PeerSendManager {
      * <p>This class is responsible for:
      * <ul>
      *   <li>Queuing messages with optional priority ordering.</li>
-     *   <li>Parallel disk I/O to hide latency (1 or 4 threads depending on peer type).</li>
-     *   <li>Non-blocking network transmission (2 threads).</li>
+     *   <li>Parallel disk I/O to hide latency (1 or 2 threads depending on peer type).</li>
+     *   <li>Non-blocking, byte-bounded network admission (2 sender threads).</li>
      *   <li>Gracefully shutting down when requested.</li>
      * </ul>
      *
@@ -130,7 +147,7 @@ public class PeerSendManager {
      *   <li>Multiple concurrent disk reads hide 10-100ms disk latency (data peers)</li>
      *   <li>Sender threads never block on disk I/O</li>
      *   <li>Network continuously fed with data</li>
-     *   <li>Bounded memory usage (32 chunks × 500KB = 16MB max)</li>
+     *   <li>Bounded preload memory (8 chunks × about 500KB)</li>
      * </ul>
      *
      * @since v5.0.8
@@ -140,6 +157,7 @@ public class PeerSendManager {
         for (int i = 0; i < this.diskIOThreadCount; i++) {
             diskIOExecutor.submit(() -> {
                 while (!Thread.currentThread().isInterrupted()) {
+                    TimedMessage timedMessage = null;
                     try {
                         // Guard: stop processing if peer is no longer connected
                         if (peer.getSocketChannel() == null || 
@@ -147,26 +165,24 @@ public class PeerSendManager {
                             peer.isStopping()) {
                             LOGGER.trace("Peer {} no longer connected in disk I/O stage, clearing {} queued messages", 
                                        peer, queue.size());
-                            queue.clear();
+                            stopAcceptingMessages();
+                            clearQueuedMessages();
+                            clearPreloadedMessages();
+                            releaseAllReliableReservations();
                             queuedHashes.clear(); // Allow request timeout to retry chunks from other peers
                             return;
                         }
                         
                         // Take metadata from original queue (blocks until available)
-                        TimedMessage timedMessage = queue.take();
+                        timedMessage = queue.take();
                         
                         long currentTime = System.currentTimeMillis();
                         
                         // Drop messages based on age (time since queued)
                         long age = currentTime - timedMessage.timestamp;
-                        if (age > MAX_MESSAGE_AGE_MS) {
+                        if (age > MAX_MESSAGE_AGE_MS && !timedMessage.retryOnBackpressure) {
                             LOGGER.trace("Dropped stale message in disk I/O stage to peer {}: queued {}ms ago (exceeds max age of {}ms)", 
                                        peer.toString(), age, MAX_MESSAGE_AGE_MS);
-                            // Remove from hash tracking when dropping stale message
-                            if (timedMessage.hash58 != null) {
-                                queuedHashes.remove(timedMessage.hash58);
-                                LOGGER.trace("Removed hash {} from tracking (message too old)", timedMessage.hash58);
-                            }
                             continue;
                         }
                         
@@ -174,15 +190,11 @@ public class PeerSendManager {
                         // But with 8 parallel threads, we hide this latency
                         long loadStart = System.currentTimeMillis();
                         final Message message = timedMessage.createMessage();
+                        timedMessage.releaseFactoryReservation();
                         long messageCreateTime = System.currentTimeMillis() - loadStart;
                         
                         if (message == null) {
                             LOGGER.warn("Failed to create message in disk I/O stage for peer: {}, skipping", peer.toString());
-                            // Remove from tracking if message creation failed
-                            if (timedMessage.hash58 != null) {
-                                queuedHashes.remove(timedMessage.hash58);
-                                LOGGER.trace("Removed hash {} from tracking (message creation failed)", timedMessage.hash58);
-                            }
                             continue;
                         }
                         
@@ -218,12 +230,21 @@ public class PeerSendManager {
                             message.getId(),
                             message.getType(),
                             messageBytes,
-                            timedMessage.hash58  // Pass hash through pipeline
+                            timedMessage.hash58,  // Pass hash through pipeline
+                            timedMessage.retryOnBackpressure,
+                            timedMessage.reliableReservation
                         );
+
+                        if (!this.acceptingMessages.get())
+                            continue;
                         
                         // Put into sender queue (blocks if queue is full - provides backpressure control)
                         // This is intentional: if senders can't keep up, we slow down disk reads
                         preloadedQueue.put(preloaded);
+                        if (!this.acceptingMessages.get()
+                                && this.preloadedQueue.remove(preloaded))
+                            continue;
+                        timedMessage = null; // Hash/reliable ownership transferred to preloaded
                         
                         long totalTime = System.currentTimeMillis() - loadStart;
                         LOGGER.debug("Preloaded message {} from disk: create {}ms, serialize {}ms, total {}ms, queue size: {}", 
@@ -235,6 +256,13 @@ public class PeerSendManager {
                         break;
                     } catch (Exception e) {
                         LOGGER.error("Error in disk I/O stage for peer {}: {}", peer, e.getMessage(), e);
+                    } finally {
+                        if (timedMessage != null) {
+                            if (timedMessage.hash58 != null)
+                                untrackQueuedHash(timedMessage.hash58);
+                            timedMessage.releaseFactoryReservation();
+                            timedMessage.releaseReliableReservation();
+                        }
                     }
                 }
             });
@@ -273,6 +301,7 @@ public class PeerSendManager {
             long lastLogTime = System.currentTimeMillis();
             
             while (!Thread.currentThread().isInterrupted()) {
+                PreloadedMessage preloaded = null;
                 try {
                     // Guard: stop processing if peer is no longer connected
                     if (peer.getSocketChannel() == null || 
@@ -280,7 +309,10 @@ public class PeerSendManager {
                         peer.isStopping()) {
                         LOGGER.trace("Peer {} no longer connected in sender stage, clearing {} preloaded messages", 
                                    peer, preloadedQueue.size());
-                        preloadedQueue.clear();
+                        stopAcceptingMessages();
+                        clearQueuedMessages();
+                        clearPreloadedMessages();
+                        releaseAllReliableReservations();
                         queuedHashes.clear(); // Allow request timeout to retry chunks from other peers
                         return;
                     }
@@ -298,7 +330,7 @@ public class PeerSendManager {
                     }
                     
                     // Take pre-loaded message (data already in memory - NO DISK I/O!)
-                    PreloadedMessage preloaded = preloadedQueue.take();
+                    preloaded = preloadedQueue.take();
                     
                     // Calculate how long message waited in preload queue
                     long queueWaitTotal = System.currentTimeMillis() - preloaded.timestamp;
@@ -318,54 +350,58 @@ public class PeerSendManager {
                         continue; // Skip this message, continue with next
                     }
 
-                    // Track send time (should be fast since no disk I/O)
-                    long sendStartTime = System.currentTimeMillis();
-
-                    // Try to send the pre-serialized message - never block the sender thread
-                    // This uses the optimized API that accepts pre-serialized bytes
+                    this.activeSenderMessages.incrementAndGet();
                     try {
-                        if (peer.sendPreSerializedMessage(
-                                preloaded.messageId, 
-                                preloaded.messageType,
-                                preloaded.serializedBytes, 
-                                0)) {  // timeout unused - pass 0
-                            
-                            // Remove hash from tracking AFTER successful send
-                            if (preloaded.hash58 != null) {
-                                queuedHashes.remove(preloaded.hash58);
-                                LOGGER.trace("Removed hash {} from tracking (successfully sent to peer {})",
-                                            preloaded.hash58, peer);
+                        // Track send time (should be fast since no disk I/O)
+                        long sendStartTime = System.currentTimeMillis();
+
+                        // Try to send the pre-serialized message. Reliable publisher-push
+                        // responses wait here under bounded ownership (two sender locals plus
+                        // the eight-entry preload queue) until the peer byte/count budget opens.
+                        try {
+                            boolean accepted;
+                            do {
+                                accepted = peer.sendPreSerializedMessage(
+                                        preloaded.messageId,
+                                        preloaded.messageType,
+                                        preloaded.serializedBytes,
+                                        0);  // timeout unused - pass 0
+
+                                if (!accepted) {
+                                    logBackpressure(preloaded.messageId);
+                                    if (!preloaded.retryOnBackpressure)
+                                        break;
+
+                                    if (peer.getSocketChannel() == null
+                                            || !peer.getSocketChannel().isOpen()
+                                            || peer.isStopping())
+                                        throw new IOException("Peer closed during QDN backpressure retry");
+
+                                    Thread.sleep(BACKPRESSURE_RETRY_DELAY_MS);
+                                }
+                            } while (!accepted);
+
+                            if (accepted) {
+                                // Log timing stats for successful sends - only for ARBITRARY_DATA_FILE
+                                long totalTime = System.currentTimeMillis() - preloaded.timestamp;
+                                long sendTime = System.currentTimeMillis() - sendStartTime;
+                                if (preloaded.messageType == MessageType.ARBITRARY_DATA_FILE) {
+                                    LOGGER.trace("RESPONDER CHUNK COMPLETE: messageId={}, queueWait={}ms, sendCall={}ms, TOTAL={}ms",
+                                        preloaded.messageId, queueWaitTotal, sendTime, totalTime);
+                                }
                             }
-                            
-                            // Log timing stats for successful sends - only for ARBITRARY_DATA_FILE
-                            long totalTime = System.currentTimeMillis() - preloaded.timestamp;
-                            long sendTime = System.currentTimeMillis() - sendStartTime;
-                            if (preloaded.messageType == MessageType.ARBITRARY_DATA_FILE) {
-                                LOGGER.trace("RESPONDER CHUNK COMPLETE: messageId={}, queueWait={}ms, sendCall={}ms, TOTAL={}ms", 
-                                    preloaded.messageId, queueWaitTotal, sendTime, totalTime);
-                            }
-                        } else {
-                            // Backpressure (Peer.sendQueue full)
-                            // For simplicity, we drop the message since it's already been loaded
-                            // Alternative: could re-queue to preloadedQueue, but risks memory buildup
-                            LOGGER.trace("Backpressure for message {} to peer {}, dropping (already loaded)", 
-                                        preloaded.messageId, peer);
-                            // Remove from tracking since we're dropping it
-                            if (preloaded.hash58 != null) {
-                                queuedHashes.remove(preloaded.hash58);
-                                LOGGER.trace("Removed hash {} from tracking (dropped due to backpressure)", preloaded.hash58);
-                            }
-                            // Note: With 8 disk I/O threads and only 2 sender threads, this should be rare.
+                        } catch (IOException e) {
+                            // TERMINAL — peer socket is closed
+                            LOGGER.debug("Peer {} socket closed in sender stage, dropping message {}",
+                                       peer, preloaded.messageId);
+                            stopAcceptingMessages();
+                            clearQueuedMessages();
+                            clearPreloadedMessages();
+                            releaseAllReliableReservations();
+                            return; // stop processing for this peer
                         }
-                    } catch (IOException e) {
-                        // TERMINAL — peer socket is closed
-                        LOGGER.debug("Peer {} socket closed in sender stage, dropping message {}", 
-                                   peer, preloaded.messageId);
-                        // Remove from tracking since peer is gone
-                        if (preloaded.hash58 != null) {
-                            queuedHashes.remove(preloaded.hash58);
-                        }
-                        return; // stop processing for this peer
+                    } finally {
+                        this.activeSenderMessages.decrementAndGet();
                     }
                     
                     // Message and serialized bytes will be garbage collected automatically
@@ -378,6 +414,12 @@ public class PeerSendManager {
                     break;
                 } catch (Exception e) {
                     LOGGER.error("Unexpected error in sender stage for peer {}: {}", peer, e.getMessage(), e);
+                } finally {
+                    if (preloaded != null) {
+                        if (preloaded.hash58 != null)
+                            untrackQueuedHash(preloaded.hash58);
+                        preloaded.releaseReliableReservation();
+                    }
                 }
             }
             });
@@ -387,8 +429,8 @@ public class PeerSendManager {
     /**
      * Starts both stages of the two-stage pipeline.
      * 
-     * <p>Stage 1 (Disk I/O): 8 threads read chunks from disk in parallel
-     * <p>Stage 2 (Network Send): 2 threads send pre-loaded chunks over network
+     * <p>Stage 1 (Disk I/O): 1-2 threads read chunks from disk in parallel
+     * <p>Stage 2 (Network Send): 2 threads offer chunks to the byte-bounded peer queue
      * 
      * <p>This architecture eliminates blocking disk I/O from the network send path,
      * improving throughput by 5-10× on systems with slow disk I/O (Raspberry Pi, HDDs).
@@ -399,6 +441,87 @@ public class PeerSendManager {
     private void start() {
         startDiskIOStage();
         startSenderStage();
+    }
+
+    private void logBackpressure(int messageId) {
+        long now = System.currentTimeMillis();
+        long lastLog = this.lastBackpressureLogTime.get();
+        if (now - lastLog >= BACKPRESSURE_LOG_INTERVAL_MS
+                && this.lastBackpressureLogTime.compareAndSet(lastLog, now)) {
+            LOGGER.debug("Backpressure for message {} to peer {}, retaining or dropping bounded chunk "
+                            + "(pending QDN bytes: {}/{}, messages: {}/{})",
+                    messageId, peer, peer.getPendingQdnBytes(), peer.getPendingQdnByteLimit(),
+                    peer.getPendingQdnMessageCount(), peer.getPendingQdnMessageLimit());
+        } else {
+            LOGGER.trace("Backpressure for message {} to peer {}, bounded chunk not admitted yet",
+                    messageId, peer);
+        }
+    }
+
+    private ReliableReservation tryReserveReliableMessage(String deduplicationKey) {
+        if (this.pendingReliableMessages.get() >= MAX_PENDING_RELIABLE_MESSAGES)
+            return null;
+        if (deduplicationKey != null
+                && this.reliableReservationsByKey.containsKey(deduplicationKey))
+            return null;
+
+        ReliableReservation reservation = new ReliableReservation(this, deduplicationKey);
+        this.pendingReliableMessages.incrementAndGet();
+        this.reliableReservations.add(reservation);
+        if (deduplicationKey != null)
+            this.reliableReservationsByKey.put(deduplicationKey, reservation);
+        return reservation;
+    }
+
+    private void trackQueuedHash(String hash58) {
+        long now = System.currentTimeMillis();
+        this.queuedHashes.compute(hash58, (key, state) -> {
+            if (state == null)
+                return new QueuedHashState(now);
+
+            state.references++;
+            state.lastQueuedTimestamp = now;
+            return state;
+        });
+    }
+
+    private void untrackQueuedHash(String hash58) {
+        this.queuedHashes.computeIfPresent(hash58, (key, state) -> {
+            state.references--;
+            return state.references > 0 ? state : null;
+        });
+    }
+
+    private void clearQueuedMessages() {
+        TimedMessage timedMessage;
+        while ((timedMessage = this.queue.poll()) != null) {
+            if (timedMessage.hash58 != null)
+                untrackQueuedHash(timedMessage.hash58);
+            timedMessage.releaseFactoryReservation();
+            timedMessage.releaseReliableReservation();
+        }
+    }
+
+    private void clearPreloadedMessages() {
+        PreloadedMessage preloaded;
+        while ((preloaded = this.preloadedQueue.poll()) != null) {
+            if (preloaded.hash58 != null)
+                untrackQueuedHash(preloaded.hash58);
+            preloaded.releaseReliableReservation();
+        }
+    }
+
+    private void stopAcceptingMessages() {
+        synchronized (this.admissionLock) {
+            this.acceptingMessages.set(false);
+        }
+    }
+
+    private void releaseAllReliableReservations() {
+        ReliableReservation[] reservations =
+                this.reliableReservations.toArray(new ReliableReservation[0]);
+        for (ReliableReservation reservation : reservations)
+            reservation.release();
     }
 
 
@@ -449,6 +572,38 @@ public class PeerSendManager {
      */
     public void queueMessageFactory(MessageFactory messageFactory, int estimatedSize) throws MessageException {
         queueMessageFactoryWithPriority(NO_PRIORITY, messageFactory, estimatedSize, null);
+    }
+
+    /**
+     * Queues a publisher-push response that must remain lazy and retry byte/count
+     * admission until accepted or the peer disconnects.
+     */
+    public boolean queueMessageFactoryWithRetry(MessageFactory messageFactory, int estimatedSize)
+            throws MessageException {
+        return queueMessageFactoryWithRetry(messageFactory, estimatedSize, null, null);
+    }
+
+    /**
+     * Queues a reliable publisher-push response if its hash is not already
+     * pending and this peer has admission capacity for another lazy factory.
+     *
+     * @return true when this manager retained the factory, false for a duplicate
+     *         or when the per-peer reliable pending limit is reached
+     */
+    public boolean queueMessageFactoryWithRetry(MessageFactory messageFactory, int estimatedSize,
+                                                String hash58) throws MessageException {
+        return queueMessageFactoryWithRetry(messageFactory, estimatedSize, hash58, hash58);
+    }
+
+    /**
+     * Queues a reliable publisher-push response using a raw hash for existing
+     * queue tracking and a separate resource-scoped key for deduplication.
+     */
+    public boolean queueMessageFactoryWithRetry(MessageFactory messageFactory, int estimatedSize,
+                                                String hash58, String deduplicationKey)
+            throws MessageException {
+        return queueMessageFactoryWithPriority(
+                NO_PRIORITY, messageFactory, estimatedSize, hash58, true, deduplicationKey);
     }
     
     /**
@@ -506,28 +661,72 @@ public class PeerSendManager {
      * @author Ice
      */
     public void queueMessageFactoryWithPriority(int priority, MessageFactory messageFactory, int estimatedSize, String hash58) throws MessageException {
+        queueMessageFactoryWithPriority(priority, messageFactory, estimatedSize, hash58, false, null);
+    }
+
+    private boolean queueMessageFactoryWithPriority(int priority, MessageFactory messageFactory,
+                                                    int estimatedSize, String hash58,
+                                                    boolean retryOnBackpressure,
+                                                    String reliableDeduplicationKey)
+            throws MessageException {
         lastUsed = System.currentTimeMillis();
-        
-        // No artificial delay - let pipeline handle natural backpressure through bounded queues
-        // Messages are ordered by priority first, then FIFO within same priority
-        TimedMessage newTimedMessage = new TimedMessage(
-                messageFactory,
-                priority,
-                hash58);  // Pass hash for tracking (null if not applicable)
-        
-        // Track hash if provided (INSTANT - no disk I/O, just map insert)
-        if (hash58 != null) {
-            queuedHashes.put(hash58, System.currentTimeMillis());
-            LOGGER.trace("Tracking hash {} in PeerSendManager for peer {}", hash58, peer);
-        }
-        
-        // Simply offer to queue - PriorityBlockingQueue handles all ordering thread-safely
-        if (!queue.offer(newTimedMessage)) {
-            LOGGER.warn("Queue full ({} messages) for peer {}, dropping message", queue.size(), peer);
-            // Remove from tracking if we couldn't queue
-            if (hash58 != null) {
-                queuedHashes.remove(hash58);
+
+        synchronized (this.admissionLock) {
+            if (!this.acceptingMessages.get())
+                return false;
+
+            if (!retryOnBackpressure
+                    && this.pendingOrdinaryFactoryMessages.get()
+                    >= MAX_PENDING_ORDINARY_FACTORY_MESSAGES) {
+                LOGGER.debug("Factory queue full ({} messages) for peer {}, dropping message",
+                        this.pendingOrdinaryFactoryMessages.get(), peer);
+                return false;
             }
+
+            ReliableReservation reliableReservation = null;
+            if (retryOnBackpressure) {
+                reliableReservation = tryReserveReliableMessage(reliableDeduplicationKey);
+                if (reliableReservation == null) {
+                    LOGGER.debug("Reliable queue admission rejected for peer {}: duplicate or pending limit {}/{}",
+                            peer, this.pendingReliableMessages.get(), MAX_PENDING_RELIABLE_MESSAGES);
+                    return false;
+                }
+            }
+
+            FactoryReservation factoryReservation = null;
+            if (!retryOnBackpressure) {
+                factoryReservation = new FactoryReservation(this);
+                this.pendingOrdinaryFactoryMessages.incrementAndGet();
+            }
+
+            // No artificial delay - let pipeline handle natural backpressure through bounded queues
+            // Messages are ordered by priority first, then FIFO within same priority
+            TimedMessage newTimedMessage = new TimedMessage(
+                    messageFactory,
+                    priority,
+                    hash58,
+                    retryOnBackpressure,
+                    reliableReservation,
+                    factoryReservation);  // Pass hash for tracking (null if not applicable)
+
+            // Track hash if provided (INSTANT - no disk I/O, just map insert)
+            if (hash58 != null) {
+                trackQueuedHash(hash58);
+                LOGGER.trace("Tracking hash {} in PeerSendManager for peer {}", hash58, peer);
+            }
+
+            // Offer while holding the admission lock so shutdown cannot clear the
+            // queue between reservation registration and ownership transfer.
+            if (!queue.offer(newTimedMessage)) {
+                LOGGER.warn("Queue full ({} messages) for peer {}, dropping message", queue.size(), peer);
+                if (hash58 != null)
+                    untrackQueuedHash(hash58);
+                newTimedMessage.releaseFactoryReservation();
+                newTimedMessage.releaseReliableReservation();
+                return false;
+            }
+
+            return true;
         }
     }
 
@@ -546,9 +745,30 @@ public class PeerSendManager {
         return queue.size();
     }
 
+    public int getPendingOrdinaryFactoryMessageCount() {
+        return this.pendingOrdinaryFactoryMessages.get();
+    }
+
+    public int getPendingOrdinaryFactoryMessageLimit() {
+        return MAX_PENDING_ORDINARY_FACTORY_MESSAGES;
+    }
+
+    public int getPendingReliableMessageCount() {
+        return this.pendingReliableMessages.get();
+    }
+
+    public int getPendingReliableMessageLimit() {
+        return MAX_PENDING_RELIABLE_MESSAGES;
+    }
+
     /** True while any stage of the per-peer QDN send pipeline still owns work. */
     public boolean hasPendingMessages() {
-        return !this.queue.isEmpty() || !this.preloadedQueue.isEmpty() || !this.queuedHashes.isEmpty();
+        return !this.queue.isEmpty()
+                || !this.preloadedQueue.isEmpty()
+                || this.activeSenderMessages.get() > 0
+                || this.pendingOrdinaryFactoryMessages.get() > 0
+                || this.pendingReliableMessages.get() > 0
+                || !this.queuedHashes.isEmpty();
     }
 
     /**
@@ -595,22 +815,19 @@ public class PeerSendManager {
     }
 
     /**
-     * Periodically clean up stale hash tracking entries.
-     * Should be called by a maintenance thread to prevent memory leaks.
-     * Removes entries older than 60 seconds.
+     * Defensively removes impossible non-positive hash states. Age alone is not
+     * terminal: ownership is released only by the queue/pipeline stage that
+     * accepted the corresponding message.
      * 
      * @since v5.0.4
      * @author Ice
      */
     public void cleanupStaleHashTracking() {
-        long now = System.currentTimeMillis();
         int countBefore = queuedHashes.size();
-        queuedHashes.entrySet().removeIf(entry ->
-            (now - entry.getValue()) > 60000L  // Remove hashes older than 60s
-        );
+        queuedHashes.entrySet().removeIf(entry -> entry.getValue().references <= 0);
         int removed = countBefore - queuedHashes.size();
         if (removed > 0) {
-            LOGGER.debug("Cleaned up {} stale hash tracking entries for peer {}", removed, peer);
+            LOGGER.debug("Cleaned up {} invalid hash tracking entries for peer {}", removed, peer);
         }
     }
 
@@ -658,11 +875,13 @@ public class PeerSendManager {
      * @updated v5.0.8 - Now shuts down both disk I/O and sender thread pools
      */
     public void shutdown() {
-        queue.clear();
-        preloadedQueue.clear();
-        queuedHashes.clear();  // Clear hash tracking
+        stopAcceptingMessages();
         diskIOExecutor.shutdownNow();
         executor.shutdownNow();
+        clearQueuedMessages();
+        clearPreloadedMessages();
+        releaseAllReliableReservations();
+        queuedHashes.clear();  // Clear hash tracking
         LOGGER.debug("PeerSendManager shutdown complete for peer {}, cleared {} tracked hashes",
                     peer, queuedHashes.size());
     }
@@ -684,6 +903,9 @@ public class PeerSendManager {
         final long timestamp;
         final int priority;  // Lower number = higher priority (1 is best, 10 is worst)
         final String hash58;  // Hash for tracking (null for non-tracked messages)
+        final boolean retryOnBackpressure;
+        final ReliableReservation reliableReservation;
+        final FactoryReservation factoryReservation;
 
         /**
          * Constructs a {@code TimedMessage} with priority and hash tracking.
@@ -695,11 +917,26 @@ public class PeerSendManager {
          * @since v5.0.9
          * @author Ice
          */
-        TimedMessage(MessageFactory messageFactory, int priority, String hash58) {
+        TimedMessage(MessageFactory messageFactory, int priority, String hash58,
+                     boolean retryOnBackpressure, ReliableReservation reliableReservation,
+                     FactoryReservation factoryReservation) {
             this.messageFactory = messageFactory;
             this.timestamp = System.currentTimeMillis();
             this.priority = priority;
             this.hash58 = hash58;
+            this.retryOnBackpressure = retryOnBackpressure;
+            this.reliableReservation = reliableReservation;
+            this.factoryReservation = factoryReservation;
+        }
+
+        void releaseFactoryReservation() {
+            if (this.factoryReservation != null)
+                this.factoryReservation.release();
+        }
+
+        void releaseReliableReservation() {
+            if (this.reliableReservation != null)
+                this.reliableReservation.release();
         }
         
         /**
@@ -761,6 +998,8 @@ public class PeerSendManager {
         final byte[] serializedBytes;
         final long timestamp;
         final String hash58;  // Hash for tracking (null for non-tracked messages)
+        final boolean retryOnBackpressure;
+        final ReliableReservation reliableReservation;
         
         /**
          * Constructs a PreloadedMessage with pre-serialized data ready to send.
@@ -770,12 +1009,71 @@ public class PeerSendManager {
          * @param serializedBytes pre-serialized message bytes (complete, ready to send)
          * @param hash58 Base58-encoded hash for tracking (null if not applicable)
          */
-        PreloadedMessage(int messageId, MessageType messageType, byte[] serializedBytes, String hash58) {
+        PreloadedMessage(int messageId, MessageType messageType, byte[] serializedBytes,
+                         String hash58, boolean retryOnBackpressure,
+                         ReliableReservation reliableReservation) {
             this.messageId = messageId;
             this.messageType = messageType;
             this.serializedBytes = serializedBytes;
             this.timestamp = System.currentTimeMillis();
             this.hash58 = hash58;
+            this.retryOnBackpressure = retryOnBackpressure;
+            this.reliableReservation = reliableReservation;
+        }
+
+        void releaseReliableReservation() {
+            if (this.reliableReservation != null)
+                this.reliableReservation.release();
+        }
+    }
+
+    private static final class QueuedHashState {
+        private volatile int references = 1;
+        private volatile long lastQueuedTimestamp;
+
+        private QueuedHashState(long lastQueuedTimestamp) {
+            this.lastQueuedTimestamp = lastQueuedTimestamp;
+        }
+    }
+
+    private static final class ReliableReservation {
+        private final PeerSendManager manager;
+        private final String deduplicationKey;
+        private final AtomicBoolean released = new AtomicBoolean();
+
+        private ReliableReservation(PeerSendManager manager, String deduplicationKey) {
+            this.manager = manager;
+            this.deduplicationKey = deduplicationKey;
+        }
+
+        private void release() {
+            if (!this.released.compareAndSet(false, true))
+                return;
+
+            synchronized (this.manager.admissionLock) {
+                this.manager.reliableReservations.remove(this);
+                if (this.deduplicationKey != null)
+                    this.manager.reliableReservationsByKey.remove(this.deduplicationKey, this);
+                this.manager.pendingReliableMessages.decrementAndGet();
+            }
+        }
+    }
+
+    private static final class FactoryReservation {
+        private final PeerSendManager manager;
+        private final AtomicBoolean released = new AtomicBoolean();
+
+        private FactoryReservation(PeerSendManager manager) {
+            this.manager = manager;
+        }
+
+        private void release() {
+            if (!this.released.compareAndSet(false, true))
+                return;
+
+            synchronized (this.manager.admissionLock) {
+                this.manager.pendingOrdinaryFactoryMessages.decrementAndGet();
+            }
         }
     }
 }
