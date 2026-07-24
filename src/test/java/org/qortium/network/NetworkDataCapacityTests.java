@@ -158,16 +158,21 @@ public class NetworkDataCapacityTests extends Common {
 	public void testFullCapacityAllowsAProvenDuplicateToReplaceCorrectDirectionIncumbent() throws Exception {
 		byte[] duplicateKey = new byte[] { 7 };
 		List<Peer> incumbents = fillCompletedCapacity(duplicateKey);
-		Peer staleIncumbent = incumbents.get(0);
-		FieldUtils.writeField(staleIncumbent, "socketChannel", SocketChannel.open(), true);
+		Peer existingIncumbent = incumbents.get(0);
+		SocketChannel incumbentSocket = SocketChannel.open();
+		FieldUtils.writeField(existingIncumbent, "socketChannel", incumbentSocket, true);
 		Peer replacement = peer("198.51.100.251:24894", duplicateKey);
 		FieldUtils.writeField(replacement, "isOutbound", false, true);
 		replacement.setPeersNodeId("");
 
-		this.networkData.onHandshakeCompleted(replacement);
+		try {
+			this.networkData.onHandshakeCompleted(replacement);
+		} finally {
+			incumbentSocket.close();
+		}
 
 		assertEquals(this.networkData.getMaxDataPeers(), this.networkData.getImmutableHandshakedPeers().size());
-		assertFalse(containsPeer(staleIncumbent));
+		assertFalse(containsPeer(existingIncumbent));
 		assertTrue(containsPeer(replacement));
 	}
 
@@ -199,7 +204,7 @@ public class NetworkDataCapacityTests extends Common {
 	}
 
 	private Peer peer(String address, byte[] publicKey) {
-		Peer peer = new Peer(new PeerData(PeerAddress.fromString(address)), Peer.NETWORKDATA);
+		Peer peer = new CapacityTestPeer(address);
 		peer.setPeersPublicKey(publicKey);
 		peer.setPeersNodeId("node-" + address);
 		return peer;
@@ -228,6 +233,22 @@ public class NetworkDataCapacityTests extends Common {
 		public SocketChannel connect(int network) {
 			this.connectAttempts++;
 			return null;
+		}
+	}
+
+	/**
+	 * Test peer whose disconnect performs the NetworkData list cleanup without
+	 * attempting socket shutdown. Capacity decisions are under test here, not
+	 * SocketChannel lifecycle, and most fixtures intentionally have no socket.
+	 */
+	private static class CapacityTestPeer extends Peer {
+		private CapacityTestPeer(String address) {
+			super(new PeerData(PeerAddress.fromString(address)), Peer.NETWORKDATA);
+		}
+
+		@Override
+		public void disconnect(String reason) {
+			NetworkData.getInstance().removeConnectedPeer(this);
 		}
 	}
 }
