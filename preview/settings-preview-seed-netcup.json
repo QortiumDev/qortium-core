@@ -87,7 +87,8 @@
     "POST /transactions/process"
   ],
   "bootstrap": false,
-  "maxPeerConnectionTime": 999999999,
+  "minPeerConnectionTime": 7200,
+  "maxPeerConnectionTime": 21600,
   "recoveryModeTimeout": 0,
   "autoUpdateMode": "OFF",
   "qdnEnabled": true,

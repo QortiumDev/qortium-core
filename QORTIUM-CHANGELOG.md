@@ -58,6 +58,10 @@ are described in their own entries.
 
 QDN connections now use `maxDataPeers`, rather than the chain peer limit, as one clear startup capacity: the data network keeps its configured completed peers plus one tightly controlled handshake slot for a proven duplicate or correct-direction replacement. Incoming TCP, I2P, ordinary outbound, and on-demand QDN connections share that bound, so a connection flood cannot build an unlimited temporary peer queue before periodic cleanup. A new unrelated peer is declined when the data layer is full instead of displacing a working connection, and peer diagnostics now show the live data capacity and any provisional admission.
 
+### 2026-07-23 - preview: set finite chain peer rotation lifetime
+
+Makes the participant and both seed profiles explicitly use the production-like randomized two-to-six-hour chain-peer lifetime instead of the inherited effectively permanent testnet override. This configuration must not be packaged or deployed until P-CORE-35's outbound-only voluntary-rotation policy has merged and passed local acceptance for inbound and low-peer safety; the operational rollout then remains phased, one node at a time.
+
 ### 2026-07-23 - fix(gateway): expose the public avatar bridge actions
 
 Brings QDN apps opened through a Core-hosted public gateway in step with
