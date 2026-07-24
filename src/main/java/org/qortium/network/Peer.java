@@ -25,7 +25,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,6 +75,15 @@ public class Peer {
      */
 	private static final int RESPONSE_TIMEOUT = 10_000; // ms
 
+    /**
+     * Maximum serialized QDN chunk data retained by one peer across its send queue and
+     * currently-writing buffer. Chain and control messages do not consume this budget.
+     */
+    static final long MAX_PENDING_QDN_BYTES = 16L * 1024L * 1024L;
+    /** Keep most shared send-queue entries available to chain and control traffic. */
+    static final int MAX_PENDING_QDN_MESSAGES = 256;
+    private static final int SEND_QUEUE_CAPACITY = 2_000;
+
 	/**
 	 * Timeout for blockchain synchronization operations (ms)
 	 * Shorter timeout to avoid blocking transaction processing during sync.
@@ -113,7 +124,11 @@ public class Peer {
     private LinkedBlockingQueue<Message> pendingMessages;
 
 	private final BlockingQueue<Message> sendQueue;
+    private final Object sendQueueLock = new Object();
+    private final OutboundByteBudget qdnByteBudget =
+            new OutboundByteBudget(MAX_PENDING_QDN_BYTES, MAX_PENDING_QDN_MESSAGES);
     private volatile ByteBuffer outputBuffer;
+    private volatile Message outputMessage;
     private String outputMessageType;
     private int outputMessageId;
     private long lastWriteProgressTime = System.currentTimeMillis();
@@ -230,7 +245,7 @@ public class Peer {
     private Peer(int network, boolean outbound) {
         this.peerType = network;
         this.isOutbound = outbound;
-        this.sendQueue = new LinkedBlockingQueue<>(2000); // Bounded queue for bulk streaming
+        this.sendQueue = new LinkedBlockingQueue<>(SEND_QUEUE_CAPACITY);
         this.replyQueues = new ConcurrentHashMap<>();
         this.pendingMessages = new LinkedBlockingQueue<>();
     }
@@ -973,8 +988,14 @@ public class Peer {
             }
             // If output byte buffer is null, fetch next message from queue (if any)
             while (this.outputBuffer == null) {
-                // Simple poll from bounded queue
-                Message message = this.sendQueue.poll();
+                Message message;
+                synchronized (this.sendQueueLock) {
+                    // Claim ownership before shutdown can drain the queue. Once claimed,
+                    // outputMessage keeps any byte reservation reachable until completion,
+                    // write failure, or disconnect.
+                    message = this.sendQueue.poll();
+                    this.outputMessage = message;
+                }
 
                 // No message? No work to do - safe to clear OP_WRITE
                 // OP_WRITE will be re-armed by sendMessageWithTimeout() when new messages arrive
@@ -1019,6 +1040,7 @@ public class Peer {
                     messageStats.totalBytes.add(this.outputBuffer.limit());
                 } catch (MessageException e) {
                     // Something went wrong converting message to bytes, so discard but allow another round
+                    releaseCurrentOutputMessage();
                     // Still decrement prefetch count if it was an ArbitraryDataFileMessage
                     if (message instanceof ArbitraryDataFileMessage) {
                         decrementPrefetchCount();
@@ -1030,7 +1052,13 @@ public class Peer {
 
             // If output byte buffer is not null, send from that
             long socketWriteStart = System.nanoTime();
-            int bytesWritten = this.socketChannel.write(outputBuffer);
+            int bytesWritten;
+            try {
+                bytesWritten = this.socketChannel.write(outputBuffer);
+            } catch (IOException e) {
+                dropCurrentOutputMessage();
+                throw e;
+            }
             long socketWriteTime = System.nanoTime() - socketWriteStart;
             
             // Log for ARBITRARY_DATA_FILE
@@ -1054,6 +1082,7 @@ public class Peer {
 
             // If we then exhaust the byte buffer, set it to null (otherwise loop and try to send more)
             if (!this.outputBuffer.hasRemaining()) {
+                releaseCurrentOutputMessage();
                 this.outputMessageType = null;
                 this.outputMessageId = 0;
                 this.outputBuffer = null;
@@ -1173,7 +1202,10 @@ public class Peer {
             
             // Simple bounded queue - always enqueue, let TCP handle backpressure
             // For bulk streaming workloads, we need deep buffering, not producer-side backpressure
-            boolean offered = this.sendQueue.offer(message);
+            boolean offered;
+            synchronized (this.sendQueueLock) {
+                offered = !this.isStopping && this.sendQueue.offer(message);
+            }
             if (!offered) {
                 
                 return false; // Queue full - peer truly overloaded
@@ -1229,6 +1261,34 @@ public class Peer {
      */
     public int getSendQueueCapacity() {
         return this.sendQueue.remainingCapacity() + this.sendQueue.size();
+    }
+
+    /**
+     * Returns serialized QDN chunk bytes owned by this peer's queue and active writer.
+     */
+    public long getPendingQdnBytes() {
+        return this.qdnByteBudget.getReservedBytes();
+    }
+
+    /**
+     * Returns this peer's serialized QDN chunk byte limit.
+     */
+    public long getPendingQdnByteLimit() {
+        return this.qdnByteBudget.getLimit();
+    }
+
+    /**
+     * Returns QDN chunk messages owned by this peer's queue and active writer.
+     */
+    public int getPendingQdnMessageCount() {
+        return this.qdnByteBudget.getReservedMessageCount();
+    }
+
+    /**
+     * Returns this peer's QDN chunk message-count limit.
+     */
+    public int getPendingQdnMessageLimit() {
+        return this.qdnByteBudget.getMessageLimit();
     }
 
     /**
@@ -1464,6 +1524,18 @@ public class Peer {
             logStats = true;
         }
         isStopping = true;
+
+        // Release queued and currently-writing QDN reservations at the disconnect
+        // boundary. Reservation.release() is idempotent, so a racing writer can
+        // safely observe completion or failure without double-decrementing.
+        synchronized (this.sendQueueLock) {
+            Message queuedMessage;
+            while ((queuedMessage = this.sendQueue.poll()) != null)
+                releaseMessageReservation(queuedMessage);
+        }
+        Message currentOutputMessage = this.outputMessage;
+        this.outputMessage = null;
+        releaseMessageReservation(currentOutputMessage);
         
         // Reset prefetch count when peer disconnects
         // Messages in sendQueue will be cleared, so prefetch count should be reset
@@ -1658,6 +1730,9 @@ public class Peer {
      * @author Ice
      */
     public boolean sendPreSerializedMessage(int messageId, MessageType messageType, byte[] serializedBytes, int timeout) throws IOException {
+        if (serializedBytes == null)
+            throw new IOException("Serialized message bytes are null");
+
         if (this.socketChannel == null) {
             if (!isStopping) {
                 this.disconnect("Socket channel is null");
@@ -1671,19 +1746,42 @@ public class Peer {
             throw new IOException("Socket closed");
         }
 
+        OutboundByteBudget.Reservation reservation = null;
+        boolean enqueued = false;
         try {
-            // Create lightweight wrapper that returns pre-serialized bytes
-            Message wrapper = new PreSerializedMessageWrapper(messageId, messageType, serializedBytes);
+            if (messageType == MessageType.ARBITRARY_DATA_FILE) {
+                reservation = this.qdnByteBudget.tryReserve(serializedBytes.length);
+                if (reservation == null) {
+                    LOGGER.trace("[{}] QDN send budget exhausted for peer {}: requestedBytes={}, "
+                                    + "pendingBytes={}/{}, pendingMessages={}/{}",
+                            this.peerConnectionId, this, serializedBytes.length,
+                            this.qdnByteBudget.getReservedBytes(), this.qdnByteBudget.getLimit(),
+                            this.qdnByteBudget.getReservedMessageCount(),
+                            this.qdnByteBudget.getMessageLimit());
+                    return false;
+                }
+            }
+
+            // Create lightweight wrapper that returns pre-serialized bytes and owns
+            // the reservation until a terminal send outcome.
+            Message wrapper = new PreSerializedMessageWrapper(messageId, messageType, serializedBytes, reservation);
             
             // Queue message - will be picked up by ChannelWriteTask and writeChannel()
             LOGGER.trace("[{}] Queuing pre-serialized {} message with ID {} to peer {}", 
                         this.peerConnectionId, messageType.name(), messageId, this);
             
             // Enqueue FIRST, then set OP_WRITE (critical ordering)
-            boolean offered = this.sendQueue.offer(wrapper);
+            boolean offered;
+            synchronized (this.sendQueueLock) {
+                offered = !this.isStopping
+                        && this.socketChannel != null
+                        && this.socketChannel.isOpen()
+                        && this.sendQueue.offer(wrapper);
+            }
             if (!offered) {
                 return false; // Queue full
             }
+            enqueued = true;
 
             // NOW set OP_WRITE - message is guaranteed to be in queue
             switch (this.getPeerType()) {
@@ -1698,8 +1796,32 @@ public class Peer {
             return true;
         } catch (Exception e) {
             LOGGER.error("Error queuing pre-serialized message: {}", e.getMessage(), e);
-            return false;
+            // Once enqueued, ownership has transferred to the peer even if selector
+            // arming reports an error. Returning true prevents the caller treating an
+            // accepted chunk as dropped while it still owns queue capacity.
+            return enqueued;
+        } finally {
+            if (!enqueued && reservation != null)
+                reservation.release();
         }
+    }
+
+    private static void releaseMessageReservation(Message message) {
+        if (message instanceof PreSerializedMessageWrapper)
+            ((PreSerializedMessageWrapper) message).releaseReservation();
+    }
+
+    private void releaseCurrentOutputMessage() {
+        Message message = this.outputMessage;
+        this.outputMessage = null;
+        releaseMessageReservation(message);
+    }
+
+    private void dropCurrentOutputMessage() {
+        releaseCurrentOutputMessage();
+        this.outputBuffer = null;
+        this.outputMessageType = null;
+        this.outputMessageId = 0;
     }
     
     /**
@@ -1717,6 +1839,7 @@ public class Peer {
      */
     private static class PreSerializedMessageWrapper extends Message {
         private final byte[] preSerializedBytes;
+        private final OutboundByteBudget.Reservation reservation;
         
         /**
          * Constructs a wrapper for pre-serialized message bytes.
@@ -1725,9 +1848,11 @@ public class Peer {
          * @param messageType the message type
          * @param preSerializedBytes complete pre-serialized message bytes
          */
-        PreSerializedMessageWrapper(int messageId, MessageType messageType, byte[] preSerializedBytes) {
+        PreSerializedMessageWrapper(int messageId, MessageType messageType, byte[] preSerializedBytes,
+                                    OutboundByteBudget.Reservation reservation) {
             super(messageId, messageType);
             this.preSerializedBytes = preSerializedBytes;
+            this.reservation = reservation;
         }
         
         /**
@@ -1739,6 +1864,93 @@ public class Peer {
         public byte[] toBytes() throws MessageException {
             // Return pre-serialized bytes instantly - zero disk I/O!
             return preSerializedBytes;
+        }
+
+        private void releaseReservation() {
+            if (this.reservation != null)
+                this.reservation.release();
+        }
+    }
+
+    /**
+     * Lock-free byte admission with an idempotent ownership token.
+     */
+    static final class OutboundByteBudget {
+        private final long limit;
+        private final int messageLimit;
+        private final AtomicLong reservedBytes = new AtomicLong();
+        private final AtomicInteger reservedMessages = new AtomicInteger();
+
+        OutboundByteBudget(long limit, int messageLimit) {
+            if (limit <= 0)
+                throw new IllegalArgumentException("Byte budget limit must be positive");
+            if (messageLimit <= 0)
+                throw new IllegalArgumentException("Message budget limit must be positive");
+
+            this.limit = limit;
+            this.messageLimit = messageLimit;
+        }
+
+        Reservation tryReserve(long bytes) {
+            if (bytes <= 0 || bytes > this.limit)
+                return null;
+
+            while (true) {
+                int currentMessages = this.reservedMessages.get();
+                if (currentMessages >= this.messageLimit)
+                    return null;
+
+                if (this.reservedMessages.compareAndSet(currentMessages, currentMessages + 1))
+                    break;
+            }
+
+            while (true) {
+                long current = this.reservedBytes.get();
+                if (bytes > this.limit - current) {
+                    this.reservedMessages.decrementAndGet();
+                    return null;
+                }
+
+                if (this.reservedBytes.compareAndSet(current, current + bytes))
+                    return new Reservation(this, bytes);
+            }
+        }
+
+        long getReservedBytes() {
+            return this.reservedBytes.get();
+        }
+
+        long getLimit() {
+            return this.limit;
+        }
+
+        int getReservedMessageCount() {
+            return this.reservedMessages.get();
+        }
+
+        int getMessageLimit() {
+            return this.messageLimit;
+        }
+
+        private void release(long bytes) {
+            this.reservedBytes.addAndGet(-bytes);
+            this.reservedMessages.decrementAndGet();
+        }
+
+        static final class Reservation {
+            private final OutboundByteBudget budget;
+            private final long bytes;
+            private final AtomicBoolean released = new AtomicBoolean();
+
+            private Reservation(OutboundByteBudget budget, long bytes) {
+                this.budget = budget;
+                this.bytes = bytes;
+            }
+
+            void release() {
+                if (this.released.compareAndSet(false, true))
+                    this.budget.release(this.bytes);
+            }
         }
     }
 }

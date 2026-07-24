@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-24 - fix(network): bound outbound QDN bytes per peer
+
+Each peer can now retain at most 16 MiB and 256 messages of serialized QDN chunk data across its outbound queue and the chunk currently being written to the socket. Admission and release are atomic across the parallel QDN sender threads, and capacity is returned exactly once after a completed write, rejected or failed send, queue drop, or disconnect. A slow QDN consumer therefore applies backpressure within a small bounded footprint instead of letting the 2,000-message queue retain roughly a gigabyte or fill with tiny chunks, leaving most entries available for chain and control messages. Publisher-push chunks requested through QDN's OFFER/WANT exchange remain lazily loaded and retry bounded peer admission until accepted or the peer disconnects. Their upstream lazy factories have a separate 10,000-item per-peer budget matching the public WANT protocol limit, while ordinary lazy factory work now honors the send manager's documented 2,000-message ceiling. Reliable deduplication uses the resource signature and chunk hash together, so an exact duplicate is rejected without conflating identical hashes belonging to different signed resources. Raw-hash queue visibility is reference-counted and follows pipeline ownership instead of expiring active work by age. This explicitly bounds total lazy metadata at about 12,000 items per peer without truncating one maximum-sized valid WANT. The reliable budget is aggregate per peer, so simultaneous valid WANTs share its available capacity. Protocol-oversized messages and post-shutdown work are not retained.
+
 ### 2026-07-24 - fix(api): canonicalize authenticated QDN publish paths
 
 Path-based QDN publishing remains available to API-key-authorized local clients, but the selected file or directory is now resolved to its canonical, existing filesystem path before Core checks or processes it. This prevents traversal and alias components from propagating through the publishing pipeline while preserving stable missing, unreadable, invalid, and inaccessible path errors.

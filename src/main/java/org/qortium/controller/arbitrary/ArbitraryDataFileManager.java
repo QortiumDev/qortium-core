@@ -1721,10 +1721,19 @@ public class ArbitraryDataFileManager extends Thread {
 
     // Network handlers
     private void processDataFile(Peer peer, byte[] hash, byte[] sig, Message originalMessage) {
+        processDataFile(peer, hash, sig, originalMessage, false);
+    }
+
+    private void processDataFile(Peer peer, byte[] hash, byte[] sig, Message originalMessage,
+                                 boolean retryOnBackpressure) {
         // Mark peer as actively used for QDN (we're serving them data)
         peer.markMeaningfulQdnUse();
 
         final String hash58 = Base58.encode(hash);
+        // ':' is outside the Base58 alphabet, so this pair is unambiguous.
+        final String reliableDeduplicationKey = retryOnBackpressure
+                ? Base58.encode(sig) + ":" + hash58
+                : null;
         try {
             ArbitraryDataFile arbitraryDataFile = ArbitraryDataFile.fromHash(hash, sig);
             
@@ -1763,7 +1772,18 @@ public class ArbitraryDataFileManager extends Thread {
                 
                 // Estimate chunk size (~500KB typical)
                 int estimatedSize = 512 * 1024;
-                PeerSendManagement.getInstance().getOrCreateSendManager(peer, true).queueMessageFactory(factory, estimatedSize);
+                PeerSendManager sendManager =
+                        PeerSendManagement.getInstance().getOrCreateSendManager(peer, true);
+                if (retryOnBackpressure) {
+                    boolean queued =
+                            sendManager.queueMessageFactoryWithRetry(
+                                    factory, estimatedSize, hash58, reliableDeduplicationKey);
+                    if (!queued)
+                        LOGGER.debug("Reliable publisher push for chunk {} was duplicate or exceeded "
+                                + "the per-peer pending limit for {}", hash58, peer);
+                } else {
+                    sendManager.queueMessageFactory(factory, estimatedSize);
+                }
                 return; // Early return - found in permanent storage
             } else {
                 LOGGER.debug("Hash {} does not exist in permanent storage, queueing send to {}", hash58, peer);
@@ -1796,7 +1816,18 @@ public class ArbitraryDataFileManager extends Thread {
                 };
                 
                 int estimatedSize = 512 * 1024;
-                PeerSendManagement.getInstance().getOrCreateSendManager(peer, true).queueMessageFactory(factory, estimatedSize);
+                PeerSendManager sendManager =
+                        PeerSendManagement.getInstance().getOrCreateSendManager(peer, true);
+                if (retryOnBackpressure) {
+                    boolean queued =
+                            sendManager.queueMessageFactoryWithRetry(
+                                    factory, estimatedSize, hash58, reliableDeduplicationKey);
+                    if (!queued)
+                        LOGGER.debug("Reliable publisher push for relay chunk {} was duplicate or exceeded "
+                                + "the per-peer pending limit for {}", hash58, peer);
+                } else {
+                    sendManager.queueMessageFactory(factory, estimatedSize);
+                }
                 return; // Early return - found in relay cache, skip all relay logic
             }
             
@@ -2000,8 +2031,6 @@ public class ArbitraryDataFileManager extends Thread {
 
     /** Max reachable peers we offer a freshly-published resource to. */
     private static final int QDN_PUSH_MAX_PEERS = 3;
-    /** Defensive cap on hashes processed from a single OFFER/WANT message. */
-    private static final int QDN_PUSH_MAX_HASHES_PER_MESSAGE = 10_000;
     /** Dedicated single-thread executor so the push never blocks the import / network threads. */
     private final ExecutorService pushExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "QDN Publisher Push");
@@ -2100,7 +2129,7 @@ public class ArbitraryDataFileManager extends Thread {
         List<byte[]> offeredHashes = offerMessage.getHashes();
         if (signature == null || offeredHashes == null || offeredHashes.isEmpty())
             return;
-        if (offeredHashes.size() > QDN_PUSH_MAX_HASHES_PER_MESSAGE) {
+        if (offeredHashes.size() > ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE) {
             LOGGER.debug("Ignoring oversized QDN push OFFER ({} hashes) from {}", offeredHashes.size(), peer);
             return;
         }
@@ -2165,7 +2194,7 @@ public class ArbitraryDataFileManager extends Thread {
         List<byte[]> wantedHashes = wantMessage.getHashes();
         if (signature == null || wantedHashes == null || wantedHashes.isEmpty())
             return;
-        if (wantedHashes.size() > QDN_PUSH_MAX_HASHES_PER_MESSAGE) {
+        if (wantedHashes.size() > ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE) {
             LOGGER.debug("Ignoring oversized QDN push WANT ({} hashes) from {}", wantedHashes.size(), peer);
             return;
         }
@@ -2175,7 +2204,7 @@ public class ArbitraryDataFileManager extends Thread {
                 continue;
             try {
                 if (ArbitraryDataFile.fromHash(hash, signature).exists())
-                    processDataFile(peer, hash, signature, message);
+                    processDataFile(peer, hash, signature, message, true);
             } catch (DataException e) {
                 LOGGER.trace("Unable to serve pushed hash to {}: {}", peer, e.getMessage());
             }

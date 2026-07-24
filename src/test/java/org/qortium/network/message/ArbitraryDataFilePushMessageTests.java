@@ -36,6 +36,13 @@ public class ArbitraryDataFilePushMessageTests {
 			assertArrayEquals(expected.get(i), actual.get(i));
 	}
 
+	private static ByteBuffer oversizedPushPayload() {
+		return ByteBuffer.allocate(Transformer.SIGNATURE_LENGTH + Integer.BYTES)
+				.put(new byte[Transformer.SIGNATURE_LENGTH])
+				.putInt(ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE + 1)
+				.flip();
+	}
+
 	@Test
 	public void testOfferRoundTrip() throws MessageException {
 		byte[] signature = filledArray(Transformer.SIGNATURE_LENGTH, 7);
@@ -60,6 +67,35 @@ public class ArbitraryDataFilePushMessageTests {
 
 		assertArrayEquals(signature, decoded.getSignature());
 		assertHashesEqual(hashes, decoded.getHashes());
+	}
+
+	@Test
+	public void testPushDecodersAcceptSharedHashLimit() throws MessageException {
+		byte[] signature = filledArray(Transformer.SIGNATURE_LENGTH, 17);
+		List<byte[]> hashes =
+				sampleHashes(ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE);
+
+		ArbitraryDataFileOfferMessage offer = new ArbitraryDataFileOfferMessage(signature, hashes);
+		ArbitraryDataFileOfferMessage decodedOffer = (ArbitraryDataFileOfferMessage)
+				ArbitraryDataFileOfferMessage.fromByteBuffer(1, ByteBuffer.wrap(offer.dataBytes));
+		assertEquals(ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE,
+				decodedOffer.getHashes().size());
+
+		ArbitraryDataFileWantMessage want = new ArbitraryDataFileWantMessage(signature, hashes);
+		ArbitraryDataFileWantMessage decodedWant = (ArbitraryDataFileWantMessage)
+				ArbitraryDataFileWantMessage.fromByteBuffer(2, ByteBuffer.wrap(want.dataBytes));
+		assertEquals(ArbitraryDataFileWantMessage.MAX_HASHES_PER_MESSAGE,
+				decodedWant.getHashes().size());
+	}
+
+	@Test(expected = MessageException.class)
+	public void testOfferDecoderRejectsAboveSharedHashLimit() throws MessageException {
+		ArbitraryDataFileOfferMessage.fromByteBuffer(1, oversizedPushPayload());
+	}
+
+	@Test(expected = MessageException.class)
+	public void testWantDecoderRejectsAboveSharedHashLimit() throws MessageException {
+		ArbitraryDataFileWantMessage.fromByteBuffer(1, oversizedPushPayload());
 	}
 
 	@Test
