@@ -20,6 +20,10 @@ public class KnownPeerDiagnostics {
 	public int connectedCount;
 	public int handshakedCount;
 	public int outboundHandshakedCount;
+	/** Effective startup capacity for the DATA layer; null for the CHAIN layer. */
+	public Integer dataPeerCapacity;
+	/** DATA-layer admissions reserved before a socket has joined connectedPeers. */
+	public Integer pendingDataPeerAdmissions;
 	public int connectableCount;
 	public int backoffCount;
 	public List<String> allowedTransports = new ArrayList<>();

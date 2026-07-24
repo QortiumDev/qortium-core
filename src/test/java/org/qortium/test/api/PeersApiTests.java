@@ -20,6 +20,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class PeersApiTests extends ApiCommon {
@@ -96,6 +97,8 @@ public class PeersApiTests extends ApiCommon {
 		KnownPeerDiagnostics diagnostics = this.peersResource.getKnownPeerDiagnostics();
 
 		assertEquals(KnownPeerDiagnostics.Layer.CHAIN, diagnostics.layer);
+		assertNull(diagnostics.dataPeerCapacity);
+		assertNull(diagnostics.pendingDataPeerAdmissions);
 		assertEquals(2, diagnostics.knownCount);
 		assertEquals(0, diagnostics.connectedCount);
 		assertEquals(1, diagnostics.connectableCount);

@@ -51,8 +51,12 @@ Adds clear startup validation and the `maxDataPeerIdleTime` setting. The old
 `maxDataPeerConnectionTime` name remains a warned compatibility alias for one
 release, conflicting values are rejected, and diagnostics expose the effective
 value and source. Peer-age and QDN-idle decisions now use monotonic elapsed
-time, while Previewnet's long chain-peer override and all peer-capacity logic
-remain unchanged.
+time. Previewnet lifetime configuration and the separate data-capacity contract
+are described in their own entries.
+
+### 2026-07-23 - fix(network): bound QDN data-peer admissions by their own capacity
+
+QDN connections now use `maxDataPeers`, rather than the chain peer limit, as one clear startup capacity: the data network keeps its configured completed peers plus one tightly controlled handshake slot for a proven duplicate or correct-direction replacement. Incoming TCP, I2P, ordinary outbound, and on-demand QDN connections share that bound, so a connection flood cannot build an unlimited temporary peer queue before periodic cleanup. A new unrelated peer is declined when the data layer is full instead of displacing a working connection, and peer diagnostics now show the live data capacity and any provisional admission.
 
 ### 2026-07-23 - fix(gateway): expose the public avatar bridge actions
 
