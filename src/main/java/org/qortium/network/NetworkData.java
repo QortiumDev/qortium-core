@@ -677,7 +677,7 @@ public class NetworkData {
 
     /**
      * Periodically clean up stale outbound failure records to prevent memory accumulation.
-     * Called from checkLongestConnection during prunePeers() (every 90 seconds).
+     * Called from the controller-cadenced idle-rotation pass during prunePeers().
      */
     private void cleanupStaleOutboundFailures() {
         int removed = this.peerDirectionState.cleanupStaleOutboundFailures();
@@ -3576,12 +3576,10 @@ public class NetworkData {
             peer.disconnect("write stuck: " + stuckInfo);
         }
 
-        // Disconnect peers that have exceeded their maximum connection age
-        // (also cleans up stale outbound failure records)
+        // Rotate at most one safely idle outbound data peer and clean up stale failure records.
         this.rotateIdleOutboundPeer();
 
-        // Prune 'old' peers from if we are over the count
-        // getImmutableHandshakedPeers().size() works fine as PeerList has a size() method.
+        // Recover any legacy or race-created completed-peer state above the startup capacity.
         int overCount = this.getImmutableHandshakedPeers().size() - this.maxDataPeers;
         if (overCount > 0) { // Too Many peers we need to trim some out
             List<Peer> listDisconnectPeers = findOldPeers(overCount);
