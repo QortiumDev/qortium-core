@@ -2571,7 +2571,9 @@ public class NetworkData {
         }
 
         this.removeConnectedPeer(peer);
-        this.channelsPendingWrite.remove(peer.getSocketChannel());
+        SocketChannel socketChannel = peer.getSocketChannel();
+        if (socketChannel != null)
+            this.channelsPendingWrite.remove(socketChannel);
         
         // Clean up PeerSendManager immediately when peer disconnects
         // This prevents messages from being queued to a dead manager
