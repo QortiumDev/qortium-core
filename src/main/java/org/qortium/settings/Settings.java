@@ -334,8 +334,13 @@ public class Settings {
 	private int minPeerConnectionTime = 2 * 60 * 60; // seconds = 2hrs
 	/** Maximum time (in seconds) that we should attempt to remain connected to a peer for */
 	private int maxPeerConnectionTime = 6 * 60 * 60; // seconds = 6hrs
-	/** Maximum time (in seconds) that a peer should remain connected when requesting QDN data */
-	private int maxDataPeerConnectionTime = 30 * 60; // seconds
+	/** Maximum meaningful-payload idle time for an outbound data peer before voluntary rotation. */
+	private Integer maxDataPeerIdleTime = null; // effective default: 30 minutes
+	/**
+	 * Deprecated one-release compatibility alias for {@code maxDataPeerIdleTime}.
+	 * This no longer means total connection age.
+	 */
+	private Integer maxDataPeerConnectionTime = null;
 
 	/**
 	 * Ordered list of allowed network transports. Presence = enabled, order = preference (first =
@@ -1072,6 +1077,8 @@ public class Settings {
 		public List<String> pendingRestart = new ArrayList<>();
 		public boolean fileDiffersFromRuntime;
 		public List<String> fileChanged = new ArrayList<>();
+		public int effectiveMaxDataPeerIdleTime;
+		public String dataPeerIdleSettingSource;
 		@JsonInclude(JsonInclude.Include.NON_NULL)
 		public String fileComparisonError;
 
@@ -1099,6 +1106,7 @@ public class Settings {
 		settings.put("minOutboundPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("minBlockchainPeers", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("minDataPeers", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("maxDataPeerIdleTime", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("apiKeyRemoteAccessEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("publicApiWriteMaxBodySize", new WritableSetting(WritableSettingType.LONG, false));
 		settings.put("publicApiBuilderRequestsPerMinute", new WritableSetting(WritableSettingType.INTEGER, false));
@@ -1312,6 +1320,11 @@ public class Settings {
 				restartRequired.add(settingName);
 		}
 
+		// Writing the clear setting name is also the explicit migration action.
+		if (patch.containsKey("maxDataPeerIdleTime")
+				&& mergedSettings.remove("maxDataPeerConnectionTime") != null)
+			removed.add("maxDataPeerConnectionTime");
+
 		Path tempSettingsPath = writeTempSettings(activeSettingsPath, mergedSettings);
 		try {
 			Settings validatedSettings;
@@ -1401,6 +1414,8 @@ public class Settings {
 		metadata.settingsPath = activeSettingsPath == null ? null : activeSettingsPath.toString();
 		metadata.writable = getWritableSettingsMetadata();
 		metadata.pendingRestart = new ArrayList<>(pendingRestartSettings);
+		metadata.effectiveMaxDataPeerIdleTime = settings.getMaxDataPeerIdleTime();
+		metadata.dataPeerIdleSettingSource = settings.getDataPeerIdleSettingSource();
 
 		try {
 			metadata.fileChanged = getFileChangedSettings(settings);
@@ -1685,6 +1700,25 @@ public class Settings {
 
 		if (this.minOutboundPeers > this.maxPeers)
 			throwValidationError("minOutboundPeers must not be greater than maxPeers");
+
+		if (this.minOutboundPeers > this.maxDataPeers)
+			throwValidationError("minOutboundPeers must not be greater than maxDataPeers");
+
+		if (this.minPeerConnectionTime <= 0)
+			throwValidationError("minPeerConnectionTime must be greater than 0");
+
+		if (this.maxPeerConnectionTime <= this.minPeerConnectionTime)
+			throwValidationError("maxPeerConnectionTime must be greater than minPeerConnectionTime");
+
+		if (this.maxDataPeerIdleTime != null && this.maxDataPeerConnectionTime != null
+				&& !this.maxDataPeerIdleTime.equals(this.maxDataPeerConnectionTime))
+			throwValidationError("maxDataPeerIdleTime conflicts with deprecated maxDataPeerConnectionTime; configure only maxDataPeerIdleTime");
+
+		if (this.getMaxDataPeerIdleTime() <= 0)
+			throwValidationError("maxDataPeerIdleTime must be greater than 0");
+
+		if (this.maxDataPeerIdleTime == null && this.maxDataPeerConnectionTime != null)
+			LOGGER.warn("Setting maxDataPeerConnectionTime is deprecated and now means data-peer idle time; rename it to maxDataPeerIdleTime");
 
 		this.minPeerVersion = validatePeerVersionSetting("minPeerVersion", this.minPeerVersion);
 
@@ -2327,8 +2361,26 @@ public class Settings {
 
 	public int getMaxPeerConnectionTime() { return this.maxPeerConnectionTime; }
 
+	public int getMaxDataPeerIdleTime() {
+		if (this.maxDataPeerIdleTime != null)
+			return this.maxDataPeerIdleTime;
+		if (this.maxDataPeerConnectionTime != null)
+			return this.maxDataPeerConnectionTime;
+		return 30 * 60;
+	}
+
+	public String getDataPeerIdleSettingSource() {
+		if (this.maxDataPeerIdleTime != null)
+			return "maxDataPeerIdleTime";
+		if (this.maxDataPeerConnectionTime != null)
+			return "maxDataPeerConnectionTime (deprecated alias)";
+		return "default";
+	}
+
+	/** @deprecated use {@link #getMaxDataPeerIdleTime()}. */
+	@Deprecated
 	public int getMaxDataPeerConnectionTime() {
-		return this.maxDataPeerConnectionTime;
+		return this.getMaxDataPeerIdleTime();
 	}
 
 	public boolean isWalletEnabled(String coinKey) {

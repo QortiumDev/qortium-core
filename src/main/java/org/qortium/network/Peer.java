@@ -113,10 +113,12 @@ public class Peer {
     private LinkedBlockingQueue<Message> pendingMessages;
 
 	private final BlockingQueue<Message> sendQueue;
-	private ByteBuffer outputBuffer;
-	private String outputMessageType;
-	private int outputMessageId;
-	private long lastWriteProgressTime = System.currentTimeMillis();
+    private volatile ByteBuffer outputBuffer;
+    private String outputMessageType;
+    private int outputMessageId;
+    private long lastWriteProgressTime = System.currentTimeMillis();
+    private volatile long connectionEstablishedNanos = -1L;
+    private volatile long lastMeaningfulQdnUseNanos = System.nanoTime();
 	
 	// Shallow prefetch: track active prefetches to cap at 2-4 chunks per peer
 	private static final int MAX_PREFETCH_COUNT = 3; // Cap at 3 prefetches per peer (2-4 range)
@@ -408,6 +410,7 @@ public class Peer {
                 
                 this.handshakeStatus = Handshake.COMPLETED;
                 this.handshakeComplete = System.currentTimeMillis();
+                this.connectionEstablishedNanos = System.nanoTime();
                 this.generateRandomMaxConnectionAge();
                 
                 // Defensive sanity check - should never fail since we're inside the lock
@@ -437,12 +440,9 @@ public class Peer {
             return;
         }
 
-        // Data connections are short-lived by design - they exist to transfer QDN data
-        if (this.isDataPeer() || this.peerType == Peer.NETWORKDATA) {
-            this.maxConnectionAge = Settings.getInstance().getMaxDataPeerConnectionTime() * 1000L;
-            LOGGER.debug("[{}] Using max data peer connection age for peer {}: {}ms", this.peerConnectionId, this, this.maxConnectionAge);
+        // Data peers use activity-aware idle rotation rather than connection age.
+        if (this.isDataPeer() || this.peerType == Peer.NETWORKDATA)
             return;
-        }
 
         // Retrieve the min and max connection time from the settings, and calculate the range
         final int minPeerConnectionTime = Settings.getInstance().getMinPeerConnectionTime();
@@ -741,6 +741,7 @@ public class Peer {
         
         this.connectionTimestamp = timestamp;
         this.lastValidUse = timestamp;
+        this.lastMeaningfulQdnUseNanos = System.nanoTime();
         this.socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, true);
         this.socketChannel.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
 
@@ -1297,12 +1298,31 @@ public class Peer {
     }
 
 
+    public void markMeaningfulQdnUse() {
+        Long now = NTP.getTime();
+        this.lastValidUse = now != null ? now : System.currentTimeMillis();
+        this.lastMeaningfulQdnUseNanos = System.nanoTime();
+    }
+
+    /** @deprecated use {@link #markMeaningfulQdnUse()} for payload or relay activity only. */
+    @Deprecated
     public void QDNUse() {
-        this.lastValidUse = NTP.getTime();
+        this.markMeaningfulQdnUse();
     }
 
     public long getLastQDNUse() {
         return this.lastValidUse;
+    }
+
+    public long getMeaningfulQdnIdleMillis(long nowNanos) {
+        return Math.max(0L, (nowNanos - this.lastMeaningfulQdnUseNanos) / 1_000_000L);
+    }
+
+    public boolean hasPendingQdnOutput() {
+        return !this.replyQueues.isEmpty()
+                || !this.sendQueue.isEmpty()
+                || this.outputBuffer != null
+                || this.activePrefetchCount.get() > 0;
     }
 
     /**
@@ -1593,9 +1613,10 @@ public class Peer {
     }
 
     public long getConnectionAge() {
-        if (handshakeComplete > 0L) {
+        if (this.connectionEstablishedNanos > 0L)
+            return Math.max(0L, (System.nanoTime() - this.connectionEstablishedNanos) / 1_000_000L);
+        if (handshakeComplete > 0L)
             return System.currentTimeMillis() - handshakeComplete;
-        }
         return handshakeComplete;
     }
 

@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-23 - fix(network): make peer rotation safe and activity-aware
+
+Makes the controller's existing two-minute startup delay and 90-second
+maintenance cycle the single schedule for both peer networks. Chain diversity
+rotation now considers only replaceable outbound peers and preserves fixed,
+synchronizing, low-total-peer, and low-outbound-peer connections. Data peers
+rotate by meaningful QDN payload inactivity instead of a fixed 30-minute
+connection age, while active requests, relays, queues, output, and prefetch work
+are protected. Routine file-list gossip does not keep every data peer young.
+Each layer can voluntarily rotate at most one peer per pass, and a soft
+ten-minute reconnect preference gives another endpoint an opportunity without
+stranding thin or I2P-only nodes.
+
+Adds clear startup validation and the `maxDataPeerIdleTime` setting. The old
+`maxDataPeerConnectionTime` name remains a warned compatibility alias for one
+release, conflicting values are rejected, and diagnostics expose the effective
+value and source. Peer-age and QDN-idle decisions now use monotonic elapsed
+time, while Previewnet's long chain-peer override and all peer-capacity logic
+remain unchanged.
+
 ### 2026-07-23 - fix(gateway): expose the public avatar bridge actions
 
 Brings QDN apps opened through a Core-hosted public gateway in step with

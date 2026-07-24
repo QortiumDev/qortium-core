@@ -57,6 +57,7 @@ public class NetworkData {
     // How long before retrying after a connection failure, in milliseconds.
     private static final long CONNECT_FAILURE_BACKOFF = 2 * 60 * 1000L; // ms
     private static final long I2P_CONNECT_FAILURE_BACKOFF = 15 * 60 * 1000L; // ms
+    private static final long ROTATION_RECONNECT_COOLDOWN_NANOS = TimeUnit.MINUTES.toNanos(10);
 
     /**
      * After dropping a working I2P fallback peer to retry direct TCP, don't drop another
@@ -78,8 +79,6 @@ public class NetworkData {
     private static final long I2P_DATA_START_RETRY_DELAY = 60 * 1000L; // ms
 
     private static final long NETWORK_EPC_KEEPALIVE = 5L; // seconds
-
-    private static final long DISCONNECTION_CHECK_INTERVAL = 180 * 1000L; // milliseconds - 3min
 
     // ---- Data-layer gossip (PEERS) bounds ----
     // The data overlay has NO compensating age-prune for allKnownPeers (unlike the chain layer's
@@ -116,8 +115,8 @@ public class NetworkData {
     private final int minOutboundPeers;
     private final int maxPeers;
 
-    private long nextDisconnectionCheck = 0L;
     private long nextHandshakeCleanup = 0L;
+    private final Map<String, Long> voluntaryRotationCooldowns = new ConcurrentHashMap<>();
 
     private final List<PeerData> allKnownPeers = new ArrayList<>();
     
@@ -2049,6 +2048,7 @@ public class NetworkData {
             return null;
         }
 
+        peers = preferPeersOutsideRotationCooldown(peers);
         peers = preferConfiguredTransport(peers);
 
         // Pick random peer
@@ -2064,6 +2064,19 @@ public class NetworkData {
         // Update connection attempt info
         peerData.setLastAttempted(now);
         return newPeer;
+    }
+
+    private List<PeerData> preferPeersOutsideRotationCooldown(List<PeerData> peers) {
+        long nowNanos = System.nanoTime();
+        this.voluntaryRotationCooldowns.entrySet().removeIf(entry -> entry.getValue() <= nowNanos);
+        Set<PeerData> coolingDown = peers.stream()
+                .filter(peerData -> this.voluntaryRotationCooldowns.containsKey(peerData.getAddress().toString()))
+                .collect(Collectors.toSet());
+        List<PeerData> preferred = PeerMaintenancePolicy.preferOutsideRotationCooldown(peers, coolingDown);
+        if (!coolingDown.isEmpty())
+            LOGGER.debug("Data voluntary rotation reconnect policy: coolingDown={}, alternativesUsed={}, fallbackAllowed={}",
+                    coolingDown.size(), preferred.size(), preferred == peers);
+        return preferred;
     }
 
     static String formatNoConnectableDataPeersWarning(KnownPeerDiagnostics diagnostics) {
@@ -2225,45 +2238,59 @@ public class NetworkData {
         return null;
     }
 
-    private void checkLongestConnection(Long now) {
-        if (now == null || now < nextDisconnectionCheck) {
-            return;
-        }
+    private void rotateIdleOutboundPeer() {
+        PeerList handshakedPeers = this.getImmutableHandshakedPeers();
+        int handshakedCount = handshakedPeers.size();
+        int minDataPeers = Settings.getInstance().getMinDataPeers();
+        int outboundCount = (int) handshakedPeers.stream().filter(Peer::isOutbound).count();
+        int minOutboundPeers = Settings.getInstance().getMinOutboundPeers();
+        long idleThresholdMillis = Settings.getInstance().getMaxDataPeerIdleTime() * 1000L;
+        long nowNanos = System.nanoTime();
+        ArbitraryDataFileManager fileManager = ArbitraryDataFileManager.getExistingInstance();
 
-        // Find peers that have reached their maximum connection age, and disconnect them
-        List<Peer> agedPeers = this.getImmutableConnectedPeers().stream()
-                .filter(peer -> !peer.isSyncInProgress())
-                .filter(peer -> peer.hasReachedMaxConnectionAge())
-                .sorted(Comparator.comparingLong(Peer::getConnectionAge).reversed())
+        List<PeerMaintenancePolicy.DataCandidate<Peer>> candidates = handshakedPeers.stream()
+                .map(peer -> {
+                    PeerSendManager sendManager = PeerSendManagement.getInstance().getSendManager(peer);
+                    boolean activeWork = peer.hasPendingQdnOutput()
+                            || (sendManager != null && sendManager.hasPendingMessages())
+                            || (fileManager != null && fileManager.hasActiveWorkForPeer(peer));
+                    return new PeerMaintenancePolicy.DataCandidate<>(
+                            peer, peer.isOutbound(), peer.getMeaningfulQdnIdleMillis(nowNanos), activeWork);
+                })
                 .collect(Collectors.toList());
 
-        if (!agedPeers.isEmpty()) {
-            int handshakedCount = this.getImmutableHandshakedPeers().size();
-            int minDataPeers = Settings.getInstance().getMinDataPeers();
+        PeerMaintenancePolicy.selectDataRotation(candidates, handshakedCount, minDataPeers,
+                        outboundCount, minOutboundPeers, idleThresholdMillis)
+                .ifPresent(candidate -> {
+                    Peer peer = candidate.peer;
+                    this.voluntaryRotationCooldowns.put(peer.getPeerData().getAddress().toString(),
+                            System.nanoTime() + ROTATION_RECONNECT_COOLDOWN_NANOS);
+                    LOGGER.info("Peer maintenance rotation: policy=data-idle, peer={}, direction=outbound, " +
+                                    "transport={}, connectionAgeMs={}, idleMs={}, idleThresholdMs={}, handshakedCount={}, protectionThreshold={}, " +
+                                    "outboundCount={}, outboundProtectionThreshold={}, reconnectCooldownMinutes={}",
+                            peer,
+                            peer.getPeerData().getAddress().isI2P() ? "I2P" : "IP",
+                            peer.getConnectionAge(), candidate.idleMillis, idleThresholdMillis,
+                            handshakedCount, minDataPeers, outboundCount, minOutboundPeers,
+                            TimeUnit.NANOSECONDS.toMinutes(ROTATION_RECONNECT_COOLDOWN_NANOS));
+                    peer.disconnect("Voluntary data-idle rotation");
+                });
 
-            if (handshakedCount <= minDataPeers) {
-                // Low-peer node: keep aged data connections rather than dropping peers we may
-                // not be able to replace, which would hurt QDN availability
-                LOGGER.debug("Preserving {} aged data peer(s): only {} handshaked data peer(s), at or below minDataPeers ({})",
-                        agedPeers.size(), handshakedCount, minDataPeers);
-            } else {
-                // Disconnect at most one aged peer per check so shuffling never mass-evicts,
-                // even when many connections age out at the same time
-                Peer peer = agedPeers.get(0);
-                LOGGER.debug("Forcing disconnection of data peer {} ({}, {}) because connection age ({} ms) " +
-                        "has reached the maximum ({} ms); handshaked data peers: {}",
-                        peer, peer.isOutbound() ? "outbound" : "inbound",
-                        peer.getPeerData().getAddress().isI2P() ? "I2P" : "IP",
-                        peer.getConnectionAge(), peer.getMaxConnectionAge(), handshakedCount);
-                peer.disconnect("Connection age too old");
-            }
-        }
+        if (handshakedCount <= minDataPeers
+                && candidates.stream().anyMatch(candidate -> candidate.idleMillis > idleThresholdMillis))
+            LOGGER.debug("Data-idle rotation protected by minDataPeers: handshakedCount={}, threshold={}",
+                    handshakedCount, minDataPeers);
+        if (outboundCount < minOutboundPeers
+                && candidates.stream().anyMatch(candidate -> candidate.idleMillis > idleThresholdMillis))
+            LOGGER.debug("Data-idle rotation protected by minOutboundPeers: outboundCount={}, threshold={}",
+                    outboundCount, minOutboundPeers);
+        candidates.stream()
+                .filter(candidate -> candidate.idleMillis > idleThresholdMillis && candidate.activeWork)
+                .forEach(candidate -> LOGGER.debug("Data-idle rotation protected active QDN work for peer {} (idleMs={})",
+                        candidate.peer, candidate.idleMillis));
 
-        // Clean up stale outbound failure records
+        // This housekeeping is intentionally controller-cadenced, not hidden behind a layer timer.
         cleanupStaleOutboundFailures();
-
-        // Check again after a minimum fixed interval
-        nextDisconnectionCheck = now + DISCONNECTION_CHECK_INTERVAL;
     }
 
     // SocketChannel interest-ops manipulations
@@ -3352,10 +3379,12 @@ public class NetworkData {
             return;
         }
         
-        final Long now = NTP.getTime();
-        if (now == null) {
+        final Long ntpNow = NTP.getTime();
+        if (ntpNow == null) {
+            this.rotateIdleOutboundPeer();
             return;
         }
+        final long now = ntpNow;
 
         // Repair any orphaned peers (bidirectional check between connectedPeers and handshakedPeers)
         try {
@@ -3450,7 +3479,7 @@ public class NetworkData {
 
         // Disconnect peers that have exceeded their maximum connection age
         // (also cleans up stale outbound failure records)
-        this.checkLongestConnection(now);
+        this.rotateIdleOutboundPeer();
 
         // Prune 'old' peers from if we are over the count
         // getImmutableHandshakedPeers().size() works fine as PeerList has a size() method.

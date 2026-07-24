@@ -755,6 +755,30 @@ public class ArbitraryDataFileManager extends Thread {
         return instance;
     }
 
+    /** Returns the active manager without starting it solely for peer maintenance. */
+    public static ArbitraryDataFileManager getExistingInstance() {
+        return instance;
+    }
+
+    /** True while this peer is the source of a chunk request or relay forward. */
+    public boolean hasActiveWorkForPeer(Peer peer) {
+        if (peer == null || peer.getPeerData() == null || peer.getPeerData().getAddress() == null)
+            return false;
+
+        String peerAddress = peer.getPeerData().getAddress().toString();
+        if (this.inFlightRequestsByHash.values().stream()
+                .anyMatch(info -> peerAddress.equals(info.peerAddress)))
+            return true;
+
+        String suffix = "|" + peerAddress;
+        return this.pendingRelayForwards.entrySet().stream()
+                .anyMatch(entry -> (entry.getKey().endsWith(suffix) && !entry.getValue().isEmpty())
+                        || entry.getValue().stream().anyMatch(forward ->
+                                forward.requestingPeerData != null
+                                        && forward.requestingPeerData.getAddress() != null
+                                        && peerAddress.equals(forward.requestingPeerData.getAddress().toString())));
+    }
+
     /**
      * Cache metadata hash for a signature so we can avoid DB fetch for non-metadata chunks.
      * Call this when we have ArbitraryTransactionData (e.g. when processing file list responses).
@@ -1089,7 +1113,7 @@ public class ArbitraryDataFileManager extends Thread {
 
     public void receivedArbitraryDataFile(Peer peer, ArbitraryDataFile adf) {
         // Mark peer as actively used for QDN (prevents premature disconnect during active downloads)
-        peer.QDNUse();
+        peer.markMeaningfulQdnUse();
         
         //ArbitraryDataFile existingFile = ArbitraryDataFile.fromHash(hash, signature);
         //boolean fileAlreadyExists = existingFile.exists();
@@ -1698,7 +1722,7 @@ public class ArbitraryDataFileManager extends Thread {
     // Network handlers
     private void processDataFile(Peer peer, byte[] hash, byte[] sig, Message originalMessage) {
         // Mark peer as actively used for QDN (we're serving them data)
-        peer.QDNUse();
+        peer.markMeaningfulQdnUse();
 
         final String hash58 = Base58.encode(hash);
         try {
@@ -1888,6 +1912,7 @@ public class ArbitraryDataFileManager extends Thread {
                         String relayKey = createRelayKey(hash58, relayPeer);
                         pendingRelayForwards.computeIfAbsent(relayKey, k -> Collections.synchronizedList(new ArrayList<>()))
                             .add(new PendingRelayForward(peer, originalMessage));
+                        relayPeer.markMeaningfulQdnUse();
                         
                  
                         

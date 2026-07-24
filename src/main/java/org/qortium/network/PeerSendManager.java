@@ -546,6 +546,11 @@ public class PeerSendManager {
         return queue.size();
     }
 
+    /** True while any stage of the per-peer QDN send pipeline still owns work. */
+    public boolean hasPendingMessages() {
+        return !this.queue.isEmpty() || !this.preloadedQueue.isEmpty() || !this.queuedHashes.isEmpty();
+    }
+
     /**
      * Checks if a specific hash is currently queued in this PeerSendManager.
      * Uses O(1) hash map lookup instead of scanning queues.
