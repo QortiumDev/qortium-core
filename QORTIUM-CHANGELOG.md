@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-24 - test(render): cover HTTP byte-range edge cases
+
+Adds render-path checks for empty files, complete-file suffix requests, a sparse file larger than the integer content-length limit, the largest valid range end, overflowing range values, and reversed bounds. These tests lock down the exact status, range headers, advertised length, and bytes a browser or media player receives at the edges of QDN's seeking contract.
+
 ### 2026-07-24 - fix(render): detect HTML extensions case-insensitively
 
 Rendered QDN documents with uppercase or mixed-case `.HTML` and `.HTM` extensions now take the same safe rewrite path as lowercase files, so a publisher's filename casing cannot accidentally make a document behave like a raw asset.
