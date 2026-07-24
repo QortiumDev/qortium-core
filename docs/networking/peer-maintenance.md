@@ -55,7 +55,10 @@ came from the new key, the deprecated alias, or the default.
 
 Startup also rejects non-positive chain minimums, chain maximums that are not
 strictly greater than their minimums, and non-positive data idle values.
-Previewnet's existing `maxPeerConnectionTime: 999999999` override is unchanged.
+The tracked Previewnet profiles explicitly use
+`minPeerConnectionTime: 7200` and `maxPeerConnectionTime: 21600`, so
+Previewnet exercises randomized two-to-six-hour chain rotation instead of the
+former effectively disabled `999999999`-second maximum.
 
 For local acceptance, a node must have at least `minOutboundPeers` outbound
 connections before voluntary rotation can run. A participant with two
