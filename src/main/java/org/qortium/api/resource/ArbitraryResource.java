@@ -3461,25 +3461,44 @@ public String finalizeUpload(
 	}
 
 	private java.nio.file.Path validatePublishPath(String path) {
-		final java.nio.file.Path publishPath;
+		final java.nio.file.Path requestedPath;
 		try {
-			publishPath = Paths.get(path);
+			requestedPath = Paths.get(path);
 		} catch (java.nio.file.InvalidPathException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is invalid");
 		}
 
-		revalidatePublishPath(publishPath);
-		return publishPath;
+		return canonicalizePublishPath(requestedPath);
 	}
 
 	private void revalidatePublishPath(java.nio.file.Path publishPath) {
-		if (!Files.exists(publishPath)) {
+		canonicalizePublishPath(publishPath);
+	}
+
+	/**
+	 * Path-based publishing is deliberately available only after the caller has
+	 * passed the API-key check in the public resource method. Resolve the
+	 * caller-selected source to its canonical, existing path before inspecting
+	 * or handing it to the data writer so aliases and traversal components do
+	 * not propagate through the publishing pipeline.
+	 */
+	private java.nio.file.Path canonicalizePublishPath(java.nio.file.Path publishPath) {
+		final java.nio.file.Path canonicalPath;
+		try {
+			canonicalPath = publishPath.toRealPath();
+		} catch (java.nio.file.NoSuchFileException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FILE_NOT_FOUND, "Publish path does not exist");
+		} catch (java.nio.file.AccessDeniedException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not readable");
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not accessible");
 		}
 
-		if (!Files.isReadable(publishPath)) {
+		if (!Files.isReadable(canonicalPath)) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Publish path is not readable");
 		}
+
+		return canonicalPath;
 	}
 
 	private static long estimateBase64DecodedSize(String base64) {

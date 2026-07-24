@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-24 - fix(api): canonicalize authenticated QDN publish paths
+
+Path-based QDN publishing remains available to API-key-authorized local clients, but the selected file or directory is now resolved to its canonical, existing filesystem path before Core checks or processes it. This prevents traversal and alias components from propagating through the publishing pipeline while preserving stable missing, unreadable, invalid, and inaccessible path errors.
+
 ### 2026-07-24 - fix(api): clarify QDN publish input errors
 
 QDN publishing now rejects identifiers over the 64-byte UTF-8 transaction limit before any data is staged or an unsigned transaction is built, clearly naming both the field and limit; malformed Unicode input receives a stable client error too. Local publish sources that are missing, unreadable, or not valid filesystem paths now return a stable client-facing API error instead of a generic repository failure containing a raw local path. This applies consistently to path, streamed, base64, ZIP, string, chunked, and transaction-JSON publish routes.
