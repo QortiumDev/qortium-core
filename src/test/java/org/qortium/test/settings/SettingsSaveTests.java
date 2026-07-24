@@ -19,6 +19,7 @@ import java.util.Map;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -394,6 +395,36 @@ public class SettingsSaveTests extends Common {
 			}
 
 			assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		}
+	}
+
+	@Test
+	public void testListenerPortCollisionsAreRejectedWithoutChangingFileOrActiveSettings() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		Settings originalSettings = Settings.getInstance();
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		for (String[] conflict : new String[][] {
+				{"{\"listenPort\":14891}", "apiPort and listenPort", "14891"},
+				{"{\"listenDataPort\":14891}", "apiPort and listenDataPort", "14891"},
+				{"{\"listenDataPort\":14892}", "listenPort and listenDataPort", "14892"},
+				{"{\"listenPort\":25000,\"listenDataPort\":25000}", "listenPort and listenDataPort", "25000"}
+		}) {
+			String conflictingPatch = conflict[0];
+			try {
+				Settings.updateAndSave(conflictingPatch);
+				fail("Expected listener-port collision to be rejected: " + conflictingPatch);
+			} catch (IllegalArgumentException e) {
+				assertTrue(e.getMessage().contains(conflict[1]));
+				assertTrue(e.getMessage().contains(conflict[2]));
+			}
+
+			assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+			assertSame(originalSettings, Settings.getInstance());
+			assertEquals(14891, Settings.getInstance().getApiPort());
+			assertEquals(14892, Settings.getInstance().getListenPort());
+			assertEquals(14894, Settings.getInstance().getQDNListenPort());
 		}
 	}
 
