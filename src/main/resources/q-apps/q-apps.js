@@ -1300,6 +1300,8 @@ window.addEventListener("beforeunload", () => {
   // price API, neither of which exists at this origin.
   const READ_ONLY_ACTIONS = [
     "FETCH_NODE_API",
+    "FETCH_ACCOUNT_AVATAR",
+    "FETCH_GROUP_AVATAR",
     "FETCH_QDN_RESOURCE",
     "GET_ACCOUNT_DATA",
     "GET_ACCOUNT_GROUPS",
@@ -1539,6 +1541,323 @@ window.addEventListener("beforeunload", () => {
         );
       return result.data;
     });
+  }
+
+  // --- Account / group avatars ---------------------------------------------
+
+  const AVATAR_MAX_BYTES = 500 * 1024;
+
+  function avatarMaxBytes(request) {
+    const value = getRequestValue(request, "maxBytes");
+    const requested =
+      typeof value === "number" && isFinite(value)
+        ? Math.floor(value)
+        : typeof value === "string" && /^\d+$/.test(value.trim())
+          ? Number(value.trim())
+          : AVATAR_MAX_BYTES;
+    return Math.max(1, Math.min(requested, AVATAR_MAX_BYTES));
+  }
+
+  function avatarDescriptor(value) {
+    if (!value || typeof value !== "object") return null;
+    const service = getString(value.service);
+    const name = getString(value.name);
+    if (!service || !name) return null;
+    return {
+      service: service,
+      name: name,
+      identifier:
+        value.identifier === undefined || value.identifier === null ? "" : String(value.identifier),
+    };
+  }
+
+  function avatarDescriptorFromHeaders(headers) {
+    return avatarDescriptor({
+      service: headers.get("x-qortium-avatar-service"),
+      name: headers.get("x-qortium-avatar-name"),
+      identifier: headers.get("x-qortium-avatar-identifier"),
+    });
+  }
+
+  function avatarContentType(bytes) {
+    function startsWith(signature, offset) {
+      const start = offset || 0;
+      return signature.every((byte, index) => bytes[start + index] === byte);
+    }
+
+    if (startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      return "image/png";
+    if (startsWith([0xff, 0xd8, 0xff])) return "image/jpeg";
+    if (startsWith([0x47, 0x49, 0x46, 0x38])) return "image/gif";
+    if (startsWith([0x42, 0x4d])) return "image/bmp";
+    if (
+      startsWith([0x52, 0x49, 0x46, 0x46]) &&
+      startsWith([0x57, 0x45, 0x42, 0x50], 8)
+    )
+      return "image/webp";
+    return null;
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize)
+      binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunkSize));
+    return btoa(binary);
+  }
+
+  function retryAfterSeconds(value) {
+    if (!value) return null;
+    if (/^\d+$/.test(value.trim())) return Number(value.trim());
+    const retryAt = Date.parse(value);
+    return isFinite(retryAt) ? Math.max(0, Math.ceil((retryAt - Date.now()) / 1000)) : null;
+  }
+
+  function fetchAvatarResponse(request, apiPath, maxBytes) {
+    let safePath;
+    try {
+      safePath = sanitizeReadPath(apiPath);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutMs =
+      request && typeof getRequestValue(request, "timeout") === "number" &&
+      getRequestValue(request, "timeout") > 0
+        ? getRequestValue(request, "timeout")
+        : 30000;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    const options = { method: "GET" };
+    if (controller) options.signal = controller.signal;
+
+    return fetch(window.location.origin + safePath, options)
+      .then((response) => {
+        const rawLength = response.headers.get("content-length");
+        const contentLength = rawLength == null ? undefined : Number(rawLength);
+
+        if (!response.ok || response.status === 202) {
+          if (response.body && typeof response.body.cancel === "function")
+            Promise.resolve(response.body.cancel()).catch(() => undefined);
+          return {
+            bytes: null,
+            contentLength: isFinite(contentLength) ? contentLength : undefined,
+            headers: response.headers,
+            ok: response.ok,
+            status: response.status,
+          };
+        }
+
+        // Let the account legacy fallback skip an advertised oversized first
+        // candidate without buffering it, just as Home does. Callers decide
+        // whether an advertised oversize is terminal for their route.
+        if (maxBytes > 0 && isFinite(contentLength) && contentLength > maxBytes) {
+          if (response.body && typeof response.body.cancel === "function")
+            Promise.resolve(response.body.cancel()).catch(() => undefined);
+          return {
+            bytes: null,
+            contentLength: contentLength,
+            headers: response.headers,
+            ok: true,
+            status: response.status,
+            tooLarge: true,
+            maxBytes: maxBytes,
+          };
+        }
+
+        return response.arrayBuffer().then((buffer) => {
+          const bytes = new Uint8Array(buffer);
+          if (bytes.byteLength > maxBytes)
+            throw new Error("Avatar exceeded the " + maxBytes + " byte limit.");
+          return {
+            bytes: bytes,
+            contentLength: isFinite(contentLength) ? contentLength : bytes.byteLength,
+            headers: response.headers,
+            ok: true,
+            status: response.status,
+          };
+        });
+      })
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+  }
+
+  function avatarPending(target, source, descriptor, retryAfter) {
+    return Object.assign({}, target, {
+      status: "PENDING",
+      retryAfterSeconds: retryAfterSeconds(retryAfter),
+      source: source,
+      descriptor: descriptor,
+    });
+  }
+
+  function avatarReady(target, source, descriptor, response) {
+    if (response.tooLarge)
+      throw new Error("Avatar exceeded the " + response.maxBytes + " byte limit.");
+    const contentType = avatarContentType(response.bytes);
+    if (!contentType) throw new Error("Avatar was not a supported image.");
+    return Object.assign({}, target, {
+      body: bytesToBase64(response.bytes),
+      encoding: "base64",
+      contentType: contentType,
+      contentLength: response.contentLength,
+      source: source,
+      descriptor: descriptor,
+    });
+  }
+
+  function buildAvatarResourcePath(name, identifier) {
+    return (
+      "/arbitrary/THUMBNAIL/" +
+      encodeURIComponent(name) +
+      "/" +
+      encodeURIComponent(identifier) +
+      "?async=true"
+    );
+  }
+
+  function fetchAvatarMetadata(request, apiPath) {
+    return fetchNodeApi({
+      action: "FETCH_NODE_API",
+      path: apiPath,
+      maxBytes: 65536,
+      timeout: getRequestValue(request, "timeout"),
+    }).then((result) => {
+      if (result.status === 404) return null;
+      if (!result.ok)
+        throw new Error(
+          result.body || "Qortium node request failed with HTTP " + result.status + ".",
+        );
+      return result.data;
+    });
+  }
+
+  function fetchLegacyAccountAvatar(request, address, maxBytes) {
+    return fetchAvatarMetadata(
+      request,
+      "/names/primary/" + encodeURIComponent(address),
+    ).then((primaryName) => {
+      const name = primaryName && typeof primaryName === "object"
+        ? getString(primaryName.name)
+        : "";
+      if (!name) throw new Error("Account avatar is not set.");
+
+      const identifiers = ["avatar", "qortal_avatar"];
+      function tryIdentifier(index) {
+        if (index >= identifiers.length) throw new Error("Account avatar is not set.");
+        return fetchAvatarResponse(
+          request,
+          buildAvatarResourcePath(name, identifiers[index]),
+          maxBytes,
+        ).then((response) => {
+          if (response.status === 202)
+            return avatarPending(
+              { address: address },
+              "LEGACY",
+              null,
+              response.headers.get("retry-after"),
+            );
+          if (!response.ok) return tryIdentifier(index + 1);
+          if (response.tooLarge) return tryIdentifier(index + 1);
+          try {
+            return avatarReady({ address: address }, "LEGACY", null, response);
+          } catch (e) {
+            return tryIdentifier(index + 1);
+          }
+        });
+      }
+      return tryIdentifier(0);
+    });
+  }
+
+  function fetchLegacyGroupAvatar(request, groupId, maxBytes) {
+    return fetchAvatarMetadata(
+      request,
+      "/groups/" + encodeURIComponent(String(groupId)),
+    ).then((group) => {
+      const ownerName =
+        group && typeof group === "object" ? getString(group.ownerPrimaryName) : "";
+      if (!ownerName) throw new Error("Group avatar is not set.");
+      return fetchAvatarResponse(
+        request,
+        buildAvatarResourcePath(ownerName, "qortal_group_avatar_" + groupId),
+        maxBytes,
+      ).then((response) => {
+        if (response.status === 202)
+          return avatarPending(
+            { groupId: groupId },
+            "LEGACY",
+            null,
+            response.headers.get("retry-after"),
+          );
+        if (!response.ok) throw new Error("Group avatar is not set.");
+        return avatarReady({ groupId: groupId }, "LEGACY", null, response);
+      });
+    });
+  }
+
+  function fetchPointerAvatar(request, target, infoPath, avatarPath, legacyFetch) {
+    const maxBytes = avatarMaxBytes(request);
+    return fetchNodeApi({
+      action: "FETCH_NODE_API",
+      path: infoPath,
+      maxBytes: 65536,
+      timeout: getRequestValue(request, "timeout"),
+    }).then((infoResponse) => {
+      if (infoResponse.status === 404) return legacyFetch(maxBytes);
+      if (!infoResponse.ok)
+        throw new Error("Avatar pointer lookup failed with HTTP " + infoResponse.status + ".");
+      const pointerDescriptor = avatarDescriptor(infoResponse.data);
+      if (!pointerDescriptor) throw new Error("Avatar pointer metadata was invalid.");
+
+      return fetchAvatarResponse(request, avatarPath, maxBytes).then((response) => {
+        const descriptor = avatarDescriptorFromHeaders(response.headers) || pointerDescriptor;
+        if (response.status === 202)
+          return avatarPending(
+            target,
+            "POINTER",
+            descriptor,
+            response.headers.get("retry-after"),
+          );
+        if (!response.ok)
+          throw new Error("Avatar request failed with HTTP " + response.status + ".");
+        return avatarReady(target, "POINTER", descriptor, response);
+      });
+    });
+  }
+
+  function fetchAccountAvatar(request) {
+    const address = requiredAddress(request);
+    return fetchPointerAvatar(
+      request,
+      { address: address },
+      "/addresses/" + encodeURIComponent(address) + "/avatar/info",
+      "/addresses/" + encodeURIComponent(address) + "/avatar",
+      (maxBytes) => fetchLegacyAccountAvatar(request, address, maxBytes),
+    );
+  }
+
+  function fetchGroupAvatar(request) {
+    const rawGroupId =
+      getRequestValue(request, "groupId") !== undefined
+        ? getRequestValue(request, "groupId")
+        : getRequestValue(request, "txGroupId");
+    const groupId =
+      typeof rawGroupId === "number" && Number.isSafeInteger(rawGroupId)
+        ? rawGroupId
+        : typeof rawGroupId === "string" && /^-?\d+$/.test(rawGroupId.trim())
+          ? Number(rawGroupId.trim())
+          : undefined;
+    if (!Number.isSafeInteger(groupId) || groupId < 1)
+      throw new Error("Group id must be a positive integer.");
+    return fetchPointerAvatar(
+      request,
+      { groupId: groupId },
+      "/groups/" + encodeURIComponent(String(groupId)) + "/avatar/info",
+      "/groups/" + encodeURIComponent(String(groupId)) + "/avatar",
+      (maxBytes) => fetchLegacyGroupAvatar(request, groupId, maxBytes),
+    );
   }
 
   // --- QDN resource paths ----------------------------------------------------
@@ -1917,6 +2236,8 @@ window.addEventListener("beforeunload", () => {
 
   const PROMISE_ACTIONS = {
     FETCH_NODE_API: fetchNodeApi,
+    FETCH_ACCOUNT_AVATAR: fetchAccountAvatar,
+    FETCH_GROUP_AVATAR: fetchGroupAvatar,
     GET_ACCOUNT_RATING: getAccountRating,
     GET_QDN_RESOURCE_URL: getResourceUrl,
     GET_RESOURCE_RATING: getResourceRating,
