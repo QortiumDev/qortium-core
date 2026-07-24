@@ -16,6 +16,15 @@ import static org.junit.Assert.assertTrue;
 public class HTMLParserTests {
 
 	@Test
+	public void testHtmlFileDetectionIsCaseInsensitive() {
+		assertTrue(HTMLParser.isHtmlFile("index.html"));
+		assertTrue(HTMLParser.isHtmlFile("index.HTML"));
+		assertTrue(HTMLParser.isHtmlFile("nested/landing.HtM"));
+		assertFalse(HTMLParser.isHtmlFile("index.html.js"));
+		assertFalse(HTMLParser.isHtmlFile("asset.css"));
+	}
+
+	@Test
 	public void testAdditionalHeaderTagsEscapeQdnMetadata() {
 		String maliciousValue = "name\"</script><script>alert(1)</script>";
 		HTMLParser htmlParser = new HTMLParser(

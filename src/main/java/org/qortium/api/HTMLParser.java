@@ -1,5 +1,6 @@
 package org.qortium.api;
 
+import java.util.Locale;
 import java.util.Objects;
 
 import org.apache.logging.log4j.LogManager;
@@ -117,7 +118,8 @@ public class HTMLParser {
     }
 
     public static boolean isHtmlFile(String path) {
-        if (path.endsWith(".html") || path.endsWith(".htm") || path.isEmpty()) {
+        String lowerCasePath = path.toLowerCase(Locale.ROOT);
+        if (lowerCasePath.endsWith(".html") || lowerCasePath.endsWith(".htm") || path.isEmpty()) {
             return true;
         }
         return false;

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-24 - fix(render): detect HTML extensions case-insensitively
+
+Rendered QDN documents with uppercase or mixed-case `.HTML` and `.HTM` extensions now take the same safe rewrite path as lowercase files, so a publisher's filename casing cannot accidentally make a document behave like a raw asset.
+
 ### 2026-07-24 - fix(settings): reject colliding listener ports before startup
 
 Core now checks the resolved API, chain-peer, and QDN data listener ports together before it starts any service. A hand-edited settings file or a settings update can no longer accidentally reuse a port that was supplied by a network default, avoiding a node that starts only partly before one listener fails to bind. The error names both conflicting settings and the port to change, and an explicitly configured API port is now checked for the normal valid port range too.
