@@ -9,6 +9,7 @@ import org.qortium.block.BlockChain;
 import org.qortium.block.ChainParameter;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.at.ATMapChangeData;
+import org.qortium.data.account.AccountTrustStatus;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortium.data.transaction.MessageTransactionData;
@@ -18,6 +19,7 @@ import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.test.common.AssetUtils;
+import org.qortium.test.common.AccountTrustTestUtils;
 import org.qortium.test.common.AtUtils;
 import org.qortium.test.common.BlockUtils;
 import org.qortium.test.common.Common;
@@ -44,15 +46,15 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * End-to-end tests running the REAL SMPL faucet AT creation bytes against the
- * map-enabled test chain: deploy, real MESSAGE claims, block minting and orphaning.
+ * map-enabled test chain: deploy, real MESSAGE claims, trust gating, block minting and orphaning.
  * <p>
  * The artifact under test is the canonical Previewnet "exactly once per account"
  * SMPL faucet (spec: qortium-casino docs/FAUCET_AT_V1_SMPL.md). Its consensus-critical
- * per-claim ordering is: GET claim marker, balance check, SET marker, GET readback,
- * PAY — an account must never be marked claimed and unpaid, and a payment must never
- * precede its marker. These tests assert the resulting on-chain OUTCOMES: a successful
- * claim uses most of the 500-step round budget, so multiple claims in one block settle
- * over later rounds and only ever produce one payment per account.
+ * per-claim ordering is: trust gate, GET claim marker, balance check, SET marker, GET
+ * readback, PAY — an account must never be marked claimed and unpaid, and a payment
+ * must never precede its marker. These tests assert the resulting on-chain OUTCOMES:
+ * a successful claim uses most of the 500-step round budget, so multiple claims in one
+ * block settle over later rounds and only ever produce one payment per account.
  */
 public class SmplFaucetAtTests extends Common {
 
@@ -60,25 +62,25 @@ public class SmplFaucetAtTests extends Common {
 	 * Canonical faucet creation bytes (hex), embedded verbatim.
 	 * Provenance: qortium-casino repo, at/faucet-v1-creation-bytes.txt, built by
 	 * at/src/main/java/org/qortium/at/casino/FaucetV1.java (grant = 1 SMPL = 100000000 raw).
-	 * SHA-256 of the decoded 484 bytes must be
-	 * 4eff8a441f8312ce3bb5ececa8830cc9ebf39f74e2ff26e3b646bc4074380522 —
+	 * SHA-256 of the decoded 523 bytes must be
+	 * 3cd6292352232c8243753b9ec3b5c78649088981804770133f8a7cc3228aec4e —
 	 * verified by {@link #faucetCreationBytes()} before every use.
 	 */
 	private static final String FAUCET_CREATION_BYTES_HEX =
-			"000200000148001100000000000000000000000035030100000001330503000000013303040000000135012500000002"
-			+ "1e00000002eb3503070000000135030500000003240000000300000004de32030a32012832030b350127000000021b00"
-			+ "000002283505300000000536053100000006000000053705330000000200000005000000062835010000000007350101"
-			+ "00000008350102000000093501030000000a3402040000000b0000000c3501040000000d3501050000000e3201213301"
-			+ "100000000d3301110000000e3506000000000f1b0000000f0b1a0000000e350530000000053605310000000600000005"
-			+ "2100000006000000000f1a0000000e330113000000103206013201213301100000000d3301110000000e350600000000"
-			+ "0f1e0000000f0b1a0000000e3301160000000733011700000008330118000000093301190000000a3705330000000200"
-			+ "000005000000001a0000000e0000000005f5e10000000000000000000000000000000000000000000000000000000000"
-			+ "000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-			+ "000000000000000000000007000000000000002000000000000000000000000000000000000000000000000000000000"
-			+ "00000001";
+			"00020000015f0013000000000000000000000000350301000000013305030000000133030400000001350125000000021e00"
+			+ "000002eb3503070000000135030500000003240000000300000004de32030a32012832030b350127000000021b0000000228"
+			+ "3505300000000536053100000006000000053705330000000200000005000000062832012835052200000011320128200000"
+			+ "0011000000128f3501000000000735010100000008350102000000093501030000000a3402040000000b0000000c35010400"
+			+ "00000d3501050000000e3201213301100000000d3301110000000e3506000000000f1b0000000f0b1a0000000e3505300000"
+			+ "000536053100000006000000052100000006000000000f1a0000000e330113000000103206013201213301100000000d3301"
+			+ "110000000e3506000000000f1e0000000f0b1a0000000e330116000000073301170000000833011800000009330119000000"
+			+ "0a3705330000000200000005000000001a0000000e0000000005f5e100000000000000000000000000000000000000000000"
+			+ "0000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000"
+			+ "0000000000000000000000000000000007000000000000002000000000000000000000000000000000000000000000000000"
+			+ "0000000000000100000000000000000000000000000001";
 
 	private static final String FAUCET_CREATION_BYTES_SHA256 =
-			"4eff8a441f8312ce3bb5ececa8830cc9ebf39f74e2ff26e3b646bc4074380522";
+			"3cd6292352232c8243753b9ec3b5c78649088981804770133f8a7cc3228aec4e";
 
 	/** 1 SMPL grant, 1e8-scaled raw units (indivisible assets still use raw scaling on-chain). */
 	private static final long GRANT_AMOUNT = 1L * Amounts.MULTIPLIER;
@@ -92,6 +94,9 @@ public class SmplFaucetAtTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+		try (Repository repository = RepositoryManager.getRepository()) {
+			markDefaultClaimantsBronze(repository);
+		}
 	}
 
 	// Case 1: happy path
@@ -119,6 +124,51 @@ public class SmplFaucetAtTests extends Common {
 			assertEquals(PREFUND_AMOUNT - GRANT_AMOUNT, atAccount.getConfirmedBalance(smplAssetId));
 			assertEquals(Long.valueOf(1L), getMarker(repository, atAddress, bobKey));
 			assertEquals(1, repository.getATRepository().getATMapEntryCount(atAddress));
+		}
+	}
+
+	// Bronze is eligible; Unverified and Suspicious must be refused before they can read or
+	// mutate the claim map, or change either working-asset balance.
+	@Test
+	public void testTrustGatePaysBronzeButRejectsUnverifiedAndSuspiciousWithoutStateChange() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			PrivateKeyAccount chloe = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			long smplAssetId = issueSmpl(repository);
+
+			AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+					AccountTrustTestUtils.subjectTrustSnapshot(bob, AccountTrustStatus.BRONZE),
+					AccountTrustTestUtils.subjectTrustSnapshot(chloe, AccountTrustStatus.UNVERIFIED),
+					AccountTrustTestUtils.subjectTrustSnapshot(dilbert, AccountTrustStatus.SUSPICIOUS));
+
+			DeployAtTransaction deploy = deployFaucet(repository, alice, smplAssetId, PREFUND_AMOUNT);
+			String atAddress = deploy.getATAccount().getAddress();
+			long bobBefore = bob.getConfirmedBalance(smplAssetId);
+			long[] bobKey = claimKeyForAddress(bob.getAddress());
+
+			sendClaimMessage(repository, bob, atAddress);
+			assertTrue("Bronze claimant must receive a grant", mintUntilMarker(repository, atAddress, bobKey));
+			assertEquals(bobBefore + GRANT_AMOUNT, bob.getConfirmedBalance(smplAssetId));
+			assertEquals(Long.valueOf(1L), getMarker(repository, atAddress, bobKey));
+
+			long atAfterBronze = deploy.getATAccount().getConfirmedBalance(smplAssetId);
+			for (PrivateKeyAccount rejected : new PrivateKeyAccount[] { chloe, dilbert }) {
+				long claimantBefore = rejected.getConfirmedBalance(smplAssetId);
+				long[] rejectedKey = claimKeyForAddress(rejected.getAddress());
+
+				sendClaimMessage(repository, rejected, atAddress);
+				BlockUtils.mintBlocks(repository, MAX_SETTLE_BLOCKS);
+
+				assertEquals("rejected claimant must receive no SMPL", claimantBefore,
+						rejected.getConfirmedBalance(smplAssetId));
+				assertNull("rejected claimant must not gain a marker", getMarker(repository, atAddress, rejectedKey));
+				assertEquals("rejected claimant must not drain the faucet", atAfterBronze,
+						deploy.getATAccount().getConfirmedBalance(smplAssetId));
+				assertEquals("only the Bronze claim may be stored", 1,
+						repository.getATRepository().getATMapEntryCount(atAddress));
+			}
 		}
 	}
 
@@ -381,9 +431,9 @@ public class SmplFaucetAtTests extends Common {
 		}
 	}
 
-	// Case 9: activation rehearsal at the test chain's atMapStorageHeight trigger — the
-	// Previewnet 69,999 -> 70,000 analogue. Pre-trigger the faucet's first map opcode is
-	// rejected (fatal error, no marker, no payment, no map root); a faucet deployed at the
+	// Case 9: activation rehearsal at the test chain's atMapStorageHeight/atTrustStatusHeight
+	// trigger — the Previewnet 69,999 -> 70,000 analogue. Pre-trigger the faucet's trust query
+	// is rejected (fatal error, no marker, no payment, no map root); a faucet deployed at the
 	// trigger height works normally. Modeled on ATMapActivationTests' boundary technique.
 	@Test
 	public void testActivationBoundaryRejectsClaimsBeforeTriggerAndPaysAfter() throws DataException {
@@ -391,6 +441,7 @@ public class SmplFaucetAtTests extends Common {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestChainBootstrapUtils.ensureDefaultTestChainBootstrap(repository);
+			markDefaultClaimantsBronze(repository);
 			repository.saveChanges();
 
 			int triggerHeight = (int) BlockChain.getInstance().getAtMapStorageHeight();
@@ -400,8 +451,8 @@ public class SmplFaucetAtTests extends Common {
 			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
 			long smplAssetId = issueSmpl(repository);
 
-			// Deploy and claim strictly before the trigger: the claim's first map opcode
-			// (GET_MAP_VALUE_KEYS_IN_A) must be rejected as a clean fatal error.
+			// Deploy and claim strictly before the trigger: the claim's first consensus-gated
+			// operation (GET_TRUST_STATUS_FROM_ACCOUNT_IN_B) must be rejected as a clean fatal error.
 			DeployAtTransaction earlyDeploy = deployFaucet(repository, alice, smplAssetId, PREFUND_AMOUNT);
 			String earlyAtAddress = earlyDeploy.getATAccount().getAddress();
 			long bobBefore = bob.getConfirmedBalance(smplAssetId);
@@ -412,7 +463,7 @@ public class SmplFaucetAtTests extends Common {
 			assertTrue("pre-trigger scenario must complete before the trigger height",
 					repository.getBlockRepository().getBlockchainHeight() < triggerHeight);
 
-			assertTrue("map opcodes must fail fatally before activation",
+			assertTrue("trust/map-enabled faucet must fail fatally before activation",
 					repository.getATRepository().fromATAddress(earlyAtAddress).getHadFatalError());
 			assertEquals("no payment before activation", bobBefore, bob.getConfirmedBalance(smplAssetId));
 			assertNull(getMarker(repository, earlyAtAddress, bobKey));
@@ -466,9 +517,9 @@ public class SmplFaucetAtTests extends Common {
 			long settlingFees = repository.getATRepository().getLatestATState(atAddress).getFees();
 			long settlingSteps = settlingFees / feePerStep;
 
-			// The claim performs exactly one SHA256, so the raised cost adds exactly 10 steps versus the
-			// flat 448-step claim: 458 steps, comfortably inside the 500-step round.
-			assertEquals("faucet claim step count under the raised hashing cost", 458L, settlingSteps);
+			// The trust gate adds two swaps, one query, and one branch (31 steps). With exactly one
+			// SHA256, the raised hashing cost yields 489 steps, inside the 500-step round.
+			assertEquals("faucet claim step count under the raised hashing cost", 489L, settlingSteps);
 			assertTrue("a claim must still fit inside one 500-step round", settlingSteps <= maxStepsPerRound);
 		}
 	}
@@ -478,7 +529,7 @@ public class SmplFaucetAtTests extends Common {
 	/** Decodes the embedded creation bytes, insisting on the canonical SHA-256 first. */
 	private static byte[] faucetCreationBytes() {
 		byte[] creationBytes = hexToBytes(FAUCET_CREATION_BYTES_HEX);
-		assertEquals("embedded artifact must be the canonical 484-byte faucet", 484, creationBytes.length);
+		assertEquals("embedded artifact must be the canonical 523-byte Bronze-gated faucet", 523, creationBytes.length);
 		assertArrayEquals("embedded artifact hash must match the canonical faucet build",
 				hexToBytes(FAUCET_CREATION_BYTES_SHA256), Crypto.digest(creationBytes));
 		return creationBytes;
@@ -509,6 +560,15 @@ public class SmplFaucetAtTests extends Common {
 	private static long issueSmpl(Repository repository) throws DataException {
 		// SMPL is indivisible; quantities and amounts are still 1e8-scaled raw longs on-chain.
 		return AssetUtils.issueAsset(repository, "alice", "SMPL", SMPL_SUPPLY, false);
+	}
+
+	/** Existing faucet scenarios focus on map/payment behavior, so give their ordinary claimants
+	 * the minimum eligible stored snapshot. The dedicated trust-gate test overrides this fixture. */
+	private static void markDefaultClaimantsBronze(Repository repository) throws DataException {
+		AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+				AccountTrustTestUtils.subjectTrustSnapshot(Common.getTestAccount(repository, "bob"), AccountTrustStatus.BRONZE),
+				AccountTrustTestUtils.subjectTrustSnapshot(Common.getTestAccount(repository, "chloe"), AccountTrustStatus.BRONZE),
+				AccountTrustTestUtils.subjectTrustSnapshot(Common.getTestAccount(repository, "dilbert"), AccountTrustStatus.BRONZE));
 	}
 
 	private static DeployAtTransaction deployFaucet(Repository repository, PrivateKeyAccount deployer,
