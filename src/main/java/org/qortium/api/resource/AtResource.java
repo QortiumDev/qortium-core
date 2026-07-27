@@ -15,8 +15,10 @@ import org.qortium.api.ApiException;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.model.AtCreationRequest;
 import org.qortium.data.at.ATData;
+import org.qortium.data.at.ATMapEntryData;
 import org.qortium.data.at.ATStateData;
 import org.qortium.data.transaction.DeployAtTransactionData;
+import org.qortium.crypto.Crypto;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -117,6 +119,45 @@ public class AtResource {
 	public ATData getByAddress(@PathParam("ataddress") String atAddress) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getATRepository().fromATAddress(atAddress);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/{ataddress}/map/value")
+	@Operation(
+		summary = "Fetch an AT persistent-map value by its two long keys",
+		responses = {
+			@ApiResponse(
+				description = "AT map entry; an absent entry is returned with value zero",
+				content = @Content(
+					schema = @Schema(implementation = ATMapEntryData.class)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE
+	})
+	public ATMapEntryData getMapValue(
+			@PathParam("ataddress") String atAddress,
+			@Parameter(description = "required first signed 64-bit map key") @QueryParam("key1") Long key1,
+			@Parameter(description = "required second signed 64-bit map key") @QueryParam("key2") Long key2) {
+		if (!Crypto.isValidAtAddress(atAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+		if (key1 == null || key2 == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Long value = repository.getATRepository().getATMapValue(atAddress, key1, key2);
+
+			// AT map zero values are deleted entries, so zero is the unambiguous public
+			// representation for a missing key. Returning the keys makes this safe for
+			// generic clients that issue multiple concurrent map reads.
+			return new ATMapEntryData(atAddress, key1, key2, value == null ? 0L : value);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
