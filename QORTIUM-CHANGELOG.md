@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-27 - feat(gateway): resolve bare QDN paths to a singleton non-default identifier
+
+The public QDN gateway now serves a resource for a bare `/{service}/{name}` request even when it was only published under a single non-default identifier, matching the convenience Home and Explore already offer. A default resource still always takes precedence when one exists, and the gateway leaves the request unresolved rather than guessing whenever a name has zero or more than one non-default identifier, so ambiguous or missing resources behave exactly as before. Explicit identifiers in the URL and multi-segment paths under a name are unaffected.
+
 ### 2026-07-24 - fix(qdn): stream large AES-GCM resource decryption
 
 Large QDN resources now decrypt with bounded memory instead of allowing the Java cryptography provider to retain the entire resource in one growing heap buffer while it verifies the authentication tag. Core keeps the existing encrypted-resource format and writes tentative plaintext only to a private temporary file, deleting it on any authentication or processing failure and exposing the result only after the final tag succeeds. A constrained-heap regression test proves a 512 MiB encrypted resource can be decrypted in a 96 MiB child JVM.

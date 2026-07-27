@@ -12,6 +12,7 @@ import org.qortium.arbitrary.ArbitraryDataReader;
 import org.qortium.arbitrary.ArbitraryDataRenderer;
 import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.data.arbitrary.ArbitraryResourceData;
 import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
@@ -71,6 +72,52 @@ public class GatewayResource {
         try (final Repository repository = RepositoryManager.getRepository()) {
             ArbitraryDataResource resource = new ArbitraryDataResource(name, ResourceIdType.NAME, service, identifier);
             return resource.getStatus(repository);
+
+        } catch (DataException e) {
+            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+        }
+    }
+
+    /**
+     * When a bare {@code /{service}/{name}} request has no default resource, resolve it to the sole
+     * non-default identifier published under that service/name — but only if it's unambiguous.
+     * Mirrors the single-resource convenience Home/Explore already apply client-side. A default
+     * resource always takes precedence over this fallback.
+     *
+     * @return the identifier to use, or null to leave the request resolving to the default resource
+     * as before (either because the default exists, or because the match is ambiguous/absent).
+     */
+    /* package */ String resolveBareIdentifierIfUnambiguous(Service service, String name) {
+        ArbitraryResourceStatus defaultStatus = this.getStatus(service, name, null, false);
+        if (defaultStatus.getTotalChunkCount() > 0) {
+            // Default resource exists - it always takes precedence, so don't override it.
+            return null;
+        }
+        return this.resolveSingletonNonDefaultIdentifier(service, name);
+    }
+
+    /** @return the sole non-default identifier for service+name, or null if there isn't exactly one. */
+    private String resolveSingletonNonDefaultIdentifier(Service service, String name) {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            List<ArbitraryResourceData> resources = repository.getArbitraryRepository().searchArbitraryResourcesSimple(
+                    service, null, List.of(name), false,
+                    null, null, 2, null, null, true);
+
+            String singletonIdentifier = null;
+            for (ArbitraryResourceData resourceData : resources) {
+                String candidateIdentifier = resourceData.identifier;
+                if (candidateIdentifier == null) {
+                    // Default resource - irrelevant here, as callers only reach this method once
+                    // they've already established no default resource exists.
+                    continue;
+                }
+                if (singletonIdentifier != null && !singletonIdentifier.equals(candidateIdentifier)) {
+                    // More than one distinct non-default identifier - ambiguous, never guess.
+                    return null;
+                }
+                singletonIdentifier = candidateIdentifier;
+            }
+            return singletonIdentifier;
 
         } catch (DataException e) {
             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
@@ -176,6 +223,16 @@ public class GatewayResource {
             if (!parts.isEmpty()) {
                 // outPath can be built by combining any remaining parts
                 outPath = String.join("/", parts);
+            }
+        }
+
+        if (identifier == null && outPath.isEmpty()) {
+            // Bare "/{service}/{name}" (no further path segments to disambiguate) - resolve to the
+            // sole non-default identifier when unambiguous. See resolveBareIdentifierIfUnambiguous().
+            String resolvedIdentifier = this.resolveBareIdentifierIfUnambiguous(service, name);
+            if (resolvedIdentifier != null) {
+                identifier = resolvedIdentifier;
+                prefixParts.add(identifier);
             }
         }
 
