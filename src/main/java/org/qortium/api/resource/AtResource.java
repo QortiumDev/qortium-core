@@ -14,8 +14,8 @@ import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiException;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.model.AtCreationRequest;
+import org.qortium.api.model.AtMapValueResponse;
 import org.qortium.data.at.ATData;
-import org.qortium.data.at.ATMapEntryData;
 import org.qortium.data.at.ATStateData;
 import org.qortium.data.transaction.DeployAtTransactionData;
 import org.qortium.crypto.Crypto;
@@ -134,7 +134,7 @@ public class AtResource {
 			@ApiResponse(
 				description = "AT map entry; an absent entry is returned with value zero",
 				content = @Content(
-					schema = @Schema(implementation = ATMapEntryData.class)
+					schema = @Schema(implementation = AtMapValueResponse.class)
 				)
 			)
 		}
@@ -142,7 +142,7 @@ public class AtResource {
 	@ApiErrors({
 		ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE
 	})
-	public ATMapEntryData getMapValue(
+	public AtMapValueResponse getMapValue(
 			@PathParam("ataddress") String atAddress,
 			@Parameter(description = "required first signed 64-bit map key") @QueryParam("key1") Long key1,
 			@Parameter(description = "required second signed 64-bit map key") @QueryParam("key2") Long key2) {
@@ -157,7 +157,7 @@ public class AtResource {
 			// AT map zero values are deleted entries, so zero is the unambiguous public
 			// representation for a missing key. Returning the keys makes this safe for
 			// generic clients that issue multiple concurrent map reads.
-			return new ATMapEntryData(atAddress, key1, key2, value == null ? 0L : value);
+			return new AtMapValueResponse(atAddress, key1, key2, value == null ? 0L : value);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {

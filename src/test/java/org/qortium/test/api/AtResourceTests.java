@@ -4,9 +4,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.api.ApiError;
+import org.qortium.api.model.AtMapValueResponse;
 import org.qortium.api.resource.AtResource;
 import org.qortium.data.at.ATMapChangeData;
-import org.qortium.data.at.ATMapEntryData;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -40,14 +40,14 @@ public class AtResourceTests extends ApiCommon {
 			repository.saveChanges();
 		}
 
-		ATMapEntryData stored = this.atResource.getMapValue(atAddress, -11L, 22L);
-		assertEquals(atAddress, stored.getATAddress());
-		assertEquals(-11L, stored.getKey1());
-		assertEquals(22L, stored.getKey2());
-		assertEquals(33L, stored.getValue());
+		AtMapValueResponse stored = this.atResource.getMapValue(atAddress, -11L, 22L);
+		assertEquals(atAddress, stored.atAddress);
+		assertEquals(-11L, stored.key1);
+		assertEquals(22L, stored.key2);
+		assertEquals(33L, stored.value);
 
-		ATMapEntryData missing = this.atResource.getMapValue(atAddress, -11L, 23L);
-		assertEquals(0L, missing.getValue());
+		AtMapValueResponse missing = this.atResource.getMapValue(atAddress, -11L, 23L);
+		assertEquals(0L, missing.value);
 	}
 
 	@Test
