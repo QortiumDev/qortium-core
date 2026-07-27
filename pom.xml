@@ -53,7 +53,7 @@
 		<maven-build-helper-plugin.version>3.6.1</maven-build-helper-plugin.version>
 		<maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
 		<maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
-		<maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
+		<maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
 		<maven-package-info-plugin.version>1.1.0</maven-package-info-plugin.version>
 		<versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
 		<maven-reproducible-build-plugin.version>0.17</maven-reproducible-build-plugin.version>
