@@ -104,4 +104,49 @@ public class HTMLParserTests {
 		assertEquals("style.css?x=1#frag", stylesheet.attr("href"));
 	}
 
+	/**
+	 * The gateway prefix precedes the resource id, so an identifier carried in the prefix would emit
+	 * "/{service}/{identifier}/{name}/" and every relative asset would miss. The identifier belongs
+	 * after the name, matching the path-segment identifier route the gateway itself parses.
+	 */
+	@Test
+	public void testGatewayIdentifierFollowsResourceIdInBaseHref() {
+		assertEquals("/APP/chat/Chat/", gatewayBaseHref("chat", "Chat"));
+		assertEquals("/APP/7R15M3G157U5/Donation/", gatewayBaseHref("7R15M3G157U5", "Donation"));
+		assertEquals("/APP/Example/id%20value/", gatewayBaseHref("Example", "id value"));
+	}
+
+	@Test
+	public void testGatewayBaseHrefOmitsAbsentOrDefaultIdentifier() {
+		assertEquals("/APP/chat/", gatewayBaseHref("chat", null));
+		assertEquals("/APP/chat/", gatewayBaseHref("chat", ""));
+		assertEquals("/APP/chat/", gatewayBaseHref("chat", "default"));
+	}
+
+	private static String gatewayBaseHref(String resourceId, String identifier) {
+		HTMLParser htmlParser = new HTMLParser(
+				resourceId,
+				"/index.html",
+				"/APP",
+				true,
+				"<html><head></head><body></body></html>".getBytes(StandardCharsets.UTF_8),
+				"gateway",
+				Service.APP,
+				identifier,
+				null,
+				true,
+				null,
+				null,
+				null,
+				null);
+
+		htmlParser.addAdditionalHeaderTags();
+
+		Document document = Jsoup.parse(new String(htmlParser.getData(), StandardCharsets.UTF_8));
+		Element base = document.selectFirst("head base[href]");
+		assertNotNull(base);
+
+		return base.attr("href");
+	}
+
 }

@@ -35,13 +35,14 @@ public class HTMLParser {
                       String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent, String uiStyle) {
         String inPathWithoutFilename = inPath.contains("/") ? inPath.substring(0, inPath.lastIndexOf('/')) : String.format("/%s",inPath);
 
-        // For the render context with a non-default identifier, fold the identifier into the base href as a
-        // path segment after the resourceId, so relative links/assets inherit it (matching the path-segment
-        // identifier route). The gateway already folds the identifier into the prefix, and domainMap does not
-        // use a path-segment identifier, so only render appends it here. Encode spaces the same way the caller
-        // encodes resourceId for the URL (space -> %20).
+        // For the render and gateway contexts with a non-default identifier, fold the identifier into the
+        // base href as a path segment after the resourceId, so relative links/assets inherit it (matching
+        // the path-segment identifier route "/{service}/{name}/{identifier}/"). The identifier must never
+        // go into the prefix instead: the prefix precedes the resourceId, which would emit the segments in
+        // the wrong order. domainMap does not use a path-segment identifier, so it is excluded. Encode
+        // spaces the same way the caller encodes resourceId for the URL (space -> %20).
         String resourceIdInBase = resourceId;
-        if (Objects.equals(qdnContext, "render") && includeResourceIdInPrefix
+        if ((Objects.equals(qdnContext, "render") || Objects.equals(qdnContext, "gateway")) && includeResourceIdInPrefix
                 && identifier != null && !identifier.isBlank() && !identifier.equals("default")) {
             resourceIdInBase = String.format("%s/%s", resourceId, identifier.replace(" ", "%20"));
         }
