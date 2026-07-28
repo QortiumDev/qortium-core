@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-28 - chore(release): prepare Core 1.6.1
+
+Marks the version for the next preview release. Since 1.6.0, chain and QDN
+peer maintenance now share a safe, activity-aware schedule, protect useful and
+in-flight connections, rotate only replaceable outbound peers, and enforce the
+QDN data layer's own configured capacity. Large encrypted QDN resources decrypt
+with bounded memory, outbound chunk traffic has per-peer byte and message
+limits, and authenticated publishing canonicalizes local paths while returning
+clear errors for invalid sources and overlong identifiers. Public gateways can
+resolve an unambiguous non-default resource from a short address, render
+identifier-based sites with the correct base path, expose faucet status from AT
+map values, and document the current pointer-aware avatar bridge. The release
+also hardens listener-port validation, HTML detection and large/range render
+edge cases, along with routine dependency updates.
+
 ### 2026-07-28 - docs: describe pointer-aware QDN avatars
 
 The Q-Apps developer guide still described the old Qortal convention where an account's avatar is whatever image sits at a well-known thumbnail address under their name. Qortium replaced that with explicit on-chain avatar pointers some time ago, so the guide now explains the current model: apps ask the host for an account or group avatar through the bridge, receive bounded image bytes with a pending/legacy status where relevant, and never reconstruct avatar addresses by hand. The old avatar examples were reworded to use neutral app-owned images so they no longer teach the outdated pattern. Documentation only — no behaviour changes.
