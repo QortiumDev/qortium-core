@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-28 - fix(gateway): render the identifier after the name in the base href
+
+Published gateway sites and apps load their images, styles, and scripts relative to the page's base address. For any resource published under an identifier, the gateway was writing that address with the identifier and the name the wrong way round, so every one of those files was requested from an address that does not exist and failed to load. The address is now written in the same `/{service}/{name}/{identifier}/` form the gateway itself reads back, so those files load. This was most visible for the shorthand addresses added the day before, which returned a page whose content could never appear.
+
 ### 2026-07-27 - feat(gateway): resolve bare QDN paths to a singleton non-default identifier
 
 The public QDN gateway now serves a resource for a bare `/{service}/{name}` request even when it was only published under a single non-default identifier, matching the convenience Home and Explore already offer. A default resource still always takes precedence when one exists, and the gateway leaves the request unresolved rather than guessing whenever a name has zero or more than one non-default identifier, so ambiguous or missing resources behave exactly as before. Explicit identifiers in the URL and multi-segment paths under a name are unaffected.

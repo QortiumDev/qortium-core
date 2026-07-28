@@ -4,6 +4,8 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
+import org.qortium.arbitrary.ArbitraryDataFile.ResourceIdType;
+import org.qortium.arbitrary.ArbitraryDataReader;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.arbitrary.ArbitraryDataManager;
 import org.qortium.data.transaction.ArbitraryTransactionData;
@@ -38,6 +40,8 @@ import static org.junit.Assert.assertTrue;
  * resolution (GatewayResource#resolveBareIdentifierIfUnambiguous and its use in #parsePath).
  */
 public class GatewayResourceBareIdentifierTests extends Common {
+
+    private static final String ASSET_MARKER = "window.assetMarker = 1;";
 
     @Before
     public void beforeTest() throws DataException, IllegalAccessException {
@@ -198,7 +202,103 @@ public class GatewayResourceBareIdentifierTests extends Common {
         }
     }
 
+    // --- Rendered base href ------------------------------------------------------------
+
+    /**
+     * The rendered base href drives every relative asset in a published app. It must be
+     * "/{service}/{name}/{identifier}/": the gateway parses that same shape back, so any other
+     * ordering makes each asset request miss and return 503.
+     */
+    @Test
+    public void testExplicitIdentifierRendersNameBeforeIdentifierInBaseHref() throws Exception {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            String name = registerName(repository, "alice");
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+
+            publishSite(repository, publicKey58, name, "only-id", alice);
+            buildCache(name, "only-id");
+
+            GatewayResource gateway = new GatewayResource();
+            Exchange exchange = new Exchange();
+            gateway.request = exchange.request;
+            gateway.response = exchange.response;
+            gateway.context = exchange.context;
+
+            invokeParsePath(gateway, "WEBSITE/" + name + "/only-id", false);
+
+            String rendered = exchange.outputStream.toString(StandardCharsets.UTF_8);
+            assertTrue("Base href must place the name before the identifier; response was: " + rendered,
+                    rendered.contains("<base href=\"/WEBSITE/" + name + "/only-id/\""));
+
+            // Close the loop: the relative asset, resolved against that base href, must come back
+            // from the gateway. A swapped base href sends this request to a resource that isn't there.
+            Exchange assetExchange = new Exchange();
+            gateway.request = assetExchange.request;
+            gateway.response = assetExchange.response;
+            gateway.context = assetExchange.context;
+
+            invokeParsePath(gateway, "WEBSITE/" + name + "/only-id/app.js", false);
+
+            assertTrue("The base-href-relative asset must resolve back to this resource",
+                    assetExchange.outputStream.toString(StandardCharsets.UTF_8).contains(ASSET_MARKER));
+        }
+    }
+
+    @Test
+    public void testResolvedSingletonIdentifierFollowsNameInBaseHref() throws Exception {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            String name = registerName(repository, "alice");
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+
+            publishSite(repository, publicKey58, name, "only-id", alice);
+            buildCache(name, "only-id");
+
+            GatewayResource gateway = new GatewayResource();
+            Exchange exchange = new Exchange();
+            gateway.request = exchange.request;
+            gateway.response = exchange.response;
+            gateway.context = exchange.context;
+
+            // Bare "/{service}/{name}" resolves the singleton identifier, which must land in the
+            // same base-href position as an explicitly requested one.
+            invokeParsePath(gateway, "website/" + name, false);
+
+            String rendered = exchange.outputStream.toString(StandardCharsets.UTF_8);
+            assertTrue("A resolved singleton identifier must follow the name; response was: " + rendered,
+                    rendered.contains("<base href=\"/WEBSITE/" + name + "/only-id/\""));
+        }
+    }
+
     // --- helpers ---------------------------------------------------------------------
+
+    /** Renders synchronously only once the resource is cached, so the test never waits on a background build. */
+    private static void buildCache(String name, String identifier) throws Exception {
+        new ArbitraryDataReader(name, ResourceIdType.NAME, Service.WEBSITE, identifier).loadSynchronously(true);
+    }
+
+    /**
+     * A site with an index and one relative asset. More than one file keeps it packaged as a
+     * directory, which WEBSITE validation requires, and gives the base href something to resolve.
+     */
+    private static void publishSite(Repository repository, String publicKey58, String name, String identifier,
+                                    PrivateKeyAccount account) throws Exception {
+        Path dir = Files.createTempDirectory("gatewayBaseHrefTest");
+        dir.toFile().deleteOnExit();
+
+        Path indexFile = Paths.get(dir.toString(), "index.html");
+        Files.write(indexFile, "<html><head><script src=\"app.js\"></script></head><body>site</body></html>"
+                .getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
+        indexFile.toFile().deleteOnExit();
+
+        Path assetFile = Paths.get(dir.toString(), "app.js");
+        Files.write(assetFile, ASSET_MARKER.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
+        assetFile.toFile().deleteOnExit();
+
+        ArbitraryUtils.createAndMintTxn(repository, publicKey58, dir, name, identifier,
+                ArbitraryTransactionData.Method.PUT, Service.WEBSITE, account);
+    }
 
     private static String registerName(Repository repository, String accountName) throws DataException {
         PrivateKeyAccount account = Common.getTestAccount(repository, accountName);

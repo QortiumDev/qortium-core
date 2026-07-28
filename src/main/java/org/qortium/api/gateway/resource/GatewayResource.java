@@ -213,10 +213,11 @@ public class GatewayResource {
                 // Name is removed, so check if the first element is now an identifier
                 ArbitraryResourceStatus status = this.getStatus(service, name, parts.get(0), false);
                 if (status.getTotalChunkCount() > 0) {
-                    // Matched service, name and identifier combination - so assume this is an identifier and can be removed
+                    // Matched service, name and identifier combination - so assume this is an identifier and can be removed.
+                    // The identifier is NOT added to the prefix: the prefix precedes the resource id (the name) in the
+                    // rendered base href, so HTMLParser appends the identifier after the name instead.
                     identifier = parts.get(0);
                     parts.remove(0);
-                    prefixParts.add(identifier);
                 }
             }
 
@@ -232,7 +233,6 @@ public class GatewayResource {
             String resolvedIdentifier = this.resolveBareIdentifierIfUnambiguous(service, name);
             if (resolvedIdentifier != null) {
                 identifier = resolvedIdentifier;
-                prefixParts.add(identifier);
             }
         }
 
