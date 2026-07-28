@@ -31,9 +31,9 @@ Each QDN resource has 3 important fields:
 
 ## Shared identifiers
 
-Since an identifier can be used by multiple names, this can be used to the advantage of Q-App developers as it allows for data to be stored in a deterministic location.
+Since an identifier can be used by multiple names, it can help Q-App developers store data in a deterministic location. For example, an app can reserve an identifier such as `myapp.profile.v1` for its own public profile document.
 
-An example of this is the user's avatar. This will always be published with service `THUMBNAIL` and identifier `qdn_avatar`, along with the user's name. So, an app can display the avatar of a user just by specifying their name when requesting the data. The same applies when publishing data.
+This convention is useful for an app's own data model, but it is not an identity or authorization mechanism. In particular, do not infer an account or group avatar from a name-based `THUMBNAIL` URL. Qortium avatars use explicit on-chain resource pointers; see [Account and group avatars](#account-and-group-avatars).
 
 
 ## "Default" resources
@@ -174,9 +174,9 @@ To link to a specific page of another website:
 <a href="qdn://WEBSITE/QdnDemo/minting-leveling/index.html">link text</a>
 ```
 
-To link to a standalone resource, such as an avatar
+To link to a standalone resource, such as a public image
 ```
-<a href="qdn://THUMBNAIL/QdnDemo/qdn_avatar">avatar</a>
+<a href="qdn://THUMBNAIL/QdnDemo/profile-banner">image</a>
 ```
 
 For cases where you would prefer to explicitly include an identifier (to remove ambiguity) you can use the keyword `default` to access a resource that doesn't have an identifier. For instance:
@@ -188,15 +188,37 @@ For cases where you would prefer to explicitly include an identifier (to remove 
 
 ## Section 1b: Linking to other QDN images
 
-The same applies for images, such as displaying an avatar:
+The same applies for app-owned public images:
 ```
-<img src="qdn://THUMBNAIL/QdnDemo/qdn_avatar" />
+<img src="qdn://THUMBNAIL/QdnDemo/profile-banner" />
 ```
 
 ...or even an image from an entirely different website:
 ```
 <img src="qdn://WEBSITE/AlphaX/assets/img/logo.png" />
 ```
+
+Do not use a raw `qdn://` or node URL for an account or group avatar. The current avatar can be an explicitly selected, mutable resource pointer and must be resolved through the host bridge described below.
+
+
+## Account and group avatars
+
+Qortium Home and the Qortium gateway expose pointer-aware avatar reads through `qdnRequest`. Feature-detect `FETCH_ACCOUNT_AVATAR` and `FETCH_GROUP_AVATAR` with `SHOW_ACTIONS` before showing a dynamic avatar. An account read accepts an `address` (or the selected account in Home); a group read accepts a positive `groupId` or `txGroupId`.
+
+A ready response contains bounded base64 bytes:
+
+```text
+{ address|groupId, body, encoding: 'base64', contentType, contentLength,
+  source: 'POINTER' | 'LEGACY', descriptor }
+```
+
+`descriptor` is `{ service, name, identifier }` when an explicit pointer is set. Create an in-memory `Blob`/object URL from `body`; do not reconstruct a QDN URL or trust `RESOLVE_IDENTITIES.avatarSrc` / `GET_SELECTED_ACCOUNT.avatarUrl` as an authoritative avatar. A queued resource returns `status: 'PENDING'` with `retryAfterSeconds`; keep an initials fallback and retry only then. Home validates raster image bytes and caps avatar responses at 500 KiB.
+
+Pointers intentionally resolve to the latest revision of their resource, so do not give them immutable or signature-based cache lifetimes. An explicit pointer always wins; an invalid or unavailable pointer fails closed. The host performs legacy named-thumbnail fallback only when Core reports no pointer, and marks that result `source: 'LEGACY'`.
+
+Avatar authoring is a separate two-step, approved flow in Qortium Home: publish a public single-file image resource, then call `SET_ACCOUNT_AVATAR` or `SET_GROUP_AVATAR` with `{ service, name, identifier }` (or `avatar: null` to clear). Publishing conventions are advisory: accounts commonly use `THUMBNAIL/<primaryName>/avatar`, and groups commonly use `THUMBNAIL/<ownerName>/qortium-group-avatar-v1-<groupId>`. Setter authorization remains account/group-specific; it does not grant control of another account's avatar.
+
+The authoritative current request shapes, node-mode rules, legacy behaviour, and approval requirements are maintained in [Qortium Home's avatar bridge contract](https://github.com/QortiumDev/qortium-home/blob/main/docs/BRIDGE_ACTIONS.md#account-and-group-avatars).
 
 
 # Section 2: Integrating a Javascript app
@@ -370,7 +392,7 @@ let res = await qdnRequest({
     action: "LIST_QDN_RESOURCES",
     service: "THUMBNAIL",
     name: "QdnDemo", // Optional (exact match)
-    identifier: "qdn_avatar", // Optional (exact match)
+    identifier: "app-icon", // Optional (exact match)
     default: true, // Optional
     includeStatus: false, // Optional - will take time to respond, so only request if necessary
     includeMetadata: false, // Optional - will take time to respond, so only request if necessary
@@ -439,7 +461,7 @@ let res = await qdnRequest({
     action: "FETCH_QDN_RESOURCE",
     name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qdn_avatar", // Optional. If omitted, the default resource is returned, or you can alternatively use the keyword "default"
+    identifier: "app-icon", // Optional. If omitted, the default resource is returned, or you can alternatively use the keyword "default"
     encoding: "base64", // Optional. If omitted, data is returned in raw form
     rebuild: false
 });
@@ -464,7 +486,7 @@ let res = await qdnRequest({
     action: "GET_QDN_RESOURCE_STATUS",
     name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qdn_avatar", // Optional
+    identifier: "app-icon", // Optional
     build: true // Optional - request that the resource is fetched & built in the background
 });
 ```
@@ -475,7 +497,7 @@ let res = await qdnRequest({
     action: "GET_QDN_RESOURCE_PROPERTIES",
     name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qdn_avatar" // Optional
+    identifier: "app-icon" // Optional
 });
 // Returns: filename, size, mimeType (where available)
 ```
@@ -486,7 +508,7 @@ let res = await qdnRequest({
     action: "GET_QDN_RESOURCE_METADATA",
     name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qdn_avatar" // Optional
+    identifier: "app-icon" // Optional
 });
 ```
 
@@ -777,7 +799,7 @@ let url = await qdnRequest({
     action: "GET_QDN_RESOURCE_URL",
     service: "THUMBNAIL",
     name: "QdnDemo",
-    identifier: "qdn_avatar"
+    identifier: "app-icon"
     // path: "filename.jpg" // optional - not needed if resource contains only one file
 });
 ```
@@ -879,53 +901,68 @@ QDN app examples can be cloned and modified, or used as a reference when creatin
 
 ## Sample App
 
-Here is a sample application to display the logged-in user's avatar:
+Here is a minimal pointer-aware reader for a visible account avatar. Replace the body's `data-account-address` with an address supplied by the app's own data model; it does not derive an avatar from a registered name. The initials fallback remains visible unless a valid image is ready.
 ```
 <html>
 <head>
     <script>
-        async function showAvatar() {
+        const MAX_AVATAR_BYTES = 500 * 1024;
+
+        function showFallback() {
+            document.getElementById("avatar").hidden = true;
+            document.getElementById("avatar-fallback").hidden = false;
+        }
+
+        async function showAvatar(address) {
             try {
-                // Get chain address of logged in account
-                let account = await qdnRequest({
-                    action: "GET_USER_ACCOUNT"
+                const actions = await qdnRequest({ action: "SHOW_ACTIONS" });
+                if (!actions.includes("FETCH_ACCOUNT_AVATAR")) return;
+
+                const avatar = await qdnRequest({
+                    action: "FETCH_ACCOUNT_AVATAR",
+                    address,
+                    maxBytes: MAX_AVATAR_BYTES,
                 });
-                let address = account.address;
-                console.log("address: " + address);
-            
-                // Get names owned by this account
-                let names = await qdnRequest({
-                    action: "GET_ACCOUNT_NAMES",
-                    address: address
-                });
-                console.log("names: " + JSON.stringify(names));
-            
-                if (names.length == 0) {
-                    console.log("User has no registered names");
+
+                if (avatar.status === "PENDING") {
+                    window.setTimeout(() => showAvatar(address),
+                        (avatar.retryAfterSeconds || 5) * 1000);
                     return;
                 }
-            
-                // Download base64-encoded avatar of the first registered name
-                let avatar = await qdnRequest({
-                    action: "FETCH_QDN_RESOURCE",
-                    name: names[0].name,
-                    service: "THUMBNAIL",
-                    identifier: "qdn_avatar",
-                    encoding: "base64"
-                });
-                console.log("Avatar size: " + avatar.length + " bytes");
-            
-                // Display the avatar image on the screen
-                document.getElementById("avatar").src = "data:image/png;base64," + avatar;
-                
-            } catch(e) {
-                console.log("Error: " + JSON.stringify(e));
+
+                if (avatar.encoding !== "base64" ||
+                    avatar.contentLength > MAX_AVATAR_BYTES ||
+                    !String(avatar.contentType).startsWith("image/")) return;
+
+                const binary = atob(avatar.body);
+                const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+                if (bytes.byteLength !== avatar.contentLength) return;
+
+                const image = document.getElementById("avatar");
+                const previous = image.dataset.objectUrl;
+                if (previous) URL.revokeObjectURL(previous);
+                const objectUrl = URL.createObjectURL(new Blob([bytes], {
+                    type: avatar.contentType,
+                }));
+                image.src = objectUrl;
+                image.dataset.objectUrl = objectUrl;
+                image.hidden = false;
+                document.getElementById("avatar-fallback").hidden = true;
+            } catch (error) {
+                console.warn("Avatar unavailable", error);
+                showFallback();
             }
         }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            const address = document.body.dataset.accountAddress;
+            if (address) showAvatar(address);
+        });
     </script>
 </head>
-<body onload="showAvatar()">
-    <img width="500" id="avatar" />
+<body data-account-address="REPLACE_WITH_VISIBLE_ACCOUNT_ADDRESS">
+    <span id="avatar-fallback" aria-label="Avatar fallback">??</span>
+    <img width="500" id="avatar" hidden onerror="showFallback()" />
 </body>
 </html>
 ```
