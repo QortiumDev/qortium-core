@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-28 - docs: describe pointer-aware QDN avatars
+
+The Q-Apps developer guide still described the old Qortal convention where an account's avatar is whatever image sits at a well-known thumbnail address under their name. Qortium replaced that with explicit on-chain avatar pointers some time ago, so the guide now explains the current model: apps ask the host for an account or group avatar through the bridge, receive bounded image bytes with a pending/legacy status where relevant, and never reconstruct avatar addresses by hand. The old avatar examples were reworded to use neutral app-owned images so they no longer teach the outdated pattern. Documentation only — no behaviour changes.
+
 ### 2026-07-28 - fix(gateway): render the identifier after the name in the base href
 
 Published gateway sites and apps load their images, styles, and scripts relative to the page's base address. For any resource published under an identifier, the gateway was writing that address with the identifier and the name the wrong way round, so every one of those files was requested from an address that does not exist and failed to load. The address is now written in the same `/{service}/{name}/{identifier}/` form the gateway itself reads back, so those files load. This was most visible for the shorthand addresses added the day before, which returned a page whose content could never appear.
