@@ -1407,7 +1407,14 @@ window.addEventListener("beforeunload", () => {
           throw new Error("Node API response exceeded the " + maxBytes + " byte limit.");
         return {
           body: body,
-          contentLength: isFinite(contentLength) ? contentLength : byteLength,
+          // Report the measured byte length of the delivered body; the
+          // Content-Length header is only used for the oversize preflight
+          // above (it can describe the compressed size, not the decoded
+          // bytes). HEAD has no body, so the header is the only length.
+          contentLength:
+            method === "HEAD"
+              ? (isFinite(contentLength) ? contentLength : undefined)
+              : byteLength,
           contentType: contentType,
           data: parseResponseBody(body, contentType),
           ok: response.ok,
@@ -1671,7 +1678,12 @@ window.addEventListener("beforeunload", () => {
             throw new Error("Avatar exceeded the " + maxBytes + " byte limit.");
           return {
             bytes: bytes,
-            contentLength: isFinite(contentLength) ? contentLength : bytes.byteLength,
+            // Always report the measured decoded byte length. The
+            // Content-Length header is only a preflight hint (see the
+            // oversize skip above): a transport that decompresses the body
+            // while a compressed-size header survives would otherwise make
+            // consumers reject the delivered bytes.
+            contentLength: bytes.byteLength,
             headers: response.headers,
             ok: true,
             status: response.status,
