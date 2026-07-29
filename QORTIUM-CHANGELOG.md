@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-29 - fix(crosschain): preserve Electrum TLS pins during store migration
+
+Moving the Electrum TLS fingerprint store out of the resource-list directory
+now leaves its old copy intact if the move cannot be completed. Those
+fingerprints are the node's persistent trust-on-first-use decisions, so
+deleting them would make the node trust whatever certificate it saw on the
+next connection. Regression tests now prove successful migration keeps every
+pin, failed migration preserves the original store, and an unrelated JSON
+object cannot prevent valid resource lists from loading.
+
+### 2026-07-29 - fix(list): don't let one malformed json file break ResourceListManager
+
+Resource-list startup now skips one malformed or unrelated file instead of
+letting its parsing exception prevent the entire list manager from starting.
+The Electrum TLS fingerprint store, whose JSON-object format exposed this
+collision, now lives in a separate cross-chain directory and migrates from its
+old location when possible. This restores QDN block and follow lookups,
+including the QDN status lookup used by the Core update endpoint, on affected
+nodes.
+
 ### 2026-07-29 - fix(gateway): report measured byte length from the read-only bridge
 
 The read-only bridge that public gateway pages use to fetch avatars and node
