@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Persistent trust-on-first-use store of ElectrumX TLS leaf-certificate SHA-256 fingerprints.
@@ -28,6 +29,7 @@ public final class ElectrumCertificateStore {
 
 	private static final Logger LOGGER = LogManager.getLogger(ElectrumCertificateStore.class);
 	private static final String STORE_FILENAME = "electrum-tls-fingerprints.json";
+	private static final String STORE_DIRNAME = "crosschain";
 
 	private static ElectrumCertificateStore defaultInstance;
 
@@ -40,8 +42,9 @@ public final class ElectrumCertificateStore {
 	}
 
 	/**
-	 * Returns the shared store rooted at the node's lists directory, or {@code null} when no settings are loaded
-	 * (e.g. offline tooling) and there is therefore nowhere to persist first-use decisions.
+	 * Returns the shared store rooted next to the node's lists directory, or {@code null} when no
+	 * settings are loaded (e.g. offline tooling) and there is therefore nowhere to persist first-use
+	 * decisions.
 	 */
 	public static synchronized ElectrumCertificateStore getDefault() {
 		if (defaultInstance != null)
@@ -51,8 +54,40 @@ public final class ElectrumCertificateStore {
 		if (settings == null)
 			return null;
 
-		defaultInstance = new ElectrumCertificateStore(Paths.get(settings.getListsPath(), STORE_FILENAME));
+		// Deliberately not inside the lists directory itself: ResourceListManager treats every
+		// ".json" file found there as a JSON-array resource list, and this store's JSON-object shape
+		// made it fail that parse, which broke every blocked/followed lookup node-wide until the file
+		// was found and removed by hand. Migrate any copy left behind at that old location.
+		Path listsPath = Paths.get(settings.getListsPath());
+		Path storePath = listsPath.resolveSibling(STORE_DIRNAME).resolve(STORE_FILENAME);
+		migrateLegacyStore(listsPath.resolve(STORE_FILENAME), storePath);
+
+		defaultInstance = new ElectrumCertificateStore(storePath);
 		return defaultInstance;
+	}
+
+	/**
+	 * Moves a store file left behind at the old, colliding location to its new home. Best-effort:
+	 * this is a TOFU cache, not authoritative state, so on any failure the legacy file is deleted
+	 * instead of left in place, where it would keep breaking ResourceListManager on every startup.
+	 */
+	private static void migrateLegacyStore(Path legacyPath, Path newPath) {
+		if (Objects.equals(legacyPath, newPath) || !Files.exists(legacyPath) || Files.exists(newPath))
+			return;
+
+		try {
+			if (newPath.getParent() != null)
+				Files.createDirectories(newPath.getParent());
+			Files.move(legacyPath, newPath);
+			LOGGER.info("Migrated Electrum TLS fingerprint store out of the lists directory to {}", newPath);
+		} catch (IOException e) {
+			LOGGER.warn("Unable to migrate Electrum TLS fingerprint store to {}; removing stale copy from the lists directory", newPath, e);
+			try {
+				Files.deleteIfExists(legacyPath);
+			} catch (IOException ignored) {
+				// Best effort - the ResourceListManager hardening covers this file being left behind too.
+			}
+		}
 	}
 
 	/** Test-only factory backed by an explicit path. */
