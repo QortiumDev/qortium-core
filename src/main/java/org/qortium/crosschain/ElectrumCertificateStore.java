@@ -68,10 +68,11 @@ public final class ElectrumCertificateStore {
 
 	/**
 	 * Moves a store file left behind at the old, colliding location to its new home. Best-effort:
-	 * this is a TOFU cache, not authoritative state, so on any failure the legacy file is deleted
-	 * instead of left in place, where it would keep breaking ResourceListManager on every startup.
+	 * on failure the legacy file is left intact because it is persistent TOFU pinning state. The
+	 * ResourceListManager hardening safely skips the legacy JSON-object file until a later startup
+	 * can migrate it.
 	 */
-	private static void migrateLegacyStore(Path legacyPath, Path newPath) {
+	static void migrateLegacyStore(Path legacyPath, Path newPath) {
 		if (Objects.equals(legacyPath, newPath) || !Files.exists(legacyPath) || Files.exists(newPath))
 			return;
 
@@ -81,12 +82,8 @@ public final class ElectrumCertificateStore {
 			Files.move(legacyPath, newPath);
 			LOGGER.info("Migrated Electrum TLS fingerprint store out of the lists directory to {}", newPath);
 		} catch (IOException e) {
-			LOGGER.warn("Unable to migrate Electrum TLS fingerprint store to {}; removing stale copy from the lists directory", newPath, e);
-			try {
-				Files.deleteIfExists(legacyPath);
-			} catch (IOException ignored) {
-				// Best effort - the ResourceListManager hardening covers this file being left behind too.
-			}
+			LOGGER.warn("Unable to migrate Electrum TLS fingerprint store to {}; leaving the legacy pinning store intact at {}",
+					newPath, legacyPath, e);
 		}
 	}
 

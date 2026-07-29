@@ -14,7 +14,9 @@ import org.qortium.utils.ListUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
@@ -22,6 +24,7 @@ import static org.junit.Assert.*;
 
 public class ListTests {
 
+    private static final String UNRELATED_JSON_FILENAME = "electrum-tls-fingerprints.json";
     private static final String[] TEST_LISTS = {
             "followedQdn", "blockedQdn", "blockedChatNames", "blockedChatAddresses", "testListA", "testListB"
     };
@@ -47,6 +50,8 @@ public class ListTests {
             list.save();
         }
 
+        Files.deleteIfExists(Paths.get(Settings.getInstance().getListsPath(), UNRELATED_JSON_FILENAME));
+
         // Clear resource list manager instance
         ResourceListManager.reset();
     }
@@ -65,6 +70,23 @@ public class ListTests {
         assertEquals(2, listNames.size());
         assertEquals("testListA", listNames.get(0));
         assertEquals("testListB", listNames.get(1));
+    }
+
+    @Test
+    public void testMalformedJsonObjectDoesNotPreventValidListDiscovery() throws IOException {
+        ResourceList validList = new ResourceList("testListA");
+        validList.add("item1");
+        validList.save();
+
+        Path unrelatedFile = Paths.get(Settings.getInstance().getListsPath(), UNRELATED_JSON_FILENAME);
+        Files.write(unrelatedFile,
+                "{\"fingerprints\":{\"electrum.example:50002\":\"aabbcc\"}}".getBytes(StandardCharsets.UTF_8));
+
+        ResourceListManager.reset();
+        List<String> listNames = ResourceListManager.getInstance().getListNames();
+
+        assertEquals(1, listNames.size());
+        assertEquals("testListA", listNames.get(0));
     }
 
     @Test
