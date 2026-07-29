@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-29 - fix(gateway): report measured byte length from the read-only bridge
+
+The read-only bridge that public gateway pages use to fetch avatars and node
+API data reported the size a response *claimed* to be (its HTTP header)
+instead of the size of the bytes it actually delivered. Those two numbers can
+differ when something between the node and the page — a browser or a reverse
+proxy — decompresses the response while the original header survives. Apps
+that check the reported size against the bytes they received, as Qortium
+Chat's avatar display does, would then silently discard a perfectly good
+image, making every pointer-based avatar vanish for gateway visitors. The
+bridge now always reports the size it measured from the delivered bytes and
+uses the header only as an early check to skip downloads that announce
+themselves as too large. Home's two copies of the same bridge are getting the
+identical fix separately. Found in the 2026-07-29 Qortium Chat delta audit.
+
 ### 2026-07-28 - chore(release): prepare Core 1.6.1
 
 Marks the version for the next preview release. Since 1.6.0, chain and QDN
