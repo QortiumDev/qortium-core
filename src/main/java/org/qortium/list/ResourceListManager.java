@@ -70,8 +70,12 @@ public class ResourceListManager {
                         if (list != null) {
                             lists.add(list);
                         }
-                    } catch (IOException e) {
-                        // Ignore this list
+                    } catch (IOException | RuntimeException e) {
+                        // A single malformed or unrelated .json file in the lists directory (e.g. one
+                        // written by an unrelated subsystem) must not stop every other list from
+                        // loading, so skip just this file instead of letting the exception escape
+                        // the constructor and leave the whole manager uninitialised.
+                        LOGGER.warn("Skipping unreadable resource list file {}: {}", fileName, e.getMessage());
                     }
                 }
             } catch (IOException e) {
@@ -101,7 +105,7 @@ public class ResourceListManager {
             this.lists.add(list);
             return list;
 
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             LOGGER.info("Unable to load or create list {}: {}", listName, e.getMessage());
             return null;
         }
