@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-30 - chore(release): prepare Core 1.6.2
+
+Marks the version for the next preview release. Since 1.6.1, automated
+transactions on a chain without a native coin can actually run: from scheduled
+activation height 80,000 the runtime charges no per-step fees while the native
+asset does not exist, so already-deployed ATs — and their queued incoming
+messages — start executing on their own at that height. Because this changes
+what every node must agree on, all minting nodes must run this version before
+the activation height. The node's API now publishes an automated transaction's
+address as `atAddress` in every response, rejects malformed AT addresses
+instead of answering "nothing found", and answers a missing AT's data cleanly.
+Public gateway pages receive the measured size of the bytes actually
+delivered rather than a header that can go stale, so pointer-based avatars no
+longer vanish for gateway visitors. Resource-list startup now skips a single
+malformed file instead of failing entirely, and the Electrum TLS fingerprint
+store — the node's trust-on-first-use record — moved to its own cross-chain
+directory with a migration that never discards existing pins.
+
 ### 2026-07-30 - fix(at): waive AT step fees when the chain has no native asset
 
 An earlier change made it possible to deploy an automated transaction (AT)
