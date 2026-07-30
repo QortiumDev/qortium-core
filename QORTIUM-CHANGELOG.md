@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-30 - fix(at): waive AT step fees when the chain has no native asset
+
+An earlier change made it possible to deploy an automated transaction (AT)
+that works in an ordinary asset on a chain that has no native coin — but the
+runtime half was missing: before every execution round the node still checked
+that the AT could pay per-step fees in the native coin, and still billed those
+fees against the AT's native balance. On a chain where the native coin does
+not exist, nothing can ever fund that balance, so a deployed AT sat idle
+forever without reporting any error. From a new scheduled activation height
+(80,000 on Previewnet), a chain whose native asset does not exist simply
+charges no step fees, so these ATs can run. Chains that do have a native
+asset keep charging fees exactly as before, and all blocks from before the
+activation height replay unchanged. ATs deployed while the bug was live —
+including their already-confirmed incoming messages — start executing on
+their own at the activation height, with nothing to resend. Because this
+changes what every node must agree on, all minting nodes need to run this
+version before the activation height.
+
 ### 2026-07-30 - fix(api): publish the AT address as atAddress everywhere
 
 The same piece of information — an automated transaction's address — was

@@ -72,6 +72,7 @@ public class BlockChain {
 	private static final String AT_BALANCE_QUERY_TRIGGER = "atBalanceQueryHeight";
 	private static final String AT_CODE_HASH_CHECK_TRIGGER = "atCodeHashCheckHeight";
 	private static final String AT_UNSIGNED_256_ARITHMETIC_TRIGGER = "atUnsigned256ArithmeticHeight";
+	private static final String AT_NO_NATIVE_ASSET_FEE_WAIVER_TRIGGER = "atNoNativeAssetFeeWaiverHeight";
 
 	// Properties
 
@@ -1034,6 +1035,18 @@ public class BlockChain {
 	 */
 	public long getAtUnsigned256ArithmeticHeight() {
 		return getFeatureTriggerHeight(AT_UNSIGNED_256_ARITHMETIC_TRIGGER);
+	}
+
+	/**
+	 * From this height, AT step fees are waived while the chain's native asset does not exist:
+	 * {@code ChainATAPI} treats {@code feePerStep} as zero, so ATs can execute without a native
+	 * balance that nothing on such a chain could ever fund. This is the runtime half of
+	 * {@link #getDeployAtWorkingAssetHeight()}, which already allows DEPLOY_AT without the native
+	 * asset — without this trigger such an AT deploys but never passes the execution fee gate.
+	 * On a chain whose native asset exists, behaviour is unchanged even beyond the trigger.
+	 */
+	public long getAtNoNativeAssetFeeWaiverHeight() {
+		return getFeatureTriggerHeight(AT_NO_NATIVE_ASSET_FEE_WAIVER_TRIGGER);
 	}
 
 	/** From this height, SET_GROUP_AVATAR transactions are consensus-active. Disabled unless configured. */
