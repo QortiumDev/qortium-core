@@ -7,6 +7,13 @@ import org.qortium.asset.Asset;
 import org.qortium.block.BlockChain;
 import org.qortium.data.account.RewardShareData;
 import org.qortium.data.at.ATStateData;
+import org.qortium.data.group.GroupData;
+import org.qortium.data.transaction.BaseTransactionData;
+import org.qortium.data.transaction.GroupApprovalTransactionData;
+import org.qortium.data.transaction.IssueAssetTransactionData;
+import org.qortium.data.transaction.TransactionData;
+import org.qortium.data.transaction.TransferAssetTransactionData;
+import org.qortium.group.Group;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -16,6 +23,7 @@ import org.qortium.test.common.AtUtils;
 import org.qortium.test.common.BlockUtils;
 import org.qortium.test.common.Common;
 import org.qortium.test.common.TestChainBootstrapUtils;
+import org.qortium.test.common.TransactionUtils;
 import org.qortium.transaction.DeployAtTransaction;
 import org.qortium.utils.Amounts;
 import org.qortium.utils.NTP;
@@ -95,6 +103,63 @@ public class ATNoNativeAssetFeeWaiverTests extends Common {
 	}
 
 	@Test
+	public void testFeesResumeOnceNativeAssetIsBootstrapped() throws DataException {
+		Common.useSettings(WAIVER_SETTINGS);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			bootstrapAliceMinter(repository);
+			TestChainBootstrapUtils.ensureDevelopmentAdmin(repository, "alice");
+			repository.saveChanges();
+
+			DeployAtTransaction deployAtTransaction = deployNonNativeAt(repository);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			// Reach the waiver trigger; the AT takes its first, fee-free round there
+			long waiverHeight = BlockChain.getInstance().getAtNoNativeAssetFeeWaiverHeight();
+			while (repository.getBlockRepository().getBlockchainHeight() < waiverHeight)
+				BlockUtils.mintBlock(repository);
+
+			ATStateData waivedStateData = repository.getATRepository().getLatestATState(atAddress);
+			assertEquals(waiverHeight, (long) waivedStateData.getHeight());
+			assertEquals(0L, (long) waivedStateData.getFees());
+
+			// Development-group-approved bootstrap creates the native asset mid-chain, ending the waiver
+			issueBootstrapNativeAsset(repository);
+			assertTrue(repository.getAssetRepository().assetExists(Asset.NATIVE));
+			int bootstrapHeight = repository.getBlockRepository().getBlockchainHeight();
+
+			// Every round the AT took while the waiver was live must have been free
+			ATStateData preFundingStateData = repository.getATRepository().getLatestATState(atAddress);
+			assertEquals("waived rounds must all be free", 0L, (long) preFundingStateData.getFees());
+
+			// Fees now apply again, and the AT holds no native balance — so even an incoming
+			// working-asset transfer must not buy it another round
+			transferToAt(repository, atAddress, TEST_ASSET_ID, 1L * Amounts.MULTIPLIER);
+			BlockUtils.mintBlock(repository);
+			BlockUtils.mintBlock(repository);
+
+			ATStateData starvedStateData = repository.getATRepository().getLatestATState(atAddress);
+			assertTrue("AT must not execute past the bootstrap without native funding",
+					starvedStateData.getHeight() <= bootstrapHeight);
+			assertEquals(preFundingStateData.getHeight(), starvedStateData.getHeight());
+			assertEquals(0L, atAccount.getConfirmedBalance(Asset.NATIVE));
+
+			// Native funding restores execution — and the round must charge real fees again.
+			// The funding block itself runs ATs against the parent state (still unfunded), so the
+			// AT's single fee-charged round happens in the one block minted after it.
+			long nativeFunding = 2L * Amounts.MULTIPLIER;
+			transferToAt(repository, atAddress, Asset.NATIVE, nativeFunding);
+			BlockUtils.mintBlock(repository);
+
+			ATStateData fundedStateData = repository.getATRepository().getLatestATState(atAddress);
+			assertTrue("AT must execute again once native-funded", fundedStateData.getHeight() > bootstrapHeight);
+			assertTrue("post-bootstrap rounds must charge step fees", fundedStateData.getFees() > 0);
+			assertEquals(nativeFunding - fundedStateData.getFees(), atAccount.getConfirmedBalance(Asset.NATIVE));
+		}
+	}
+
+	@Test
 	public void testWaiverDoesNotApplyWhenNativeAssetExists() throws DataException {
 		// Default test chain: native asset in genesis AND atNoNativeAssetFeeWaiverHeight active from 0
 		Common.useDefaultSettings();
@@ -120,6 +185,38 @@ public class ATNoNativeAssetFeeWaiverTests extends Common {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 
 		return AtUtils.doDeployAT(repository, alice, AtUtils.buildSimpleAT(), FUNDING_AMOUNT, TEST_ASSET_ID, 0L);
+	}
+
+	/** Development-group-gated runtime bootstrap of the native asset (submit, approve, wait out the group block delay). */
+	private static void issueBootstrapNativeAsset(Repository repository) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID,
+				alice.getPublicKey(), 0L, null);
+		IssueAssetTransactionData issueTransactionData = new IssueAssetTransactionData(baseTransactionData,
+				"BOOTSTRAP", "Bootstrap native asset", 1_000_000L * Amounts.MULTIPLIER, true, "{}", false);
+		issueTransactionData.setRequestedAssetId(Asset.NATIVE);
+		TransactionUtils.signAndMint(repository, issueTransactionData, alice);
+
+		timestamp = TransactionUtils.nextTimestamp(repository);
+		baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, alice.getPublicKey(), 0L, null);
+		GroupApprovalTransactionData approvalTransactionData = new GroupApprovalTransactionData(baseTransactionData,
+				issueTransactionData.getSignature(), true);
+		TransactionUtils.signAndMint(repository, approvalTransactionData, alice);
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		BlockUtils.mintBlocks(repository, groupData.getMinimumBlockDelay());
+	}
+
+	private static void transferToAt(Repository repository, String atAddress, long assetId, long amount) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, alice.getPublicKey(), 0L, null);
+		TransactionData transactionData = new TransferAssetTransactionData(baseTransactionData, atAddress, amount, assetId);
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
 	}
 
 	private static void bootstrapAliceMinter(Repository repository) throws DataException {
