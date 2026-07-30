@@ -62,6 +62,9 @@ public class ChainATAPI extends API {
 	/** Generated platform-function payouts not tracked by CIYAM's single current-balance field. */
 	private final Map<Long, Long> pendingAssetPayouts;
 
+	/** Lazily-cached "does the native asset exist" repository lookup for the step-fee waiver. */
+	private Boolean nativeAssetExists;
+
 	// Constructors
 
 	public ChainATAPI(Repository repository, ATData atData, long blockTimestamp) {
@@ -136,10 +139,12 @@ public class ChainATAPI extends API {
 
 	@Override
 	public int getMaxStepsPerRound() {
-		if (this.usesNativeWorkingAsset() || this.ciyamAtSettings.feePerStep <= 0)
+		long feePerStep = this.effectiveFeePerStep();
+
+		if (this.usesNativeWorkingAsset() || feePerStep <= 0)
 			return this.ciyamAtSettings.maxStepsPerRound;
 
-		long nativeStepBudget = this.getNativeFeeBalance() / this.ciyamAtSettings.feePerStep;
+		long nativeStepBudget = this.getNativeFeeBalance() / feePerStep;
 		return (int) Math.min(this.ciyamAtSettings.maxStepsPerRound, Math.max(0L, nativeStepBudget));
 	}
 
@@ -928,9 +933,9 @@ public class ChainATAPI extends API {
 	 */
 	long calcStepFees(long steps) {
 		if (this.isCheckedArithmeticActive())
-			return Math.multiplyExact(steps, this.ciyamAtSettings.feePerStep);
+			return Math.multiplyExact(steps, this.effectiveFeePerStep());
 
-		return steps * this.ciyamAtSettings.feePerStep;
+		return steps * this.effectiveFeePerStep();
 	}
 
 	/** Returns partial transaction signature, used to verify we're operating on the same transaction and not naively using block height & sequence. */
@@ -1014,10 +1019,40 @@ public class ChainATAPI extends API {
 		return this.atData.getAssetId() == Asset.NATIVE;
 	}
 
+	/**
+	 * The fee charged per execution step, honouring the no-native-asset waiver: from
+	 * {@code atNoNativeAssetFeeWaiverHeight}, a chain whose native asset does not exist charges no
+	 * step fees, because no account on such a chain could ever fund them. Below the trigger, or on
+	 * a chain whose native asset exists, this is exactly the configured {@code feePerStep}, so all
+	 * historic blocks replay byte-for-byte. Every step-fee calculation and gate MUST price via this
+	 * method, never via {@code ciyamAtSettings.feePerStep} directly: nodes cross-check per-AT and
+	 * per-block fee totals, so one unwaived site would fork updated nodes from each other.
+	 */
+	private long effectiveFeePerStep() {
+		return this.isNoNativeAssetFeeWaiverActive() ? 0L : this.ciyamAtSettings.feePerStep;
+	}
+
+	private boolean isNoNativeAssetFeeWaiverActive() {
+		if (this.getGateBlockHeight() < BlockChain.getInstance().getAtNoNativeAssetFeeWaiverHeight())
+			return false;
+
+		if (this.nativeAssetExists == null) {
+			try {
+				this.nativeAssetExists = this.repository.getAssetRepository().assetExists(Asset.NATIVE);
+			} catch (DataException e) {
+				throw new RuntimeException("AT API unable to check for native asset?", e);
+			}
+		}
+
+		return !this.nativeAssetExists;
+	}
+
 	public boolean hasNativeFeeBalance() {
+		long feePerStep = this.effectiveFeePerStep();
+
 		return this.usesNativeWorkingAsset()
-				|| this.ciyamAtSettings.feePerStep <= 0
-				|| this.getNativeFeeBalance() >= this.ciyamAtSettings.feePerStep;
+				|| feePerStep <= 0
+				|| this.getNativeFeeBalance() >= feePerStep;
 	}
 
 	private long getNativeFeeBalance() {
@@ -1194,7 +1229,7 @@ public class ChainATAPI extends API {
 	}
 
 	private long calcMaxRoundFees() {
-		return this.ciyamAtSettings.maxStepsPerRound * this.ciyamAtSettings.feePerStep;
+		return this.ciyamAtSettings.maxStepsPerRound * this.effectiveFeePerStep();
 	}
 
 	private void addPaymentToB(long amount, long assetId, MachineState state) {

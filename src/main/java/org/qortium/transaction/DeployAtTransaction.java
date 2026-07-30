@@ -127,8 +127,10 @@ public class DeployAtTransaction extends Transaction {
 			return ValidationResult.ASSET_DOES_NOT_EXIST;
 
 			// Non-native ATs only require native asset if a transaction fee, native fee reserve or AT step fees need it.
-			// From deployAtWorkingAssetHeight the feePerStep clause is dropped: runtime waives step fees for ATs with a
-			// non-native working asset (ChainATAPI.getFeePerStep), so chains without a native asset can still deploy them.
+			// From deployAtWorkingAssetHeight the feePerStep clause is dropped so chains without a native asset can
+			// still deploy them. The runtime half is atNoNativeAssetFeeWaiverHeight: ChainATAPI waives step-fee
+			// gating/charging while no native asset exists — between the two triggers such an AT deploys but cannot
+			// execute, because willExecute() still demands a native fee balance that nothing could fund.
 			boolean deployAtWorkingAssetEnabled = this.repository.getBlockRepository().getBlockchainHeight() + 1
 					>= BlockChain.getInstance().getDeployAtWorkingAssetHeight();
 			boolean nativeFundingRequired = assetId != Asset.NATIVE
