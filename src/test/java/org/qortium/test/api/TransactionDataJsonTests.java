@@ -4,7 +4,9 @@ import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
+import org.qortium.crypto.Crypto;
 import org.qortium.data.transaction.BaseTransactionData;
+import org.qortium.data.transaction.DeployAtTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.data.transaction.TransferPrivsTransactionData;
 import org.qortium.data.transaction.UpdatePollTransactionData;
@@ -21,6 +23,7 @@ import javax.xml.bind.Marshaller;
 import java.io.StringWriter;
 import java.util.List;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class TransactionDataJsonTests extends ApiCommon {
@@ -77,6 +80,31 @@ public class TransactionDataJsonTests extends ApiCommon {
 		assertTrue(json.contains("\"pollId\":123"));
 		assertTrue(json.contains("\"newPollName\":\"test-poll\""));
 		assertTrue(json.contains("\"newDescription\":\"Updated description\""));
+	}
+
+	/**
+	 * Guards the serialized name of the DEPLOY_AT address. This class is bound with
+	 * {@link javax.xml.bind.annotation.XmlAccessType#FIELD}, so the JSON key is the Java field
+	 * name — the field was {@code aTAddress}, publishing a key no other Core response used, which
+	 * silently broke consumers reading {@code atAddress}.
+	 */
+	@Test
+	public void testDeployAtJsonUsesCamelCaseAtAddress() throws JAXBException {
+		PrivateKeyAccount alice = Common.getTestAccount(null, "alice");
+		String atAddress = Crypto.toATAddress(new byte[32]);
+
+		BaseTransactionData baseTransactionData = new BaseTransactionData(System.currentTimeMillis(), Group.NO_GROUP,
+				alice.getPublicKey(), Amounts.MULTIPLIER, null);
+		DeployAtTransactionData transactionData = new DeployAtTransactionData(baseTransactionData, atAddress,
+				"test-at", "description", "test-type", "tags", new byte[] {1}, Amounts.MULTIPLIER, 1L);
+
+		String json = marshal(transactionData);
+
+		assertTrue(json.contains("\"type\":\"DEPLOY_AT\""));
+		assertTrue("DEPLOY_AT JSON must expose atAddress: " + json,
+				json.contains("\"atAddress\":\"" + atAddress + "\""));
+		assertFalse("DEPLOY_AT JSON must not expose the legacy aTAddress key: " + json,
+				json.contains("\"aTAddress\""));
 	}
 
 	private static String marshal(TransactionData transactionData) throws JAXBException {

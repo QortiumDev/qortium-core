@@ -34,6 +34,34 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-30 - fix(api): publish the AT address as atAddress everywhere
+
+The same piece of information — an automated transaction's address — was
+published under three different names depending on which response you asked
+for: `aTAddress` on a DEPLOY_AT transaction, `ATAddress` when fetching an AT,
+and `atAddress` on AT map reads and in every other part of the node's API. The
+inconsistency was inherited from Qortal and had been there for years. It is the
+kind of difference that produces no error and no warning: a program reading
+`atAddress` from a DEPLOY_AT transaction simply saw nothing, and could report a
+deployment as failed when it had in fact succeeded. That is exactly what
+happened while deploying the first automated transaction on Previewnet.
+
+Every response now uses `atAddress`. Tests check the published names directly,
+so a future rename cannot quietly change the API again.
+
+Two related faults are fixed at the same time. Asking the node about an AT did
+not check that what it was given even looked like an AT address, so any
+mistyped or invented address answered "nothing found" — indistinguishable from
+a real answer about a real address, and easy to mistake for proof that no
+automated transactions existed at all. Malformed addresses are now rejected as
+invalid, while a well-formed address with no AT still answers "nothing found",
+as before. Asking for the stored data of an AT that does not exist previously
+produced an unexplained server error, and now answers "nothing found" too.
+
+Programs reading the AT address from a DEPLOY_AT transaction or from an AT
+lookup must use `atAddress`. Anything reading the old names should accept
+either name while nodes on older versions remain in use.
+
 ### 2026-07-29 - fix(crosschain): preserve Electrum TLS pins during store migration
 
 Moving the Electrum TLS fingerprint store out of the resource-list directory
