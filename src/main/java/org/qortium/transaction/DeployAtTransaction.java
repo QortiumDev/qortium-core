@@ -63,7 +63,7 @@ public class DeployAtTransaction extends Transaction {
 		return (short) ((creationBytes[0] << 8) | (creationBytes[1] & 0xff)); // Big-endian
 	}
 
-	/** Make sure deployATTransactionData has an ATAddress */
+	/** Make sure deployAtTransactionData has an atAddress */
 	public static void ensureATAddress(DeployAtTransactionData deployAtTransactionData) throws DataException {
 		if (deployAtTransactionData.getAtAddress() != null)
 			return;

@@ -9,7 +9,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 public class ATData {
 
 	// Properties
-	private String ATAddress;
+	private String atAddress;
 	private byte[] creatorPublicKey;
 	private long creation;
 	private int version;
@@ -31,10 +31,10 @@ public class ATData {
 	protected ATData() {
 	}
 
-	public ATData(String ATAddress, byte[] creatorPublicKey, long creation, int version, long assetId, byte[] codeBytes, byte[] codeHash,
+	public ATData(String atAddress, byte[] creatorPublicKey, long creation, int version, long assetId, byte[] codeBytes, byte[] codeHash,
 			boolean isSleeping, Integer sleepUntilHeight, boolean isFinished, boolean hadFatalError, boolean isFrozen, Long frozenBalance,
 			Long sleepUntilMessageTimestamp) {
-		this.ATAddress = ATAddress;
+		this.atAddress = atAddress;
 		this.creatorPublicKey = creatorPublicKey;
 		this.creation = creation;
 		this.version = version;
@@ -51,8 +51,8 @@ public class ATData {
 	}
 
 	/** For constructing skeleton ATData with bare minimum info. */
-	public ATData(String ATAddress, byte[] creatorPublicKey, long creation, long assetId) {
-		this.ATAddress = ATAddress;
+	public ATData(String atAddress, byte[] creatorPublicKey, long creation, long assetId) {
+		this.atAddress = atAddress;
 		this.creatorPublicKey = creatorPublicKey;
 		this.creation = creation;
 		this.assetId = assetId;
@@ -61,7 +61,7 @@ public class ATData {
 	// Getters / setters
 
 	public String getATAddress() {
-		return this.ATAddress;
+		return this.atAddress;
 	}
 
 	public byte[] getCreatorPublicKey() {

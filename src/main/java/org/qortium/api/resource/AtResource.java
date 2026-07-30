@@ -114,9 +114,15 @@ public class AtResource {
 		}
 	)
 	@ApiErrors({
-		ApiError.REPOSITORY_ISSUE
+		ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE
 	})
 	public ATData getByAddress(@PathParam("ataddress") String atAddress) {
+		// Without this check any unmatched path under /at/ reaches here as an "AT address" and an
+		// unknown address answers 204, so a mistyped or invented sub-path is indistinguishable from
+		// a genuine "no such AT". A valid-but-absent address still answers 204, as before.
+		if (!Crypto.isValidAtAddress(atAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getATRepository().fromATAddress(atAddress);
 		} catch (ApiException e) {
@@ -179,11 +185,18 @@ public class AtResource {
 		}
 	)
 	@ApiErrors({
-		ApiError.REPOSITORY_ISSUE
+		ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE
 	})
 	public byte[] getDataByAddress(@PathParam("ataddress") String atAddress) {
+		if (!Crypto.isValidAtAddress(atAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+			// An unknown AT has no state; dereferencing it here answered a bare HTTP 500.
+			if (atStateData == null)
+				return null;
+
 			byte[] stateData = atStateData.getStateData();
 
 			byte[] dataBytes = MachineState.extractDataBytes(stateData);

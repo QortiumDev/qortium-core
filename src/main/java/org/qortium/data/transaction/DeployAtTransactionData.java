@@ -27,7 +27,7 @@ public class DeployAtTransactionData extends TransactionData {
 	private long assetId;
 	@XmlJavaTypeAdapter(value = org.qortium.api.AmountTypeAdapter.class)
 	private long nativeFeeReserve;
-	private String aTAddress;
+	private String atAddress;
 
 	// Constructors
 
@@ -38,10 +38,10 @@ public class DeployAtTransactionData extends TransactionData {
 
 	/** From repository */
 	public DeployAtTransactionData(BaseTransactionData baseTransactionData,
-			String aTAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId, long nativeFeeReserve) {
+			String atAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId, long nativeFeeReserve) {
 		super(TransactionType.DEPLOY_AT, baseTransactionData);
 
-		this.aTAddress = aTAddress;
+		this.atAddress = atAddress;
 		this.name = name;
 		this.description = description;
 		this.aTType = aTType;
@@ -54,8 +54,8 @@ public class DeployAtTransactionData extends TransactionData {
 
 	/** From repository */
 	public DeployAtTransactionData(BaseTransactionData baseTransactionData,
-			String aTAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId) {
-		this(baseTransactionData, aTAddress, name, description, aTType, tags, creationBytes, amount, assetId, 0L);
+			String atAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId) {
+		this(baseTransactionData, atAddress, name, description, aTType, tags, creationBytes, amount, assetId, 0L);
 	}
 
 	/** From network/API */
@@ -105,11 +105,11 @@ public class DeployAtTransactionData extends TransactionData {
 	}
 
 	public String getAtAddress() {
-		return this.aTAddress;
+		return this.atAddress;
 	}
 
-	public void setAtAddress(String AtAddress) {
-		this.aTAddress = AtAddress;
+	public void setAtAddress(String atAddress) {
+		this.atAddress = atAddress;
 	}
 
 	// Re-expose creatorPublicKey for this transaction type for JAXB

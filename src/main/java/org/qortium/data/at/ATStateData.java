@@ -3,7 +3,7 @@ package org.qortium.data.at;
 public class ATStateData {
 
 	// Properties
-	private String ATAddress;
+	private String atAddress;
 	private Integer height;
 	private byte[] stateData;
 	private byte[] stateHash;
@@ -17,15 +17,15 @@ public class ATStateData {
 	// Constructors
 
 	/** Create new ATStateData */
-	public ATStateData(String ATAddress, Integer height, byte[] stateData, byte[] stateHash, Long fees,
+	public ATStateData(String atAddress, Integer height, byte[] stateData, byte[] stateHash, Long fees,
 			boolean isInitial, Long sleepUntilMessageTimestamp) {
-		this(ATAddress, height, stateData, stateHash, null, fees, isInitial, sleepUntilMessageTimestamp);
+		this(atAddress, height, stateData, stateHash, null, fees, isInitial, sleepUntilMessageTimestamp);
 	}
 
 	/** Create new ATStateData with a committed AT map root. */
-	public ATStateData(String ATAddress, Integer height, byte[] stateData, byte[] stateHash, byte[] mapRoot, Long fees,
+	public ATStateData(String atAddress, Integer height, byte[] stateData, byte[] stateHash, byte[] mapRoot, Long fees,
 			boolean isInitial, Long sleepUntilMessageTimestamp) {
-		this.ATAddress = ATAddress;
+		this.atAddress = atAddress;
 		this.height = height;
 		this.stateData = stateData;
 		this.stateHash = stateHash;
@@ -36,25 +36,25 @@ public class ATStateData {
 	}
 
 	/** For recreating per-block ATStateData from repository where not all info is needed */
-	public ATStateData(String ATAddress, int height, byte[] stateHash, Long fees, boolean isInitial) {
-		this(ATAddress, height, null, stateHash, fees, isInitial, null);
+	public ATStateData(String atAddress, int height, byte[] stateHash, Long fees, boolean isInitial) {
+		this(atAddress, height, null, stateHash, fees, isInitial, null);
 	}
 
 	/** For recreating per-block ATStateData with a committed AT map root. */
-	public ATStateData(String ATAddress, int height, byte[] stateHash, byte[] mapRoot, Long fees, boolean isInitial) {
-		this(ATAddress, height, null, stateHash, mapRoot, fees, isInitial, null);
+	public ATStateData(String atAddress, int height, byte[] stateHash, byte[] mapRoot, Long fees, boolean isInitial) {
+		this(atAddress, height, null, stateHash, mapRoot, fees, isInitial, null);
 	}
 
 	/** For creating ATStateData from serialized bytes when we don't have all the info */
-	public ATStateData(String ATAddress, byte[] stateHash, Long fees) {
+	public ATStateData(String atAddress, byte[] stateHash, Long fees) {
 		// This won't ever be initial AT state from deployment, as that's never serialized over the network.
-		this(ATAddress, null, null, stateHash, fees, false, null);
+		this(atAddress, null, null, stateHash, fees, false, null);
 	}
 
 	// Getters / setters
 
 	public String getATAddress() {
-		return this.ATAddress;
+		return this.atAddress;
 	}
 
 	public Integer getHeight() {
