@@ -168,9 +168,35 @@ public class ArbitraryDataFileRequestThread {
             String peer = peerTimeLapse.getKey();
             Integer elapsedSeconds = peerTimeLapse.getValue();
 
-            if (elapsedSeconds > 12 ) {  // stale, drop list and counter
+            // I2P dials (SAM STREAM CONNECT including a LeaseSet lookup) routinely take far
+            // longer than a direct TCP connect, so give them a correspondingly longer window
+            // before declaring the pending connect stale.
+            int dropAfterSeconds = peer.contains(".b32.i2p") ? 90 : 12;
+
+            if (elapsedSeconds > dropAfterSeconds) {  // stale, drop list and counter
+                // Before discarding, requeue any responses that carried a relay fallback, so the
+                // chunks are retried via the (still-connected) sender rather than being lost
+                // until the next discovery round.
+                List<ArbitraryFileListResponseInfo> droppedResponses = arbitraryDataFileManager.getPendingPeerAndChunks().get(peer);
                 arbitraryDataFileManager.removePeerTimeOut(peer);
-                LOGGER.debug("Removing Peer: {} for time out greater than 8", peer);
+                LOGGER.debug("Removing pending peer {} after {}s without a data connection", peer, elapsedSeconds);
+
+                if (droppedResponses != null) {
+                    Long requeueTime = NTP.getTime();
+                    for (ArbitraryFileListResponseInfo dropped : droppedResponses) {
+                        PeerData relayFallbackPeerData = dropped.getRelayFallbackPeerData();
+                        if (relayFallbackPeerData == null)
+                            continue;
+
+                        Peer relayFallbackPeer = new Peer(relayFallbackPeerData, Peer.NETWORKDATA);
+                        ArbitraryFileListResponseInfo relayRetry = new ArbitraryFileListResponseInfo(
+                                dropped.getHash58(), dropped.getSignature58(), relayFallbackPeer, dropped.getNodeId(),
+                                requeueTime, dropped.getRequestTime(), dropped.getRequestHops(), false);
+                        LOGGER.debug("Requeuing hash {} via relay fallback {} after direct connect to {} failed",
+                                dropped.getHash58(), relayFallbackPeerData.getAddress(), peer);
+                        arbitraryDataFileManager.addResponse(relayRetry);
+                    }
+                }
             }
         }
 

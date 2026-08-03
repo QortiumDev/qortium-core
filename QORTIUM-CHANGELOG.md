@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - fix(qdn): keep retrying stalled downloads and fall back to relays
+
+Fixes the "0 of 1 chunks for hours" problem with QDN downloads. Three changes
+work together. First, the retry schedule for finding who holds a file had a
+broken middle tier (a condition that could never be true), so any download
+that failed its first half hour of attempts dropped straight to one retry
+every six hours; the middle tier now works and the worst case is one retry
+every thirty minutes — and any sign that a holder is out there resets the
+schedule back to once a minute. Second, when a holder said "connect to me
+directly" the node threw away the alternative of fetching through the peer
+that relayed the answer; now it remembers that relay option and uses it if
+the direct connection fails, instead of losing the chunks until the next
+retry round. Third, connections to holders over I2P were cut off after 12
+seconds, which is shorter than a normal I2P connection takes to open; they
+now get 90 seconds. Downloads that used to sit at "0/1" for hours or days
+should now come through in minutes.
+
 ### 2026-08-03 - fix(sync): serve archived blocks to syncing peers
 
 Fixes the bug that left every fresh node stuck at the checkpoint (height
