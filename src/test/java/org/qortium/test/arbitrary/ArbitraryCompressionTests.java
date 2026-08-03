@@ -225,7 +225,11 @@ public class ArbitraryCompressionTests extends Common {
     @Test
     public void testUnzipRejectsTraversalEntry() throws IOException {
         Path zipFile = Files.createTempFile("traversal", ".zip");
-        Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
+        // Nest the output directory inside a fresh parent this test owns: the escape
+        // assertion below must target a directory that is guaranteed empty, not the
+        // shared system temp dir, where any historical leftover fails it forever.
+        Path testParent = Files.createTempDirectory("unzipTraversalParent");
+        Path outputDirectory = Files.createDirectory(testParent.resolve("unzippedDirectory"));
         Path outsideFile = outputDirectory.resolve("..").resolve("outside.txt").normalize();
 
         Files.write(zipFile, zipBytes("../outside.txt", "outside"));
@@ -243,7 +247,9 @@ public class ArbitraryCompressionTests extends Common {
     @Test
     public void testUnzipRejectsAbsoluteEntry() throws IOException {
         Path zipFile = Files.createTempFile("absolute", ".zip");
-        Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
+        // Nested inside a fresh test-owned parent - see testUnzipRejectsTraversalEntry
+        Path testParent = Files.createTempDirectory("unzipAbsoluteParent");
+        Path outputDirectory = Files.createDirectory(testParent.resolve("unzippedDirectory"));
         Path outsideFile = outputDirectory.getParent().resolve("absolute-outside.txt").toAbsolutePath().normalize();
 
         Files.write(zipFile, zipBytes(outsideFile.toString(), "outside"));
@@ -260,7 +266,9 @@ public class ArbitraryCompressionTests extends Common {
 
     @Test
     public void testUnzipFromStreamRejectsTraversalEntry() throws IOException {
-        Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
+        // Nested inside a fresh test-owned parent - see testUnzipRejectsTraversalEntry
+        Path testParent = Files.createTempDirectory("unzipStreamTraversalParent");
+        Path outputDirectory = Files.createDirectory(testParent.resolve("unzippedDirectory"));
         Path outsideFile = outputDirectory.resolve("..").resolve("outside-from-stream.txt").normalize();
 
         try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(zipBytes("../outside-from-stream.txt", "outside")))) {

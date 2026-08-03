@@ -143,8 +143,10 @@ public class SerializationTests extends Common {
 		for (int run = 0; run < 100; ++run) {
 			final int numberOfKnownAccounts = random.nextInt(1 << 17) + 1;
 
-			// 3% to 23%
-			final int numberOfAccountsToEncode = random.nextInt((numberOfKnownAccounts / 20) + numberOfKnownAccounts / 3);
+			// 3% to 23%, but always at least one: an empty ConciseSet NPEs in toByteBuffer(),
+			// and nextInt(0) throws when numberOfKnownAccounts is tiny - both random flakes
+			final int maxAccountsToEncode = Math.max(1, (numberOfKnownAccounts / 20) + numberOfKnownAccounts / 3);
+			final int numberOfAccountsToEncode = random.nextInt(maxAccountsToEncode) + 1;
 
 			// Enough uncompressed bytes to fit one bit per known account
 			final int uncompressedBitSetSize = ((numberOfKnownAccounts - 1) >> 3) + 1; // the >> 3 is to scale size from 8 bits to 1 byte

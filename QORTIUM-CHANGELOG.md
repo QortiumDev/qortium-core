@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - test: make the zip-escape and compression-benchmark tests deterministic
+
+Test-only reliability fixes found while validating the 1.6.3 release. The
+three zip-escape tests asserted that no file had escaped into the shared
+system temp folder, so any leftover file there from unrelated software made
+them fail forever on that machine; they now check inside a fresh private
+folder each test owns. The serialization benchmark generated a random number
+of accounts that could be zero, which crashed the compression library; it
+now always encodes at least one. One stale code comment still describing the
+old six-hour retry backoff was updated to say thirty minutes.
+
+
 ### 2026-08-03 - chore(release): prepare Core 1.6.3
 
 Marks the version for the next preview release. Since 1.6.2 this is a
