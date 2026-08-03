@@ -71,6 +71,13 @@ public class Network {
      */
     private static final long I2P_FALLBACK_DROP_COOLDOWN = 15 * 60 * 1000L; // ms
     /**
+     * Outbound slots guaranteed to the NON-preferred transport when both transports are
+     * enabled. Keeps a NAT'd IP-first node holding a couple of I2P links so its b32 keeps
+     * propagating (the I2P identity is only ever advertised over I2P connections), and
+     * conversely keeps an I2P-first node from abandoning direct connectivity entirely.
+     */
+    /* package */ static final int RESERVED_NON_PREFERRED_OUTBOUND_SLOTS = 2;
+    /**
      * How long to wait between connection attempts when isolated (no peers) and retrying backoff peers, in milliseconds.
      * This prevents hammering peers when the node has no connections.
      */
@@ -1827,6 +1834,16 @@ public class Network {
         if (Settings.getInstance().isI2PPreferred())
             return null;
 
+        // Never evict below the reserved non-preferred allocation: those links are this node's
+        // only guaranteed-dialable identity when it is NAT'd, and the "replacement" candidate is
+        // an unverified address that may well be undialable. Break-before-make eviction of the
+        // last I2P links repeatedly tore down working connections in exchange for doomed dials.
+        long outboundI2PCount = getImmutableOutboundHandshakedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().isI2P())
+                .count();
+        if (outboundI2PCount <= RESERVED_NON_PREFERRED_OUTBOUND_SLOTS)
+            return null;
+
         return getImmutableOutboundHandshakedPeers().stream()
                 .filter(peer -> peer.getPeerData().getAddress().isI2P())
                 .filter(peer -> peer.getPeersNodeId() != null)
@@ -2179,10 +2196,19 @@ public class Network {
         if (!chainI2PReady)
             return directPeers;
 
-        if (Settings.getInstance().isI2PPreferred())
-            return !i2pPeers.isEmpty() ? i2pPeers : directPeers;
+        boolean preferI2P = Settings.getInstance().isI2PPreferred();
+        List<PeerData> preferredPeers = preferI2P ? i2pPeers : directPeers;
+        List<PeerData> nonPreferredPeers = preferI2P ? directPeers : i2pPeers;
 
-        return !directPeers.isEmpty() ? directPeers : i2pPeers;
+        // Reserve a couple of outbound slots for the non-preferred transport. Winner-take-all
+        // preference starves the other transport entirely, and for a NAT'd IP-first node that
+        // means zero I2P links, so its b32 is never advertised and it gets no inbound at all.
+        // A small guaranteed allocation keeps both identities alive on the network.
+        long nonPreferredOutboundCount = getImmutableOutboundHandshakedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().isI2P() != preferI2P)
+                .count();
+        return PeerMaintenancePolicy.selectTransportDialCandidates(preferredPeers, nonPreferredPeers,
+                nonPreferredOutboundCount, RESERVED_NON_PREFERRED_OUTBOUND_SLOTS);
     }
 
     private boolean isTransportAllowed(PeerData peerData) {

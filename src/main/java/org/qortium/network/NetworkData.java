@@ -1379,8 +1379,23 @@ public class NetworkData {
         List<PeerData> preferredPeers = peers.stream()
                 .filter(peerData -> peerData.getAddress().isI2P() == preferI2P)
                 .collect(Collectors.toList());
+        List<PeerData> nonPreferredPeers = peers.stream()
+                .filter(peerData -> peerData.getAddress().isI2P() != preferI2P)
+                .collect(Collectors.toList());
 
-        return preferredPeers.isEmpty() ? peers : preferredPeers;
+        // Reserve a couple of outbound data slots for the non-preferred transport (see
+        // Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS) - winner-take-all preference
+        // otherwise starves the other transport and, for NAT'd IP-first nodes, cuts them
+        // off from the I2P-reachable half of the data overlay entirely. When the non-preferred
+        // transport is I2P, only reserve while a live data session exists to dial with.
+        int reservedSlots = (preferI2P || this.getI2PDataDestination() != null)
+                ? Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS
+                : 0;
+        long nonPreferredOutboundCount = getImmutableOutboundHandshakedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().isI2P() != preferI2P)
+                .count();
+        return PeerMaintenancePolicy.selectTransportDialCandidates(preferredPeers, nonPreferredPeers,
+                nonPreferredOutboundCount, reservedSlots);
     }
 
     private boolean isTransportAllowed(PeerData peerData) {
@@ -1873,6 +1888,16 @@ public class NetworkData {
 
     private Peer findI2PFallbackPeerWithDirectReplacement(Long now) {
         if (Settings.getInstance().isI2PPreferred())
+            return null;
+
+        // Never evict below the reserved non-preferred allocation (see
+        // Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS): those links are this node's only
+        // guaranteed-dialable identity when it is NAT'd, and the "replacement" candidate is an
+        // unverified address that may well be undialable.
+        long outboundI2PCount = getImmutableOutboundHandshakedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().isI2P())
+                .count();
+        if (outboundI2PCount <= Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS)
             return null;
 
         return getImmutableOutboundHandshakedPeers().stream()

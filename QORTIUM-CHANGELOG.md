@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - fix(net): give both transports a fair share of connections
+
+Fixes the puzzle where switching I2P to "preferred" made peer counts go UP.
+The transport preference was winner-take-all: as long as even one direct-IP
+candidate existed, a node would never dial I2P at all. For someone behind a
+home router without working port forwarding that was disastrous — their I2P
+address (the only address other people can actually reach) was never shared
+with the network, because it only spreads over I2P connections, so they got
+no incoming connections on either transport. Three changes: every node now
+keeps a couple of connections on its non-preferred transport, so both of its
+identities stay alive on the network; the node no longer tears down a working
+I2P connection just because an unverified direct address for the same peer
+looks available; and when answering "who has this file", a node only
+advertises its IP address if that address is provably reachable — otherwise
+it advertises its I2P address, so downloads no longer dead-end on a home
+router's closed port. Together with today's download fixes, this should
+noticeably improve both peer counts and QDN reliability for home users,
+whatever their transport setting.
+
 ### 2026-08-03 - fix(qdn): keep retrying stalled downloads and fall back to relays
 
 Fixes the "0 of 1 chunks for hours" problem with QDN downloads. Three changes

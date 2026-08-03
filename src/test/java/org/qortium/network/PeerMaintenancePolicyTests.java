@@ -121,4 +121,30 @@ public class PeerMaintenancePolicyTests {
 			long idle, boolean activeWork) {
 		return new PeerMaintenancePolicy.DataCandidate<>(name, outbound, idle, activeWork);
 	}
+
+	@Test
+	public void testTransportDialCandidatesReserveNonPreferredSlots() {
+		List<String> preferred = Arrays.asList("direct-1", "direct-2");
+		List<String> nonPreferred = Arrays.asList("i2p-1");
+
+		// Below the reserved allocation, the non-preferred transport wins the round
+		assertEquals(nonPreferred,
+				PeerMaintenancePolicy.selectTransportDialCandidates(preferred, nonPreferred, 0, 2));
+		assertEquals(nonPreferred,
+				PeerMaintenancePolicy.selectTransportDialCandidates(preferred, nonPreferred, 1, 2));
+
+		// At or above the reservation, the preferred transport wins as before
+		assertEquals(preferred,
+				PeerMaintenancePolicy.selectTransportDialCandidates(preferred, nonPreferred, 2, 2));
+
+		// No reservation (e.g. non-preferred transport not dialable): preferred wins outright
+		assertEquals(preferred,
+				PeerMaintenancePolicy.selectTransportDialCandidates(preferred, nonPreferred, 0, 0));
+
+		// Empty pools fall through to whichever side has candidates
+		assertEquals(nonPreferred,
+				PeerMaintenancePolicy.selectTransportDialCandidates(List.of(), nonPreferred, 5, 2));
+		assertEquals(preferred,
+				PeerMaintenancePolicy.selectTransportDialCandidates(preferred, List.of(), 0, 2));
+	}
 }
