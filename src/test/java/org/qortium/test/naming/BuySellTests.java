@@ -372,7 +372,7 @@ public class BuySellTests extends Common {
 		assertNull(nameData.getSalePrice());
 
 		// Re-sell-name
-		Long newPrice = random.nextInt(1000) * Amounts.MULTIPLIER;
+		Long newPrice = (random.nextInt(1000) + 1) * Amounts.MULTIPLIER;
 		SellNameTransactionData sellNameTransactionData = new SellNameTransactionData(TestTransaction.generateBase(alice), name, newPrice);
 		TransactionUtils.signAndMint(repository, sellNameTransactionData, alice);
 
@@ -494,7 +494,7 @@ public class BuySellTests extends Common {
 		testBuyName();
 
 		// Sell-name
-		Long newPrice = random.nextInt(1000) * Amounts.MULTIPLIER;
+		Long newPrice = (random.nextInt(1000) + 1) * Amounts.MULTIPLIER;
 		SellNameTransactionData transactionData = new SellNameTransactionData(TestTransaction.generateBase(bob), name, newPrice);
 		TransactionUtils.signAndMint(repository, transactionData, bob);
 
