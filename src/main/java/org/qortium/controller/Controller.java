@@ -57,6 +57,7 @@ import org.qortium.transaction.ChatTransaction;
 import org.qortium.transaction.Transaction;
 import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.transform.TransformationException;
+import org.qortium.transform.block.BlockTransformer;
 import org.qortium.utils.*;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -2155,11 +2156,31 @@ public class Controller extends Thread {
             return null;
 
         int nextHeight = parentHeight + 1;
+        boolean isFirstArchivedBlock = true;
         while (blocksBuilder.getBlockCount() < numberRequested) {
             Triple<byte[], Integer, Integer> archivedBlock = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForHeight(nextHeight);
             if (archivedBlock == null || archivedBlock.getA() == null)
                 // Not in the archive (or past its end)
                 break;
+
+            if (isFirstArchivedBlock) {
+                // Protocol invariant: the response must descend from the requested parent. The
+                // height-based archive lookup assumes index/file consistency, so verify the first
+                // served block's parent reference against the requested signature before trusting
+                // the walk. V2 serialization is version(int) + timestamp(long) + reference, so the
+                // reference sits at a fixed offset and no deserialization is needed.
+                byte[] blockBytes = archivedBlock.getA();
+                int referenceOffset = Integer.BYTES + Long.BYTES;
+                int referenceLength = BlockTransformer.BLOCK_SIGNATURE_LENGTH;
+                if (blockBytes.length < referenceOffset + referenceLength
+                        || !Arrays.equals(blockBytes, referenceOffset, referenceOffset + referenceLength,
+                                parentSignature, 0, parentSignature.length)) {
+                    LOGGER.error(String.format("Archived block at height %d does not reference requested parent %.8s - archive index/file mismatch?",
+                            nextHeight, Base58.encode(parentSignature)));
+                    return null;
+                }
+                isFirstArchivedBlock = false;
+            }
 
             if (!blocksBuilder.tryAdd(BlocksMessage.SerializedBlock.fromArchiveBytes(nextHeight, archivedBlock.getA())))
                 // Response byte budget reached
