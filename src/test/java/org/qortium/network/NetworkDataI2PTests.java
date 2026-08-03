@@ -153,6 +153,10 @@ public class NetworkDataI2PTests extends Common {
 
 	@Test
 	public void testFullDataSlotsSelectI2PFallbackForDirectReplacement() throws Exception {
+		// Two extra outbound I2P data links keep the total above the reserved eviction floor,
+		// so replacement remains possible for the peer with a cached direct address
+		addOutboundHandshakedI2PDataFiller("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p");
+		addOutboundHandshakedI2PDataFiller("defghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvw.b32.i2p");
 		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORKDATA);
 		i2pPeer.setPeersNodeId(NODE_ID);
 		i2pPeer.setIsDataPeer(true);
@@ -165,6 +169,28 @@ public class NetworkDataI2PTests extends Common {
 		Peer fallbackPeer = invokeFindI2PFallbackPeerWithDirectReplacement(System.currentTimeMillis());
 
 		assertSame(i2pPeer, fallbackPeer);
+	}
+
+	@Test
+	public void testI2PDataFallbackEvictionRefusedAtReservedFloor() throws Exception {
+		// With only one outbound I2P data link (at/below the reserved floor), eviction must refuse
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORKDATA);
+		i2pPeer.setPeersNodeId(NODE_ID);
+		i2pPeer.setIsDataPeer(true);
+		NetworkData.getInstance().addConnectedPeer(i2pPeer);
+		NetworkData.getInstance().addHandshakedPeer(i2pPeer);
+		PeerData directPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test");
+		getMutableKnownPeers().add(directPeerData);
+		invokeUpdateAddressToNodeIdCache(directPeerData.getAddress().toString(), NODE_ID);
+
+		assertNull(invokeFindI2PFallbackPeerWithDirectReplacement(System.currentTimeMillis()));
+	}
+
+	private void addOutboundHandshakedI2PDataFiller(String b32) throws Exception {
+		Peer filler = new Peer(new PeerData(PeerAddress.fromString(b32)), Peer.NETWORKDATA);
+		filler.setIsDataPeer(true);
+		NetworkData.getInstance().addConnectedPeer(filler);
+		NetworkData.getInstance().addHandshakedPeer(filler);
 	}
 
 	@Test
