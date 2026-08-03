@@ -72,6 +72,23 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testUPnPEnabledIsWritableAndFlagsRestart() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertTrue(Settings.getInstance().isUPnPEnabled());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"uPnPEnabled\":false}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("uPnPEnabled"));
+		assertTrue(result.restartRequired.contains("uPnPEnabled"));
+		assertFalse(Settings.getInstance().isUPnPEnabled());
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals(Boolean.FALSE, savedSettings.get("uPnPEnabled"));
+	}
+
+	@Test
 	public void testPlaintextElectrumSettingIsSaved() throws Exception {
 		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
 		Settings.fileInstance(settingsPath.toString());

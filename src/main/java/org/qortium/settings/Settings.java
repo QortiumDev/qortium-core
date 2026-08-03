@@ -1099,6 +1099,7 @@ public class Settings {
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("allowedTransports", new WritableSetting(WritableSettingType.ALLOWED_TRANSPORTS, true)); // changes binding/advertisement -> restart
+		settings.put("uPnPEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true)); // only read during Network/NetworkData start() -> restart
 		settings.put("listenPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("listenDataPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("maxPeers", new WritableSetting(WritableSettingType.INTEGER, true));
