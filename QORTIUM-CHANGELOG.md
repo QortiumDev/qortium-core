@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - chore(release): prepare Core 1.6.3
+
+Marks the version for the next preview release. Since 1.6.2 this is a
+network-health release, driven by a live support session with a stuck new
+node: fresh installs can sync past the height-30,000 checkpoint again
+(serving nodes now answer from their block archive), QDN downloads no longer
+sit at "0/1 chunks" for hours (working retry schedule, relay fallback,
+longer I2P connection window), both transports keep a fair share of
+connections so home users get incoming peers whatever their preference
+order, the UPnP setting is changeable from the settings screen, and nodes
+behind home routers stop advertising unusable return addresses. Nodes stuck
+at 30,000 need no action — they catch up on their own once their peers run
+this version. There is no on-chain auto-update for this release.
+
 ### 2026-08-03 - fix(settings, qdn): UPnP toggle from the UI, honest download return address
 
 Two small quality fixes rolled into 1.6.3. First, the UPnP setting can now be
