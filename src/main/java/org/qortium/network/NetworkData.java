@@ -1159,9 +1159,11 @@ public class NetworkData {
         // Also add to outbound handshaked peers cache
         if (peer.isOutbound()) {
             this.addOutboundHandshakedPeer(peer);
-        } else {
-            // Only inbound connections prove we can accept inbound
-            // Outbound connections only prove we can reach others, not that they can reach us
+        } else if (!peer.getPeerData().getAddress().isI2P()) {
+            // Only inbound DIRECT connections prove the clearnet port is reachable.
+            // Outbound connections only prove we can reach others, and an inbound I2P
+            // stream says nothing about the IP listen port - counting it here made
+            // canAcceptInbound() advertise a NAT'd external IP as dialable.
             this.inboundReachability.recordInboundHandshake();
         }
     }
@@ -1388,10 +1390,14 @@ public class NetworkData {
         // otherwise starves the other transport and, for NAT'd IP-first nodes, cuts them
         // off from the I2P-reachable half of the data overlay entirely. When the non-preferred
         // transport is I2P, only reserve while a live data session exists to dial with.
+        // Count ALL outbound connections (handshaking included) so slow I2P handshakes don't
+        // let successive rounds overshoot the reservation, and scale the reservation down for
+        // small outbound targets so the preferred transport always keeps the majority.
         int reservedSlots = (preferI2P || this.getI2PDataDestination() != null)
-                ? Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS
+                ? Math.min(Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS, this.minOutboundPeers / 2)
                 : 0;
-        long nonPreferredOutboundCount = getImmutableOutboundHandshakedPeers().stream()
+        long nonPreferredOutboundCount = getImmutableConnectedPeers().stream()
+                .filter(Peer::isOutbound)
                 .filter(peer -> peer.getPeerData().getAddress().isI2P() != preferI2P)
                 .count();
         return PeerMaintenancePolicy.selectTransportDialCandidates(preferredPeers, nonPreferredPeers,
@@ -1897,7 +1903,7 @@ public class NetworkData {
         long outboundI2PCount = getImmutableOutboundHandshakedPeers().stream()
                 .filter(peer -> peer.getPeerData().getAddress().isI2P())
                 .count();
-        if (outboundI2PCount <= Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS)
+        if (outboundI2PCount <= Math.min(Network.RESERVED_NON_PREFERRED_OUTBOUND_SLOTS, this.minOutboundPeers / 2))
             return null;
 
         return getImmutableOutboundHandshakedPeers().stream()

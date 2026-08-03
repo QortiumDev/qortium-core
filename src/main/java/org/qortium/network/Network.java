@@ -1841,7 +1841,7 @@ public class Network {
         long outboundI2PCount = getImmutableOutboundHandshakedPeers().stream()
                 .filter(peer -> peer.getPeerData().getAddress().isI2P())
                 .count();
-        if (outboundI2PCount <= RESERVED_NON_PREFERRED_OUTBOUND_SLOTS)
+        if (outboundI2PCount <= Math.min(RESERVED_NON_PREFERRED_OUTBOUND_SLOTS, this.minOutboundPeers / 2))
             return null;
 
         return getImmutableOutboundHandshakedPeers().stream()
@@ -2204,11 +2204,16 @@ public class Network {
         // preference starves the other transport entirely, and for a NAT'd IP-first node that
         // means zero I2P links, so its b32 is never advertised and it gets no inbound at all.
         // A small guaranteed allocation keeps both identities alive on the network.
-        long nonPreferredOutboundCount = getImmutableOutboundHandshakedPeers().stream()
+        // Count ALL outbound connections (handshaking included) so slow I2P handshakes don't
+        // let successive rounds overshoot the reservation, and scale the reservation down for
+        // small outbound targets so the preferred transport always keeps the majority.
+        long nonPreferredOutboundCount = getImmutableConnectedPeers().stream()
+                .filter(Peer::isOutbound)
                 .filter(peer -> peer.getPeerData().getAddress().isI2P() != preferI2P)
                 .count();
+        int reservedSlots = Math.min(RESERVED_NON_PREFERRED_OUTBOUND_SLOTS, this.minOutboundPeers / 2);
         return PeerMaintenancePolicy.selectTransportDialCandidates(preferredPeers, nonPreferredPeers,
-                nonPreferredOutboundCount, RESERVED_NON_PREFERRED_OUTBOUND_SLOTS);
+                nonPreferredOutboundCount, reservedSlots);
     }
 
     private boolean isTransportAllowed(PeerData peerData) {
@@ -2943,7 +2948,10 @@ public class Network {
         // Clear direction mismatch if inbound succeeds.
         // They successfully connected to us, so we don't need to avoid them.
         if (!peer.isOutbound()) {
-            this.inboundReachability.recordInboundHandshake();
+            // Only an inbound DIRECT connection proves the clearnet port is reachable -
+            // an inbound I2P stream says nothing about the IP listen port.
+            if (!peer.getPeerData().getAddress().isI2P())
+                this.inboundReachability.recordInboundHandshake();
             clearDirectionMismatch(theirNodeId);
         }
     }
