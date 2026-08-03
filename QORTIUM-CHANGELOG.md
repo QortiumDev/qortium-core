@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - test: never roll a zero sale price in the name buy/sell tests
+
+Two of the name buy/sell tests picked a random re-sale price between 0 and
+999, but a zero-price open-market sale is deliberately rejected by the
+validator, so about one run in a thousand failed with INVALID_AMOUNT for no
+real reason (it hit today's full-suite run). The tests now roll 1 to 1000,
+matching how their setup already picks the first sale price.
+
 ### 2026-08-03 - test: make the zip-escape and compression-benchmark tests deterministic
 
 Test-only reliability fixes found while validating the 1.6.3 release. The
