@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - fix(sync): serve archived blocks to syncing peers
+
+Fixes the bug that left every fresh node stuck at the checkpoint (height
+30,000) — or at height 1 with fast-sync disabled. Long-running nodes move old
+blocks from their working database into a compact archive file and then delete
+the originals. The bulk block-serving path used during sync only looked in the
+working database, so once the network's serving nodes had archived past the
+checkpoint (which happened on 2026-07-21), they answered every catch-up request
+with a well-formed empty reply, and newly installed nodes could never get past
+it. Serving nodes now read archived blocks straight from the archive file when
+the working database no longer has them. Two more layers of protection come
+with it: the single-block serving path had an impossible version check that
+stopped it ever using the archive (now corrected), and a syncing node that
+receives an empty bulk reply from a not-yet-updated peer now retries the same
+stretch block-by-block instead of giving up. A stuck node needs no action once
+its peers update — it will catch up on its own.
+
 ### 2026-07-30 - chore(release): prepare Core 1.6.2
 
 Marks the version for the next preview release. Since 1.6.1, automated

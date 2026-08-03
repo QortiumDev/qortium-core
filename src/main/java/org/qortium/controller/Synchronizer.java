@@ -2013,9 +2013,14 @@ public class Synchronizer extends Thread {
             List<Block> blocks = this.fetchBlocks(repository, peer, latestPeerSignature, numberRequested);
 
             if (blocks == null || blocks.isEmpty()) {
-                LOGGER.warn(String.format("Peer %s failed to respond with more blocks after height %d, sig %.8s", peer,
+                // A valid-but-empty BLOCKS reply usually means the peer has archived and pruned
+                // these blocks out of its Blocks table (e.g. below a pinned checkpoint) and is
+                // running a version without the archive-aware GET_BLOCKS fallback. GET_SIGNATURES
+                // and GET_BLOCK are archive-capable, so retry this batch via slow sync instead of
+                // giving up - otherwise a node syncing across the archive boundary wedges forever.
+                LOGGER.info(String.format("Peer %s returned no blocks after height %d, sig %.8s via fast sync; retrying via slow sync", peer,
                         ourHeight, Base58.encode(latestPeerSignature)));
-                return SynchronizationResult.NO_REPLY;
+                return this.applyNewBlocksUsingSlowSync(repository, ourHeight, latestPeerSignature, maxBatchHeight, peer, peerHeight, new ArrayList<>());
             }
 
             LOGGER.debug("Received {} blocks after height {}, sig {} from {}", blocks.size(), ourHeight, Base58.encode(latestPeerSignature), peer);
@@ -2100,19 +2105,25 @@ public class Synchronizer extends Thread {
 
     private SynchronizationResult applyNewBlocksUsingSlowSync(Repository repository, BlockData commonBlockData, int ourInitialHeight,
                                                               Peer peer, int peerHeight, List<BlockSummaryData> peerBlockSummaries) throws InterruptedException, DataException {
-        LOGGER.debug(String.format("Fetching new blocks from peer %s using slow sync", peer));
-
         final int commonBlockHeight = commonBlockData.getHeight();
         final byte[] commonBlockSig = commonBlockData.getSignature();
-
-        int ourHeight = ourInitialHeight;
-
-        // Fetch, and apply, blocks from peer
-        byte[] latestPeerSignature = commonBlockSig;
         int maxBatchHeight = commonBlockHeight + SYNC_BATCH_SIZE;
 
         // Convert any block summaries from above into signatures to request from peer
         List<byte[]> peerBlockSignatures = peerBlockSummaries.stream().map(BlockSummaryData::getSignature).collect(Collectors.toList());
+
+        return this.applyNewBlocksUsingSlowSync(repository, ourInitialHeight, commonBlockSig, maxBatchHeight, peer, peerHeight, peerBlockSignatures);
+    }
+
+    /** Slow-sync variant with an explicit start position, so fast sync can hand over mid-batch. */
+    private SynchronizationResult applyNewBlocksUsingSlowSync(Repository repository, int startHeight, byte[] startSignature,
+                                                              int maxBatchHeight, Peer peer, int peerHeight, List<byte[]> peerBlockSignatures) throws InterruptedException, DataException {
+        LOGGER.debug(String.format("Fetching new blocks from peer %s using slow sync", peer));
+
+        int ourHeight = startHeight;
+
+        // Fetch, and apply, blocks from peer
+        byte[] latestPeerSignature = startSignature;
 
         while (ourHeight < peerHeight && ourHeight < maxBatchHeight) {
             if (Controller.isStopping())
