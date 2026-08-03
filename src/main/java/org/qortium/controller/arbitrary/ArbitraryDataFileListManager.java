@@ -80,7 +80,7 @@ public class ArbitraryDataFileListManager {
      * Value: Triple<networkBroadcastCount, directPeerRequestCount, lastAttemptTimestamp>
      * Uses ConcurrentHashMap for thread-safe atomic operations like compute()
      */
-    private final ConcurrentHashMap<String, Triple<Integer, Integer, Long>> arbitraryDataSignatureRequests = new ConcurrentHashMap<>();
+    /* package */ final ConcurrentHashMap<String, Triple<Integer, Integer, Long>> arbitraryDataSignatureRequests = new ConcurrentHashMap<>();
 
 
     /** Maximum number of seconds that a file list relay request is able to exist on the network */
@@ -136,7 +136,7 @@ public class ArbitraryDataFileListManager {
 
     // Track file list lookups by signature
 
-    private boolean shouldMakeFileListRequestForSignature(String signature58) {
+    /* package */ boolean shouldMakeFileListRequestForSignature(String signature58) {
         Triple<Integer, Integer, Long> request = arbitraryDataSignatureRequests.get(signature58);
 
         if (request == null) {
@@ -179,16 +179,19 @@ public class ArbitraryDataFileListManager {
         // Then allow another 8 attempts, each 15 minutes apart
         if (timeSinceLastAttempt > 15 * 60 * 1000L) {
             // We haven't tried for at least 15 minutes
-
-            if (networkBroadcastCount < 16) {
-                // We've made less than 16 total attempts
+            // (was `< 16`, unreachable after the 40-attempt tier above - the intended
+            // 15-minute tier never fired and requests fell straight to the terminal backoff)
+            if (networkBroadcastCount < 48) {
+                // We've made less than 48 total attempts
                 return true;
             }
         }
 
-        // From then on, only try once every 6 hours, to reduce network spam
-        if (timeSinceLastAttempt > 6 * 60 * 60 * 1000L) {
-            // We haven't tried for at least 6 hours
+        // From then on, only try once every 30 minutes, to reduce network spam
+        // (was 6 hours, which turned any resource that failed its first ~35 minutes of
+        // attempts into a multi-hour "0/1 chunks" stall even after the holder came back)
+        if (timeSinceLastAttempt > 30 * 60 * 1000L) {
+            // We haven't tried for at least 30 minutes
             return true;
         }
 
@@ -303,6 +306,19 @@ public class ArbitraryDataFileListManager {
         arbitraryDataSignatureRequests.remove(signature58);
     }
 
+    /**
+     * Called when a file list response for one of our own requests arrives with usable hashes.
+     * Caps the network broadcast count back into the 1-minute retry tier so that a resource
+     * with a proven-live holder keeps being retried at a useful cadence, instead of sliding
+     * into the terminal backoff because chunk transfers keep failing.
+     */
+    public void notedUsableFileListResponse(String signature58) {
+        arbitraryDataSignatureRequests.computeIfPresent(signature58, (key, existing) ->
+                existing.getA() != null && existing.getA() > 12
+                        ? new Triple<>(12, existing.getB(), existing.getC())
+                        : existing);
+    }
+
 
     // Lookup file lists by signature (and optionally hashes)
 
@@ -359,15 +375,16 @@ public class ArbitraryDataFileListManager {
             // Then allow another 8 attempts, each 15 minutes apart
             if (timeSinceLastAttempt > 15 * 60 * 1000L) {
                 // We haven't tried for at least 15 minutes
-                if (networkBroadcastCount < 16) {
-                    // We've made less than 16 total attempts - allow it
+                // (was `< 16`, unreachable after the 40-attempt tier above)
+                if (networkBroadcastCount < 48) {
+                    // We've made less than 48 total attempts - allow it
                     return new Triple<>(networkBroadcastCount + 1, directPeerRequestCount, now);
                 }
             }
-            
-            // From then on, only try once every 6 hours, to reduce network spam
-            if (timeSinceLastAttempt > 6 * 60 * 60 * 1000L) {
-                // We haven't tried for at least 6 hours - allow it
+
+            // From then on, only try once every 30 minutes, to reduce network spam (was 6 hours)
+            if (timeSinceLastAttempt > 30 * 60 * 1000L) {
+                // We haven't tried for at least 30 minutes - allow it
                 return new Triple<>(networkBroadcastCount + 1, directPeerRequestCount, now);
             }
             
@@ -683,6 +700,8 @@ public class ArbitraryDataFileListManager {
 
                         Long now = NTP.getTime();
 
+                        boolean anyMissingHashAdmitted = false;
+
                         // Keep track of the hashes this peer reports to have access to
                         for (byte[] hash : hashes) {
                             String hash58 = Base58.encode(hash);
@@ -749,6 +768,16 @@ public class ArbitraryDataFileListManager {
                             if (arbitraryDataFileListMessage.isDirectConnectable() && peerWithFiles != null) {
                                 responseInfo = new ArbitraryFileListResponseInfo(hash58, signature58,
                                         peerWithFiles, nodeId, now, arbitraryDataFileListMessage.getRequestTime(), requestHops, true);
+                                // The sender is a connected peer that can relay these chunks, so keep it
+                                // as a fallback: if the direct dial to the holder fails (NAT'd holder,
+                                // stale I2P LeaseSet, ...), the request thread requeues the chunks via
+                                // the sender instead of losing them until the next discovery round.
+                                // Respect the protocol's explicit "no relay" signal (DC_ONLY): a
+                                // direct-connectable response with isRelayPossible=false must never
+                                // be converted into relay chunk requests.
+                                if (peer != null && peer.getPeerData() != null
+                                        && Boolean.TRUE.equals(arbitraryDataFileListMessage.isRelayPossible()))
+                                    responseInfo.setRelayFallbackPeerData(peer.getPeerData());
                                 LOGGER.debug("Adding QDN Direct Connect responseInfo to ArbDataFileManager peer: {} FileHash: {}", peerWithFilesString, hash58);
                             } else { // We have to relay the peers chunks because they cant Direct Connect
                                 responseInfo = new ArbitraryFileListResponseInfo(hash58, signature58,
@@ -756,7 +785,16 @@ public class ArbitraryDataFileListManager {
                                 LOGGER.trace("Adding QDN Relay-able responseInfo to ArbDataFileManager peer: {} FileHash: {}", peer, hash58);
                             }
                             ArbitraryDataFileManager.getInstance().addResponse(responseInfo);
+                            anyMissingHashAdmitted = true;
                         }
+
+                        // A response that actually admitted missing chunks to fetch work is proof
+                        // a live holder exists, so refresh part of the retry budget - a resource
+                        // with a live holder must not slide into the terminal discovery backoff
+                        // just because the chunk transfers themselves keep failing. Replies whose
+                        // hashes are all already local (or empty) must NOT keep discovery alive.
+                        if (anyMissingHashAdmitted)
+                            this.notedUsableFileListResponse(signature58);
 
                         // Keep track of the source peer, for direct connections
                         String advertisedHolderAddress = arbitraryDataFileListMessage.getPeerAddress();
