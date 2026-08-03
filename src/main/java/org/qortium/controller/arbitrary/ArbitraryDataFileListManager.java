@@ -117,7 +117,7 @@ public class ArbitraryDataFileListManager {
         arbitraryDataFileListRequests.entrySet().removeIf(entry -> entry.getValue().getC() == null || entry.getValue().getC() < requestMinimumTimestamp);
         
         // Clean up old signature request tracking entries
-        // These are used for rate-limiting with a maximum backoff of 6 hours
+        // These are used for rate-limiting with a maximum backoff of 30 minutes
         // After 24 hours, entries are obsolete and safe to remove to prevent memory leaks
         final long signatureRequestMaxAge = 24 * 60 * 60 * 1000L; // 24 hours
         final long signatureRequestMinimumTimestamp = now - signatureRequestMaxAge;
