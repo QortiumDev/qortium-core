@@ -31,6 +31,8 @@ public class NetworkI2PTests extends Common {
 
 	private static final String B32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
 	private static final String LOCAL_B32 = "cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p";
+	private static final String FILLER_B32_1 = "defghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvw.b32.i2p";
+	private static final String FILLER_B32_2 = "efghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.b32.i2p";
 	private static final String NODE_ID = "node-id-for-network-i2p-test";
 	/** Must match Network.I2P_FALLBACK_DROP_COOLDOWN. */
 	private static final long I2P_FALLBACK_DROP_COOLDOWN = 15 * 60 * 1000L;
@@ -84,6 +86,10 @@ public class NetworkI2PTests extends Common {
 	@Test
 	public void testDirectChainPeerStaysPrimaryWhenI2PNotPreferred() throws Exception {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		// The non-preferred (I2P) reservation is already met by two outbound I2P links,
+		// so the preferred direct transport keeps priority for this dial round
+		Network.getInstance().addConnectedPeer(new Peer(new PeerData(PeerAddress.fromString(FILLER_B32_1)), Peer.NETWORK));
+		Network.getInstance().addConnectedPeer(new Peer(new PeerData(PeerAddress.fromString(FILLER_B32_2)), Peer.NETWORK));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
 
@@ -91,6 +97,19 @@ public class NetworkI2PTests extends Common {
 
 		assertEquals("198.51.100.10:24892", selectedPeer.getPeerData().getAddress().toString());
 		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testUnmetI2PReservationDialsI2PEvenWhenNotPreferred() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		// No outbound I2P links yet: the reserved allocation for the non-preferred transport
+		// must win the round, otherwise a NAT'd IP-first node never propagates its b32
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertTrue(selectedPeer.getPeerData().getAddress().isI2P());
 	}
 
 	@Test
@@ -171,6 +190,10 @@ public class NetworkI2PTests extends Common {
 
 	@Test
 	public void testFullChainSlotsSelectI2PFallbackForDirectReplacement() throws Exception {
+		// Two extra outbound I2P links keep the total above the reserved eviction floor,
+		// so replacement remains possible for the peer with a cached direct address
+		addOutboundHandshakedI2PFiller(FILLER_B32_1);
+		addOutboundHandshakedI2PFiller(FILLER_B32_2);
 		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
 		i2pPeer.setPeersNodeId(NODE_ID);
 		Network.getInstance().addConnectedPeer(i2pPeer);
@@ -185,8 +208,34 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
+	public void testI2PFallbackEvictionRefusedAtReservedFloor() throws Exception {
+		// With only one outbound I2P link (at/below the reserved floor), eviction must refuse -
+		// tearing down the last working I2P links for an unverified direct address repeatedly
+		// destroyed real connectivity on NAT'd nodes
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		i2pPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(i2pPeer);
+		Network.getInstance().addHandshakedPeer(i2pPeer);
+		PeerData directPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test");
+		getMutableKnownPeers().add(directPeerData);
+		invokeUpdateAddressToNodeIdCache(directPeerData.getAddress().toString(), NODE_ID);
+
+		assertNull(invokeFindI2PFallbackPeerWithDirectReplacement(System.currentTimeMillis()));
+	}
+
+	private void addOutboundHandshakedI2PFiller(String b32) throws Exception {
+		Peer filler = new Peer(new PeerData(PeerAddress.fromString(b32)), Peer.NETWORK);
+		Network.getInstance().addConnectedPeer(filler);
+		Network.getInstance().addHandshakedPeer(filler);
+	}
+
+	@Test
 	public void testDroppedI2PChainFallbackIsNotImmediatelyRedropped() throws Exception {
 		long now = System.currentTimeMillis();
+
+		// Keep the outbound I2P count above the reserved eviction floor throughout
+		addOutboundHandshakedI2PFiller(FILLER_B32_1);
+		addOutboundHandshakedI2PFiller(FILLER_B32_2);
 
 		// An outbound, handshaked I2P fallback peer with a known nodeId...
 		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
@@ -266,6 +315,10 @@ public class NetworkI2PTests extends Common {
 	public void testPreferredI2PSelectsI2PChainPeerWhenSessionIsUp() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P", "IP"), true);
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		// The non-preferred (direct) reservation is already met by two outbound direct links,
+		// so the preferred I2P transport keeps priority for this dial round
+		Network.getInstance().addConnectedPeer(new Peer(new PeerData(PeerAddress.fromString("203.0.113.1:24892")), Peer.NETWORK));
+		Network.getInstance().addConnectedPeer(new Peer(new PeerData(PeerAddress.fromString("203.0.113.2:24892")), Peer.NETWORK));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
 

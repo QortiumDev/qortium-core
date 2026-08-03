@@ -86,4 +86,20 @@ final class PeerMaintenancePolicy {
 				.collect(Collectors.toList());
 		return alternatives.isEmpty() ? candidates : alternatives;
 	}
+
+	/**
+	 * Picks which transport's candidates to dial this round. The preferred transport
+	 * normally wins, but the non-preferred transport is guaranteed {@code reservedSlots}
+	 * outbound connections whenever it has candidates - winner-take-all preference would
+	 * otherwise starve it entirely (and with it, e.g., all b32 advertisement on a NAT'd
+	 * IP-first node). Pass {@code reservedSlots = 0} when the non-preferred transport is
+	 * not currently dialable.
+	 */
+	static <T> List<T> selectTransportDialCandidates(List<T> preferred, List<T> nonPreferred,
+			long nonPreferredOutboundCount, int reservedSlots) {
+		if (nonPreferredOutboundCount < reservedSlots && !nonPreferred.isEmpty())
+			return nonPreferred;
+
+		return !preferred.isEmpty() ? preferred : nonPreferred;
+	}
 }

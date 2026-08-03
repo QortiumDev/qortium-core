@@ -1078,14 +1078,17 @@ public class ArbitraryDataFileListManager {
                         arbitraryDataFileListRequests.put(message.getId(), newEntry);
                     }
 
-                    // Advertise an address requesters can dial back to. Prefer a usable external IP
-                    // (clearnet-reachable seeds keep behaving exactly as before). When there is no usable
-                    // external IP but we have a usable I2P data destination, advertise our b32 so a NAT'd
-                    // publisher is still reachable (requesters dial the data dest instead of dead-ending on
-                    // an unreachable I2P relay). Never advertise the literal "null:port" we used to emit.
+                    // Advertise an address requesters can dial back to. Only advertise the external
+                    // IP when clearnet inbound is actually provable (port mapped, configured external
+                    // address, or a recent inbound handshake) - merely KNOWING our NAT'd public IP
+                    // from peers' HELLOs does not make it dialable, and advertising it sent every
+                    // fetcher to a dead address. Otherwise fall back to our I2P data destination,
+                    // which is dialable regardless of NAT. Never advertise the literal "null:port"
+                    // we used to emit.
                     String externalIpAddress = Network.getInstance().getOurExternalIpAddress();
                     String ourAddress;
-                    if (externalIpAddress != null && !externalIpAddress.isBlank()) {
+                    if (externalIpAddress != null && !externalIpAddress.isBlank()
+                            && NetworkData.getInstance().canAcceptInbound()) {
                         ourAddress = externalIpAddress + ":" + Settings.getInstance().getQDNListenPort();
                     } else {
                         // Bare b32 (no port) — PeerAddress classifies it as I2P. May be null if no usable dest.
