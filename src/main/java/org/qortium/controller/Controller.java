@@ -2006,7 +2006,11 @@ public class Controller extends Thread {
 				// If we have no block data, we should check the archive in case it's there
 				if (Settings.getInstance().isArchiveEnabled()) {
 					Triple<byte[], Integer, Integer> serializedBlock = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForSignature(signature, true, repository);
-					if (serializedBlock != null && serializedBlock.getB() == 2) {
+					// Qortium archives report SUPPORTED_ARCHIVE_VERSION (1) and store V2-serialized
+					// block bytes, which is exactly what a BLOCK message carries. The previous check
+					// here (== 2) used inherited version semantics and could never match, so archived
+					// blocks were never served in response to GET_BLOCK.
+					if (serializedBlock != null && serializedBlock.getB() == BlockArchiveReader.SUPPORTED_ARCHIVE_VERSION) {
 						byte[] bytes = serializedBlock.getA();
 						Message blockMessage = new CachedBlockMessage(bytes);
 						blockMessage.setId(message.getId());
@@ -2069,6 +2073,19 @@ public class Controller extends Thread {
             BlockData blockData = repository.getBlockRepository().fromReference(parentSignature);
             int includedBlockCount = 0;
 
+            // The Blocks table no longer holds the children of parentSignature once they have
+            // been archived and pruned, so fall back to serving the serialized bytes straight
+            // from the archive. Without this, every node syncing across the archive boundary
+            // (e.g. a pinned checkpoint) receives a valid-but-empty BLOCKS reply from every
+            // archiving peer and wedges permanently.
+            if (blockData == null && Settings.getInstance().isArchiveEnabled()) {
+                Integer continueHeight = addArchivedBlocksToResponse(repository, parentSignature, numberRequested, blocksBuilder);
+                includedBlockCount = blocksBuilder.getBlockCount();
+                if (continueHeight != null && includedBlockCount > 0 && includedBlockCount < numberRequested)
+                    // The archive ran out before the request budget - continue from the Blocks table
+                    blockData = repository.getBlockRepository().fromHeight(continueHeight);
+            }
+
             while (blockData != null && includedBlockCount < numberRequested) {
                 // If we're dealing with untrimmed blocks, ensure we don't go above the untrimmedBlockLimitPerRequest
                 if (blockData.isTrimmed() == false && includedBlockCount >= untrimmedBlockLimitPerRequest) {
@@ -2111,6 +2128,47 @@ public class Controller extends Thread {
         } catch (TransformationException | IOException e) {
             LOGGER.error(String.format("Failed to build BLOCKS response after %s to peer %s", Base58.encode(parentSignature), peer), e);
         }
+    }
+
+    /**
+     * Adds blocks following {@code parentSignature} to {@code blocksBuilder} from the local
+     * block archive, for parents whose children have been archived and pruned out of the
+     * Blocks table. Archived bytes are already in the V2 serialization the BLOCKS wire
+     * format carries, so they are appended without a deserialize/re-serialize round trip.
+     *
+     * @return the next height to continue serving from (the first height NOT taken from the
+     *         archive), or null if the parent block is unknown to both the Blocks table and
+     *         the archive index.
+     */
+    public static Integer addArchivedBlocksToResponse(Repository repository, byte[] parentSignature,
+                                                      int numberRequested, BlocksMessage.BoundedBuilder blocksBuilder) throws DataException {
+        // The parent itself may still be in the Blocks table (e.g. the genesis block, which is
+        // never pruned) or only in the archive index - resolve its height from either.
+        Integer parentHeight;
+        BlockData parentBlockData = repository.getBlockRepository().fromSignature(parentSignature);
+        if (parentBlockData != null)
+            parentHeight = parentBlockData.getHeight();
+        else
+            parentHeight = BlockArchiveReader.getInstance().fetchHeightForSignature(parentSignature, repository);
+
+        if (parentHeight == null)
+            return null;
+
+        int nextHeight = parentHeight + 1;
+        while (blocksBuilder.getBlockCount() < numberRequested) {
+            Triple<byte[], Integer, Integer> archivedBlock = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForHeight(nextHeight);
+            if (archivedBlock == null || archivedBlock.getA() == null)
+                // Not in the archive (or past its end)
+                break;
+
+            if (!blocksBuilder.tryAdd(BlocksMessage.SerializedBlock.fromArchiveBytes(nextHeight, archivedBlock.getA())))
+                // Response byte budget reached
+                break;
+
+            ++nextHeight;
+        }
+
+        return nextHeight;
     }
 
 	private void onNetworkGetBlockSummariesMessage(Peer peer, Message message) {

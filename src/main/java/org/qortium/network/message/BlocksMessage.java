@@ -100,6 +100,16 @@ public class BlocksMessage extends Message {
             return new SerializedBlock(block, block.getBlockData().getHeight(), BlockTransformer.toBytesV2(block));
         }
 
+        /**
+         * Wraps already-serialized V2 block bytes (as stored in the block archive), avoiding
+         * deserialize/re-serialize when serving blocks that have been archived and pruned
+         * from the Blocks table. The bytes must NOT include the height prefix; it is written
+         * separately from {@code height}, matching the wire format of {@link #fromBlock}.
+         */
+        public static SerializedBlock fromArchiveBytes(int height, byte[] blockBytesV2) {
+            return new SerializedBlock(null, height, blockBytesV2);
+        }
+
         public Block getBlock() {
             return this.block;
         }
@@ -124,6 +134,10 @@ public class BlocksMessage extends Message {
 
         private BoundedBuilder(int maxPayloadLength) {
             this.maxPayloadLength = maxPayloadLength;
+        }
+
+        public int getBlockCount() {
+            return this.serializedBlocks.size();
         }
 
         public boolean tryAdd(SerializedBlock serializedBlock) {

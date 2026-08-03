@@ -7,6 +7,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.controller.BlockMinter;
+import org.qortium.controller.Controller;
+import org.qortium.network.message.BlocksMessage;
+import org.qortium.transform.block.BlockTransformer;
 import org.qortium.data.at.ATStateData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.transaction.TransactionData;
@@ -424,6 +427,90 @@ public class BlockArchiveTests extends Common {
 			assertEquals(1002, lastBlockHeight);
 
 			System.out.println("testArchiveAndPrune completed successfully.");
+		}
+	}
+
+	@Test
+	public void testServeArchivedBlocksForGetBlocksRequest() throws DataException, InterruptedException, TransformationException, IOException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+
+			// Deploy an AT so that we have AT state data
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			byte[] creationBytes = AtUtils.buildSimpleAT();
+			long fundingAmount = 1_00000000L;
+			AtUtils.doDeployAT(repository, deployer, creationBytes, fundingAmount);
+
+			// Mint some blocks so that we are able to archive them later
+			for (int i = 0; i < 1000; i++)
+				BlockMinter.mintTestingBlock(repository, Common.getTestAccount(repository, "alice-reward-share"));
+
+			// Trim, archive 2-900 and prune, mirroring a long-running node's state
+			repository.getBlockRepository().setOnlineAccountsSignaturesTrimHeight(901);
+			repository.getATRepository().setAtTrimHeight(901);
+
+			BlockArchiveWriter writer = new BlockArchiveWriter(0, 900, repository);
+			writer.setShouldEnforceFileSizeTarget(false);
+			assertEquals(BlockArchiveWriter.BlockArchiveWriteResult.OK, writer.write());
+
+			repository.getBlockArchiveRepository().setBlockArchiveHeight(901);
+			repository.saveChanges();
+
+			assertEquals(900 - 1, repository.getBlockRepository().pruneBlocks(0, 900));
+			repository.getBlockRepository().setBlockPruneHeight(901);
+			repository.getATRepository().rebuildLatestAtStates(900);
+			repository.saveChanges();
+			repository.getATRepository().pruneAtStates(0, 900);
+			repository.getATRepository().setAtPruneHeight(901);
+
+			byte[] genesisSignature = repository.getBlockRepository().fromHeight(1).getSignature();
+
+			// The precondition for the bug: the Blocks table no longer knows the genesis block's child,
+			// so the old GET_BLOCKS serving path would have returned a valid-but-empty BLOCKS reply
+			assertNull(repository.getBlockRepository().fromReference(genesisSignature));
+
+			// The archive fallback must serve the pruned range instead
+			BlocksMessage.BoundedBuilder blocksBuilder = BlocksMessage.newBoundedBuilder(10 * 1024 * 1024);
+			Integer continueHeight = Controller.addArchivedBlocksToResponse(repository, genesisSignature, 200, blocksBuilder);
+			assertNotNull(continueHeight);
+			assertEquals(200, blocksBuilder.getBlockCount());
+			assertEquals(202, (int) continueHeight);
+
+			// The served bytes must be the V2 serialization the BLOCKS wire format carries,
+			// and consecutive archived blocks must link parent-to-child
+			byte[] block2Bytes = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForHeight(2).getA();
+			byte[] block3Bytes = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForHeight(3).getA();
+			BlockTransformation block2 = BlockTransformer.fromByteBufferV2(java.nio.ByteBuffer.wrap(block2Bytes));
+			BlockTransformation block3 = BlockTransformer.fromByteBufferV2(java.nio.ByteBuffer.wrap(block3Bytes));
+			assertArrayEquals(genesisSignature, block2.getBlockData().getReference());
+			assertArrayEquals(block2.getBlockData().getSignature(), block3.getBlockData().getReference());
+
+			// A parent that only exists in the archive index must also resolve
+			byte[] block500Signature = BlockArchiveReader.getInstance().fetchBlockAtHeight(500).getBlockData().getSignature();
+			assertNull(repository.getBlockRepository().fromSignature(block500Signature));
+			BlocksMessage.BoundedBuilder midBuilder = BlocksMessage.newBoundedBuilder(10 * 1024 * 1024);
+			Integer midContinueHeight = Controller.addArchivedBlocksToResponse(repository, block500Signature, 50, midBuilder);
+			assertNotNull(midContinueHeight);
+			assertEquals(50, midBuilder.getBlockCount());
+			assertEquals(551, (int) midContinueHeight);
+
+			// Crossing the archive/Blocks-table boundary: a request anchored at the last archived
+			// block drains the archive, and the returned continue-height is servable from the DB
+			byte[] block899Signature = BlockArchiveReader.getInstance().fetchBlockAtHeight(899).getBlockData().getSignature();
+			BlocksMessage.BoundedBuilder boundaryBuilder = BlocksMessage.newBoundedBuilder(10 * 1024 * 1024);
+			Integer boundaryContinueHeight = Controller.addArchivedBlocksToResponse(repository, block899Signature, 50, boundaryBuilder);
+			assertNotNull(boundaryContinueHeight);
+			assertEquals(1, boundaryBuilder.getBlockCount()); // only 900 is still in the archive
+			assertEquals(901, (int) boundaryContinueHeight);
+			assertNotNull(repository.getBlockRepository().fromHeight(901));
+
+			// An unknown parent must be reported as such, not served
+			byte[] unknownSignature = new byte[128];
+			assertNull(Controller.addArchivedBlocksToResponse(repository, unknownSignature, 50, BlocksMessage.newBoundedBuilder(10 * 1024 * 1024)));
+
+			// The GET_BLOCK (single block) archive path relies on archived bytes reporting
+			// SUPPORTED_ARCHIVE_VERSION - the version its serving check must compare against
+			assertEquals(BlockArchiveReader.SUPPORTED_ARCHIVE_VERSION,
+					(int) BlockArchiveReader.getInstance().fetchSerializedBlockBytesForSignature(block500Signature, true, repository).getB());
 		}
 	}
 
