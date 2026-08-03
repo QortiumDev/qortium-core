@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - fix: stop serving stale QDN app versions after a synced-in update
+
+A user whose node was fully synced past the Node 1.4.4 publish still saw
+the old 1.4.3 app for hours, until a Core restart fixed it. Two bugs
+combined: first, when an updated resource's transaction arrived inside a
+synchronized block (rather than through this node's own unconfirmed pool),
+Core only cleared the resource's built cache if it already had the new
+data files at that exact moment - usually it doesn't yet, so nothing was
+cleared. Second, the one-hour window during which Core trusts a built
+resource without checking for newer versions was extended by every access,
+so clicking the app again and again kept the stale copy alive forever.
+Now every new transaction clears the built cache regardless of whether the
+files have arrived yet, and the trust window is only started by a real
+freshness check, never extended by rate-limited access.
+
 ### 2026-08-03 - test: never roll a zero sale price in the name buy/sell tests
 
 Two of the name buy/sell tests picked a random re-sale price between 0 and
