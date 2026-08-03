@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-03 - fix(settings, qdn): UPnP toggle from the UI, honest download return address
+
+Two small quality fixes rolled into 1.6.3. First, the UPnP setting can now be
+changed from the node settings screen like the other connection options — it
+previously required hand-editing the settings file, which was exactly the
+hurdle a non-technical user hit during this week's support session (a restart
+is still needed for it to take effect, and the UI says so). Second, when a
+node behind a home router asked the network for a file, it introduced itself
+with a broken return address (the literal text "null" plus a port number),
+which every receiver silently threw away; it now introduces itself the same
+honest way it answers others — with its IP only when that IP is provably
+reachable, otherwise its I2P address, otherwise nothing.
+
 ### 2026-08-03 - fix(net): give both transports a fair share of connections
 
 Fixes the puzzle where switching I2P to "preferred" made peer counts go UP.

@@ -421,9 +421,20 @@ public class ArbitraryDataFileListManager {
 
         LOGGER.trace(String.format("Sending data file list request for signature %s with %d hashes to %d peers...", signature58, hashCount, handshakedPeers.size()));
 
-        // Send our address as requestingPeer, to allow for potential direct connections with seeds/peers
-        //String requestingPeer = NetworkData.getInstance().getOurExternalIpAddressAndPort();
-        String requestingPeer = Network.getInstance().getOurExternalIpAddress() + ":" + Settings.getInstance().getQDNListenPort();
+        // Send our address as requestingPeer, to allow for potential direct connections with
+        // seeds/peers. Mirror the dial-back selection used when responding: only advertise the
+        // external IP when clearnet inbound is provable, else our I2P data destination, else
+        // omit the field (it is optional on the wire). The previous bare concatenation sent the
+        // literal "null:<port>" for NAT'd nodes, which receivers discard.
+        String requestingPeerExternalIp = Network.getInstance().getOurExternalIpAddress();
+        String requestingPeer;
+        if (requestingPeerExternalIp != null && !requestingPeerExternalIp.isBlank()
+                && NetworkData.getInstance().canAcceptInbound()) {
+            requestingPeer = requestingPeerExternalIp + ":" + Settings.getInstance().getQDNListenPort();
+        } else {
+            // Bare b32 (no port), or null when no usable destination exists
+            requestingPeer = NetworkData.getInstance().getI2PDataDestination();
+        }
 
         // Build request
         Message getArbitraryDataFileListMessage = new GetArbitraryDataFileListMessage(signature, missingHashes, now, 0, requestingPeer);
