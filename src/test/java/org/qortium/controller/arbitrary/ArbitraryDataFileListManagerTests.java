@@ -41,6 +41,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ArbitraryDataFileListManagerTests extends Common {
@@ -222,6 +223,25 @@ public class ArbitraryDataFileListManagerTests extends Common {
         assertEquals("127.0.0.1:9104", responseInfo.getPeerData().getAddress().toString());
         assertNotNull(responseInfo.getRelayFallbackPeerData());
         assertEquals(sender.getPeerData(), responseInfo.getRelayFallbackPeerData());
+
+        // DC_ONLY: direct-connectable with isRelayPossible=false must NOT record a fallback,
+        // and hashes that admit no new fetch work must NOT refresh the retry budget
+        clearRelayState();
+        int dcOnlyRequestId = 41004;
+        this.fileListManager.arbitraryDataFileListRequests.put(dcOnlyRequestId,
+                new Triple<>(signature58, null, now));
+        ArbitraryDataFileListMessage dcOnlyOutgoing = new ArbitraryDataFileListMessage(signature, hashes,
+                now, 1, "127.0.0.1:9104", "holder-3", false, true); // isRelayPossible=false, isDirectConnectable=true
+        dcOnlyOutgoing.setId(dcOnlyRequestId);
+        this.fileListManager.processNetworkArbitraryDataFileListMessages(
+                List.of(new PeerMessage(sender, parseFileList(dcOnlyOutgoing))));
+
+        List<ArbitraryFileListResponseInfo> dcOnlyResponses = localResponses();
+        assertEquals(1, dcOnlyResponses.size());
+        assertEquals(Boolean.TRUE, dcOnlyResponses.get(0).isDirectConnectable());
+        assertNull(dcOnlyResponses.get(0).getRelayFallbackPeerData());
+
+        this.fileListManager.arbitraryDataSignatureRequests.remove(signature58);
     }
 
     private static ArbitraryDataFileListMessage incomingFileList(int id, byte[] signature, List<byte[]> hashes,

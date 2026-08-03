@@ -700,12 +700,7 @@ public class ArbitraryDataFileListManager {
 
                         Long now = NTP.getTime();
 
-                        // A response for one of our own requests is proof a holder exists, so
-                        // refresh part of the retry budget - a resource with a live holder must
-                        // not slide into the terminal discovery backoff just because the chunk
-                        // transfers themselves keep failing.
-                        if (hashes != null && !hashes.isEmpty())
-                            this.notedUsableFileListResponse(signature58);
+                        boolean anyMissingHashAdmitted = false;
 
                         // Keep track of the hashes this peer reports to have access to
                         for (byte[] hash : hashes) {
@@ -777,7 +772,11 @@ public class ArbitraryDataFileListManager {
                                 // as a fallback: if the direct dial to the holder fails (NAT'd holder,
                                 // stale I2P LeaseSet, ...), the request thread requeues the chunks via
                                 // the sender instead of losing them until the next discovery round.
-                                if (peer != null && peer.getPeerData() != null)
+                                // Respect the protocol's explicit "no relay" signal (DC_ONLY): a
+                                // direct-connectable response with isRelayPossible=false must never
+                                // be converted into relay chunk requests.
+                                if (peer != null && peer.getPeerData() != null
+                                        && Boolean.TRUE.equals(arbitraryDataFileListMessage.isRelayPossible()))
                                     responseInfo.setRelayFallbackPeerData(peer.getPeerData());
                                 LOGGER.debug("Adding QDN Direct Connect responseInfo to ArbDataFileManager peer: {} FileHash: {}", peerWithFilesString, hash58);
                             } else { // We have to relay the peers chunks because they cant Direct Connect
@@ -786,7 +785,16 @@ public class ArbitraryDataFileListManager {
                                 LOGGER.trace("Adding QDN Relay-able responseInfo to ArbDataFileManager peer: {} FileHash: {}", peer, hash58);
                             }
                             ArbitraryDataFileManager.getInstance().addResponse(responseInfo);
+                            anyMissingHashAdmitted = true;
                         }
+
+                        // A response that actually admitted missing chunks to fetch work is proof
+                        // a live holder exists, so refresh part of the retry budget - a resource
+                        // with a live holder must not slide into the terminal discovery backoff
+                        // just because the chunk transfers themselves keep failing. Replies whose
+                        // hashes are all already local (or empty) must NOT keep discovery alive.
+                        if (anyMissingHashAdmitted)
+                            this.notedUsableFileListResponse(signature58);
 
                         // Keep track of the source peer, for direct connections
                         String advertisedHolderAddress = arbitraryDataFileListMessage.getPeerAddress();
