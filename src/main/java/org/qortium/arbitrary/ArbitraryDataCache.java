@@ -50,6 +50,14 @@ public class ArbitraryDataCache {
                 return true;
             }
 
+            // While the rate limit is in effect, trust the cache without checking signatures.
+            // Crucially, do NOT refresh the rate-limit window below in this case: refreshing
+            // it on every access kept a stale cache alive indefinitely for frequently used
+            // resources whenever the new-transaction invalidation was missed.
+            if (this.rateLimitInEffect()) {
+                return false;
+            }
+
             // We might want to overwrite anyway, if an updated version is available
             if (this.shouldInvalidateResource()) {
                 return true;
@@ -60,8 +68,8 @@ public class ArbitraryDataCache {
             return true;
         }
 
-        // No need to invalidate the cache
-        // Remember that it's up to date, so that we won't check again for a while
+        // A real freshness check passed, so remember that the cache is up to date
+        // and skip re-checking for a while
         ArbitraryDataManager.getInstance().addResourceToCache(this.getArbitraryDataResource());
 
         return false;
@@ -80,11 +88,6 @@ public class ArbitraryDataCache {
     }
 
     private boolean shouldInvalidateName() {
-        // To avoid spamming the database too often, we shouldn't check sigs or invalidate when rate limited
-        if (this.rateLimitInEffect()) {
-            return false;
-        }
-
         // If the state's sig doesn't match the latest transaction's sig, we need to invalidate
         // This means that an updated layer is available
         return this.shouldInvalidateDueToSignatureMismatch();

@@ -301,7 +301,7 @@ public class ArbitraryTransaction extends Transaction {
 		ArbitraryTransactionUtils.checkAndRelocateMiscFiles(arbitraryTransactionData);
 
 		// Update caches
-		updateCaches(true);
+		updateCaches();
 
 		// Publisher-initiated push (Fix 1): if we hold this resource's data locally (i.e. we just
 		// published it), proactively offer it to a few reachable peers so it reaches the network even
@@ -321,24 +321,20 @@ public class ArbitraryTransaction extends Transaction {
 		new Payment(this.repository).process(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments());
 
 		// Update caches
-		this.updateCaches(false);
+		this.updateCaches();
 	}
 
-	private void updateCaches(boolean autoInvalidate) {
+	private void updateCaches() {
 		// Very important to use a separate repository instance from the one being used for validation/processing
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			// If the data is local, we need to perform a few actions
-			if (isDataLocal()) {
-
-				// We have the data for this transaction, so invalidate the file cache
-				if (arbitraryTransactionData.getName() != null) {
-					ArbitraryDataManager.getInstance().invalidateCache(arbitraryTransactionData, true);
-				}
-			}
-			else if( autoInvalidate ) {
-				if (arbitraryTransactionData.getName() != null) {
-					ArbitraryDataManager.getInstance().invalidateCache(arbitraryTransactionData, false);
-				}
+			// A new transaction always makes any built cache and the in-memory rate-limit
+			// entry for this resource stale, even when this node does not hold the new data
+			// files yet - e.g. when the transaction arrives in a synced block before the
+			// follower has fetched its files. Skipping invalidation in that case left nodes
+			// serving the previous version indefinitely, because every access refreshed the
+			// rate-limit window that suppresses the latest-signature check.
+			if (arbitraryTransactionData.getName() != null) {
+				ArbitraryDataManager.getInstance().invalidateCache(arbitraryTransactionData, isDataLocal());
 			}
 
 			// Add/update arbitrary resource caches, but don't update the status as this involves time-consuming
