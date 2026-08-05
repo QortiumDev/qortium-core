@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-05 - chore(release): prepare Core 1.6.4
+
+Marks the version for the next preview release. Since 1.6.3 this is a small
+reliability release with two fixes. The larger one stops a node from
+silently giving up on following the chain: a single unexpected error could
+end the thread that does the synchronizing, leaving a node that still held
+its peers and still served QDN but whose block height never moved again
+until someone noticed and restarted it. The other makes a node stop serving
+an outdated version of a QDN app after it has already synced the update.
+Everything else since 1.6.3 is dependency and test maintenance. Nodes
+currently stuck this way need no special handling beyond the update itself.
+There is no on-chain auto-update for this release.
+
 ### 2026-08-05 - fix: keep the synchronizer alive when a peer's chain tip vanishes
 
 A node stopped following the chain while still looking perfectly healthy:
