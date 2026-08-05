@@ -34,6 +34,34 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-05 - fix: keep the synchronizer alive when a peer's chain tip vanishes
+
+A node stopped following the chain while still looking perfectly healthy:
+it held twelve peers, kept serving QDN, and reported itself only "behind"
+in its status, but its block height never moved again until it was
+restarted. The cause was a single unexpected error inside the thread that
+does the synchronizing. That thread's main loop was written so that any
+unforeseen error ended the loop entirely, and the thread then quietly went
+away for the rest of the node's life. Nothing else noticed, because every
+other part of the node carried on as normal.
+
+The error itself came from a peer whose advertised chain tip disappeared at
+exactly the wrong moment. The node picks which peers are worth syncing with
+by first discarding any peer whose tip it doesn't know, and then reading
+that tip a moment later. In between those two steps, an incoming update
+carrying no blocks at all could wipe out what we knew about a peer, so the
+second step found nothing where it expected a tip and failed.
+
+Three things changed. An empty update no longer erases a chain tip we
+already know, which removes the race at its source. Every place that reads
+a peer's chain tip now copes with it being absent, skipping that peer for
+the round instead of failing. And the synchronizer's main loop now treats
+an unexpected error as costing one cycle rather than the whole thread, so
+a future surprise of this kind means a logged blip and a retry a second
+later, not a node that silently stops following the chain until someone
+notices and restarts it. Shutdown still stops the loop immediately as
+before.
+
 ### 2026-08-03 - fix: stop serving stale QDN app versions after a synced-in update
 
 A user whose node was fully synced past the Node 1.4.4 publish still saw
