@@ -183,41 +183,18 @@ public class Synchronizer extends Thread {
 				if (ArchiveFastSyncManager.isReplayInProgress())
 					continue;
 
-				// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
-				// no sync is already requested/pending/running. This guarantees the node keeps
-				// retrying synchronization even if inbound BLOCK_SUMMARIES broadcasts stop
-				// arriving or every attempt no-ops and clears requestSync. Gating on
-				// !isUpToDate() keeps healthy nodes quiet (no redundant peer round-trips), and
-				// skipping while a request is pending avoids starving transaction import, which
-				// defers on isSyncRequestPending().
-				if (!requestSync && !syncRequestPending && !isSynchronizing
-						&& System.currentTimeMillis() - lastSyncAttemptTimestamp >= SYNC_HEARTBEAT_INTERVAL
-						&& !Controller.getInstance().isUpToDate()) {
-					requestSync = true;
-				}
-
-				if (requestSync) {
-					requestSync = false;
-					lastSyncAttemptTimestamp = System.currentTimeMillis();
-					boolean success = Synchronizer.getInstance().potentiallySynchronize();
-					if (!success) {
-						// Something went wrong, so try again next time
-						requestSync = true;
-					}
-					// Remember that we have a pending sync request if this attempt failed
-					syncRequestPending = !success;
-				}
-
-				// Fork-recovery watchdog (paced): detect a stale tip wedged behind a fresh higher
-				// peer quorum and auto-orphan our short top fork so normal sync can adopt the chain.
-				// Wrapped defensively so a watchdog fault can never terminate the synchronizer.
-				if (!isSynchronizing && System.currentTimeMillis() - lastWatchdogCheckTimestamp >= WATCHDOG_CHECK_INTERVAL) {
-					lastWatchdogCheckTimestamp = System.currentTimeMillis();
-					try {
-						checkStuckSelfMintedFork();
-					} catch (Exception e) {
-						LOGGER.warn("Fork-recovery watchdog check failed: {}", e.getMessage());
-					}
+				// An unexpected runtime fault must cost us a single cycle, not the whole thread.
+				// This body used to run directly inside the outer try, so any RuntimeException
+				// escaping a sync attempt terminated the synchronizer for the life of the
+				// process: the node kept its peers, kept serving QDN and kept looking healthy in
+				// /admin/status, but never advanced its chain tip again until it was restarted.
+				// InterruptedException is deliberately NOT caught here so shutdown still exits
+				// the loop promptly. Every sync entry point releases the blockchain lock and
+				// clears isSynchronizing in a finally, so the next cycle starts from clean state.
+				try {
+					runSyncCycle();
+				} catch (RuntimeException e) {
+					LOGGER.error("Synchronizer cycle failed - retrying next cycle", e);
 				}
 			}
 		} catch (InterruptedException e) {
@@ -226,6 +203,46 @@ public class Synchronizer extends Thread {
 			// Fall-through to exit
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);
+		}
+	}
+
+	/** One synchronizer cycle: re-arm sync if needed, attempt it, then run the fork-recovery watchdog. */
+	private void runSyncCycle() throws InterruptedException {
+		// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
+		// no sync is already requested/pending/running. This guarantees the node keeps
+		// retrying synchronization even if inbound BLOCK_SUMMARIES broadcasts stop
+		// arriving or every attempt no-ops and clears requestSync. Gating on
+		// !isUpToDate() keeps healthy nodes quiet (no redundant peer round-trips), and
+		// skipping while a request is pending avoids starving transaction import, which
+		// defers on isSyncRequestPending().
+		if (!requestSync && !syncRequestPending && !isSynchronizing
+				&& System.currentTimeMillis() - lastSyncAttemptTimestamp >= SYNC_HEARTBEAT_INTERVAL
+				&& !Controller.getInstance().isUpToDate()) {
+			requestSync = true;
+		}
+
+		if (requestSync) {
+			requestSync = false;
+			lastSyncAttemptTimestamp = System.currentTimeMillis();
+			boolean success = Synchronizer.getInstance().potentiallySynchronize();
+			if (!success) {
+				// Something went wrong, so try again next time
+				requestSync = true;
+			}
+			// Remember that we have a pending sync request if this attempt failed
+			syncRequestPending = !success;
+		}
+
+		// Fork-recovery watchdog (paced): detect a stale tip wedged behind a fresh higher
+		// peer quorum and auto-orphan our short top fork so normal sync can adopt the chain.
+		// Wrapped defensively so a watchdog fault can never terminate the synchronizer.
+		if (!isSynchronizing && System.currentTimeMillis() - lastWatchdogCheckTimestamp >= WATCHDOG_CHECK_INTERVAL) {
+			lastWatchdogCheckTimestamp = System.currentTimeMillis();
+			try {
+				checkStuckSelfMintedFork();
+			} catch (Exception e) {
+				LOGGER.warn("Fork-recovery watchdog check failed: {}", e.getMessage());
+			}
 		}
 	}
 
@@ -684,8 +701,10 @@ public class Synchronizer extends Thread {
 		Peer peer;
 		if (staleChainCatchUpActive) {
 			peer = getBestStaleCatchUpPeer(peers);
+			final BlockSummaryData selectedPeerChainTipData = peer.getChainTipData();
 			LOGGER.debug("Stale chain catch-up active; selected peer {} with height {}, ts {}", peer,
-					peer.getChainTipData().getHeight(), peer.getChainTipData().getTimestamp());
+					selectedPeerChainTipData != null ? selectedPeerChainTipData.getHeight() : null,
+					selectedPeerChainTipData != null ? selectedPeerChainTipData.getTimestamp() : null);
 		} else {
 			// Pick random peer to sync with
 			int index = new SecureRandom().nextInt(peers.size());
@@ -740,9 +759,7 @@ public class Synchronizer extends Thread {
 
 				case INFERIOR_CHAIN: {
 					// Update our list of inferior chain tips
-					ByteArray inferiorChainSignature = ByteArray.wrap(peer.getChainTipData().getSignature());
-					if (!inferiorChainSignatures.contains(inferiorChainSignature))
-						inferiorChainSignatures.add(inferiorChainSignature);
+					rememberInferiorChainTip(peer);
 
 					// These are minor failure results so fine to try again
 					LOGGER.debug(() -> String.format("Refused to synchronize with peer %s (%s)", peer, syncResult.name()));
@@ -770,9 +787,7 @@ public class Synchronizer extends Thread {
 					// fall-through...
 				case NOTHING_TO_DO: {
 					// Update our list of inferior chain tips
-					ByteArray inferiorChainSignature = ByteArray.wrap(peer.getChainTipData().getSignature());
-					if (!inferiorChainSignatures.contains(inferiorChainSignature))
-						inferiorChainSignatures.add(inferiorChainSignature);
+					rememberInferiorChainTip(peer);
 
 					LOGGER.debug(() -> String.format("Synchronized with peer %s (%s)", peer, syncResult.name()));
 					break;
@@ -812,6 +827,20 @@ public class Synchronizer extends Thread {
 			}
 			peer.setSyncInProgress(false);
 		}
+	}
+
+	/**
+	 * Record the peer's current chain tip as an inferior chain, so we skip peers still on it next round.
+	 * Silently does nothing if the peer's tip has gone away since we synchronized with it.
+	 */
+	private void rememberInferiorChainTip(Peer peer) {
+		BlockSummaryData peerChainTipData = peer.getChainTipData();
+		if (peerChainTipData == null || peerChainTipData.getSignature() == null)
+			return;
+
+		ByteArray inferiorChainSignature = ByteArray.wrap(peerChainTipData.getSignature());
+		if (!inferiorChainSignatures.contains(inferiorChainSignature))
+			inferiorChainSignatures.add(inferiorChainSignature);
 	}
 
 	private static Integer getPeerTargetHeight(Peer peer) {
@@ -990,6 +1019,12 @@ public class Synchronizer extends Thread {
 			final int ourInitialHeight = ourLatestBlockData.getHeight();
 
 			BlockSummaryData peerChainTipData = peer.getChainTipData();
+			if (peerChainTipData == null || peerChainTipData.getSignature() == null) {
+				// Peer's chain tip went away since we filtered the peer list - nothing to compare against
+				LOGGER.debug(String.format("Peer %s has no chain tip - skipping common block search", peer));
+				return SynchronizationResult.NO_REPLY;
+			}
+
 			int peerHeight = peerChainTipData.getHeight();
 			byte[] peersLastBlockSignature = peerChainTipData.getSignature();
 
@@ -1120,6 +1155,14 @@ public class Synchronizer extends Thread {
 
 						// Count the number of blocks this peer has beyond our common block
 						final BlockSummaryData peerChainTipData = peer.getChainTipData();
+						if (peerChainTipData == null || peerChainTipData.getSignature() == null) {
+							// Peer's chain tip went away mid-round - drop it from this comparison
+							LOGGER.debug(String.format("Ignoring peer %s because it no longer has a chain tip", peer));
+							peers.remove(peer);
+							peersSharingCommonBlockIterator.remove();
+							continue;
+						}
+
 						final int peerHeight = peerChainTipData.getHeight();
 						final byte[] peerLastBlockSignature = peerChainTipData.getSignature();
 						final int peerAdditionalBlocksAfterCommonBlock = peerHeight - commonBlockSummary.getHeight();
@@ -1212,6 +1255,13 @@ public class Synchronizer extends Thread {
 					LOGGER.debug(String.format("Listing peers with common block %.8s...", Base58.encode(commonBlockSummary.getSignature())));
 					for (Peer peer : peersSharingCommonBlock) {
 						BlockSummaryData peerChainTipData = peer.getChainTipData();
+						if (peerChainTipData == null) {
+							// Peer's chain tip went away mid-round - remove this peer for now
+							LOGGER.debug(String.format("Peer %s no longer has a chain tip - removing it from this round", peer));
+							peers.remove(peer);
+							continue;
+						}
+
 						final int peerHeight = peerChainTipData.getHeight();
 						final Long peerLastBlockTimestamp = peerChainTipData.getTimestamp();
 						final int peerAdditionalBlocksAfterCommonBlock = peerHeight - commonBlockSummary.getHeight();
@@ -1311,7 +1361,12 @@ public class Synchronizer extends Thread {
 		// Calculate the length of the shortest peer chain sharing this common block
 		int minChainLength = 0;
 		for (Peer peer : peersSharingCommonBlock) {
-			final int peerHeight = peer.getChainTipData().getHeight();
+			final BlockSummaryData peerChainTipData = peer.getChainTipData();
+			if (peerChainTipData == null)
+				// Peer's chain tip went away mid-round - it can't constrain the shortest chain
+				continue;
+
+			final int peerHeight = peerChainTipData.getHeight();
 			final int peerAdditionalBlocksAfterCommonBlock = peerHeight - commonBlockSummary.getHeight();
 
 			if (peerAdditionalBlocksAfterCommonBlock < minChainLength || minChainLength == 0)
@@ -1424,6 +1479,12 @@ public class Synchronizer extends Thread {
 					final int ourInitialHeight = ourLatestBlockData.getHeight();
 
 					BlockSummaryData peerChainTipData = peer.getChainTipData();
+					if (peerChainTipData == null || peerChainTipData.getSignature() == null) {
+						// Peer's chain tip went away since we chose it - treat as a no-reply and retry later
+						LOGGER.debug(String.format("Peer %s has no chain tip - abandoning synchronization", peer));
+						return SynchronizationResult.NO_REPLY;
+					}
+
 					int peerHeight = peerChainTipData.getHeight();
 					byte[] peersLastBlockSignature = peerChainTipData.getSignature();
 

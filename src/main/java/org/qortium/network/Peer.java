@@ -644,6 +644,13 @@ public class Peer {
     }
 
     public void setChainTipSummaries(List<BlockSummaryData> chainTipSummaries) {
+        // Ignore an empty/absent update rather than erasing what we already know. Callers treat a
+        // null getChainTipData() as "we have never learned this peer's tip" and filter such peers
+        // out up-front; letting an empty broadcast clear a known tip instead makes it null again
+        // *after* those filters have run, which is a race the synchronizer cannot defend against.
+        if (chainTipSummaries == null || chainTipSummaries.isEmpty())
+            return;
+
         this.peersChainTipData = List.copyOf(chainTipSummaries);
     }
 
