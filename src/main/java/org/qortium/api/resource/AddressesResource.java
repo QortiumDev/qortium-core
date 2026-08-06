@@ -330,7 +330,7 @@ public class AddressesResource {
 	@Path("/balance/{address}")
 	@Operation(
 		summary = "Returns account balance",
-		description = "Returns account's native asset balance, or of other specified asset",
+		description = "Returns the account's native asset balance when assetId is omitted, or the balance of the specified existing asset",
 		responses = {
 			@ApiResponse(
 				description = "the balance",
