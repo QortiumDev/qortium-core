@@ -7,6 +7,7 @@ import org.qortium.account.Account;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.api.ApiError;
 import org.qortium.api.resource.AddressesResource;
+import org.qortium.asset.Asset;
 import org.qortium.controller.OnlineAccountsManager;
 import org.qortium.data.account.AccountData;
 import org.qortium.data.account.AccountTrustStatus;
@@ -21,6 +22,7 @@ import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.test.common.ApiCommon;
 import org.qortium.test.common.AccountTrustTestUtils;
+import org.qortium.test.common.AssetUtils;
 import org.qortium.test.common.Common;
 import org.qortium.test.common.TestAccount;
 import org.qortium.test.common.TransactionUtils;
@@ -96,6 +98,28 @@ public class AddressesApiTests extends ApiCommon {
 		useLiteMode();
 
 		assertApiError(ApiError.NO_REPLY, () -> this.addressesResource.getBalance(aliceAddress, null));
+	}
+
+	@Test
+	public void testGetBalanceDefaultsToNativeAndAcceptsExplicitAssetId() throws DataException {
+		long nativeBalance;
+		long goldBalance;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			nativeBalance = alice.getConfirmedBalance(Asset.NATIVE);
+			goldBalance = alice.getConfirmedBalance(AssetUtils.goldAssetId);
+		}
+
+		assertEquals(Amounts.toBigDecimal(nativeBalance), this.addressesResource.getBalance(aliceAddress, null));
+		assertEquals(Amounts.toBigDecimal(nativeBalance), this.addressesResource.getBalance(aliceAddress, Asset.NATIVE));
+		assertEquals(Amounts.toBigDecimal(goldBalance), this.addressesResource.getBalance(aliceAddress, AssetUtils.goldAssetId));
+	}
+
+	@Test
+	public void testGetBalanceRejectsUnknownAssetId() {
+		assertApiError(ApiError.INVALID_ASSET_ID,
+				() -> this.addressesResource.getBalance(aliceAddress, Long.MAX_VALUE));
 	}
 
 	@Test

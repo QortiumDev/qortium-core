@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-05 - test: protect optional asset balance API contract
+
+Home and other API clients can ask for either the chain's native balance or a
+specific asset through the same account-balance endpoint. The API description
+now states that omitting `assetId` selects the native asset and supplying it
+selects an existing asset. Focused tests protect the omitted, explicit-native,
+non-native, and unknown-asset cases so future Core changes cannot silently
+break the wallet bridge contract.
+
 ### 2026-08-05 - fix: keep the synchronizer alive when a peer's chain tip vanishes
 
 A node stopped following the chain while still looking perfectly healthy:
