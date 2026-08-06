@@ -107,13 +107,9 @@ public final class RefreshElectrumServers {
 			if (options.verify) {
 				List<CandidateServer> verifiedServers = verifyCandidates(coinConfig, candidates, options);
 				System.out.printf("%s: kept %d verified servers from %d candidates%n", coinConfig.label(), verifiedServers.size(), candidates.size());
-
-				if (!verifiedServers.isEmpty())
-					candidates = verifiedServers;
-				else {
-					System.out.printf("%s: no verified servers; keeping existing generated seeds%n", coinConfig.label());
-					candidates = existingCandidates;
-				}
+				candidates = verifiedServers;
+				if (verifiedServers.isEmpty())
+					System.out.printf("%s: no verified servers; writing an empty list rather than retaining failed seeds%n", coinConfig.label());
 			}
 
 			List<CandidateServer> dedupedCandidates = ElectrumServerDiscovery.dedupeCandidates(candidates);
@@ -290,6 +286,10 @@ public final class RefreshElectrumServers {
 				Object height = ((JSONObject) header).get("height");
 				if (!(height instanceof Number) || ((Number) height).longValue() <= 0)
 					throw new IOException("invalid blockchain height " + height);
+
+				Object history = rpc(electrumServer, "blockchain.scripthash.get_history", ElectrumX.WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
+				Object unspent = rpc(electrumServer, "blockchain.scripthash.listunspent", ElectrumX.WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
+				ElectrumX.validateWalletRpcResponses(history, unspent);
 			}
 
 			success = true;

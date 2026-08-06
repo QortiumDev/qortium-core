@@ -270,6 +270,27 @@ public class ElectrumServerListTests extends Common {
 				bitcoinNetworks.get(BitcoinyChainSpecs.TEST4).stream().map(CandidateServer::getServer).collect(Collectors.toList()));
 	}
 
+	@Test
+	public void testVerifiedRefreshDoesNotRetainFailedExistingSeeds() throws Exception {
+		Path directory = Files.createTempDirectory("electrum-server-fail-closed-test");
+		Path outputJson = directory.resolve("electrum-servers.json");
+		String json = "{\"servers\":{\"BTC\":{\"MAIN\":[{\"host\":\"127.0.0.1\",\"port\":1,\"protocol\":\"SSL\"}]}}}";
+		Files.write(outputJson, json.getBytes(StandardCharsets.UTF_8));
+
+		RefreshElectrumServers.main(new String[] {
+				"--output", outputJson.toString(),
+				"--coins", "BTC",
+				"--networks", BitcoinyChainSpecs.MAIN,
+				"--skip-1209k",
+				"--skip-peers",
+				"--timeout-ms", "100",
+				"--threads", "1"
+		});
+
+		Map<String, Map<String, List<CandidateServer>>> generated = RefreshElectrumServers.readGeneratedServers(outputJson);
+		assertFalse("Failed seeds must not survive a verified refresh", generated.containsKey("BTC"));
+	}
+
 	private static String row(String host, String port, String protocol, String status) {
 		return "<tr>"
 				+ td(host)

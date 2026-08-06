@@ -30,6 +30,7 @@ class MockBitcoinyBlockchainProvider extends BitcoinyBlockchainProvider {
 	private final Map<String, byte[]> rawTransactionsByHash = new HashMap<>();
 	private final Map<String, BitcoinyTransaction> transactionsByHash = new HashMap<>();
 	private final List<byte[]> broadcastTransactions = new ArrayList<>();
+	private ForeignBlockchainException addressTransactionsFailure;
 	private Bitcoiny blockchain;
 
 	MockBitcoinyBlockchainProvider(String netId) {
@@ -46,6 +47,10 @@ class MockBitcoinyBlockchainProvider extends BitcoinyBlockchainProvider {
 
 	void addAddressTransaction(byte[] scriptPubKey, TransactionHash transactionHash) {
 		this.transactionHashesByScript.computeIfAbsent(HashCode.fromBytes(scriptPubKey).toString(), key -> new ArrayList<>()).add(transactionHash);
+	}
+
+	void setAddressTransactionsFailure(ForeignBlockchainException addressTransactionsFailure) {
+		this.addressTransactionsFailure = addressTransactionsFailure;
 	}
 
 	void addRawTransaction(String txHash, byte[] rawTransaction) {
@@ -142,7 +147,10 @@ class MockBitcoinyBlockchainProvider extends BitcoinyBlockchainProvider {
 	}
 
 	@Override
-	public List<TransactionHash> getAddressTransactions(byte[] scriptPubKey, boolean includeUnconfirmed) {
+	public List<TransactionHash> getAddressTransactions(byte[] scriptPubKey, boolean includeUnconfirmed) throws ForeignBlockchainException {
+		if (this.addressTransactionsFailure != null)
+			throw this.addressTransactionsFailure;
+
 		List<TransactionHash> transactionHashes = new ArrayList<>(this.transactionHashesByScript.getOrDefault(HashCode.fromBytes(scriptPubKey).toString(), Collections.emptyList()));
 		if (!includeUnconfirmed)
 			transactionHashes.removeIf(transactionHash -> transactionHash.height == 0);

@@ -265,6 +265,50 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	@Test
+	public void testEmptyWalletTransactionHistory() throws ForeignBlockchainException {
+		assumeTrue(supportsDeterministicWalletTests());
+
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock-empty-history");
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+
+		assertTrue(mockBitcoiny.getWalletTransactions(getDeterministicPublicKey58()).isEmpty());
+	}
+
+	@Test
+	public void testWalletTransactionHistoryFailureIsNotReportedAsEmpty() {
+		assumeTrue(supportsDeterministicWalletTests());
+
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock-history-failure");
+		blockchainProvider.setAddressTransactionsFailure(new ForeignBlockchainException.NetworkException("wallet history RPC unavailable"));
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+
+		try {
+			mockBitcoiny.getWalletTransactions(getDeterministicPublicKey58());
+			fail("Wallet history failure must not be reported as an empty transaction list");
+		} catch (ForeignBlockchainException e) {
+			assertTrue(e instanceof ForeignBlockchainException.NetworkException);
+			assertEquals("wallet history RPC unavailable", e.getMessage());
+		}
+	}
+
+	@Test
+	public void testWalletBalanceHistoryFailureIsNotReportedAsZero() {
+		assumeTrue(supportsDeterministicWalletTests());
+
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock-balance-history-failure");
+		blockchainProvider.setAddressTransactionsFailure(new ForeignBlockchainException.NetworkException("wallet discovery RPC unavailable"));
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+
+		try {
+			mockBitcoiny.getWalletBalance(getDeterministicPublicKey58());
+			fail("Wallet discovery failure must not be reported as a zero balance");
+		} catch (ForeignBlockchainException e) {
+			assertTrue(e instanceof ForeignBlockchainException.NetworkException);
+			assertEquals("wallet discovery RPC unavailable", e.getMessage());
+		}
+	}
+
+	@Test
 	public void testWalletBalanceAndSpendIgnoreFilteredOutputs() throws ForeignBlockchainException {
 		assumeTrue(supportsDeterministicWalletTests());
 		assumeTrue(supportsSpendTransactionTests());

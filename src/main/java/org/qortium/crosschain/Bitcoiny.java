@@ -52,6 +52,11 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	/** How many wallet keys to generate in each batch. */
 	private static final int WALLET_KEY_LOOKAHEAD_INCREMENT = 3;
 
+	@FunctionalInterface
+	private interface WalletHistoryCheck {
+		boolean get() throws ForeignBlockchainException;
+	}
+
 	/** Byte offset into raw block headers to block timestamp. */
 	protected static final int TIMESTAMP_OFFSET = 4 + 32 + 32;
 	private static final int BLOCK_HEADER_LENGTH = 80;
@@ -944,8 +949,18 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 				if (check.get()) {
 					foundTransaction = true;
 				}
-			} catch (Exception e) {
-				LOGGER.warn("Failed to check transaction for key", e);
+			} catch (InterruptedException e) {
+				transactionChecks.forEach(future -> future.cancel(true));
+				Thread.currentThread().interrupt();
+				throw new ForeignBlockchainException("Interrupted while discovering wallet transaction history");
+			} catch (ExecutionException e) {
+				transactionChecks.forEach(future -> future.cancel(true));
+				Throwable cause = e.getCause();
+				if (cause instanceof ForeignBlockchainException)
+					throw (ForeignBlockchainException) cause;
+
+				String message = cause == null ? e.getMessage() : cause.getMessage();
+				throw new ForeignBlockchainException("Failed to discover wallet transaction history: " + message);
 			}
 		}
 
@@ -1197,7 +1212,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 		boolean needToProcessAdditionalKeys = false;
 
-		List<Supplier<Boolean>> transactionChecks = new ArrayList<>(keys.size());
+		List<WalletHistoryCheck> transactionChecks = new ArrayList<>(keys.size());
 
 		for (BitcoinyDeterministicKey dKey : keys) {
 
@@ -1237,51 +1252,59 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @return true if any task returns true, false if all tasks return false
 	 */
-	public static boolean anyTrue(ExecutorService executor, List<Supplier<Boolean>> suppliers, int retries) throws ForeignBlockchainException {
+	private static boolean anyTrue(ExecutorService executor, List<WalletHistoryCheck> suppliers, int retries) throws ForeignBlockchainException {
 
 		// return value
 		boolean anyTrueYet = false;
 
 		// for recursion if necessary
-		List<Supplier<Boolean>> suppliersToRetry = new ArrayList<>(suppliers.size());
+		List<WalletHistoryCheck> suppliersToRetry = new ArrayList<>(suppliers.size());
 
-		try {
-			Map<Integer, Supplier<Boolean>> supplierMap = new HashMap<>( suppliers.size() );
-			Map<Integer, Future<Boolean>> futureMap = new HashMap<>( suppliers.size() );
+		Map<Integer, WalletHistoryCheck> supplierMap = new HashMap<>( suppliers.size() );
+		Map<Integer, Future<Boolean>> futureMap = new HashMap<>( suppliers.size() );
 
-			int index = 0;
+		int index = 0;
 
-			for( Supplier<Boolean> supplier : suppliers ) {
+		for( WalletHistoryCheck supplier : suppliers ) {
 
-				Future<Boolean> future = executor.submit(() -> supplier.get());
+			Future<Boolean> future = executor.submit(supplier::get);
 
-				supplierMap.put( index, supplier);
-				futureMap.put( index, future );
+			supplierMap.put( index, supplier);
+			futureMap.put( index, future );
 
-				index++;
-			}
+			index++;
+		}
 
-			final int count = index;
+		final int count = index;
 
-			for( index = 0; index < count; index++) {
+		for( index = 0; index < count; index++) {
 
-				Future<Boolean> future = futureMap.get(index);
+			Future<Boolean> future = futureMap.get(index);
 
-				try {
-					if( future.get(TIMEOUT, TimeUnit.SECONDS) ) {
-						anyTrueYet = true;
-						break;
-					}
-				} catch (TimeoutException e) {
-					suppliersToRetry.add(supplierMap.get(index));
+			try {
+				if( future.get(TIMEOUT, TimeUnit.SECONDS) ) {
+					anyTrueYet = true;
+					break;
 				}
-			}
+			} catch (TimeoutException e) {
+				suppliersToRetry.add(supplierMap.get(index));
+			} catch (InterruptedException e) {
+				futureMap.values().forEach(check -> check.cancel(true));
+				Thread.currentThread().interrupt();
+				throw new ForeignBlockchainException("Interrupted while discovering wallet address history");
+			} catch (ExecutionException e) {
+				futureMap.values().forEach(check -> check.cancel(true));
+				Throwable cause = e.getCause();
+				if (cause instanceof ForeignBlockchainException)
+					throw (ForeignBlockchainException) cause;
 
-			for( Future<Boolean> future: futureMap.values()) {
-				future.cancel(true);
+				String message = cause == null ? e.getMessage() : cause.getMessage();
+				throw new ForeignBlockchainException("Failed to discover wallet address history: " + message);
 			}
-		} catch (Exception e) {
-			throw new ForeignBlockchainException(e.getMessage());
+		}
+
+		for( Future<Boolean> future: futureMap.values()) {
+			future.cancel(true);
 		}
 
 		if( retries > 0 && !anyTrueYet && !suppliersToRetry.isEmpty() ) {
@@ -1304,26 +1327,18 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @throws ForeignBlockchainException
 	 */
-	private boolean checkForTransactions(BitcoinyDeterministicKey dKey, byte[] script) {
+	private boolean checkForTransactions(BitcoinyDeterministicKey dKey, byte[] script) throws ForeignBlockchainException {
 		return checkForTransactions(dKey.getCacheKey(), script);
 	}
 
-	private boolean checkForTransactions(String keyCacheKey, byte[] script) {
-		try {
-			// Ask for transaction history - if it's empty then key has never been used
-			List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
+	private boolean checkForTransactions(String keyCacheKey, byte[] script) throws ForeignBlockchainException {
+		// Ask for transaction history - if it's empty then key has never been used
+		List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
 
-			// if the key has history, then it should be processing additional keys
-			if (!historicTransactionHashes.isEmpty()) {
-				this.blockchainCache.addKeyWithHistory(keyCacheKey);
-				return true;
-			}
-		} catch (ForeignBlockchainException e) {
-			if ("Interrupted while waiting for ElectrumX connection".equals(e.getMessage())) {
-				LOGGER.debug(e.getMessage());
-			} else {
-				LOGGER.warn(e.getMessage());
-			}
+		// if the key has history, then it should be processing additional keys
+		if (!historicTransactionHashes.isEmpty()) {
+			this.blockchainCache.addKeyWithHistory(keyCacheKey);
+			return true;
 		}
 
 		return false;

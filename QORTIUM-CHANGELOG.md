@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-06 - fix: require wallet-capable Electrum servers
+
+Foreign-chain servers are now accepted only after they prove that they can
+return both transaction history and unspent outputs, rather than merely a
+chain height. The server-list refresh tool applies the same check. Wallet
+history discovery also reports server failures instead of presenting them as
+an empty wallet, preventing a broken server from looking like a valid
+zero-activity account.
+
 ### 2026-08-05 - test: protect optional asset balance API contract
 
 Home and other API clients can ask for either the chain's native balance or a
