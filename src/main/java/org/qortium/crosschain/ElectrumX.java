@@ -65,6 +65,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private static final long IDLE_DISCONNECT_MS = 2 * 60 * 1000L;
 	private static final long ACQUIRE_SERVER_TIMEOUT_MS = 3000L;
 	private static final int MAX_BROADCAST_ATTEMPTS = 3;
+	static final String WALLET_CAPABILITY_PROBE_SCRIPT_HASH = "00".repeat(32);
 
 	// Multi-server height corroboration: cross-check the chain tip across connected servers so a single
 	// malicious/lagging server cannot skew height-based refund/locktime decisions.
@@ -1094,6 +1095,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			electrumServer.setClientName(randomClientName());
 
 			Object response = connectedRpc(electrumServer, "server.version");
+			validateWalletRpcSupport(electrumServer);
 			if (response != null) {
 				recordSuccess(server);
 			} else {
@@ -1377,11 +1379,12 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private Optional<ChainableServerConnection> makeConnection(ChainableServer server, String requestedBy) {
 		LOGGER.debug(() -> String.format("Connecting to %s %s", server, this.getCurrencyCodeForLogging()));
 
+		ElectrumServer electrumServer = null;
 		try {
 			SocketAddress endpoint = new InetSocketAddress(server.getHostName(), server.getPort());
 			int timeout = 5000; // ms
 
-			ElectrumServer electrumServer = ElectrumServer.createInstance(server, endpoint, timeout, this.recorder);
+			electrumServer = ElectrumServer.createInstance(server, endpoint, timeout, this.recorder);
 			electrumServer.setClientName(randomClientName());
 
 			// All connections need to start with a version negotiation
@@ -1415,6 +1418,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				return Optional.of( recorder.recordConnection(server, requestedBy, true, false, EXPECTED_GENESIS_ERROR) );
 			}
 
+			// Height and feature calls alone do not prove that a server can support wallets.
+			// Validate the two read-only RPCs used for discovery and balance before pooling it.
+			validateWalletRpcSupport(electrumServer);
+
 			recordSuccess(server);
 			LOGGER.debug(() -> String.format("Connected to %s %s", server, this.getCurrencyCodeForLogging()));
 			this.connections.add(electrumServer);
@@ -1423,11 +1430,27 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		} catch (IOException | ForeignBlockchainException | ClassCastException | NullPointerException e) {
 			// Didn't work, try another server...
 			recordFailure(server);
+			if (electrumServer != null)
+				electrumServer.closeServer(this.getClass().getSimpleName(), "wallet capability or connection validation failure");
 			return Optional.of( this.recorder.recordConnection( server, requestedBy, true, false, CrossChainUtils.getNotes(e)));
 		} catch( Exception e ) {
 			LOGGER.error(e.getMessage(), e);
 			return Optional.empty();
 		}
+	}
+
+	private void validateWalletRpcSupport(ElectrumServer electrumServer) throws ForeignBlockchainException {
+		Object historyResponse = connectedRpc(electrumServer, "blockchain.scripthash.get_history", WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
+		Object unspentResponse = connectedRpc(electrumServer, "blockchain.scripthash.listunspent", WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
+		validateWalletRpcResponses(historyResponse, unspentResponse);
+	}
+
+	static void validateWalletRpcResponses(Object historyResponse, Object unspentResponse) throws ForeignBlockchainException.NetworkException {
+		if (!(historyResponse instanceof JSONArray))
+			throw new ForeignBlockchainException.NetworkException("ElectrumX server lacks usable blockchain.scripthash.get_history support");
+
+		if (!(unspentResponse instanceof JSONArray))
+			throw new ForeignBlockchainException.NetworkException("ElectrumX server lacks usable blockchain.scripthash.listunspent support");
 	}
 
 	/**

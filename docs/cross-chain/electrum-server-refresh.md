@@ -22,8 +22,9 @@ The refresh tool derives its supported BTC-like coins and refreshable networks f
 - preserves existing generated server source and response-time metadata for coins that are not refreshed
 - scrapes OK TCP/SSL rows from `https://1209k.com/bitcoin-eye/ele.php`
 - asks a limited number of Electrum servers for `server.peers.subscribe`
-- verifies candidates with `server.version`, `server.features`, expected genesis hash, and `blockchain.headers.subscribe`
+- verifies candidates with `server.version`, `server.features`, expected genesis hash, `blockchain.headers.subscribe`, and the wallet history/unspent-output RPCs
 - keeps SSL servers when any are available, falling back to TCP only if no SSL servers verify
+- writes an empty list when every candidate fails verification instead of retaining known-bad seeds
 - sorts retained servers with numeric/IP-style hosts first, followed by alphabetic hostnames
 - writes a refreshed `crosschain/electrum-servers.json`
 
