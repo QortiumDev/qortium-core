@@ -49,6 +49,12 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	protected String transactionsCacheXpub;
 	protected static long TRANSACTIONS_CACHE_TIMEOUT = 2 * 60 * 1000L; // 2 minutes
 
+	/** Cache recent balance to avoid re-walking every used address on every request */
+	protected Long balanceCache;
+	protected Long balanceCacheTimestamp;
+	protected String balanceCacheXpub;
+	protected static long BALANCE_CACHE_TIMEOUT = 30 * 1000L; // 30 seconds
+
 	/** How many wallet keys to generate in each batch. */
 	private static final int WALLET_KEY_LOOKAHEAD_INCREMENT = 3;
 
@@ -685,6 +691,17 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	 * @return unspent foreign-chain balance, or null if unable to determine balance
 	 */
 	public Long getWalletBalance(String key58) throws ForeignBlockchainException {
+		// Serve from cache if valid
+		if (Objects.equals(balanceCacheXpub, key58)) {
+			if (balanceCache != null && balanceCacheTimestamp != null) {
+				Long now = NTP.getTime();
+				boolean isCacheStale = (now != null && now - balanceCacheTimestamp >= BALANCE_CACHE_TIMEOUT);
+				if (!isCacheStale) {
+					return balanceCache;
+				}
+			}
+		}
+
 		Long balance = 0L;
 
 		// Get all wallet addresses (via recursive gap-limit logic)
@@ -703,6 +720,10 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 			LOGGER.error("Unexpected error in getWalletBalance: {}", e.getMessage(), e);
 			return null;
 		}
+
+		balanceCache = balance;
+		balanceCacheTimestamp = NTP.getTime();
+		balanceCacheXpub = key58;
 
 		return balance;
 	}
