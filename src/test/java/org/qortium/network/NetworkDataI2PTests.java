@@ -187,7 +187,11 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	private void addOutboundHandshakedI2PDataFiller(String b32) throws Exception {
-		Peer filler = new Peer(new PeerData(PeerAddress.fromString(b32)), Peer.NETWORKDATA);
+		addOutboundHandshakedDataFiller(b32);
+	}
+
+	private void addOutboundHandshakedDataFiller(String address) throws Exception {
+		Peer filler = new Peer(new PeerData(PeerAddress.fromString(address)), Peer.NETWORKDATA);
 		filler.setIsDataPeer(true);
 		NetworkData.getInstance().addConnectedPeer(filler);
 		NetworkData.getInstance().addHandshakedPeer(filler);
@@ -240,6 +244,7 @@ public class NetworkDataI2PTests extends Common {
 	@Test
 	public void testRecentDataPeerConnectFailureSkippedWhenNotIsolated() throws Exception {
 		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 1, true);
 		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.20:24894")), Peer.NETWORKDATA);
 		connectedPeer.setIsDataPeer(true);
 		NetworkData.getInstance().addConnectedPeer(connectedPeer);
@@ -254,8 +259,101 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
+	public void testDataNetworkBelowMinimumRetriesBackoffPeer() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 3, true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PDataFiller("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p");
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
+	public void testDataNetworkAtMinimumHonorsI2PBackoff() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 3, true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PDataFiller("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p");
+		addOutboundHandshakedI2PDataFiller("defghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvw.b32.i2p");
+		addOutboundHandshakedI2PDataFiller("efghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.b32.i2p");
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 3 * 60 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		assertNull(invokeGetConnectablePeer(now));
+	}
+
+	@Test
+	public void testDegradedRecoveryDoesNotRetryI2PWhileSessionIsDown() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 3, true);
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		assertNull(invokeGetConnectablePeer(now));
+	}
+
+	@Test
+	public void testDegradedRecoveryPrefersInitialDataPeer() throws Exception {
+		long now = System.currentTimeMillis();
+		String gossipB32 = "fghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxy.b32.i2p";
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 3, true);
+		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers", new String[] { B32 }, true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PDataFiller("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p");
+
+		PeerData initialPeer = new PeerData(PeerAddress.fromString(B32), 100L, "initial");
+		initialPeer.setLastAttempted(now - 30 * 1000L);
+		PeerData gossipPeer = new PeerData(PeerAddress.fromString(gossipB32), 100L, "gossip");
+		gossipPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(initialPeer);
+		getMutableKnownPeers().add(gossipPeer);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
+	public void testDegradedRecoveryPrefersPreviouslyConnectedPeer() throws Exception {
+		long now = System.currentTimeMillis();
+		String unverifiedB32 = "fghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxy.b32.i2p";
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 3, true);
+		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers", new String[0], true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PDataFiller("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p");
+
+		PeerData successfulPeer = new PeerData(PeerAddress.fromString(B32), 100L, "known");
+		successfulPeer.setLastConnected(now - 2 * 60 * 1000L);
+		successfulPeer.setLastAttempted(now - 30 * 1000L);
+		PeerData unverifiedPeer = new PeerData(PeerAddress.fromString(unverifiedB32), 100L, "gossip");
+		unverifiedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(successfulPeer);
+		getMutableKnownPeers().add(unverifiedPeer);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
 	public void testI2PDataPeerUsesLongerConnectFailureBackoff() throws Exception {
 		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 1, true);
 		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.20:24894")), Peer.NETWORKDATA);
 		connectedPeer.setIsDataPeer(true);
@@ -269,6 +367,40 @@ public class NetworkDataI2PTests extends Common {
 		Peer selectedPeer = invokeGetConnectablePeer(now);
 
 		assertNull(selectedPeer);
+	}
+
+	@Test
+	public void testBackoffRecoveryUsesOneMinuteSchedulerCadence() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", 3, true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PDataFiller("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p");
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		assertTrue(invokeMaybeProduceConnectPeerTask(now) != null);
+		assertEquals(now + 60 * 1000L, getNextConnectTaskTimestamp());
+	}
+
+	@Test
+	public void testDataMinimumStillRefillsAfterOutboundGoalIsMet() throws Exception {
+		long now = System.currentTimeMillis();
+		int minOutboundPeers = getMinOutboundPeers();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minDataPeers", minOutboundPeers + 1, true);
+
+		for (int i = 1; i <= minOutboundPeers; ++i)
+			addOutboundHandshakedDataFiller("192.0.2." + i + ":24894");
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		assertTrue(invokeMaybeProduceConnectPeerTask(now) != null);
+		assertEquals(now + 60 * 1000L, getNextConnectTaskTimestamp());
 	}
 
 	@Test
@@ -402,6 +534,8 @@ public class NetworkDataI2PTests extends Common {
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "handshakedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "outboundHandshakedPeers", true)).clear();
 		FieldUtils.writeField(NetworkData.getInstance(), "nextHandshakeCleanup", 0L, true);
+		((java.util.concurrent.atomic.AtomicLong) FieldUtils.readField(NetworkData.getInstance(), "nextConnectTaskTimestamp", true)).set(0L);
+		FieldUtils.writeField(NetworkData.getInstance(), "lastPeerWasFromBackoff", false, true);
 		getConnectingI2PPeers().clear();
 	}
 
@@ -428,6 +562,21 @@ public class NetworkDataI2PTests extends Common {
 		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("getConnectablePeer", Long.class);
 		method.setAccessible(true);
 		return (Peer) method.invoke(NetworkData.getInstance(), now);
+	}
+
+	private Object invokeMaybeProduceConnectPeerTask(long now) throws Exception {
+		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("maybeProduceConnectPeerTask", Long.class);
+		method.setAccessible(true);
+		return method.invoke(NetworkData.getInstance(), now);
+	}
+
+	private long getNextConnectTaskTimestamp() throws Exception {
+		return ((java.util.concurrent.atomic.AtomicLong) FieldUtils.readField(
+				NetworkData.getInstance(), "nextConnectTaskTimestamp", true)).get();
+	}
+
+	private int getMinOutboundPeers() throws Exception {
+		return (int) FieldUtils.readField(NetworkData.getInstance(), "minOutboundPeers", true);
 	}
 
 	private String invokeNextI2PDataSessionId() throws Exception {

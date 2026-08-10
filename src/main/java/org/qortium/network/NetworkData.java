@@ -67,10 +67,10 @@ public class NetworkData {
     private static final long I2P_FALLBACK_DROP_COOLDOWN = 15 * 60 * 1000L; // ms
 
     /**
-     * How long to wait between connection attempts when isolated (no peers) and retrying backoff peers, in milliseconds.
-     * This prevents hammering peers when the node has no connections.
+     * How long to wait between connection attempts when below minDataPeers and retrying backed-off peers.
+     * This prevents degraded recovery from hammering unavailable destinations.
      */
-    private static final long ISOLATION_RETRY_INTERVAL = 60 * 1000L; // ms
+    private static final long MINIMUM_RECOVERY_RETRY_INTERVAL = 60 * 1000L; // ms
 
     //  Maximum time allowed for handshake to complete, in milliseconds.
     private static final long HANDSHAKE_TIMEOUT = 60 * 1000L; // ms
@@ -1676,17 +1676,20 @@ public class NetworkData {
         if (now == null || now < nextConnectTaskTimestamp.get()) {
             return null;
         }
-        if (getImmutableOutboundHandshakedPeers().size() >= minOutboundPeers) {
+        int handshakedPeerCount = getImmutableHandshakedPeers().size();
+        if (getImmutableOutboundHandshakedPeers().size() >= minOutboundPeers
+                && handshakedPeerCount >= Settings.getInstance().getMinDataPeers()) {
             disconnectI2PFallbackPeerWithDirectReplacement(now);
             return null;
         }
-        boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
-        if (hasNoPeers && lastPeerWasFromBackoff) {
-            nextConnectTaskTimestamp.set(now + ISOLATION_RETRY_INTERVAL);
-        } else {
-            nextConnectTaskTimestamp.set(now + 3000L);
-        }
+
         Peer targetPeer = getConnectablePeer(now);
+        handshakedPeerCount = getImmutableHandshakedPeers().size();
+        boolean isBelowMinimum = handshakedPeerCount < Settings.getInstance().getMinDataPeers();
+        nextConnectTaskTimestamp.set(now + (isBelowMinimum && lastPeerWasFromBackoff
+                ? MINIMUM_RECOVERY_RETRY_INTERVAL
+                : 3000L));
+
         if (targetPeer == null) {
             return null;
         }
@@ -2037,12 +2040,15 @@ public class NetworkData {
         
     
         
-        // Check if we have any handshaked peers (inbound or outbound) - are we isolated?
-        boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
+        int handshakedPeerCount = getImmutableHandshakedPeers().size();
+        boolean hasNoPeers = handshakedPeerCount == 0;
+        int minDataPeers = Settings.getInstance().getMinDataPeers();
+        boolean isBelowMinimum = handshakedPeerCount < minDataPeers;
 
-        // Save peers in backoff for later consideration if we're isolated
+        // Save backed-off peers for controlled recovery whenever the data network is below its
+        // configured floor. A single surviving peer should not suppress recovery for 15 minutes.
         List<PeerData> peersInBackoff = new ArrayList<>();
-        if (hasNoPeers) {
+        if (isBelowMinimum) {
             peersInBackoff = peers.stream()
                 .filter(peerData -> hasRecentConnectFailure(peerData, now))
                 .collect(Collectors.toList());
@@ -2064,81 +2070,20 @@ public class NetworkData {
         // Don't consider peers we're already connected to by nodeId
         // This handles cases where we have an inbound connection on an ephemeral port
         // but allKnownPeers has the listen port (common when peer is added from Network)
-        peers.removeIf(peerData -> {
-            String peerAddress = peerData.getAddress().toString();
-            CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
-            
-            if (cachedInfo != null) {
-                // We know this peer's nodeId - check if already connected
-                String candidateNodeId = cachedInfo.nodeId;
-                Peer existingPeer = this.getImmutableConnectedPeers().stream()
-                        .filter(peer -> peer.getPeersNodeId() != null
-                                && peer.getPeersNodeId().equals(candidateNodeId))
-                        .findFirst()
-                        .orElse(null);
-
-                if (existingPeer != null) {
-                    if (!Settings.getInstance().isI2PPreferred()
-                            && existingPeer.getPeerData().getAddress().isI2P()
-                            && !peerData.getAddress().isI2P()) {
-                        LOGGER.debug("Data peer {} (nodeId {}) is connected over I2P fallback, allowing direct TCP replacement attempt",
-                                peerAddress, candidateNodeId.substring(0, 8));
-                        return false;
-                    }
-
-                    // Already connected to this nodeId - check whether a preferred outbound replacement is useful.
-                    String ourNodeId = this.getOurNodeId();
-                    if (ourNodeId != null) {
-                        boolean weShouldBeOutbound = shouldBeOutboundTo(candidateNodeId, peerData.getAddress().getHost());
-                        boolean outboundRecentlyFailed = hasRecentOutboundFailures(candidateNodeId, peerData.getAddress().getHost());
-                        if (PeerDirectionPolicy.shouldAttemptPreferredOutboundReplacement(existingPeer.isOutbound(),
-                                weShouldBeOutbound, outboundRecentlyFailed)) {
-                            LOGGER.debug("Data peer {} (nodeId {}) connected in fallback direction, allowing preferred outbound attempt",
-                                    peerAddress, candidateNodeId.substring(0, 8));
-                            return false;
-                        }
-                    }
-
-                    LOGGER.debug("Skipping peer {} (nodeId {}) - already connected",
-                            peerAddress, candidateNodeId.substring(0, 8));
-                    return true;
-                }
-            }
-            return false;
-        });
+        peers.removeIf(this::isKnownNodeAlreadyConnected);
 
         // Don't attempt I2P data peers until our own data I2P session is up.
         peers.removeIf(peerData -> peerData.getAddress().isI2P() && this.getI2PDataDestination() == null);
 
         // Don't consider peers with recent direction mismatches
         // CRITICAL: Never skip fixed network peers (prevents isolation)
-        peers.removeIf(peerData -> {
-            if (isFixedPeer(peerData.getAddress()) || isInitialDataPeer(peerData.getAddress())) {
-                return false;
-            }
+        peers.removeIf(this::hasRecentDirectionMismatchUnlessConfigured);
 
-            // Try to resolve address to nodeId using cache
-            String peerAddress = peerData.getAddress().toString();
-            CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
-            
-            if (cachedInfo != null) {
-                // We know this peer's nodeId from previous handshake
-                boolean shouldSkip = hasRecentDirectionMismatch(cachedInfo.nodeId);
-                if (shouldSkip) {
-                    LOGGER.debug("Skipping peer {} (nodeId {}) due to recent direction mismatch",
-                            peerAddress, cachedInfo.nodeId.substring(0, 8));
-                }
-                return shouldSkip;
-            }
-            
-            // No cached nodeId - can't determine if mismatch, allow connection
-            // (First-time connection, or cache expired)
-            return false;
-        });
-
-        // If we have no available peers but have peers in backoff, and we're isolated, retry them
-        // Being isolated is worse than retrying a peer that might still be down
-        if (peers.isEmpty() && !peersInBackoff.isEmpty() && hasNoPeers) {
+        // If ordinary candidates are exhausted while below the configured floor, retry one
+        // backed-off peer at the scheduler's degraded one-minute cadence. Once the floor is met,
+        // the normal transport-specific backoff remains fully enforced.
+        lastPeerWasFromBackoff = false;
+        if (peers.isEmpty() && !peersInBackoff.isEmpty() && isBelowMinimum) {
             // Filter out self and connected from backoff list
             synchronized (this.selfPeers) {
                 peersInBackoff.removeIf(isSelfPeer);
@@ -2147,14 +2092,16 @@ public class NetworkData {
             peersInBackoff.removeIf(isConnectedPeer);
             peersInBackoff.removeIf(isConnectingI2PPeer);
             peersInBackoff.removeIf(isI2PAlternativeForConnectedPeer);
+            peersInBackoff.removeIf(this::isKnownNodeAlreadyConnected);
+            peersInBackoff.removeIf(peerData -> peerData.getAddress().isI2P() && this.getI2PDataDestination() == null);
+            peersInBackoff.removeIf(this::hasRecentDirectionMismatchUnlessConfigured);
             
             if (!peersInBackoff.isEmpty()) {
-                peers = peersInBackoff;
+                peers = preferDegradedRecoveryPeers(peersInBackoff);
                 lastPeerWasFromBackoff = true;
-                LOGGER.debug("No connected data peers - retrying {} peer(s) in backoff period", peers.size());
+                LOGGER.debug("Data peers below configured minimum ({}/{}) - retrying {} preferred peer(s) in backoff period",
+                        handshakedPeerCount, minDataPeers, peers.size());
             }
-        } else {
-            lastPeerWasFromBackoff = false;
         }
 
         // Any left?
@@ -2181,6 +2128,81 @@ public class NetworkData {
         // Update connection attempt info
         peerData.setLastAttempted(now);
         return newPeer;
+    }
+
+    private boolean isKnownNodeAlreadyConnected(PeerData peerData) {
+        String peerAddress = peerData.getAddress().toString();
+        CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
+        if (cachedInfo == null)
+            return false;
+
+        String candidateNodeId = cachedInfo.nodeId;
+        Peer existingPeer = this.getImmutableConnectedPeers().stream()
+                .filter(peer -> peer.getPeersNodeId() != null
+                        && peer.getPeersNodeId().equals(candidateNodeId))
+                .findFirst()
+                .orElse(null);
+        if (existingPeer == null)
+            return false;
+
+        if (!Settings.getInstance().isI2PPreferred()
+                && existingPeer.getPeerData().getAddress().isI2P()
+                && !peerData.getAddress().isI2P()) {
+            LOGGER.debug("Data peer {} (nodeId {}) is connected over I2P fallback, allowing direct TCP replacement attempt",
+                    peerAddress, candidateNodeId.substring(0, 8));
+            return false;
+        }
+
+        // Already connected to this nodeId - check whether a preferred outbound replacement is useful.
+        String ourNodeId = this.getOurNodeId();
+        if (ourNodeId != null) {
+            boolean weShouldBeOutbound = shouldBeOutboundTo(candidateNodeId, peerData.getAddress().getHost());
+            boolean outboundRecentlyFailed = hasRecentOutboundFailures(candidateNodeId, peerData.getAddress().getHost());
+            if (PeerDirectionPolicy.shouldAttemptPreferredOutboundReplacement(existingPeer.isOutbound(),
+                    weShouldBeOutbound, outboundRecentlyFailed)) {
+                LOGGER.debug("Data peer {} (nodeId {}) connected in fallback direction, allowing preferred outbound attempt",
+                        peerAddress, candidateNodeId.substring(0, 8));
+                return false;
+            }
+        }
+
+        LOGGER.debug("Skipping peer {} (nodeId {}) - already connected",
+                peerAddress, candidateNodeId.substring(0, 8));
+        return true;
+    }
+
+    private boolean hasRecentDirectionMismatchUnlessConfigured(PeerData peerData) {
+        if (isFixedPeer(peerData.getAddress()) || isInitialDataPeer(peerData.getAddress()))
+            return false;
+
+        String peerAddress = peerData.getAddress().toString();
+        CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
+        if (cachedInfo == null)
+            // No cached nodeId means this is a first connection or an expired cache entry.
+            return false;
+
+        boolean shouldSkip = hasRecentDirectionMismatch(cachedInfo.nodeId);
+        if (shouldSkip) {
+            LOGGER.debug("Skipping peer {} (nodeId {}) due to recent direction mismatch",
+                    peerAddress, cachedInfo.nodeId.substring(0, 8));
+        }
+        return shouldSkip;
+    }
+
+    private List<PeerData> preferDegradedRecoveryPeers(List<PeerData> peers) {
+        List<PeerData> configuredPeers = peers.stream()
+                .filter(peerData -> isFixedPeer(peerData.getAddress()) || isInitialDataPeer(peerData.getAddress()))
+                .collect(Collectors.toList());
+        if (!configuredPeers.isEmpty())
+            return configuredPeers;
+
+        List<PeerData> previouslyConnectedPeers = peers.stream()
+                .filter(peerData -> peerData.getLastConnected() != null)
+                .collect(Collectors.toList());
+        if (!previouslyConnectedPeers.isEmpty())
+            return previouslyConnectedPeers;
+
+        return peers;
     }
 
     private List<PeerData> preferPeersOutsideRotationCooldown(List<PeerData> peers) {

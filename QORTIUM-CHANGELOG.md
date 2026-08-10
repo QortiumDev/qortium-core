@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-10 - fix: refill data peers below the configured minimum
+
+The data network now treats a peer count below `minDataPeers` as degraded instead of
+considering any single surviving connection sufficient. If every otherwise suitable
+peer is still inside its connection-failure backoff, Core retries one configured or
+previously successful candidate per minute until the minimum is restored. At or above
+the minimum, the normal longer I2P backoff remains unchanged. This prevents a brief
+I2P outage from leaving an otherwise healthy node stranded at one data peer for up to
+fifteen minutes, without creating a rapid retry loop against unavailable destinations.
+
 ### 2026-08-06 - fix: require wallet-capable Electrum servers
 
 Foreign-chain servers are now accepted only after they prove that they can
