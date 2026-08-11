@@ -52,7 +52,7 @@ jobs:
           cp target/bom.cdx.json old-bom.cdx.json
 
       - name: Run scanner on existing code
-        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
         with:
           scan-args: |-
             --format=json
@@ -75,7 +75,7 @@ jobs:
           cp target/bom.cdx.json new-bom.cdx.json
 
       - name: Run scanner on new code
-        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
         with:
           scan-args: |-
             --config=osv-scanner.toml
@@ -85,7 +85,7 @@ jobs:
         continue-on-error: true
 
       - name: Run osv-scanner-reporter
-        uses: google/osv-scanner-action/osv-reporter-action@v2.3.8
+        uses: google/osv-scanner-action/osv-reporter-action@v2.5.0
         with:
           scan-args: |-
             --output=results.sarif
