@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-10 - docs: record August dependency updates
+
+Records five maintenance updates that were merged from Dependabot without
+modifying the bot-authored pull requests. Core now uses Jetty `12.1.12`, Swagger
+JAX-RS `2.2.53`, and Netty `4.2.17.Final`, bringing upstream fixes for HTTP and
+schema handling, TLS and buffer cleanup, compression, and memory management.
+The repository's CodeQL action is now `4.37.6` and its OSV Scanner actions are
+`2.5.0`, keeping the security workflows current. These dependency-only updates
+do not change Qortium consensus rules, chain configuration, transaction formats,
+public APIs, or runtime settings.
+
 ### 2026-08-10 - fix: refill data peers below the configured minimum
 
 The data network now treats a peer count below `minDataPeers` as degraded instead of
