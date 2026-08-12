@@ -52,6 +52,32 @@ public class ArbitraryDataFileRequestThread {
     private static int maxBatchSize() { return Settings.getInstance().getQdnMaxChunkBatchSize(); }
     private static int initialBatchSize() { return Settings.getInstance().getQdnInitialChunkBatchSize(); }
     private static final long BATCH_RAMP_UP_MS = 5000L; // Use initialBatchSize() until this many ms since fetch started
+
+    /**
+     * Caps the per-peer chunk batch size while this node is NOT caught up with the chain, so bulk QDN
+     * transfer yields bandwidth to chain sync/pings on constrained links (qdnYieldDuringSync /
+     * qdnSyncYieldBatchSize in Settings). QDN is never fully paused during catch-up, only slowed, so a
+     * user browsing QDN content while their node is still syncing still sees slow progress. Pure/static
+     * so it's directly unit-testable.
+     */
+    static int effectiveBatchSize(boolean upToDate, int desiredBatchSize, boolean yieldDuringSync, int syncYieldBatchSize) {
+        if (upToDate || !yieldDuringSync)
+            return desiredBatchSize;
+
+        return Math.min(desiredBatchSize, syncYieldBatchSize);
+    }
+
+    /**
+     * Live-wired overload of {@link #effectiveBatchSize(boolean, int, boolean, int)}: uses
+     * Controller.isUpToDate() as the authoritative "caught up" signal - the same check other
+     * components (e.g. TransactionImporter, OnlineAccountsManager) use to gate sync-sensitive
+     * behavior - together with current Settings.
+     */
+    private static int effectiveBatchSize(int desiredBatchSize) {
+        Settings settings = Settings.getInstance();
+        boolean upToDate = Controller.getInstance().isUpToDate();
+        return effectiveBatchSize(upToDate, desiredBatchSize, settings.isQdnYieldDuringSync(), settings.getQdnSyncYieldBatchSize());
+    }
     private static final long BATCH_INTERVAL_MS = 2000L;  // Interval between batches
     private static final long STALE_BATCH_TIMEOUT_MS = 300000L; // 5 minutes - remove batches that haven't completed
     private static final long SOURCE_REFRESH_INTERVAL_MS = 30_000L; // Refresh file-list discovery for stalled batches
@@ -563,7 +589,7 @@ public class ArbitraryDataFileRequestThread {
                 if (isNewBatch && batch.initialBatchSent.compareAndSet(false, true)) {
                     if (!batch.pendingChunks.isEmpty()) {
                         LOGGER.trace("Sending initial batch for signature {} with {} chunks", signature58, batch.pendingChunks.size());
-                        sendBatchForSignature(batch, initialBatchSize(), arbitraryDataFileManager, true, null);
+                        sendBatchForSignature(batch, effectiveBatchSize(initialBatchSize()), arbitraryDataFileManager, true, null);
                     } else {
                         // If no chunks yet, reset the flag so it can be sent later
                         batch.initialBatchSent.set(false);
@@ -742,7 +768,8 @@ public class ArbitraryDataFileRequestThread {
                 } else {
                     // Send incremental batch (normal operation). Use smaller batch until ramp-up period has passed.
                     int batchLimit = (elapsed >= BATCH_RAMP_UP_MS) ? maxBatchSize() : initialBatchSize();
-                    LOGGER.trace("Sending incremental batch for signature {}: limit {} chunks (elapsed {}s)", 
+                    batchLimit = effectiveBatchSize(batchLimit);
+                    LOGGER.trace("Sending incremental batch for signature {}: limit {} chunks (elapsed {}s)",
                             batch.signature58, batchLimit, elapsed / 1000);
                     ArbitraryDataFileManager dataFileManager = ArbitraryDataFileManager.getInstance();
                     sendBatchForSignature(batch, batchLimit, dataFileManager, false, connectedPeers);

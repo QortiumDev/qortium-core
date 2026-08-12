@@ -353,6 +353,17 @@ public class Settings {
 	private int peerPingTimeoutMillis = 4000;
 
 	/**
+	 * Number of CONSECUTIVE missed pings (PONG not received within {@code peerPingTimeoutMillis})
+	 * before a chain peer is disconnected as unresponsive. Defaults to 3, so ordinary nodes tolerate up
+	 * to two isolated slow/late PONGs before giving up on a peer, instead of disconnecting on the very
+	 * first one. One late PONG on a saturated link means slow, not dead: genuinely dead TCP connections
+	 * are already torn down by socket errors independently of this, and a truly unresponsive (zombie)
+	 * peer is still removed within roughly {@code peerPingFailureThreshold} ping intervals (~40s each).
+	 * Set to 1 to restore the previous instant-disconnect-on-first-miss behavior.
+	 */
+	private int peerPingFailureThreshold = 3;
+
+	/**
 	 * Ordered list of allowed network transports. Presence = enabled, order = preference (first =
 	 * preferred). A single element means that transport only — e.g. {@code [I2P]} is I2P-only (no
 	 * direct TCP at all: not bound, advertised, or dialled), {@code [IP]} is TCP-only. When absent
@@ -575,6 +586,22 @@ public class Settings {
 	 * elapsed. Defaults to the previous hard-coded 40. Must be >= {@code qdnInitialChunkBatchSize}.
 	 */
 	private int qdnMaxChunkBatchSize = 40;
+
+	/**
+	 * Whether to cap per-peer QDN chunk batch size while this node is NOT caught up with the chain, so
+	 * bulk QDN transfer yields bandwidth to chain sync/pings on constrained links. Defaults to true.
+	 * QDN downloads are never fully paused during catch-up, only slowed to {@code qdnSyncYieldBatchSize}
+	 * chunks per batch, so a user browsing QDN content while their node is still syncing still sees
+	 * slow progress rather than nothing at all.
+	 */
+	private boolean qdnYieldDuringSync = true;
+
+	/**
+	 * Effective per-peer QDN chunk batch size while {@code qdnYieldDuringSync} is true and this node is
+	 * not yet caught up with the chain. Defaults to 1. Ignored once the node is up to date, at which
+	 * point normal {@code qdnInitialChunkBatchSize}/{@code qdnMaxChunkBatchSize} batching applies.
+	 */
+	private int qdnSyncYieldBatchSize = 1;
 
 	/** Expiry time (ms) for (unencrypted) built/cached data */
 	private Long builtDataExpiryInterval = 7 * 24 * 60 * 60 * 1000L; // 7 days
@@ -1760,6 +1787,9 @@ public class Settings {
 		if (this.peerPingTimeoutMillis < 500 || this.peerPingTimeoutMillis > 60000)
 			throwValidationError("peerPingTimeoutMillis must be between 500 and 60000");
 
+		if (this.peerPingFailureThreshold < 1 || this.peerPingFailureThreshold > 10)
+			throwValidationError("peerPingFailureThreshold must be between 1 and 10");
+
 		if (this.singleBlockResponseTimeout < 1000 || this.singleBlockResponseTimeout > 600000)
 			throwValidationError("singleBlockResponseTimeout must be between 1000 and 600000");
 
@@ -1777,6 +1807,9 @@ public class Settings {
 
 		if (this.qdnMaxChunkBatchSize < this.qdnInitialChunkBatchSize)
 			throwValidationError("qdnMaxChunkBatchSize must not be less than qdnInitialChunkBatchSize");
+
+		if (this.qdnSyncYieldBatchSize < 1 || this.qdnSyncYieldBatchSize > 100)
+			throwValidationError("qdnSyncYieldBatchSize must be between 1 and 100");
 
 		if (this.maxDataPeerIdleTime != null && this.maxDataPeerConnectionTime != null
 				&& !this.maxDataPeerIdleTime.equals(this.maxDataPeerConnectionTime))
@@ -2453,6 +2486,8 @@ public class Settings {
 
 	public int getPeerPingTimeoutMillis() { return this.peerPingTimeoutMillis; }
 
+	public int getPeerPingFailureThreshold() { return this.peerPingFailureThreshold; }
+
 	public int getMaxDataPeerIdleTime() {
 		if (this.maxDataPeerIdleTime != null)
 			return this.maxDataPeerIdleTime;
@@ -2888,6 +2923,14 @@ public class Settings {
 
 	public int getQdnMaxChunkBatchSize() {
 		return this.qdnMaxChunkBatchSize;
+	}
+
+	public boolean isQdnYieldDuringSync() {
+		return this.qdnYieldDuringSync;
+	}
+
+	public int getQdnSyncYieldBatchSize() {
+		return this.qdnSyncYieldBatchSize;
 	}
 
 	public boolean isOriginalCopyIndicatorFileEnabled() {

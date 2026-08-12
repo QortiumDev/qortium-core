@@ -21,6 +21,11 @@ import static org.junit.Assert.fail;
  * qdnRequestTimeoutMillis, qdnInitialChunkBatchSize, qdnMaxChunkBatchSize, singleBlockResponseTimeout,
  * and blocksBatchResponseTimeout. Every default must match the previous hard-coded constant so ordinary
  * nodes are unaffected.
+ *
+ * Also covers the adaptive-behavior knobs added on top of that: peerPingFailureThreshold (three-strikes
+ * ping policy) and qdnYieldDuringSync / qdnSyncYieldBatchSize (chain-first QDN yielding). Unlike the
+ * knobs above, these two DEFAULTS deliberately change behavior (3 strikes instead of 1, yielding on) -
+ * that is the point of this change, so their "defaults" assertions pin the new values, not old constants.
  */
 public class LowBandwidthNetworkSettingsTests {
 
@@ -34,6 +39,48 @@ public class LowBandwidthNetworkSettingsTests {
 		assertEquals(40, settings.getQdnMaxChunkBatchSize());
 		assertEquals(4000, settings.getSingleBlockResponseTimeout());
 		assertEquals(10000, settings.getBlocksBatchResponseTimeout());
+	}
+
+	@Test
+	public void testAdaptiveBehaviorDefaults() throws Exception {
+		Settings settings = load("{}");
+
+		// Deliberate default change: three strikes instead of instant disconnect on first missed ping.
+		assertEquals(3, settings.getPeerPingFailureThreshold());
+		// Deliberate default change: QDN yields to chain sync by default.
+		assertTrue(settings.isQdnYieldDuringSync());
+		assertEquals(1, settings.getQdnSyncYieldBatchSize());
+	}
+
+	@Test
+	public void testPeerPingFailureThresholdOutOfRangeIsRejected() throws Exception {
+		assertInvalid("{\"peerPingFailureThreshold\":0}", "peerPingFailureThreshold must be between 1 and 10");
+		assertInvalid("{\"peerPingFailureThreshold\":11}", "peerPingFailureThreshold must be between 1 and 10");
+	}
+
+	@Test
+	public void testPeerPingFailureThresholdBoundaryValuesAreAccepted() throws Exception {
+		// 1 restores the previous instant-disconnect-on-first-miss behavior.
+		assertEquals(1, load("{\"peerPingFailureThreshold\":1}").getPeerPingFailureThreshold());
+		assertEquals(10, load("{\"peerPingFailureThreshold\":10}").getPeerPingFailureThreshold());
+	}
+
+	@Test
+	public void testQdnYieldDuringSyncCanBeDisabled() throws Exception {
+		Settings settings = load("{\"qdnYieldDuringSync\":false}");
+		assertEquals(false, settings.isQdnYieldDuringSync());
+	}
+
+	@Test
+	public void testQdnSyncYieldBatchSizeOutOfRangeIsRejected() throws Exception {
+		assertInvalid("{\"qdnSyncYieldBatchSize\":0}", "qdnSyncYieldBatchSize must be between 1 and 100");
+		assertInvalid("{\"qdnSyncYieldBatchSize\":101}", "qdnSyncYieldBatchSize must be between 1 and 100");
+	}
+
+	@Test
+	public void testQdnSyncYieldBatchSizeBoundaryValuesAreAccepted() throws Exception {
+		assertEquals(1, load("{\"qdnSyncYieldBatchSize\":1}").getQdnSyncYieldBatchSize());
+		assertEquals(100, load("{\"qdnSyncYieldBatchSize\":100}").getQdnSyncYieldBatchSize());
 	}
 
 	@Test

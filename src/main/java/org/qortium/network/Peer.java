@@ -170,6 +170,14 @@ public class Peer {
     private Long lastPingSent = null;
 
     /**
+     * Count of CONSECUTIVE missed pings (PONG not received within {@code peerPingTimeoutMillis}).
+     * Reset to 0 on any successful PONG. {@code PingTask} disconnects the peer once this reaches
+     * {@code Settings.getPeerPingFailureThreshold()} - see the "three strikes" rationale there: one
+     * late PONG on a saturated link means slow, not dead.
+     */
+    private final AtomicInteger consecutiveMissedPings = new AtomicInteger(0);
+
+    /**
      * Track last response of QDN assets to find nodes that have useful/maximum data
      */
     private Long lastValidUse = null;
@@ -567,6 +575,22 @@ public class Peer {
         synchronized (this.peerInfoLock) {
             this.lastPing = lastPing;
         }
+    }
+
+    /** Resets the consecutive-missed-ping counter to 0. Call on any successful PONG. */
+    public void resetMissedPings() {
+        this.consecutiveMissedPings.set(0);
+    }
+
+    /**
+     * Records a missed ping (no PONG within the timeout) and returns the new consecutive-miss count.
+     */
+    public int recordMissedPing() {
+        return this.consecutiveMissedPings.incrementAndGet();
+    }
+
+    public int getConsecutiveMissedPings() {
+        return this.consecutiveMissedPings.get();
     }
 
     protected byte[] getOurChallenge() {
