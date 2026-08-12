@@ -99,6 +99,27 @@ and block-sync requests keep retrying instead of completing. None of this
 affects consensus, block validity, or wire formats — it only changes how long
 a local node waits for a reply and how much it asks for per request.
 
+**As of this change, the node adapts to a slow link automatically, with no
+settings changes required:**
+
+- A chain peer is only disconnected after `peerPingFailureThreshold`
+  (default 3) *consecutive* missed pings, not the first one. One late PONG on
+  a saturated link means slow, not dead — genuinely dead TCP connections are
+  already torn down independently by socket errors, and a truly unresponsive
+  peer is still removed within roughly `peerPingFailureThreshold` ping
+  intervals (~40s each).
+- QDN chunk transfer automatically yields to chain sync: while the node is
+  not yet caught up with the chain, its per-peer chunk batch size is capped
+  at `qdnSyncYieldBatchSize` (default 1) instead of the normal 10-40 range.
+  QDN is never fully paused during catch-up — just slowed — so a user
+  browsing QDN content while their node is still syncing still sees slow
+  progress. Once the node is caught up, normal batching resumes.
+
+This means the settings profile below is now needed only for genuinely
+extreme links, or to further tune behavior beyond the automatic defaults; a
+node on a merely slow (rather than extremely constrained) connection may not
+need to touch settings.json at all.
+
 A complete settings.json for a constrained node:
 
 ```json
@@ -121,18 +142,21 @@ A complete settings.json for a constrained node:
   one byte-bounded response; capping this at 1 keeps each fast-sync response
   small enough to actually arrive within `blocksBatchResponseTimeout`.
 - `peerPingTimeoutMillis: 25000` — how long Core waits for a PING reply before
-  disconnecting a chain peer as unresponsive (default 4000ms). Chain pings go
-  out every ~40 seconds; a reply that is simply queued behind other traffic on
-  a slow link can easily take longer than the 4-second default, so raising
-  this stops healthy peers from being dropped as dead.
+  counting it as a missed ping (default 4000ms). Chain pings go out every ~40
+  seconds; a reply that is simply queued behind other traffic on a slow link
+  can easily take longer than the 4-second default, so raising this reduces
+  how often healthy peers even register a miss (see `peerPingFailureThreshold`
+  below for how many consecutive misses it then takes to disconnect).
 - `qdnRequestTimeoutMillis: 180000` — how long QDN keeps a file-list/chunk
   request's bookkeeping entry before treating it as expired and eligible for
   retry (default 12000ms). A single 512 KiB QDN chunk can legitimately take
   minutes on a very slow link, so this needs to be well above the default.
 - `qdnInitialChunkBatchSize: 1` and `qdnMaxChunkBatchSize: 1` — how many QDN
-  chunks are requested from a peer per batch (defaults 10 then ramping to 40).
-  Pinning both to 1 avoids requesting many chunks in parallel from a link that
-  can barely sustain one at a time.
+  chunks are requested from a peer per batch once the node is caught up with
+  the chain (defaults 10 then ramping to 40). Pinning both to 1 avoids
+  requesting many chunks in parallel from a link that can barely sustain one
+  at a time, on top of the automatic `qdnSyncYieldBatchSize` cap that already
+  applies while still syncing.
 - `singleBlockResponseTimeout: 20000` — how long slow sync waits for a single
   `GET_BLOCK` reply (default 4000ms, previously the same timeout used for
   chain pings). Raise this alongside `peerPingTimeoutMillis` so a legitimately
@@ -141,10 +165,25 @@ A complete settings.json for a constrained node:
   `GET_BLOCKS` reply (default 10000ms). With `maxBlocksPerRequest: 1` each
   response is small, but still give it a generous window on a slow link.
 
+Two further fields control the automatic adaptive behavior itself, on top of
+the timeouts/batch sizes above:
+
+- `peerPingFailureThreshold: 1` — restores the pre-adaptive instant-disconnect
+  behavior (disconnect on the very first missed ping), for an operator who
+  wants the old strict dead-peer detection instead of the new default of 3
+  consecutive misses. Valid range is 1-10.
+- `qdnYieldDuringSync: false` and `qdnSyncYieldBatchSize` — disable, or retune,
+  automatic QDN yielding during chain catch-up. `qdnYieldDuringSync` defaults
+  to `true`; `qdnSyncYieldBatchSize` defaults to 1 and accepts 1-100. Turning
+  yielding off is only useful if you specifically want full-speed QDN transfer
+  even while behind on chain sync (accepting that it will further starve chain
+  pings/sync on a constrained link) — most operators should leave this alone.
+
 Also consider temporarily setting `qdnEnabled: false` while a node is still
-catching up on initial chain sync — this stops QDN chunk transfers from
-competing with chain sync traffic for the same thin link, and can be turned
-back on once the node is caught up.
+catching up on initial chain sync, on links extreme enough that even the
+automatic `qdnSyncYieldBatchSize` cap is too much — this stops QDN chunk
+transfers entirely rather than just slowing them, and can be turned back on
+once the node is caught up.
 
 ## Privacy: What's Exposed (and What Isn't)
 
