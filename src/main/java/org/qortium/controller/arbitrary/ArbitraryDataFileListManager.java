@@ -113,7 +113,7 @@ public class ArbitraryDataFileListManager {
         if (now == null) {
             return;
         }
-        final long requestMinimumTimestamp = now - ArbitraryDataManager.ARBITRARY_REQUEST_TIMEOUT;
+        final long requestMinimumTimestamp = now - ArbitraryDataManager.getArbitraryRequestTimeout();
         arbitraryDataFileListRequests.entrySet().removeIf(entry -> entry.getValue().getC() == null || entry.getValue().getC() < requestMinimumTimestamp);
         
         // Clean up old signature request tracking entries
@@ -458,7 +458,7 @@ public class ArbitraryDataFileListManager {
         // Poll to see if data has arrived
         final long singleWait = 100;
         long totalWait = 0;
-        while (totalWait < ArbitraryDataManager.ARBITRARY_REQUEST_TIMEOUT) {
+        while (totalWait < ArbitraryDataManager.getArbitraryRequestTimeout()) {
             try {
                 Thread.sleep(singleWait);
             } catch (InterruptedException e) {
@@ -516,7 +516,7 @@ public class ArbitraryDataFileListManager {
         // Poll to see if data has arrived
         final long singleWait = 100;
         long totalWait = 0;
-        while (totalWait < ArbitraryDataManager.ARBITRARY_REQUEST_TIMEOUT) {
+        while (totalWait < ArbitraryDataManager.getArbitraryRequestTimeout()) {
             try {
                 Thread.sleep(singleWait);
             } catch (InterruptedException e) {

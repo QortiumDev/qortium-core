@@ -35,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import static org.qortium.network.Peer.FETCH_BLOCKS_TIMEOUT;
 import static org.qortium.network.Peer.SYNC_RESPONSE_TIMEOUT;
 
 public class Synchronizer extends Thread {
@@ -2289,8 +2288,10 @@ public class Synchronizer extends Thread {
 	private Block fetchBlock(Repository repository, Peer peer, byte[] signature) throws InterruptedException {
 		Message getBlockMessage = new GetBlockMessage(signature);
 
-		// Use shorter timeout for sync operations to avoid blocking transaction processing
-		Message message = peer.getResponseWithTimeout(getBlockMessage, SYNC_RESPONSE_TIMEOUT);
+		// Use a short timeout for sync operations to avoid blocking transaction processing.
+		// Configurable via singleBlockResponseTimeout (default matches SYNC_RESPONSE_TIMEOUT, 4s) so
+		// slow-link operators can widen this without touching the general sync response timeout.
+		Message message = peer.getResponseWithTimeout(getBlockMessage, Settings.getInstance().getSingleBlockResponseTimeout());
 		if (message == null) {
 			peer.getPeerData().incrementFailedSyncCount();
 			if (peer.getPeerData().getFailedSyncCount() >= MAX_CONSECUTIVE_FAILED_SYNC_ATTEMPTS) {
@@ -2321,7 +2322,10 @@ public class Synchronizer extends Thread {
         LOGGER.trace("Building GetBlocksMessage with parentSignature: {}, numberRequested: {}", parentSignature, numberRequested);
         Message getBlocksMessage = new GetBlocksMessage(parentSignature, numberRequested);
 
-        Message message = peer.getResponseWithTimeout(getBlocksMessage, FETCH_BLOCKS_TIMEOUT);
+        // Configurable via blocksBatchResponseTimeout (default matches the previous hard-coded
+        // FETCH_BLOCKS_TIMEOUT, 10s) so slow-link operators can widen the window for a byte-bounded
+        // batched response, typically alongside a reduced maxBlocksPerRequest.
+        Message message = peer.getResponseWithTimeout(getBlocksMessage, Settings.getInstance().getBlocksBatchResponseTimeout());
         if (message == null || message.getType() != MessageType.BLOCKS) {
             LOGGER.warn("Received a null BLOCKS payload from {}", peer);
             return null;

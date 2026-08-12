@@ -47,9 +47,11 @@ public class ArbitraryDataFileRequestThread {
     private static final Logger LOGGER = LogManager.getLogger(ArbitraryDataFileRequestThread.class);
 
     // Batching configuration
-    private static final int MAX_BATCH_SIZE = 40;        // Maximum chunks per batch
-    private static final int INITIAL_BATCH_SIZE = 10;    // Smaller first batch to avoid overloading bad peers
-    private static final long BATCH_RAMP_UP_MS = 5000L; // Use INITIAL_BATCH_SIZE until this many ms since fetch started
+    // Maximum/initial chunks per batch are backed by Settings (qdnMaxChunkBatchSize / qdnInitialChunkBatchSize)
+    // so slow-link operators can shrink per-peer concurrency; defaults match the previous hard-coded 40 / 10.
+    private static int maxBatchSize() { return Settings.getInstance().getQdnMaxChunkBatchSize(); }
+    private static int initialBatchSize() { return Settings.getInstance().getQdnInitialChunkBatchSize(); }
+    private static final long BATCH_RAMP_UP_MS = 5000L; // Use initialBatchSize() until this many ms since fetch started
     private static final long BATCH_INTERVAL_MS = 2000L;  // Interval between batches
     private static final long STALE_BATCH_TIMEOUT_MS = 300000L; // 5 minutes - remove batches that haven't completed
     private static final long SOURCE_REFRESH_INTERVAL_MS = 30_000L; // Refresh file-list discovery for stalled batches
@@ -561,7 +563,7 @@ public class ArbitraryDataFileRequestThread {
                 if (isNewBatch && batch.initialBatchSent.compareAndSet(false, true)) {
                     if (!batch.pendingChunks.isEmpty()) {
                         LOGGER.trace("Sending initial batch for signature {} with {} chunks", signature58, batch.pendingChunks.size());
-                        sendBatchForSignature(batch, INITIAL_BATCH_SIZE, arbitraryDataFileManager, true, null);
+                        sendBatchForSignature(batch, initialBatchSize(), arbitraryDataFileManager, true, null);
                     } else {
                         // If no chunks yet, reset the flag so it can be sent later
                         batch.initialBatchSent.set(false);
@@ -739,7 +741,7 @@ public class ArbitraryDataFileRequestThread {
                     }
                 } else {
                     // Send incremental batch (normal operation). Use smaller batch until ramp-up period has passed.
-                    int batchLimit = (elapsed >= BATCH_RAMP_UP_MS) ? MAX_BATCH_SIZE : INITIAL_BATCH_SIZE;
+                    int batchLimit = (elapsed >= BATCH_RAMP_UP_MS) ? maxBatchSize() : initialBatchSize();
                     LOGGER.trace("Sending incremental batch for signature {}: limit {} chunks (elapsed {}s)", 
                             batch.signature58, batchLimit, elapsed / 1000);
                     ArbitraryDataFileManager dataFileManager = ArbitraryDataFileManager.getInstance();

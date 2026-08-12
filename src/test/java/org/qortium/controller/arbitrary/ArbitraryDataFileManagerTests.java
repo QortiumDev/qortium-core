@@ -34,7 +34,7 @@ public class ArbitraryDataFileManagerTests {
 
 		manager.clearTriedPeersForSignature(signature58);
 		manager.arbitraryDataFileRequests.remove(hash58);
-		manager.arbitraryDataFileRequests.put(hash58, now - ArbitraryDataManager.ARBITRARY_REQUEST_TIMEOUT - 1);
+		manager.arbitraryDataFileRequests.put(hash58, now - ArbitraryDataManager.getArbitraryRequestTimeout() - 1);
 		manager.recordChunkRequested(hash58, signature58, peerAddress);
 
 		assertEquals(1, manager.getInFlightRequestCountForSignature(signature58));
