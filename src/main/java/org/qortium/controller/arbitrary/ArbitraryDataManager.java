@@ -51,8 +51,14 @@ public class ArbitraryDataManager extends Thread {
 	/** Test override for arbitrary data transaction MemoryPoW difficulty. */
 	private Integer powDifficultyOverride = null;
 
-	/** Request timeout when transferring arbitrary data */
-	public static final long ARBITRARY_REQUEST_TIMEOUT = 12 * 1000L; // ms
+	/**
+	 * Request timeout when transferring arbitrary data (ms). Backed by
+	 * {@link Settings#getQdnRequestTimeoutMillis()} so slow-link operators can widen the request
+	 * bookkeeping expiry without changing wire behaviour. Default matches the previous hard-coded 12s.
+	 */
+	public static long getArbitraryRequestTimeout() {
+		return Settings.getInstance().getQdnRequestTimeoutMillis();
+	}
 
 	/** Request timeout when fetching metadata only (shorter than full data) */
 	public static final long METADATA_REQUEST_TIMEOUT = 12 * 1000L; // ms

@@ -1008,7 +1008,7 @@ public class ArbitraryDataFileManager extends Thread {
         if (now == null) {
             return;
         }
-        final long requestMinimumTimestamp = now - ArbitraryDataManager.getInstance().ARBITRARY_REQUEST_TIMEOUT;
+        final long requestMinimumTimestamp = now - ArbitraryDataManager.getArbitraryRequestTimeout();
         // Always remove after timeout so chunk becomes re-requestable; don't block on queue state (avoids stuck IDLE)
         arbitraryDataFileRequests.entrySet().removeIf(entry -> {
             Long value = entry.getValue();

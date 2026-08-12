@@ -89,6 +89,63 @@ node, and only `["IP"]` disables I2P entirely.
 The key files hold the persistent I2P destinations for the chain and QDN/data
 networks. Keep them local to the node and do not commit them.
 
+## Low-bandwidth profile
+
+Core's default networking timeouts assume a normal broadband link. On a very
+constrained connection (tens of kbps — dial-up, a saturated satellite/cellular
+uplink, etc.) those short timeouts fire before a reply can physically arrive,
+so the node loses chain peers every 1-3 minutes ("no ping received") and QDN
+and block-sync requests keep retrying instead of completing. None of this
+affects consensus, block validity, or wire formats — it only changes how long
+a local node waits for a reply and how much it asks for per request.
+
+A complete settings.json for a constrained node:
+
+```json
+{
+  "allowedTransports": ["IP"],
+  "maxBlocksPerRequest": 1,
+  "peerPingTimeoutMillis": 25000,
+  "qdnRequestTimeoutMillis": 180000,
+  "qdnInitialChunkBatchSize": 1,
+  "qdnMaxChunkBatchSize": 1,
+  "singleBlockResponseTimeout": 20000,
+  "blocksBatchResponseTimeout": 60000
+}
+```
+
+- `allowedTransports: ["IP"]` — disables I2P. I2P's tunnel-relay overhead adds
+  further latency and jitter on top of an already-thin link, so a constrained
+  node gets the most predictable behaviour from direct TCP only.
+- `maxBlocksPerRequest: 1` — fast sync normally batches up to 100 blocks into
+  one byte-bounded response; capping this at 1 keeps each fast-sync response
+  small enough to actually arrive within `blocksBatchResponseTimeout`.
+- `peerPingTimeoutMillis: 25000` — how long Core waits for a PING reply before
+  disconnecting a chain peer as unresponsive (default 4000ms). Chain pings go
+  out every ~40 seconds; a reply that is simply queued behind other traffic on
+  a slow link can easily take longer than the 4-second default, so raising
+  this stops healthy peers from being dropped as dead.
+- `qdnRequestTimeoutMillis: 180000` — how long QDN keeps a file-list/chunk
+  request's bookkeeping entry before treating it as expired and eligible for
+  retry (default 12000ms). A single 512 KiB QDN chunk can legitimately take
+  minutes on a very slow link, so this needs to be well above the default.
+- `qdnInitialChunkBatchSize: 1` and `qdnMaxChunkBatchSize: 1` — how many QDN
+  chunks are requested from a peer per batch (defaults 10 then ramping to 40).
+  Pinning both to 1 avoids requesting many chunks in parallel from a link that
+  can barely sustain one at a time.
+- `singleBlockResponseTimeout: 20000` — how long slow sync waits for a single
+  `GET_BLOCK` reply (default 4000ms, previously the same timeout used for
+  chain pings). Raise this alongside `peerPingTimeoutMillis` so a legitimately
+  in-flight block isn't abandoned early.
+- `blocksBatchResponseTimeout: 60000` — how long fast sync waits for a batched
+  `GET_BLOCKS` reply (default 10000ms). With `maxBlocksPerRequest: 1` each
+  response is small, but still give it a generous window on a slow link.
+
+Also consider temporarily setting `qdnEnabled: false` while a node is still
+catching up on initial chain sync — this stops QDN chunk transfers from
+competing with chain sync traffic for the same thin link, and can be turned
+back on once the node is caught up.
+
 ## Privacy: What's Exposed (and What Isn't)
 
 A short summary of how I2P protects your IP address, and where it doesn't.

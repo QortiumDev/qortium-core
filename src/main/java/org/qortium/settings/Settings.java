@@ -343,6 +343,16 @@ public class Settings {
 	private Integer maxDataPeerConnectionTime = null;
 
 	/**
+	 * Maximum time (ms) to wait for a PING reply before disconnecting a chain peer as unresponsive.
+	 * Defaults to the previous hard-coded {@code SYNC_RESPONSE_TIMEOUT} (4s) used for chain pings, so
+	 * ordinary nodes are unaffected. On a slow last-mile link (tens of kbps), a PONG can legitimately
+	 * queue behind other traffic well past 4s even though the peer is alive and well; raising this to
+	 * 20-30s lets such a node keep its chain peers instead of losing them to "no ping received" every
+	 * ~40s ping interval. A ceiling still applies so a genuinely dead peer is detected in bounded time.
+	 */
+	private int peerPingTimeoutMillis = 4000;
+
+	/**
 	 * Ordered list of allowed network transports. Presence = enabled, order = preference (first =
 	 * preferred). A single element means that transport only — e.g. {@code [I2P]} is I2P-only (no
 	 * direct TCP at all: not bound, advertised, or dialled), {@code [IP]} is TCP-only. When absent
@@ -376,6 +386,21 @@ public class Settings {
 	private int maxBlocksPerRequest = 100;
 	/** Maximum number of blocks this node will serve in a single response */
 	private int maxBlocksPerResponse = 200;
+
+	/**
+	 * Maximum time (ms) to wait for a single-block (GET_BLOCK) response during slow sync. Defaults to
+	 * the previous hard-coded {@code SYNC_RESPONSE_TIMEOUT} (4s). Raise this on slow links so a block
+	 * that is legitimately still in flight isn't abandoned before it can arrive.
+	 */
+	private int singleBlockResponseTimeout = 4000;
+
+	/**
+	 * Maximum time (ms) to wait for a batched GET_BLOCKS response during fast sync. Defaults to the
+	 * previous hard-coded {@code FETCH_BLOCKS_TIMEOUT} (10s). Raise this on slow links, typically
+	 * together with a reduced {@code maxBlocksPerRequest}, so a byte-bounded batched response has time
+	 * to arrive.
+	 */
+	private int blocksBatchResponseTimeout = 10000;
 
 	/** Whether to answer peers' requests for block-archive manifests and chunks (archive distribution). */
 	private boolean archiveServingEnabled = true;
@@ -529,6 +554,27 @@ public class Settings {
 
 	/** Whether to make connections directly with peers that have the required data */
 	private boolean directDataRetrievalEnabled = true;
+
+	/**
+	 * Expiry (ms) for in-flight QDN request bookkeeping (file-list and chunk request tracking).
+	 * Defaults to the previous hard-coded 12s used by {@code ArbitraryDataManager}. On a slow link, one
+	 * 512 KiB chunk can legitimately take minutes, so a constrained node should raise this well beyond
+	 * 12s to avoid retrying requests that are simply still in flight.
+	 */
+	private int qdnRequestTimeoutMillis = 12000;
+
+	/**
+	 * Initial number of QDN chunks requested from a peer in the first batch of a transfer, before the
+	 * ramp-up window elapses. Defaults to the previous hard-coded 10. Lower this (e.g. to 1) on very
+	 * slow links to avoid overloading a low-bandwidth peer connection with parallel chunk requests.
+	 */
+	private int qdnInitialChunkBatchSize = 10;
+
+	/**
+	 * Maximum number of QDN chunks requested from a peer per batch once the ramp-up window has
+	 * elapsed. Defaults to the previous hard-coded 40. Must be >= {@code qdnInitialChunkBatchSize}.
+	 */
+	private int qdnMaxChunkBatchSize = 40;
 
 	/** Expiry time (ms) for (unencrypted) built/cached data */
 	private Long builtDataExpiryInterval = 7 * 24 * 60 * 60 * 1000L; // 7 days
@@ -1711,6 +1757,27 @@ public class Settings {
 		if (this.maxPeerConnectionTime <= this.minPeerConnectionTime)
 			throwValidationError("maxPeerConnectionTime must be greater than minPeerConnectionTime");
 
+		if (this.peerPingTimeoutMillis < 500 || this.peerPingTimeoutMillis > 60000)
+			throwValidationError("peerPingTimeoutMillis must be between 500 and 60000");
+
+		if (this.singleBlockResponseTimeout < 1000 || this.singleBlockResponseTimeout > 600000)
+			throwValidationError("singleBlockResponseTimeout must be between 1000 and 600000");
+
+		if (this.blocksBatchResponseTimeout < 1000 || this.blocksBatchResponseTimeout > 600000)
+			throwValidationError("blocksBatchResponseTimeout must be between 1000 and 600000");
+
+		if (this.qdnRequestTimeoutMillis < 3000 || this.qdnRequestTimeoutMillis > 600000)
+			throwValidationError("qdnRequestTimeoutMillis must be between 3000 and 600000");
+
+		if (this.qdnInitialChunkBatchSize < 1 || this.qdnInitialChunkBatchSize > 100)
+			throwValidationError("qdnInitialChunkBatchSize must be between 1 and 100");
+
+		if (this.qdnMaxChunkBatchSize < 1 || this.qdnMaxChunkBatchSize > 100)
+			throwValidationError("qdnMaxChunkBatchSize must be between 1 and 100");
+
+		if (this.qdnMaxChunkBatchSize < this.qdnInitialChunkBatchSize)
+			throwValidationError("qdnMaxChunkBatchSize must not be less than qdnInitialChunkBatchSize");
+
 		if (this.maxDataPeerIdleTime != null && this.maxDataPeerConnectionTime != null
 				&& !this.maxDataPeerIdleTime.equals(this.maxDataPeerConnectionTime))
 			throwValidationError("maxDataPeerIdleTime conflicts with deprecated maxDataPeerConnectionTime; configure only maxDataPeerIdleTime");
@@ -2384,6 +2451,8 @@ public class Settings {
 
 	public int getMaxPeerConnectionTime() { return this.maxPeerConnectionTime; }
 
+	public int getPeerPingTimeoutMillis() { return this.peerPingTimeoutMillis; }
+
 	public int getMaxDataPeerIdleTime() {
 		if (this.maxDataPeerIdleTime != null)
 			return this.maxDataPeerIdleTime;
@@ -2554,6 +2623,10 @@ public class Settings {
 	public int getMaxBlocksPerRequest() { return this.maxBlocksPerRequest; }
 
 	public int getMaxBlocksPerResponse() { return this.maxBlocksPerResponse; }
+
+	public int getSingleBlockResponseTimeout() { return this.singleBlockResponseTimeout; }
+
+	public int getBlocksBatchResponseTimeout() { return this.blocksBatchResponseTimeout; }
 
 	public boolean isArchiveServingEnabled() {
 		return this.archiveServingEnabled;
@@ -2803,6 +2876,18 @@ public class Settings {
 
 	public boolean isDirectDataRetrievalEnabled() {
 		return this.directDataRetrievalEnabled;
+	}
+
+	public int getQdnRequestTimeoutMillis() {
+		return this.qdnRequestTimeoutMillis;
+	}
+
+	public int getQdnInitialChunkBatchSize() {
+		return this.qdnInitialChunkBatchSize;
+	}
+
+	public int getQdnMaxChunkBatchSize() {
+		return this.qdnMaxChunkBatchSize;
 	}
 
 	public boolean isOriginalCopyIndicatorFileEnabled() {
