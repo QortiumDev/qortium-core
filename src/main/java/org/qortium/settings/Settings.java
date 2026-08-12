@@ -413,6 +413,18 @@ public class Settings {
 	 */
 	private int blocksBatchResponseTimeout = 10000;
 
+	/**
+	 * Whether a GET_BLOCKS response timeout during fast sync automatically halves the requested block
+	 * count for that peer (floor 1) and retries immediately, within the current sync session, instead of
+	 * giving up the whole round on one timeout. A successful response at a degraded count lets the next
+	 * request try double the count again (capped at {@code maxBlocksPerRequest}). This state is scoped to
+	 * a single sync attempt only - nothing persists across sessions or is stored on Peer/Settings. Only
+	 * when the minimal (count 1) request also times out does the existing failure handling apply, exactly
+	 * as before this change. Defaults to true; set false to restore the previous fixed-count, single-
+	 * attempt-per-request behavior.
+	 */
+	private boolean blocksBatchAutoDegrade = true;
+
 	/** Whether to answer peers' requests for block-archive manifests and chunks (archive distribution). */
 	private boolean archiveServingEnabled = true;
 	/** Whether to rebuild state from downloaded archive chunks using trusted fast-replay during sync.
@@ -586,6 +598,18 @@ public class Settings {
 	 * elapsed. Defaults to the previous hard-coded 40. Must be >= {@code qdnInitialChunkBatchSize}.
 	 */
 	private int qdnMaxChunkBatchSize = 40;
+
+	/**
+	 * Whether the per-peer QDN chunk batch size self-tunes via a feedback (AIMD) window instead of the
+	 * fixed time-based ramp (starts at {@code qdnInitialChunkBatchSize} for the first few seconds, then
+	 * jumps to {@code qdnMaxChunkBatchSize}). When true (default), a single shared window starts at
+	 * {@code qdnInitialChunkBatchSize} and: grows by 1 (capped at {@code qdnMaxChunkBatchSize}) after a
+	 * batch interval in which at least one requested chunk arrived and no tracked request expired; halves
+	 * (floor 1) the moment a tracked chunk request expires. This reacts to the actual link instead of
+	 * assuming a fixed ramp-up time. The {@code qdnYieldDuringSync} sync-yield cap still applies on top,
+	 * unchanged. Set false to restore the previous time-based ramp exactly.
+	 */
+	private boolean qdnAdaptiveBatching = true;
 
 	/**
 	 * Whether to cap per-peer QDN chunk batch size while this node is NOT caught up with the chain, so
@@ -2663,6 +2687,8 @@ public class Settings {
 
 	public int getBlocksBatchResponseTimeout() { return this.blocksBatchResponseTimeout; }
 
+	public boolean isBlocksBatchAutoDegrade() { return this.blocksBatchAutoDegrade; }
+
 	public boolean isArchiveServingEnabled() {
 		return this.archiveServingEnabled;
 	}
@@ -2923,6 +2949,10 @@ public class Settings {
 
 	public int getQdnMaxChunkBatchSize() {
 		return this.qdnMaxChunkBatchSize;
+	}
+
+	public boolean isQdnAdaptiveBatching() {
+		return this.qdnAdaptiveBatching;
 	}
 
 	public boolean isQdnYieldDuringSync() {

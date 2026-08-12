@@ -114,6 +114,25 @@ settings changes required:**
   QDN is never fully paused during catch-up — just slowed — so a user
   browsing QDN content while their node is still syncing still sees slow
   progress. Once the node is caught up, normal batching resumes.
+- QDN chunk batching self-tunes to the actual link instead of assuming a
+  fixed few-second ramp-up. A single feedback window starts at
+  `qdnInitialChunkBatchSize`, grows by 1 chunk after any batch interval that
+  saw at least one chunk arrive with nothing timing out, and immediately
+  halves the moment a tracked chunk request expires. A link that's actually
+  fast climbs past the old 40-chunk ceiling's ramp-up delay quickly; a link
+  that's actually slow backs off within one interval instead of hammering a
+  peer that can't keep up. The sync-yield cap above still applies on top,
+  unchanged. Controlled by `qdnAdaptiveBatching` (default true).
+- GET_BLOCKS requests during fast sync auto-degrade on a timeout instead of
+  wasting the whole 10-second round: the requested block count is halved for
+  that peer and retried immediately (down to a floor of 1), so a peer that's
+  simply slow gets a request its link can actually complete instead of
+  repeatedly missing the same oversized one. A successful response at a
+  degraded count lets the next request try double the count again, capped at
+  `maxBlocksPerRequest` — the node recovers speed as the link (or the
+  request's luck) improves. This is scoped to the current sync attempt only;
+  nothing persists across sessions. Controlled by `blocksBatchAutoDegrade`
+  (default true).
 
 This means the settings profile below is now needed only for genuinely
 extreme links, or to further tune behavior beyond the automatic defaults; a
@@ -178,6 +197,17 @@ the timeouts/batch sizes above:
   yielding off is only useful if you specifically want full-speed QDN transfer
   even while behind on chain sync (accepting that it will further starve chain
   pings/sync on a constrained link) — most operators should leave this alone.
+- `qdnAdaptiveBatching: false` — restores the previous fixed, time-based
+  chunk-batching ramp exactly (`qdnInitialChunkBatchSize` for the first 5
+  seconds of a transfer, then `qdnMaxChunkBatchSize`), instead of the
+  self-tuning feedback window described above. Only useful if you want a
+  predictable, link-independent batch size rather than one that adapts.
+- `blocksBatchAutoDegrade: false` — restores the previous fixed-count,
+  single-attempt GET_BLOCKS behavior: one request at `maxBlocksPerRequest`
+  blocks per round, and a timeout wastes the whole
+  `blocksBatchResponseTimeout` window rather than retrying smaller
+  immediately. Only useful if you'd rather tune `maxBlocksPerRequest`
+  manually than let the node auto-degrade per peer.
 
 Also consider temporarily setting `qdnEnabled: false` while a node is still
 catching up on initial chain sync, on links extreme enough that even the

@@ -26,6 +26,11 @@ import static org.junit.Assert.fail;
  * ping policy) and qdnYieldDuringSync / qdnSyncYieldBatchSize (chain-first QDN yielding). Unlike the
  * knobs above, these two DEFAULTS deliberately change behavior (3 strikes instead of 1, yielding on) -
  * that is the point of this change, so their "defaults" assertions pin the new values, not old constants.
+ *
+ * Also covers the second adaptive-networking tranche's opt-out booleans: qdnAdaptiveBatching (feedback/AIMD
+ * chunk batching, replacing the time-based ramp) and blocksBatchAutoDegrade (GET_BLOCKS auto-halving on
+ * timeout). Both default to true (a deliberate behavior change, same as the tranche above), and both can be
+ * set false to restore the exact previous fixed behavior.
  */
 public class LowBandwidthNetworkSettingsTests {
 
@@ -50,6 +55,28 @@ public class LowBandwidthNetworkSettingsTests {
 		// Deliberate default change: QDN yields to chain sync by default.
 		assertTrue(settings.isQdnYieldDuringSync());
 		assertEquals(1, settings.getQdnSyncYieldBatchSize());
+	}
+
+	@Test
+	public void testSecondTrancheDefaults() throws Exception {
+		Settings settings = load("{}");
+
+		// Deliberate default change: feedback-based (AIMD) batching replaces the time-based ramp.
+		assertTrue(settings.isQdnAdaptiveBatching());
+		// Deliberate default change: GET_BLOCKS auto-degrades on timeout instead of wasting the round.
+		assertTrue(settings.isBlocksBatchAutoDegrade());
+	}
+
+	@Test
+	public void testQdnAdaptiveBatchingCanBeDisabled() throws Exception {
+		Settings settings = load("{\"qdnAdaptiveBatching\":false}");
+		assertEquals(false, settings.isQdnAdaptiveBatching());
+	}
+
+	@Test
+	public void testBlocksBatchAutoDegradeCanBeDisabled() throws Exception {
+		Settings settings = load("{\"blocksBatchAutoDegrade\":false}");
+		assertEquals(false, settings.isBlocksBatchAutoDegrade());
 	}
 
 	@Test
