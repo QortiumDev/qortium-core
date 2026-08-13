@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(sync): allow genesis discovery before signer state exists
+
+Keeps a genesis-only node able to synchronize after it defers minting to an
+advertised higher tip. The latest peer minter may have created its self-share
+after genesis, so the local repository cannot pre-validate that tip signer yet;
+Core now retains such peers only at genesis and validates every downloaded block
+sequentially as the required account state is established. Post-genesis signer
+filtering remains unchanged, and wording now distinguishes a non-null advertised
+signature field from a cryptographically validated chain claim.
+
 ### 2026-08-13 - fix(settings): preserve watchdog disablement across rollback
 
 Keeps the legacy peer-claim watchdog explicitly disabled even when an operator
@@ -46,16 +56,17 @@ verify both the current development flag and the legacy downgrade guard.
 ### 2026-08-13 - fix(minting): defer genesis minting to a fresh higher peer
 
 Prevents a fresh or restored genesis-only node from creating a competing block
-2 when a current-version peer already advertises a recent signed higher tip.
-The node now defers locally so normal synchronization can retrieve and validate
-the established chain. Equal-height, stale, unsigned, and obsolete peer claims
-do not trigger the brake, preserving delayed launch of a genuinely new network;
-block formats and validation rules are unchanged.
+2 when a current-version peer advertises a recent higher tip with a non-null
+signature field. The claim remains unverified and only defers local minting;
+normal synchronization retrieves and sequentially validates the advertised
+chain. Equal-height, stale, missing-signature, and obsolete peer claims do not
+trigger the brake, preserving delayed launch of a genuinely new network. Block
+formats and validation rules are unchanged.
 
 ### 2026-08-13 - fix(sync): exit recovery mode when a recent peer returns
 
-Restores normal synchronization policy as soon as any recent eligible peer is
-available again. A mixed fresh-and-stale peer set previously left recovery mode
+Restores normal synchronization policy when a recent eligible peer is available
+outside the separate stale-chain catch-up state. A mixed fresh-and-stale peer set previously left recovery mode
 permanently active, continuing to relax peer-age and minting safeguards. Core
 now evaluates a separate recent-peer view, exits on the fresh peer, and removes
 stale peers from that same synchronization attempt while preserving all-stale

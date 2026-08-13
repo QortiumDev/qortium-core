@@ -46,27 +46,39 @@ public class BlockMinterTests extends Common {
 	}
 
 	@Test
-	public void testGenesisMintingDefersToFreshSignedHigherPeer() {
+	public void testGenesisMintingDefersToAdvertisedFreshHigherTip() {
 		BlockData genesis = blockAt(1, 1_000L);
 		Peer peer = peerAt(2, 2_000L, true, true);
 
-		assertTrue(BlockMinter.shouldDeferGenesisMinting(genesis, List.of(peer), 1_500L));
+		assertTrue(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis, List.of(peer), 1_500L));
 	}
 
 	@Test
 	public void testGenesisMintingDoesNotDeferToIneligibleClaims() {
 		BlockData genesis = blockAt(1, 1_000L);
 
-		assertFalse(BlockMinter.shouldDeferGenesisMinting(genesis,
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
 				List.of(peerAt(1, 2_000L, true, true)), 1_500L));
-		assertFalse(BlockMinter.shouldDeferGenesisMinting(genesis,
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
 				List.of(peerAt(2, 1_499L, true, true)), 1_500L));
-		assertFalse(BlockMinter.shouldDeferGenesisMinting(genesis,
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
 				List.of(peerAt(2, 2_000L, false, true)), 1_500L));
-		assertFalse(BlockMinter.shouldDeferGenesisMinting(genesis,
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
 				List.of(peerAt(2, 2_000L, true, false)), 1_500L));
-		assertFalse(BlockMinter.shouldDeferGenesisMinting(blockAt(2, 1_000L),
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(blockAt(2, 1_000L),
 				List.of(peerAt(3, 2_000L, true, true)), 1_500L));
+	}
+
+	@Test
+	public void testGenesisDiscoveryRetainsPeerWhoseTipMinterIsNotYetKnown() {
+		Peer peer = peerAt(2, 2_000L, true, true);
+		assertTrue("empty genesis state cannot yet recognize the advertised tip minter",
+				Controller.hasInvalidSigner.test(peer));
+
+		assertFalse("genesis synchronization must fetch the intervening blocks before judging the tip minter",
+				Synchronizer.shouldRejectPeerForInvalidTipSigner(blockAt(1, 1_000L), peer));
+		assertTrue("post-genesis synchronization keeps the normal invalid-signer prefilter",
+				Synchronizer.shouldRejectPeerForInvalidTipSigner(blockAt(2, 1_000L), peer));
 	}
 
 	private static BlockData blockAt(int height, long timestamp) {

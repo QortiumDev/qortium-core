@@ -105,7 +105,8 @@ pinned release digest, signed manifest, or explicit operator-supplied digest.
 ## Current Work Boundary
 
 T2 is the active implementation boundary. It may repair recovery-mode exit,
-defer genesis minting to a vetted fresh higher peer, and make peer-claim
+defer genesis minting when a non-misbehaving current-version peer advertises a
+recent higher tip with a non-null signature field, and make peer-claim
 orphaning a development-only explicit opt-in. It must not redesign or enable
 watchdog orphaning, alter block validity or weighting, change stale-chain
 catch-up policy, or include bootstrap, Docker, transport, API, release,

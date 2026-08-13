@@ -205,8 +205,8 @@ public class BlockMinter extends Thread {
 						// Genesis normally bypasses recent-tip checks so a deliberately delayed new network can
 						// launch block 2. That exception must not let a restored node mint beside an established,
 						// visibly live chain: defer locally and let normal synchronization validate the peer chain.
-						if (shouldDeferGenesisMinting(lastBlockData, peers, minLatestBlockTimestamp)) {
-							moderatedLog(() -> LOGGER.info("Genesis minting deferred because a current-version peer advertises a recent signed higher chain tip"));
+						if (shouldDeferGenesisMintingToAdvertisedHigherTip(lastBlockData, peers, minLatestBlockTimestamp)) {
+							moderatedLog(() -> LOGGER.info("Genesis minting deferred because a current-version peer advertises a recent higher tip with a non-null signature field"));
 							continue;
 						}
 
@@ -723,7 +723,7 @@ public class BlockMinter extends Thread {
 				.orElse(null);
 	}
 
-	/* package */ static boolean shouldDeferGenesisMinting(BlockData latestBlockData, List<Peer> peers,
+	/* package */ static boolean shouldDeferGenesisMintingToAdvertisedHigherTip(BlockData latestBlockData, List<Peer> peers,
 			long minLatestBlockTimestamp) {
 		if (latestBlockData == null || latestBlockData.getHeight() == null || latestBlockData.getHeight() != 1)
 			return false;

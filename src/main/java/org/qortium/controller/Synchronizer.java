@@ -659,10 +659,15 @@ public class Synchronizer extends Thread {
 					inferiorChainPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 		}
 
-		// Disregard peers that have a block with an invalid signer
+		// Disregard peers whose advertised tip signer is invalid in our current state. At genesis,
+		// later-chain reward shares are necessarily unknown, so keep the peer for discovery and let
+		// sequential block validation establish (or reject) that signer state while synchronizing.
+		BlockData localTipForSignerCheck = Controller.getInstance().getChainTip();
 		beforeCount = peers.size();
-		List<Peer> invalidSignerPeers = peers.stream().filter(Controller.hasInvalidSigner).collect(Collectors.toList());
-		peers.removeIf(Controller.hasInvalidSigner);
+		List<Peer> invalidSignerPeers = peers.stream()
+				.filter(peer -> shouldRejectPeerForInvalidTipSigner(localTipForSignerCheck, peer))
+				.collect(Collectors.toList());
+		peers.removeIf(peer -> shouldRejectPeerForInvalidTipSigner(localTipForSignerCheck, peer));
 		if (!invalidSignerPeers.isEmpty()) {
 			LOGGER.trace(String.format("Filtered out %d peer(s) with invalid signer: %s", invalidSignerPeers.size(),
 					invalidSignerPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
@@ -721,6 +726,13 @@ public class Synchronizer extends Thread {
 		}
 
 		return true;
+	}
+
+	/* package */ static boolean shouldRejectPeerForInvalidTipSigner(BlockData localTip, Peer peer) {
+		if (localTip != null && localTip.getHeight() != null && localTip.getHeight() == 1)
+			return false;
+
+		return Controller.hasInvalidSigner.test(peer);
 	}
 
 	public SynchronizationResult actuallySynchronize(Peer peer, boolean force) throws InterruptedException {
