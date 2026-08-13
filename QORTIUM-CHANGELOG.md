@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: start ultra-review watchdog evidence redesign
+
+Starts the separately bounded redesign of the disabled peer-claim orphaning
+experiment. This tranche will require locally anchored and validated
+alternative-block evidence before a confirmed local block can be removed, with
+adversarial and transactional tests proving that peer height and archive claims
+alone cannot authorize the action. It does not enable the mechanism in public
+profiles, change normal block validity or chain weighting, or authorize a
+release or deployment.
+
 ### 2026-08-13 - fix(sync): contain recovery and genesis fork hazards
 
 Completes the second ultra-review remediation tranche without changing block
