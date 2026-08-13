@@ -273,11 +273,14 @@ floor to port.
 
 ## Triage Worksheet
 
-**Proposed dispositions, pending owner review.** The owner records final
-decisions separately; these rows are an implementation/review starting point,
-not accepted Qortium policy.
+**Decisions recorded 2026-08-12: the owner accepted every disposition below as
+proposed.** The remaining implementation work is the two Adapt rows (verify and
+port any residual upstream query/pool deltas that Qortium's divergent code has
+not already absorbed, and review a pool-monitoring endpoint within Qortium's
+restricted API model); the Adopt rows were verified already present in the
+tree, and the Skip rows require no action.
 
-| Change | Proposed disposition | Rationale |
+| Change | Disposition (accepted) | Rationale |
 |---|---|---|
 | `00658cbf5` HSQLDB cache configuration and `/admin/dbpool` | Adapt | Qortium already carries the final cache-setting URL behavior; retain its no-JMX/debug-log form and review any pool endpoint only within Qortium's restricted API model. |
 | `249b6693a` `/data/storage/info` | Adopt | Equivalent API-key-protected endpoint and DTO already exist in `1082b1131`; only a Home bridge allowlist decision could remain. |
