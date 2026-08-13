@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - test(sync): cover recovery entry state transitions
+
+Adds explicit state-machine coverage for the recovery path that was preserved
+by the mixed-peer exit repair. Tests now prove that losing every recent peer
+first records unavailability, enters recovery only after the configured timeout,
+and leaves existing recovery state untouched when no handshaked peer exists, in
+addition to the fresh-only, stale-only, and mixed-peer exit cases.
+
 ### 2026-08-13 - fix(sync): allow genesis discovery before signer state exists
 
 Keeps a genesis-only node able to synchronize after it defers minting to an

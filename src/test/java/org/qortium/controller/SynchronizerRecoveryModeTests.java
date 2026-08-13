@@ -99,6 +99,30 @@ public class SynchronizerRecoveryModeTests extends Common {
 		assertEquals(List.of(stalePeer), selectedPeers);
 	}
 
+	@Test
+	public void testUnavailablePeersEnterRecoveryOnlyAfterTimeout() throws Exception {
+		long originalRecoveryModeTimeout = Settings.getInstance().getRecoveryModeTimeout();
+		try {
+			FieldUtils.writeField(Settings.getInstance(), "recoveryModeTimeout", 1_000L, true);
+
+			assertFalse(this.synchronizer.checkRecoveryModeForPeers(true, List.of()));
+			assertFalse((boolean) FieldUtils.readField(this.synchronizer, "peersAvailable", true));
+
+			FieldUtils.writeField(this.synchronizer, "timePeersLastAvailable", this.now - 1_001L, true);
+			assertTrue(this.synchronizer.checkRecoveryModeForPeers(true, List.of()));
+		} finally {
+			FieldUtils.writeField(Settings.getInstance(), "recoveryModeTimeout", originalRecoveryModeTimeout, true);
+		}
+	}
+
+	@Test
+	public void testNoHandshakedPeersDoNotChangeRecoveryState() throws Exception {
+		FieldUtils.writeField(this.synchronizer, "recoveryMode", true, true);
+
+		assertTrue(this.synchronizer.checkRecoveryModeForPeers(false, List.of()));
+		assertTrue(this.synchronizer.getRecoveryMode());
+	}
+
 	private Peer peerAt(int height, long timestamp) {
 		Peer peer = new CurrentVersionPeer("198.51.100." + height + ":24892");
 		peer.setChainTipData(new BlockSummaryData(height, new byte[] {(byte) height}, new byte[32], timestamp));
