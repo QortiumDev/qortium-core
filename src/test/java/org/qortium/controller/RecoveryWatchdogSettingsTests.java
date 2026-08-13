@@ -56,10 +56,12 @@ public class RecoveryWatchdogSettingsTests extends Common {
 		}) {
 			Map<String, Object> settings = readSettings(Path.of(profile));
 			assertEquals(profile, Boolean.FALSE, settings.get("developmentPeerClaimOrphaningEnabled"));
+			assertEquals(profile, Boolean.FALSE, settings.get("recoveryWatchdogEnabled"));
 		}
 
 		Map<String, Object> developmentSettings = readSettings(Path.of("testnet/settings-test.json"));
 		assertEquals(Boolean.TRUE, developmentSettings.get("developmentPeerClaimOrphaningEnabled"));
+		assertEquals(Boolean.FALSE, developmentSettings.get("recoveryWatchdogEnabled"));
 	}
 
 	private static void loadSettings(String json) throws Exception {

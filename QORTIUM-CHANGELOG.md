@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(settings): preserve watchdog disablement across rollback
+
+Keeps the legacy peer-claim watchdog explicitly disabled even when an operator
+rolls back both Core and its managed settings template. Generated runtime files
+retain the legacy `false` value while template snapshots intentionally omit that
+key, causing older merge logic to preserve the safe value as a local override
+instead of silently restoring its former default-on behavior. Profile tests now
+verify both the current development flag and the legacy downgrade guard.
+
 ### 2026-08-13 - fix(minting): defer genesis minting to a fresh higher peer
 
 Prevents a fresh or restored genesis-only node from creating a competing block
@@ -59,8 +68,8 @@ orphaning in generic or Preview configurations. The former default-on setting
 is now ignored, managed profile upgrades force its legacy value to `false` for
 downgrade safety, and all Preview templates explicitly stay disabled. The
 existing experiment remains available only through a newly named, deliberate
-test-network opt-in so its orphan-selection design can be replaced separately
-without silently discarding confirmed blocks in shipped profiles.
+local test-network opt-in so its orphan-selection design can be replaced
+separately without silently discarding confirmed blocks in public profiles.
 
 ### 2026-08-13 - docs: start ultra-review recovery containment tranche
 

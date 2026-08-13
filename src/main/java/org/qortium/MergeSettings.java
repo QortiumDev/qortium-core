@@ -104,10 +104,20 @@ public class MergeSettings {
 		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
 			merged.put("recoveryWatchdogEnabled", false);
 			result.preserved.remove("recoveryWatchdogEnabled");
+			result.removed.remove("recoveryWatchdogEnabled");
 		}
 
 		writeJsonObject(settingsPath, merged);
-		Files.copy(templatePath, snapshotPath, StandardCopyOption.REPLACE_EXISTING);
+		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
+			// Deliberately omit the legacy key from the snapshot while retaining false in the runtime
+			// file. If a complete release rollback restores an old template, the old merge algorithm
+			// then sees runtime false as a local addition and preserves it instead of restoring default-on.
+			LinkedHashMap<String, Object> safeSnapshot = new LinkedHashMap<>(template);
+			safeSnapshot.remove("recoveryWatchdogEnabled");
+			writeJsonObject(snapshotPath, safeSnapshot);
+		} else {
+			Files.copy(templatePath, snapshotPath, StandardCopyOption.REPLACE_EXISTING);
+		}
 
 		return result;
 	}

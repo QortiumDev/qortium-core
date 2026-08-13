@@ -232,7 +232,7 @@ public class Synchronizer extends Thread {
 			syncRequestPending = !success;
 		}
 
-		// Development peer-claim orphaning experiment (paced). Disabled in shipped profiles;
+		// Development peer-claim orphaning experiment (paced). Disabled in shipped public profiles;
 		// retained only for explicit multi-node test-network investigation before T3 redesign.
 		// Wrapped defensively so a watchdog fault can never terminate the synchronizer.
 		if (!isSynchronizing && System.currentTimeMillis() - lastWatchdogCheckTimestamp >= WATCHDOG_CHECK_INTERVAL) {
