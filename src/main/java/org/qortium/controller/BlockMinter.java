@@ -202,6 +202,14 @@ public class BlockMinter extends Thread {
 						if (peers.size() < Settings.getInstance().getMinBlockchainPeers())
 							continue;
 
+						// Genesis normally bypasses recent-tip checks so a deliberately delayed new network can
+						// launch block 2. That exception must not let a restored node mint beside an established,
+						// visibly live chain: defer locally and let normal synchronization validate the peer chain.
+						if (shouldDeferGenesisMintingToAdvertisedHigherTip(lastBlockData, peers, minLatestBlockTimestamp)) {
+							moderatedLog(() -> LOGGER.info("Genesis minting deferred because a current-version peer advertises a recent higher tip with a non-null signature field"));
+							continue;
+						}
+
 						Peer betterStaleCatchUpPeer = staleChainCatchUpActive ? getBetterStaleCatchUpPeer(lastBlockData, peers) : null;
 						if (betterStaleCatchUpPeer != null) {
 							final BlockSummaryData betterPeerChainTipData = betterStaleCatchUpPeer.getChainTipData();
@@ -713,6 +721,30 @@ public class BlockMinter extends Thread {
 				.filter(peer -> Controller.isPeerHeightAheadOf(latestBlockData, peer.getChainTipData()))
 				.max((left, right) -> Controller.compareChainTipsByHeightThenTimestamp(left.getChainTipData(), right.getChainTipData()))
 				.orElse(null);
+	}
+
+	/* package */ static boolean shouldDeferGenesisMintingToAdvertisedHigherTip(BlockData latestBlockData, List<Peer> peers,
+			long minLatestBlockTimestamp) {
+		if (latestBlockData == null || latestBlockData.getHeight() == null || latestBlockData.getHeight() != 1)
+			return false;
+
+		// The caller has already removed recently misbehaving peers. Do not require locally-known
+		// reward-share eligibility here: at genesis, this repository cannot know a minter created later
+		// on the established chain. This is a local minting brake; synchronization still validates data.
+		for (Peer peer : peers) {
+			if (Controller.hasOldVersion.test(peer))
+				continue;
+
+			BlockSummaryData peerTip = peer.getChainTipData();
+			if (peerTip == null || peerTip.getSignature() == null || peerTip.getTimestamp() == null)
+				continue;
+			if (peerTip.getTimestamp() < minLatestBlockTimestamp)
+				continue;
+			if (Controller.isPeerHeightAheadOf(latestBlockData, peerTip))
+				return true;
+		}
+
+		return false;
 	}
 
 	private static void moderatedLog(Runnable logFunction) {

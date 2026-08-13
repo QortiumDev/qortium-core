@@ -19,8 +19,15 @@ public class RecoveryWatchdogTests {
 
 	private static RecoveryWatchdogAction decide(boolean stale, int higherPeers, boolean activeEpisode,
 			long stuckSince, long lastOrphan, int orphanCount) {
-		return Synchronizer.decideRecoveryWatchdogAction(stale, higherPeers, activeEpisode,
+		return Synchronizer.decideRecoveryWatchdogAction(true, stale, higherPeers, activeEpisode,
 				NOW, stuckSince, lastOrphan, orphanCount, MIN_PEERS, THRESHOLD, COOLDOWN, CEILING);
+	}
+
+	@Test
+	public void testDisabledExperimentCannotOrphan() {
+		assertEquals(RecoveryWatchdogAction.NONE,
+				Synchronizer.decideRecoveryWatchdogAction(false, true, MIN_PEERS, true,
+						NOW, NOW - THRESHOLD, 0L, 0, MIN_PEERS, THRESHOLD, COOLDOWN, CEILING));
 	}
 
 	@Test

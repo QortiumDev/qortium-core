@@ -100,18 +100,18 @@ public class Synchronizer extends Thread {
 	 */
 	private static final long SYNC_HEARTBEAT_INTERVAL = 60 * 1000L;
 
-	/** Fork-recovery watchdog (Tier 3): how often, at most, the watchdog evaluates, inside the 1s run-loop. */
+	/** Development peer-claim experiment: how often, at most, it evaluates inside the 1s run-loop. */
 	private static final long WATCHDOG_CHECK_INTERVAL = 30 * 1000L;
-	/** Fork-recovery watchdog: minimum number of distinct fresh, healthy, strictly-higher peers required to act. */
+	/** Development peer-claim experiment: minimum distinct fresh, healthy, strictly-higher peers required. */
 	private static final int RECOVERY_WATCHDOG_MIN_PEERS = 2;
 	/**
-	 * Fork-recovery watchdog: absolute ceiling on how many of our own tip blocks the watchdog will
+	 * Development peer-claim experiment: absolute ceiling on how many confirmed local tip blocks it will
 	 * discard within one stuck episode (no intervening forward progress). Guarantees the watchdog can
 	 * never approach MAXIMUM_COMMON_DELTA and can never become a deep-reorg tool.
 	 */
 	private static final int RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING = 3;
 
-	/** Fork-recovery watchdog state (all touched only on the Synchronizer thread). */
+	/** Development peer-claim experiment state (all touched only on the Synchronizer thread). */
 	private long lastWatchdogCheckTimestamp = 0L;          // System.currentTimeMillis() pacing
 	private long watchdogStuckSince = 0L;                  // NTP time the current stuck episode began; 0 = not stuck
 	private byte[] watchdogStuckTipSignature = null;       // our tip sig the episode is keyed to
@@ -205,7 +205,7 @@ public class Synchronizer extends Thread {
 		}
 	}
 
-	/** One synchronizer cycle: re-arm sync if needed, attempt it, then run the fork-recovery watchdog. */
+	/** One synchronizer cycle: re-arm sync if needed, attempt it, then evaluate the development experiment. */
 	private void runSyncCycle() throws InterruptedException {
 		// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
 		// no sync is already requested/pending/running. This guarantees the node keeps
@@ -232,15 +232,15 @@ public class Synchronizer extends Thread {
 			syncRequestPending = !success;
 		}
 
-		// Fork-recovery watchdog (paced): detect a stale tip wedged behind a fresh higher
-		// peer quorum and auto-orphan our short top fork so normal sync can adopt the chain.
+		// Development peer-claim orphaning experiment (paced). Disabled in shipped public profiles;
+		// retained only for explicit multi-node test-network investigation before T3 redesign.
 		// Wrapped defensively so a watchdog fault can never terminate the synchronizer.
 		if (!isSynchronizing && System.currentTimeMillis() - lastWatchdogCheckTimestamp >= WATCHDOG_CHECK_INTERVAL) {
 			lastWatchdogCheckTimestamp = System.currentTimeMillis();
 			try {
-				checkStuckSelfMintedFork();
+				checkDevelopmentPeerClaimOrphaning();
 			} catch (Exception e) {
-				LOGGER.warn("Fork-recovery watchdog check failed: {}", e.getMessage());
+				LOGGER.warn("Development peer-claim orphaning check failed: {}", e.getMessage());
 			}
 		}
 	}
@@ -250,7 +250,7 @@ public class Synchronizer extends Thread {
 		this.interrupt();
 	}
 
-	/** Outcome of the Tier-3 fork-recovery watchdog gate logic (see {@link #decideRecoveryWatchdogAction}). */
+	/** Outcome of the development peer-claim orphaning gates (see {@link #decideRecoveryWatchdogAction}). */
 	/* package */ enum RecoveryWatchdogAction {
 		/** Not wedged behind a live network (not stale, or no fresh higher-peer quorum) — clear stuck state. */
 		NONE,
@@ -258,12 +258,12 @@ public class Synchronizer extends Thread {
 		ARM,
 		/** Stuck, but the sustained-duration / cooldown / orphan-ceiling gates are not all satisfied yet. */
 		WAIT,
-		/** All gates satisfied — orphan one of our own top blocks and request a sync. */
+		/** All gates satisfied — orphan one confirmed local tip block and request a sync. */
 		ORPHAN
 	}
 
 	/**
-	 * Pure decision function for the fork-recovery watchdog gates, factored out for unit testing
+	 * Pure decision function for the development peer-claim orphaning gates, factored out for unit testing
 	 * (no chain / network / NTP access). Given the observed condition and the watchdog's timers,
 	 * returns what the watchdog should do this tick. The caller performs the side effects.
 	 *
@@ -280,9 +280,12 @@ public class Synchronizer extends Thread {
 	 * @param maxOrphanCeiling       hard cap on orphans per stuck episode
 	 */
 	/* package */ static RecoveryWatchdogAction decideRecoveryWatchdogAction(
-			boolean ourTipStale, int higherPeerCount, boolean haveActiveEpisodeForTip,
+			boolean enabled, boolean ourTipStale, int higherPeerCount, boolean haveActiveEpisodeForTip,
 			long now, long watchdogStuckSince, long lastWatchdogOrphanTimestamp, int watchdogOrphanCount,
 			int minPeers, long stuckThresholdMillis, long cooldownMillis, int maxOrphanCeiling) {
+
+		if (!enabled)
+			return RecoveryWatchdogAction.NONE;
 
 		// Only act when we are stale AND behind a quorum of fresh higher peers.
 		if (!ourTipStale || higherPeerCount < minPeers)
@@ -300,7 +303,7 @@ public class Synchronizer extends Thread {
 		if (lastWatchdogOrphanTimestamp != 0L && now - lastWatchdogOrphanTimestamp < cooldownMillis)
 			return RecoveryWatchdogAction.WAIT;
 
-		// Hard ceiling on own-block orphans per stuck episode.
+		// Hard ceiling on local-tip orphans per stuck episode.
 		if (watchdogOrphanCount >= maxOrphanCeiling)
 			return RecoveryWatchdogAction.WAIT;
 
@@ -308,13 +311,13 @@ public class Synchronizer extends Thread {
 	}
 
 	/**
-	 * Tier 3 fork-recovery watchdog.
+	 * Development-only peer-claim orphaning experiment.
 	 *
 	 * Detects the narrow "wedged behind a live network" state — our chain tip is STALE (we are
 	 * behind), a quorum of fresh, healthy, strictly-higher peers exists, and normal synchronization
-	 * has been unable to advance us for a sustained period (e.g. we minted a short fork that wins the
+	 * has been unable to advance us for a sustained period (e.g. a short local fork wins the
 	 * 1-block weight comparison, so sync refuses the longer network chain) — and recovers by
-	 * orphaning a single one of our own top blocks back toward the common block, then requesting a
+	 * orphaning a single confirmed local tip block back toward the common block, then requesting a
 	 * sync. Normal, fully-validated synchronization (preProcess()+isValid()) then adopts the network
 	 * chain; this method NEVER imports peer blocks and NEVER force-syncs.
 	 *
@@ -328,8 +331,8 @@ public class Synchronizer extends Thread {
 	 * instead" gate plus Tier 2 (no stale-catch-up mint while a fresh higher peer exists) keep
 	 * minting OFF afterwards, so the node syncs rather than re-minting the fork.
 	 */
-	private void checkStuckSelfMintedFork() throws DataException {
-		if (!Settings.getInstance().isRecoveryWatchdogEnabled())
+	private void checkDevelopmentPeerClaimOrphaning() throws DataException {
+		if (!Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled())
 			return;
 
 		final Long now = NTP.getTime();
@@ -354,7 +357,7 @@ public class Synchronizer extends Thread {
 				watchdogStuckSince != 0L && Arrays.equals(watchdogStuckTipSignature, tip.getSignature());
 
 		final RecoveryWatchdogAction action = decideRecoveryWatchdogAction(
-				ourTipStale, higherPeerCount, haveActiveEpisodeForTip,
+				true, ourTipStale, higherPeerCount, haveActiveEpisodeForTip,
 				now, watchdogStuckSince, lastWatchdogOrphanTimestamp, watchdogOrphanCount,
 				RECOVERY_WATCHDOG_MIN_PEERS,
 				Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis(),
@@ -375,7 +378,7 @@ public class Synchronizer extends Thread {
 				}
 				watchdogStuckSince = now;
 				watchdogStuckTipSignature = tip.getSignature();
-				LOGGER.info("Fork-recovery watchdog: stale tip at height {} behind {} fresh higher peer(s); will recover if it persists {}s",
+				LOGGER.info("Development peer-claim orphaning: stale tip at height {} behind {} fresh higher peer(s); will act if it persists {}s",
 						tip.getHeight(), higherPeerCount, Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis() / 1000);
 				return;
 
@@ -403,7 +406,7 @@ public class Synchronizer extends Thread {
 			try (final Repository repository = RepositoryManager.getRepository()) {
 				int oldestBlock = repository.getBlockArchiveRepository().getBlockArchiveHeight() + 100;
 				if (targetHeight <= oldestBlock) {
-					LOGGER.warn("Fork-recovery watchdog: not orphaning to {} because it is at/below the archive floor {}", targetHeight, oldestBlock);
+					LOGGER.warn("Development peer-claim orphaning: not orphaning to {} because it is at/below the archive floor {}", targetHeight, oldestBlock);
 					resetWatchdogStuckState();
 					return;
 				}
@@ -416,19 +419,19 @@ public class Synchronizer extends Thread {
 		int nextBlockHeight = targetHeight + 1;
 		int bodyServingPeers = countFreshHigherPeersServingBlock(targetHeight, nextBlockHeight);
 		if (bodyServingPeers < RECOVERY_WATCHDOG_MIN_PEERS) {
-			LOGGER.warn("Fork-recovery watchdog: not orphaning to {} because only {} fresh higher peer(s) can serve block {} via normal sync",
+			LOGGER.warn("Development peer-claim orphaning: not orphaning to {} because only {} fresh higher peer(s) can serve block {} via normal sync",
 					targetHeight, bodyServingPeers, nextBlockHeight);
 			resetWatchdogStuckState();
 			return;
 		}
 
-		// Discard only our own top block back to the common height; BlockChain.orphan uses a
+		// Discard only the confirmed local tip block back to the common height; BlockChain.orphan uses a
 		// non-blocking tryLock and returns false if minting/sync holds the blockchain lock.
 		boolean orphaned = BlockChain.orphan(targetHeight);
 		if (!orphaned)
 			return; // lock busy — retry next paced tick (stuck condition persists)
 
-		LOGGER.info("Fork-recovery watchdog: orphaned our stale block {} back to height {} (behind {} fresh higher peer(s), stuck {}s); requesting sync to adopt the network chain",
+		LOGGER.info("Development peer-claim orphaning: orphaned stale local block {} back to height {} (behind {} fresh higher peer(s), stuck {}s); requesting sync",
 				freshTip.getHeight(), targetHeight, higherPeerCount, (now - watchdogStuckSince) / 1000);
 
 		watchdogOrphanCount++;
@@ -606,7 +609,7 @@ public class Synchronizer extends Thread {
 						noRecentBlockPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 			}
 
-			if (this.checkRecoveryModeForPeers(peers)) {
+			if (this.checkRecoveryModeForPeers(initialPeerCount > 0, peers)) {
 				peers = peersBeforeRecentFilter;
 				enteredRecoveryFromStalePeers = true;
 				LOGGER.debug("Recovery mode active; allowing peers with older chain tips for synchronization");
@@ -627,8 +630,7 @@ public class Synchronizer extends Thread {
 		}
 
 		if (!enteredRecoveryFromStalePeers && !staleChainCatchUpActive) {
-			if (!this.recoveryMode || peers.stream().noneMatch(Controller.hasNoRecentBlock))
-				checkRecoveryModeForPeers(peers);
+			peers = this.applyRecoveryModePeerPolicy(initialPeerCount > 0, peers);
 		}
 
 		// Check we have enough peers to potentially synchronize
@@ -657,10 +659,15 @@ public class Synchronizer extends Thread {
 					inferiorChainPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 		}
 
-		// Disregard peers that have a block with an invalid signer
+		// Disregard peers whose advertised tip signer is invalid in our current state. At genesis,
+		// later-chain reward shares are necessarily unknown, so keep the peer for discovery and let
+		// sequential block validation establish (or reject) that signer state while synchronizing.
+		BlockData localTipForSignerCheck = Controller.getInstance().getChainTip();
 		beforeCount = peers.size();
-		List<Peer> invalidSignerPeers = peers.stream().filter(Controller.hasInvalidSigner).collect(Collectors.toList());
-		peers.removeIf(Controller.hasInvalidSigner);
+		List<Peer> invalidSignerPeers = peers.stream()
+				.filter(peer -> shouldRejectPeerForInvalidTipSigner(localTipForSignerCheck, peer))
+				.collect(Collectors.toList());
+		peers.removeIf(peer -> shouldRejectPeerForInvalidTipSigner(localTipForSignerCheck, peer));
 		if (!invalidSignerPeers.isEmpty()) {
 			LOGGER.trace(String.format("Filtered out %d peer(s) with invalid signer: %s", invalidSignerPeers.size(),
 					invalidSignerPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
@@ -719,6 +726,13 @@ public class Synchronizer extends Thread {
 		}
 
 		return true;
+	}
+
+	/* package */ static boolean shouldRejectPeerForInvalidTipSigner(BlockData localTip, Peer peer) {
+		if (localTip != null && localTip.getHeight() != null && localTip.getHeight() == 1)
+			return false;
+
+		return Controller.hasInvalidSigner.test(peer);
 	}
 
 	public SynchronizationResult actuallySynchronize(Peer peer, boolean force) throws InterruptedException {
@@ -871,10 +885,18 @@ public class Synchronizer extends Thread {
 		return (int) Math.min(100, (boundedHeight * 100L) / targetHeight);
 	}
 
-	private boolean checkRecoveryModeForPeers(List<Peer> qualifiedPeers) {
-		List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
+	/* package */ List<Peer> applyRecoveryModePeerPolicy(boolean haveHandshakedPeers, List<Peer> peers) {
+		List<Peer> recentPeers = peers.stream()
+				.filter(Controller.hasNoRecentBlock.negate())
+				.collect(Collectors.toList());
 
-		if (!handshakedPeers.isEmpty()) {
+		// If recovery remains active, retain the all-age peer set. As soon as one recent peer returns,
+		// exit recovery and restore the normal recent-only set in this same synchronization attempt.
+		return checkRecoveryModeForPeers(haveHandshakedPeers, recentPeers) ? peers : recentPeers;
+	}
+
+	/* package */ boolean checkRecoveryModeForPeers(boolean haveHandshakedPeers, List<Peer> qualifiedPeers) {
+		if (haveHandshakedPeers) {
 			// There is at least one handshaked peer
 			if (qualifiedPeers.isEmpty()) {
 				// There are no 'qualified' peers - i.e. peers that have a recent block we can sync to

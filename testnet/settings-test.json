@@ -39,6 +39,8 @@
   "bootstrap": false,
   "maxPeerConnectionTime": 999999999,
   "recoveryModeTimeout": 0,
+  "developmentPeerClaimOrphaningEnabled": true,
+  "recoveryWatchdogEnabled": false,
   "uiLocalServers": [
     "localhost",
     "127.0.0.1",

@@ -3,6 +3,8 @@ package org.qortium.controller;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Test;
+import org.qortium.block.Block;
+import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
 import org.qortium.data.block.CommonBlockData;
 import org.qortium.data.network.PeerData;
@@ -16,6 +18,7 @@ import java.math.BigInteger;
 import java.util.List;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class BlockMinterTests extends Common {
 
@@ -42,6 +45,54 @@ public class BlockMinterTests extends Common {
 		assertFalse(result);
 	}
 
+	@Test
+	public void testGenesisMintingDefersToAdvertisedFreshHigherTip() {
+		BlockData genesis = blockAt(1, 1_000L);
+		Peer peer = peerAt(2, 2_000L, true, true);
+
+		assertTrue(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis, List.of(peer), 1_500L));
+	}
+
+	@Test
+	public void testGenesisMintingDoesNotDeferToIneligibleClaims() {
+		BlockData genesis = blockAt(1, 1_000L);
+
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
+				List.of(peerAt(1, 2_000L, true, true)), 1_500L));
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
+				List.of(peerAt(2, 1_499L, true, true)), 1_500L));
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
+				List.of(peerAt(2, 2_000L, false, true)), 1_500L));
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(genesis,
+				List.of(peerAt(2, 2_000L, true, false)), 1_500L));
+		assertFalse(BlockMinter.shouldDeferGenesisMintingToAdvertisedHigherTip(blockAt(2, 1_000L),
+				List.of(peerAt(3, 2_000L, true, true)), 1_500L));
+	}
+
+	@Test
+	public void testGenesisDiscoveryRetainsPeerWhoseTipMinterIsNotYetKnown() {
+		Peer peer = peerAt(2, 2_000L, true, true);
+		assertTrue("empty genesis state cannot yet recognize the advertised tip minter",
+				Controller.hasInvalidSigner.test(peer));
+
+		assertFalse("genesis synchronization must fetch the intervening blocks before judging the tip minter",
+				Synchronizer.shouldRejectPeerForInvalidTipSigner(blockAt(1, 1_000L), peer));
+		assertTrue("post-genesis synchronization keeps the normal invalid-signer prefilter",
+				Synchronizer.shouldRejectPeerForInvalidTipSigner(blockAt(2, 1_000L), peer));
+	}
+
+	private static BlockData blockAt(int height, long timestamp) {
+		return new BlockData(Block.CURRENT_VERSION, new byte[128], 0, 0L, new byte[64], height, timestamp,
+				new byte[32], new byte[64], 0, 0L);
+	}
+
+	private static Peer peerAt(int height, long timestamp, boolean signed, boolean currentVersion) {
+		Peer peer = new VersionedPeer("198.51.100." + height + ":24892", currentVersion);
+		peer.setChainTipData(new BlockSummaryData(height, signed ? new byte[] {(byte) height} : null,
+				new byte[32], timestamp));
+		return peer;
+	}
+
 	private static class ClearingCommonBlockPeer extends Peer {
 		private CommonBlockData commonBlockData;
 
@@ -55,6 +106,20 @@ public class BlockMinterTests extends Common {
 			CommonBlockData currentCommonBlockData = this.commonBlockData;
 			this.commonBlockData = null;
 			return currentCommonBlockData;
+		}
+	}
+
+	private static final class VersionedPeer extends Peer {
+		private final boolean currentVersion;
+
+		private VersionedPeer(String address, boolean currentVersion) {
+			super(new PeerData(PeerAddress.fromString(address)), Peer.NETWORK);
+			this.currentVersion = currentVersion;
+		}
+
+		@Override
+		public boolean isAtLeastVersion(String minVersionString) {
+			return this.currentVersion;
 		}
 	}
 }

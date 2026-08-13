@@ -34,6 +34,82 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(sync): contain recovery and genesis fork hazards
+
+Completes the second ultra-review remediation tranche without changing block
+validity or chain weighting. Peer-claim orphaning is now disabled in public
+profiles and confined to an explicit test-network experiment, including safe
+managed-settings rollback; recovery mode exits as soon as a recent peer returns
+outside stale-chain catch-up; and a genesis-only node defers competing block-2
+minting while remaining able to discover and sequentially validate a live
+higher chain. The advertised peer tip remains unverified, so the watchdog's
+evidence model is still scheduled for redesign rather than treated as trusted.
+
+### 2026-08-13 - test(sync): cover recovery entry state transitions
+
+Adds explicit state-machine coverage for the recovery path that was preserved
+by the mixed-peer exit repair. Tests now prove that losing every recent peer
+first records unavailability, enters recovery only after the configured timeout,
+and leaves existing recovery state untouched when no handshaked peer exists, in
+addition to the fresh-only, stale-only, and mixed-peer exit cases.
+
+### 2026-08-13 - fix(sync): allow genesis discovery before signer state exists
+
+Keeps a genesis-only node able to synchronize after it defers minting to an
+advertised higher tip. The latest peer minter may have created its self-share
+after genesis, so the local repository cannot pre-validate that tip signer yet;
+Core now retains such peers only at genesis and validates every downloaded block
+sequentially as the required account state is established. Post-genesis signer
+filtering remains unchanged, and wording now distinguishes a non-null advertised
+signature field from a cryptographically validated chain claim.
+
+### 2026-08-13 - fix(settings): preserve watchdog disablement across rollback
+
+Keeps the legacy peer-claim watchdog explicitly disabled even when an operator
+rolls back both Core and its managed settings template. Generated runtime files
+retain the legacy `false` value while template snapshots intentionally omit that
+key, causing older merge logic to preserve the safe value as a local override
+instead of silently restoring its former default-on behavior. Profile tests now
+verify both the current development flag and the legacy downgrade guard.
+
+### 2026-08-13 - fix(minting): defer genesis minting to a fresh higher peer
+
+Prevents a fresh or restored genesis-only node from creating a competing block
+2 when a current-version peer advertises a recent higher tip with a non-null
+signature field. The claim remains unverified and only defers local minting;
+normal synchronization retrieves and sequentially validates the advertised
+chain. Equal-height, stale, missing-signature, and obsolete peer claims do not
+trigger the brake, preserving delayed launch of a genuinely new network. Block
+formats and validation rules are unchanged.
+
+### 2026-08-13 - fix(sync): exit recovery mode when a recent peer returns
+
+Restores normal synchronization policy when a recent eligible peer is available
+outside the separate stale-chain catch-up state. A mixed fresh-and-stale peer set
+previously left recovery mode permanently active, continuing to relax peer-age
+and minting safeguards. Core now evaluates a separate recent-peer view, exits on
+the fresh peer, and removes stale peers from that same synchronization attempt
+while preserving all-stale recovery and the separate stale-chain catch-up path.
+
+### 2026-08-13 - security(sync): disable peer-claim recovery watchdog by default
+
+Stops peer-advertised height and archive claims from authorizing automatic
+orphaning in generic or Preview configurations. The former default-on setting
+is now ignored, managed profile upgrades force its legacy value to `false` for
+downgrade safety, and all Preview templates explicitly stay disabled. The
+existing experiment remains available only through a newly named, deliberate
+local test-network opt-in so its orphan-selection design can be replaced
+separately without silently discarding confirmed blocks in public profiles.
+
+### 2026-08-13 - docs: start ultra-review recovery containment tranche
+
+Advances the tracked Core review work to its second bounded tranche after the
+first consensus repair was accepted. This tranche is limited to restoring
+normal recovery-mode exit when a recent peer returns, preventing a genesis-only
+node from minting beside a live higher chain, and making peer-claim orphaning an
+explicit development-only opt-in. It does not redesign orphaning, change block
+validity or chain weighting, or authorize a release or deployment.
+
 ### 2026-08-13 - fix(at): use local height for chain-query activation gates
 
 Makes the three AT chain-query activation checks follow the block height Core
