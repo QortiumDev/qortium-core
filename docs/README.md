@@ -25,6 +25,7 @@ history.
 ## Development And Operations
 
 - `Developer reference` [Database inspection](development/database.md) - local HSQLDB inspection notes
+- `Planning note` [Ultra review remediation plan](development/ultra-review-remediation-plan.md) - tracked dispositions, tranches, and acceptance evidence for the 2026-08 Core review
 - `Developer reference` [Notification WebSocket](development/notifications.md) - event filters, payloads, and foreign-payment watch lifecycle
 - `Developer reference` [I2P fallback operator guide](networking/i2p-fallback-operator-guide.md) - standalone Core setup and verification for optional i2pd fallback
 - `Developer reference` [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow

@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: track ultra-review remediation plan
+
+Records the independently verified 2026-08 Core review as a durable execution
+plan instead of leaving the findings in a private review transcript. The plan
+preserves all fifteen capped findings and seven lower-severity items, corrects
+the public-write path claim that does not reproduce against the shipped handler
+chain, groups the accepted work into small dependency-aware tranches, and sets
+explicit tests and review gates before any item can be marked complete. The
+first authorized tranche is limited to the AT chain-query activation-height
+consensus repair; later recovery, bootstrap, transport, networking, repository,
+Docker, and configuration work remains planned or decision-gated.
+
 ### 2026-08-12 - feat: add the API-key-protected /admin/dbpool endpoint
 
 Completes the accepted Qortal 6.1.9 triage worksheet. Node operators who
