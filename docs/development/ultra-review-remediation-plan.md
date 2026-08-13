@@ -38,7 +38,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | Tranche | Scope | Status | Dependencies | Acceptance evidence |
 | --- | --- | --- | --- | --- |
 | T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | Complete | None | `fix(at): use local height for chain-query activation gates`; adversarial red test failed 2/2 before the repair; focused tests passed 29/29; full suite passed 3,004 with 68 skips; independent Codex review passed |
-| T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Planned | T1 accepted and committed | State-transition, genesis-height minting-policy, and watchdog default/profile tests; coordinated rollout and live-height verification remain a release condition |
+| T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | In progress | T1 accepted and committed | State-transition, genesis-height minting-policy, and watchdog default/profile tests; coordinated rollout and live-height verification remain a release condition |
 | T3 | Redesign watchdog orphaning around validated, locally anchored alternative-block evidence. | Planned | T2 containment | Adversarial peer-claim tests and transactional orphan/adoption tests |
 | T4 | Make bootstrap acquisition and repository replacement fail-safe. | Planned | Operator trust/provenance decision | HTTPS/provenance, digest, truncation, staging, validation, rollback tests |
 | T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Planned | Decide whether generic Docker targets no network or explicit Previewnet | Cross-profile and container configuration invariants |
@@ -104,6 +104,9 @@ pinned release digest, signed manifest, or explicit operator-supplied digest.
 
 ## Current Work Boundary
 
-Only T1 is authorized in the first implementation tranche. No recovery,
-bootstrap, Docker, networking, API, testnet, release, deployment, or publication
-changes are part of T1.
+T2 is the active implementation boundary. It may repair recovery-mode exit,
+defer genesis minting to a vetted fresh higher peer, and make peer-claim
+orphaning a development-only explicit opt-in. It must not redesign or enable
+watchdog orphaning, alter block validity or weighting, change stale-chain
+catch-up policy, or include bootstrap, Docker, transport, API, release,
+deployment, or publication changes.

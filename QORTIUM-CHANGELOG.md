@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: start ultra-review recovery containment tranche
+
+Advances the tracked Core review work to its second bounded tranche after the
+first consensus repair was accepted. This tranche is limited to restoring
+normal recovery-mode exit when a recent peer returns, preventing a genesis-only
+node from minting beside a live higher chain, and making peer-claim orphaning an
+explicit development-only opt-in. It does not redesign orphaning, change block
+validity or chain weighting, or authorize a release or deployment.
+
 ### 2026-08-13 - fix(at): use local height for chain-query activation gates
 
 Makes the three AT chain-query activation checks follow the block height Core
