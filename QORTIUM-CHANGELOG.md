@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(sync): contain recovery and genesis fork hazards
+
+Completes the second ultra-review remediation tranche without changing block
+validity or chain weighting. Peer-claim orphaning is now disabled in public
+profiles and confined to an explicit test-network experiment, including safe
+managed-settings rollback; recovery mode exits as soon as a recent peer returns
+outside stale-chain catch-up; and a genesis-only node defers competing block-2
+minting while remaining able to discover and sequentially validate a live
+higher chain. The advertised peer tip remains unverified, so the watchdog's
+evidence model is still scheduled for redesign rather than treated as trusted.
+
 ### 2026-08-13 - test(sync): cover recovery entry state transitions
 
 Adds explicit state-machine coverage for the recovery path that was preserved
@@ -74,11 +85,11 @@ formats and validation rules are unchanged.
 ### 2026-08-13 - fix(sync): exit recovery mode when a recent peer returns
 
 Restores normal synchronization policy when a recent eligible peer is available
-outside the separate stale-chain catch-up state. A mixed fresh-and-stale peer set previously left recovery mode
-permanently active, continuing to relax peer-age and minting safeguards. Core
-now evaluates a separate recent-peer view, exits on the fresh peer, and removes
-stale peers from that same synchronization attempt while preserving all-stale
-recovery and the separate stale-chain catch-up path.
+outside the separate stale-chain catch-up state. A mixed fresh-and-stale peer set
+previously left recovery mode permanently active, continuing to relax peer-age
+and minting safeguards. Core now evaluates a separate recent-peer view, exits on
+the fresh peer, and removes stale peers from that same synchronization attempt
+while preserving all-stale recovery and the separate stale-chain catch-up path.
 
 ### 2026-08-13 - security(sync): disable peer-claim recovery watchdog by default
 

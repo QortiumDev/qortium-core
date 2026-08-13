@@ -38,7 +38,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | Tranche | Scope | Status | Dependencies | Acceptance evidence |
 | --- | --- | --- | --- | --- |
 | T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | Complete | None | `fix(at): use local height for chain-query activation gates`; adversarial red test failed 2/2 before the repair; focused tests passed 29/29; full suite passed 3,004 with 68 skips; independent Codex review passed |
-| T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | In progress | T1 accepted and committed | State-transition, genesis-height minting-policy, and watchdog default/profile tests; coordinated rollout and live-height verification remain a release condition |
+| T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Complete | T1 accepted and committed | Six implementation commits plus focused tests passed 42/42 and the serialized full suite passed 3,020 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; coordinated rollout and live-height verification remain a release condition |
 | T3 | Redesign watchdog orphaning around validated, locally anchored alternative-block evidence. | Planned | T2 containment | Adversarial peer-claim tests and transactional orphan/adoption tests |
 | T4 | Make bootstrap acquisition and repository replacement fail-safe. | Planned | Operator trust/provenance decision | HTTPS/provenance, digest, truncation, staging, validation, rollback tests |
 | T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Planned | Decide whether generic Docker targets no network or explicit Previewnet | Cross-profile and container configuration invariants |
@@ -54,10 +54,10 @@ runs must never overlap in the same checkout because they share `target/` and
 | --- | --- | --- | --- | --- | --- |
 | C-01 | `ChainATAPI` selects three opcode gates from peer-supplied `blockHeight` instead of the local parent height plus one. | Critical | T1 | Complete | Both height-mismatch directions pass at the exact trigger boundary for all three opcodes; existing bytecode-level pre-trigger and at-trigger tests pass |
 | C-02 | Unknown feature-trigger names are accepted and silently unused. This is currently intentional forward-compatibility behavior, and `featureTriggers` is excluded from the chain-config handshake hash. | High safety / design | T9 | Decision | Decide strict registry plus activation-schedule compatibility mechanism |
-| C-03 | A genesis-height node can bypass stale-tip protections and mint a competing block 2 despite fresh higher peers. This is local fork/liveness policy, not remote block-validation bypass. | Medium | T2 | Planned | Pending |
+| C-03 | A genesis-height node can bypass stale-tip protections and mint a competing block 2 despite fresh higher peers. This is local fork/liveness policy, not remote block-validation bypass. | Medium | T2 | Complete | Recent-higher, equal, stale, missing-signature-field, old-version, and post-genesis cases pass. Genesis discovery retains a peer whose later-chain tip signer is not yet known locally while sequential block validation remains authoritative. The advertisement remains unverified and only defers local minting |
 | N-01 | Java defaults combine mainnet chain identity with Previewnet seed addresses; an empty/default configuration cannot handshake with those seeds. | High | T5 | Planned | Pending |
-| N-02 | The recovery watchdog can orphan up to three local tip blocks based on unverified peer tip and archive-capability claims. Peer connections are handshaked, but the asserted chain evidence is not authenticated. | High | T2/T3 | Planned | Pending |
-| N-03 | Recovery mode remains active with a mixed fresh/stale peer set because exit requires every retained peer to be recent. | High | T2 | Planned | Pending |
+| N-02 | The recovery watchdog can orphan up to three local tip blocks based on unverified peer tip and archive-capability claims. Peer connections are handshaked, but the asserted chain evidence is not authenticated. | High | T2/T3 | Contained; T3 redesign planned | Legacy `true` is ignored; the replacement opt-in defaults off, is test-network-only, and is explicitly false in public Preview templates. Managed upgrades and rollbacks preserve legacy `false`, and the disabled decision path cannot orphan |
+| N-03 | Recovery mode remains active with a mixed fresh/stale peer set because exit requires every retained peer to be recent. | High | T2 | Complete | Mixed and fresh peer sets exit to recent-only selection in the same attempt; stale-only recovery, timeout-gated entry, and no-handshake behavior pass |
 | N-04 | GET_BLOCKS auto-degrade can spend about seven full batch timeouts on one dead peer before fallback. The loop is bounded and interruptible, but monopolizes synchronization and delays the watchdog. | Medium | T7 | Planned | Pending |
 | N-05 | QDN yielding uses `Controller.isUpToDate()`, so a fresh node below the minting/sync peer quorum is permanently capped as if it were catching up. | Medium | T7 | Planned | Pending |
 | N-06 | AIMD halves a process-global window once per expired chunk-map entry, allowing one stalled peer to collapse batching for all transfers. | High | T7 | Planned | Pending |
@@ -104,10 +104,18 @@ pinned release digest, signed manifest, or explicit operator-supplied digest.
 
 ## Current Work Boundary
 
-T2 is the active implementation boundary. It may repair recovery-mode exit,
-defer genesis minting when a non-misbehaving current-version peer advertises a
-recent higher tip with a non-null signature field, and make peer-claim
-orphaning a development-only explicit opt-in. It must not redesign or enable
-watchdog orphaning, alter block validity or weighting, change stale-chain
-catch-up policy, or include bootstrap, Docker, transport, API, release,
-deployment, or publication changes.
+No implementation tranche is active. T2 is complete in source and local
+validation but is not released or deployed. T3 is the next planned boundary
+and remains limited to an evidence-backed watchdog redesign; starting it
+requires a separate tracked boundary update.
+
+T2 was completed by `security(sync): disable peer-claim recovery watchdog by
+default`, `fix(sync): exit recovery mode when a recent peer returns`,
+`fix(minting): defer genesis minting to a fresh higher peer`, and the corrective
+follow-ups `fix(settings): preserve watchdog disablement across rollback`,
+`fix(sync): allow genesis discovery before signer state exists`, and
+`test(sync): cover recovery entry state transitions`. The focused six-class
+suite passed 42/42, the serialized full suite passed 3,020 tests with 68 skips,
+`git diff --check` passed, and three independent Codex reviews found no remaining
+blocker. These results do not claim release, deployment, or live-network
+verification.
