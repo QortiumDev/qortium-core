@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-12 - feat: add the API-key-protected /admin/dbpool endpoint
+
+Completes the accepted Qortal 6.1.9 triage worksheet. Node operators who
+enable connection-pool monitoring can now read the tracked pooled-connection
+states over GET /admin/dbpool; without monitoring enabled the endpoint
+returns an empty list. Unlike upstream Qortal's version, the endpoint
+requires the API key because it exposes connection allocation state,
+owning-thread identity, and timestamps. This was the only portable delta
+left from 6.1.9 - a line-by-line comparison verified the database query
+optimizations, cleanup throttle, and cache configuration were already
+present in Qortium.
+
 ### 2026-08-12 - docs: add Qortal 6.1.9 upstream comparison
 
 Added an inventory of the upstream Qortal changes between the 6.1.8 and 6.1.9 release points, in the same neutral style as the earlier comparisons. 6.1.9 adds no feature trigger and touches no chain configuration; it is a local database/QDN follow-up, and most of its HSQLDB cache, storage-info, and arbitrary-query work is already present in Qortium through earlier ports and independent changes. The document records each change's review bucket, where Qortium's code already diverges, and a proposed triage worksheet pending owner decisions - the notable proposed skip is the upstream multi-file service redefinition, which conflicts with Qortium's intentional typed multi-file services and single-blob private encryption.
