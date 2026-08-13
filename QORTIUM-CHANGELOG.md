@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(sync): exit recovery mode when a recent peer returns
+
+Restores normal synchronization policy as soon as any recent eligible peer is
+available again. A mixed fresh-and-stale peer set previously left recovery mode
+permanently active, continuing to relax peer-age and minting safeguards. Core
+now evaluates a separate recent-peer view, exits on the fresh peer, and removes
+stale peers from that same synchronization attempt while preserving all-stale
+recovery and the separate stale-chain catch-up path.
+
 ### 2026-08-13 - security(sync): disable peer-claim recovery watchdog by default
 
 Stops peer-advertised height and archive claims from authorizing automatic

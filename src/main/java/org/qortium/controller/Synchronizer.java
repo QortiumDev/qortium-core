@@ -609,7 +609,7 @@ public class Synchronizer extends Thread {
 						noRecentBlockPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 			}
 
-			if (this.checkRecoveryModeForPeers(peers)) {
+			if (this.checkRecoveryModeForPeers(initialPeerCount > 0, peers)) {
 				peers = peersBeforeRecentFilter;
 				enteredRecoveryFromStalePeers = true;
 				LOGGER.debug("Recovery mode active; allowing peers with older chain tips for synchronization");
@@ -630,8 +630,7 @@ public class Synchronizer extends Thread {
 		}
 
 		if (!enteredRecoveryFromStalePeers && !staleChainCatchUpActive) {
-			if (!this.recoveryMode || peers.stream().noneMatch(Controller.hasNoRecentBlock))
-				checkRecoveryModeForPeers(peers);
+			peers = this.applyRecoveryModePeerPolicy(initialPeerCount > 0, peers);
 		}
 
 		// Check we have enough peers to potentially synchronize
@@ -874,10 +873,18 @@ public class Synchronizer extends Thread {
 		return (int) Math.min(100, (boundedHeight * 100L) / targetHeight);
 	}
 
-	private boolean checkRecoveryModeForPeers(List<Peer> qualifiedPeers) {
-		List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
+	/* package */ List<Peer> applyRecoveryModePeerPolicy(boolean haveHandshakedPeers, List<Peer> peers) {
+		List<Peer> recentPeers = peers.stream()
+				.filter(Controller.hasNoRecentBlock.negate())
+				.collect(Collectors.toList());
 
-		if (!handshakedPeers.isEmpty()) {
+		// If recovery remains active, retain the all-age peer set. As soon as one recent peer returns,
+		// exit recovery and restore the normal recent-only set in this same synchronization attempt.
+		return checkRecoveryModeForPeers(haveHandshakedPeers, recentPeers) ? peers : recentPeers;
+	}
+
+	/* package */ boolean checkRecoveryModeForPeers(boolean haveHandshakedPeers, List<Peer> qualifiedPeers) {
+		if (haveHandshakedPeers) {
 			// There is at least one handshaked peer
 			if (qualifiedPeers.isEmpty()) {
 				// There are no 'qualified' peers - i.e. peers that have a recent block we can sync to
