@@ -40,7 +40,6 @@ import static org.qortium.network.Peer.SYNC_RESPONSE_TIMEOUT;
 public class Synchronizer extends Thread {
 
 	private static final Logger LOGGER = LogManager.getLogger(Synchronizer.class);
-	private static final String ARCHIVE_HEIGHT_CAPABILITY = "ARCHIVE_HEIGHT";
 
 	/** Max number of new blocks we aim to add to chain tip in each sync round */
 	private static final int SYNC_BATCH_SIZE = 1000; // XXX move to Settings?
@@ -99,25 +98,6 @@ public class Synchronizer extends Thread {
 	 * flag — the node would never retry and could sit behind the network indefinitely.
 	 */
 	private static final long SYNC_HEARTBEAT_INTERVAL = 60 * 1000L;
-
-	/** Development peer-claim experiment: how often, at most, it evaluates inside the 1s run-loop. */
-	private static final long WATCHDOG_CHECK_INTERVAL = 30 * 1000L;
-	/** Development peer-claim experiment: minimum distinct fresh, healthy, strictly-higher peers required. */
-	private static final int RECOVERY_WATCHDOG_MIN_PEERS = 2;
-	/**
-	 * Development peer-claim experiment: absolute ceiling on how many confirmed local tip blocks it will
-	 * discard within one stuck episode (no intervening forward progress). Guarantees the watchdog can
-	 * never approach MAXIMUM_COMMON_DELTA and can never become a deep-reorg tool.
-	 */
-	private static final int RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING = 3;
-
-	/** Development peer-claim experiment state (all touched only on the Synchronizer thread). */
-	private long lastWatchdogCheckTimestamp = 0L;          // System.currentTimeMillis() pacing
-	private long watchdogStuckSince = 0L;                  // NTP time the current stuck episode began; 0 = not stuck
-	private byte[] watchdogStuckTipSignature = null;       // our tip sig the episode is keyed to
-	private long lastWatchdogOrphanTimestamp = 0L;         // NTP time of last orphan, for cooldown
-	private int watchdogOrphanCount = 0;                   // consecutive orphans without forward progress
-	private int watchdogHighWaterHeight = 0;               // highest tip height seen; forward progress resets the orphan budget
 
 	// Keep track of invalid blocks so that we don't keep trying to sync them
 	private Map<ByteArray, Long> invalidBlockSignatures = Collections.synchronizedMap(new HashMap<>());
@@ -205,7 +185,7 @@ public class Synchronizer extends Thread {
 		}
 	}
 
-	/** One synchronizer cycle: re-arm sync if needed, attempt it, then evaluate the development experiment. */
+	/** One synchronizer cycle: re-arm synchronization when needed, then attempt it. */
 	private void runSyncCycle() throws InterruptedException {
 		// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
 		// no sync is already requested/pending/running. This guarantees the node keeps
@@ -231,274 +211,12 @@ public class Synchronizer extends Thread {
 			// Remember that we have a pending sync request if this attempt failed
 			syncRequestPending = !success;
 		}
-
-		// Development peer-claim orphaning experiment (paced). Disabled in shipped public profiles;
-		// retained only for explicit multi-node test-network investigation before T3 redesign.
-		// Wrapped defensively so a watchdog fault can never terminate the synchronizer.
-		if (!isSynchronizing && System.currentTimeMillis() - lastWatchdogCheckTimestamp >= WATCHDOG_CHECK_INTERVAL) {
-			lastWatchdogCheckTimestamp = System.currentTimeMillis();
-			try {
-				checkDevelopmentPeerClaimOrphaning();
-			} catch (Exception e) {
-				LOGGER.warn("Development peer-claim orphaning check failed: {}", e.getMessage());
-			}
-		}
 	}
 
 	public void shutdown() {
 		this.running = false;
 		this.interrupt();
 	}
-
-	/** Outcome of the development peer-claim orphaning gates (see {@link #decideRecoveryWatchdogAction}). */
-	/* package */ enum RecoveryWatchdogAction {
-		/** Not wedged behind a live network (not stale, or no fresh higher-peer quorum) — clear stuck state. */
-		NONE,
-		/** Stuck behind a quorum; (re)start the sustained-stuck timer for the current tip. */
-		ARM,
-		/** Stuck, but the sustained-duration / cooldown / orphan-ceiling gates are not all satisfied yet. */
-		WAIT,
-		/** All gates satisfied — orphan one confirmed local tip block and request a sync. */
-		ORPHAN
-	}
-
-	/**
-	 * Pure decision function for the development peer-claim orphaning gates, factored out for unit testing
-	 * (no chain / network / NTP access). Given the observed condition and the watchdog's timers,
-	 * returns what the watchdog should do this tick. The caller performs the side effects.
-	 *
-	 * @param ourTipStale            our chain tip is older than the "recent" threshold (we are behind)
-	 * @param higherPeerCount        number of distinct fresh, healthy, strictly-higher peers
-	 * @param haveActiveEpisodeForTip a stuck-episode timer is already running for the CURRENT tip signature
-	 * @param now                    current NTP time (ms)
-	 * @param watchdogStuckSince     NTP time the current episode began (0 if none)
-	 * @param lastWatchdogOrphanTimestamp NTP time of the last orphan (0 if none)
-	 * @param watchdogOrphanCount    consecutive orphans this episode without forward progress
-	 * @param minPeers               minimum quorum of higher peers required to act
-	 * @param stuckThresholdMillis   how long the condition must persist before acting
-	 * @param cooldownMillis         minimum gap between orphan actions
-	 * @param maxOrphanCeiling       hard cap on orphans per stuck episode
-	 */
-	/* package */ static RecoveryWatchdogAction decideRecoveryWatchdogAction(
-			boolean enabled, boolean ourTipStale, int higherPeerCount, boolean haveActiveEpisodeForTip,
-			long now, long watchdogStuckSince, long lastWatchdogOrphanTimestamp, int watchdogOrphanCount,
-			int minPeers, long stuckThresholdMillis, long cooldownMillis, int maxOrphanCeiling) {
-
-		if (!enabled)
-			return RecoveryWatchdogAction.NONE;
-
-		// Only act when we are stale AND behind a quorum of fresh higher peers.
-		if (!ourTipStale || higherPeerCount < minPeers)
-			return RecoveryWatchdogAction.NONE;
-
-		// Start/refresh the sustained-stuck timer when this is a new episode or our tip moved.
-		if (!haveActiveEpisodeForTip)
-			return RecoveryWatchdogAction.ARM;
-
-		// Sustained-duration gate.
-		if (now - watchdogStuckSince < stuckThresholdMillis)
-			return RecoveryWatchdogAction.WAIT;
-
-		// Cooldown gate.
-		if (lastWatchdogOrphanTimestamp != 0L && now - lastWatchdogOrphanTimestamp < cooldownMillis)
-			return RecoveryWatchdogAction.WAIT;
-
-		// Hard ceiling on local-tip orphans per stuck episode.
-		if (watchdogOrphanCount >= maxOrphanCeiling)
-			return RecoveryWatchdogAction.WAIT;
-
-		return RecoveryWatchdogAction.ORPHAN;
-	}
-
-	/**
-	 * Development-only peer-claim orphaning experiment.
-	 *
-	 * Detects the narrow "wedged behind a live network" state — our chain tip is STALE (we are
-	 * behind), a quorum of fresh, healthy, strictly-higher peers exists, and normal synchronization
-	 * has been unable to advance us for a sustained period (e.g. a short local fork wins the
-	 * 1-block weight comparison, so sync refuses the longer network chain) — and recovers by
-	 * orphaning a single confirmed local tip block back toward the common block, then requesting a
-	 * sync. Normal, fully-validated synchronization (preProcess()+isValid()) then adopts the network
-	 * chain; this method NEVER imports peer blocks and NEVER force-syncs.
-	 *
-	 * Safety: only fires when our tip is stale (a healthy node at the network tip never qualifies);
-	 * requires a distinct fresh-higher-peer quorum reusing the same vetted filter as Tier 2's
-	 * hasFreshHigherPeer (so a solo/most-advanced minter of a dead network is never affected — that
-	 * is stale-chain catch-up's job); orphans at most one block per action, hard-capped at
-	 * RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING per stuck episode (forward progress resets the
-	 * budget), far below MAXIMUM_COMMON_DELTA; paced, sustained-gated and cooldown-gated against
-	 * thrash. Because the orphaned-to block is itself stale, the BlockMinter "tip not recent -> sync
-	 * instead" gate plus Tier 2 (no stale-catch-up mint while a fresh higher peer exists) keep
-	 * minting OFF afterwards, so the node syncs rather than re-minting the fork.
-	 */
-	private void checkDevelopmentPeerClaimOrphaning() throws DataException {
-		if (!Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled())
-			return;
-
-		final Long now = NTP.getTime();
-		if (now == null)
-			return; // NTP not synced yet — do nothing this round
-
-		final BlockData tip = Controller.getInstance().getChainTip();
-		if (tip == null || tip.getHeight() == null || tip.getSignature() == null)
-			return;
-
-		final Long minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
-		if (minLatestBlockTimestamp == null)
-			return;
-
-		// A node at the network tip is never stale, so a healthy node yields NONE here. The quorum
-		// uses the same vetted filter as Tier 2's hasFreshHigherPeer, so a solo / most-advanced
-		// minter of a dead network (no fresh higher peer) also yields NONE — stale-chain catch-up
-		// governs that case, not this watchdog.
-		final boolean ourTipStale = tip.getTimestamp() < minLatestBlockTimestamp;
-		final int higherPeerCount = ourTipStale ? countFreshHigherPeers(tip.getHeight()) : 0;
-		final boolean haveActiveEpisodeForTip =
-				watchdogStuckSince != 0L && Arrays.equals(watchdogStuckTipSignature, tip.getSignature());
-
-		final RecoveryWatchdogAction action = decideRecoveryWatchdogAction(
-				true, ourTipStale, higherPeerCount, haveActiveEpisodeForTip,
-				now, watchdogStuckSince, lastWatchdogOrphanTimestamp, watchdogOrphanCount,
-				RECOVERY_WATCHDOG_MIN_PEERS,
-				Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis(),
-				Settings.getInstance().getRecoveryWatchdogCooldownMillis(),
-				RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING);
-
-		switch (action) {
-			case NONE:
-				resetWatchdogStuckState();
-				return;
-
-			case ARM:
-				// Begin (or refresh) the sustained-stuck timer for this tip. Forward progress since
-				// the last episode (our height rose past the high-water mark) refills the orphan budget.
-				if (tip.getHeight() > watchdogHighWaterHeight) {
-					watchdogOrphanCount = 0;
-					watchdogHighWaterHeight = tip.getHeight();
-				}
-				watchdogStuckSince = now;
-				watchdogStuckTipSignature = tip.getSignature();
-				LOGGER.info("Development peer-claim orphaning: stale tip at height {} behind {} fresh higher peer(s); will act if it persists {}s",
-						tip.getHeight(), higherPeerCount, Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis() / 1000);
-				return;
-
-			case WAIT:
-				// Stuck, but the sustained-duration / cooldown / orphan-ceiling gates are not all met yet.
-				return;
-
-			case ORPHAN:
-				break; // perform the bounded orphan below
-		}
-
-		// Re-read the tip immediately before acting; abort if it moved so we orphan exactly one
-		// block from the CURRENT tip (never a deeper reorg computed against a stale height).
-		final BlockData freshTip = Controller.getInstance().getChainTip();
-		if (freshTip == null || freshTip.getHeight() == null || freshTip.getSignature() == null
-				|| !Arrays.equals(freshTip.getSignature(), tip.getSignature()))
-			return;
-
-		final int targetHeight = freshTip.getHeight() - 1;
-		if (targetHeight <= 0)
-			return;
-
-		// Respect the archive floor (mirrors AdminResource /orphan). For depth 1 this never trips.
-		if (Settings.getInstance().isTopOnly() || Settings.getInstance().isArchiveEnabled()) {
-			try (final Repository repository = RepositoryManager.getRepository()) {
-				int oldestBlock = repository.getBlockArchiveRepository().getBlockArchiveHeight() + 100;
-				if (targetHeight <= oldestBlock) {
-					LOGGER.warn("Development peer-claim orphaning: not orphaning to {} because it is at/below the archive floor {}", targetHeight, oldestBlock);
-					resetWatchdogStuckState();
-					return;
-				}
-			}
-		}
-
-		// Also respect the peer-side archive floor. If orphaning would leave us below the height
-		// that fresh higher peers serve via normal block-body sync, the immediate sync request below
-		// cannot re-fetch the orphaned block and the node remains stranded behind the archive floor.
-		int nextBlockHeight = targetHeight + 1;
-		int bodyServingPeers = countFreshHigherPeersServingBlock(targetHeight, nextBlockHeight);
-		if (bodyServingPeers < RECOVERY_WATCHDOG_MIN_PEERS) {
-			LOGGER.warn("Development peer-claim orphaning: not orphaning to {} because only {} fresh higher peer(s) can serve block {} via normal sync",
-					targetHeight, bodyServingPeers, nextBlockHeight);
-			resetWatchdogStuckState();
-			return;
-		}
-
-		// Discard only the confirmed local tip block back to the common height; BlockChain.orphan uses a
-		// non-blocking tryLock and returns false if minting/sync holds the blockchain lock.
-		boolean orphaned = BlockChain.orphan(targetHeight);
-		if (!orphaned)
-			return; // lock busy — retry next paced tick (stuck condition persists)
-
-		LOGGER.info("Development peer-claim orphaning: orphaned stale local block {} back to height {} (behind {} fresh higher peer(s), stuck {}s); requesting sync",
-				freshTip.getHeight(), targetHeight, higherPeerCount, (now - watchdogStuckSince) / 1000);
-
-		watchdogOrphanCount++;
-		lastWatchdogOrphanTimestamp = now;
-		// Restart the sustained timer for any subsequent episode, and prompt an immediate, fully
-		// validated sync to adopt the heavier/longer network chain.
-		watchdogStuckSince = 0L;
-		watchdogStuckTipSignature = null;
-		requestSync = true;
-	}
-
-	private void resetWatchdogStuckState() {
-		this.watchdogStuckSince = 0L;
-		this.watchdogStuckTipSignature = null;
-	}
-
-	/**
-	 * Counts distinct handshaked peers advertising a fresh (recent) chain tip strictly higher than
-	 * the given height, using the same healthy-peer filter set as Controller.hasFreshHigherPeer.
-	 */
-	private int countFreshHigherPeers(int ourHeight) {
-		List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
-
-		peers.removeIf(Controller.hasMisbehaved);
-		peers.removeIf(Controller.hasOldVersion);
-		peers.removeIf(Controller.hasInvalidSigner);
-		peers.removeIf(Controller.hasNoRecentBlock);
-
-		int count = 0;
-		for (Peer peer : peers) {
-			final BlockSummaryData peerChainTipData = peer.getChainTipData();
-			if (peerChainTipData != null && peerChainTipData.getSignature() != null && peerChainTipData.getHeight() > ourHeight)
-				count++;
-		}
-
-		return count;
-	}
-
-	private int countFreshHigherPeersServingBlock(int ourHeight, int blockHeight) {
-		List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
-
-		peers.removeIf(Controller.hasMisbehaved);
-		peers.removeIf(Controller.hasOldVersion);
-		peers.removeIf(Controller.hasInvalidSigner);
-		peers.removeIf(Controller.hasNoRecentBlock);
-
-		int count = 0;
-		for (Peer peer : peers) {
-			final BlockSummaryData peerChainTipData = peer.getChainTipData();
-			if (peerChainTipData != null && peerChainTipData.getSignature() != null && peerChainTipData.getHeight() > ourHeight
-					&& canServeBlockViaNormalSync(peerArchiveHeight(peer), blockHeight))
-				count++;
-		}
-
-		return count;
-	}
-
-	private static int peerArchiveHeight(Peer peer) {
-		Object capability = peer.getPeerCapability(ARCHIVE_HEIGHT_CAPABILITY);
-		return (capability instanceof Number) ? ((Number) capability).intValue() : 0;
-	}
-
-	/* package */ static boolean canServeBlockViaNormalSync(int peerArchiveHeight, int blockHeight) {
-		return peerArchiveHeight < blockHeight;
-	}
-
-
 
 	public boolean isSynchronizing() {
 		return this.isSynchronizing;

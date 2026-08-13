@@ -39,7 +39,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | --- | --- | --- | --- | --- |
 | T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | Complete | None | `fix(at): use local height for chain-query activation gates`; adversarial red test failed 2/2 before the repair; focused tests passed 29/29; full suite passed 3,004 with 68 skips; independent Codex review passed |
 | T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Complete | T1 accepted and committed | Six implementation commits plus focused tests passed 42/42 and the serialized full suite passed 3,020 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; coordinated rollout and live-height verification remain a release condition |
-| T3 | Redesign watchdog orphaning around validated, locally anchored alternative-block evidence. | In progress | T2 containment | Adversarial peer-claim tests and transactional orphan/adoption tests |
+| T3 | Retire automatic peer-claim orphaning while retaining both old setting names as permanently disabled compatibility inputs. | In progress | T2 containment | Adversarial settings/profile tests; proof that no peer-claim orphan path remains; standard synchronization behavior unchanged |
 | T4 | Make bootstrap acquisition and repository replacement fail-safe. | Planned | Operator trust/provenance decision | HTTPS/provenance, digest, truncation, staging, validation, rollback tests |
 | T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Planned | Decide whether generic Docker targets no network or explicit Previewnet | Cross-profile and container configuration invariants |
 | T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | Planned | None | Request/response and chain/data x IP/I2P matrix tests |
@@ -104,14 +104,20 @@ pinned release digest, signed manifest, or explicit operator-supplied digest.
 
 ## Current Work Boundary
 
-T3 is the active implementation boundary. It may replace peer-advertised height
-and archive-capability authorization with locally anchored, validated
-alternative-block evidence and add adversarial plus transactional tests. It
-must fail closed when that evidence is absent, incomplete, invalid, stale, or
-changes before the action. It must not broaden the development opt-in, enable
-the mechanism in a public profile, change normal block validity or chain
-weighting, alter unrelated recovery or stale-chain-catch-up policy, or include
-release, deployment, or publication work.
+T3 is the active implementation boundary. Its design review found that the T2
+recovery correction and the existing stale-tip synchronization path already
+handle the motivating case: recent peers restore normal policy in the same
+attempt, the heartbeat retries synchronization, and a stale local tip bypasses
+the mutual-height weight rejection before standard block retrieval and
+validation. T3 therefore retires the redundant automatic orphaning path instead
+of introducing a second reorganization engine. Both former setting names remain
+accepted only as disabled compatibility inputs, with explicit `false` values
+retained for old-binary rollback safety.
+
+This tranche must not add another orphan/adoption path, change normal block
+validity or chain weighting, alter unrelated recovery or stale-chain-catch-up
+policy, enable any profile, or include release, deployment, or publication
+work.
 
 T2 was completed by `security(sync): disable peer-claim recovery watchdog by
 default`, `fix(sync): exit recovery mode when a recent peer returns`,

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - security(sync): retire peer-claim orphaning
+
+Removes the automatic path that could discard confirmed local blocks from peer
+height, freshness, quorum, and archive-capability claims. The old setting names
+remain accepted only as permanently disabled compatibility inputs, every public
+and development profile declares them false, and managed rollback continues to
+preserve the legacy safe value. The corrected recovery policy and normal
+synchronizer already retry and adopt a valid higher chain; no replacement reorg
+path, chain-selection rule, release, or deployment is introduced here.
+
 ### 2026-08-13 - docs: start ultra-review watchdog evidence redesign
 
 Starts the separately bounded redesign of the disabled peer-claim orphaning

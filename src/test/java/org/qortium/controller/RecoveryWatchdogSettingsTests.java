@@ -13,9 +13,8 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
-/** Fail-closed configuration coverage for development-only peer-claim orphaning. */
+/** Compatibility coverage proving retired peer-claim orphaning inputs remain inert. */
 public class RecoveryWatchdogSettingsTests extends Common {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -29,22 +28,26 @@ public class RecoveryWatchdogSettingsTests extends Common {
 	@Test
 	public void testAbsentSettingDisablesPeerClaimOrphaning() throws Exception {
 		loadSettings("{}");
-		assertFalse(Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled());
+		assertPeerClaimOrphaningDisabled();
 	}
 
 	@Test
 	public void testLegacyTrueSettingCannotEnablePeerClaimOrphaning() throws Exception {
 		loadSettings("{\"isTestNet\":true,\"recoveryWatchdogEnabled\":true}");
-		assertFalse(Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled());
+		assertPeerClaimOrphaningDisabled();
 	}
 
 	@Test
-	public void testDevelopmentOptInIsRestrictedToTestNetworks() throws Exception {
+	public void testRetiredDevelopmentOptInCannotEnablePeerClaimOrphaning() throws Exception {
 		loadSettings("{\"developmentPeerClaimOrphaningEnabled\":true}");
-		assertFalse(Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled());
+		assertPeerClaimOrphaningDisabled();
 
 		loadSettings("{\"isTestNet\":true,\"developmentPeerClaimOrphaningEnabled\":true}");
-		assertTrue(Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled());
+		assertPeerClaimOrphaningDisabled();
+
+		loadSettings("{\"isTestNet\":true,\"recoveryWatchdogEnabled\":true,"
+				+ "\"developmentPeerClaimOrphaningEnabled\":true}");
+		assertPeerClaimOrphaningDisabled();
 	}
 
 	@Test
@@ -60,7 +63,7 @@ public class RecoveryWatchdogSettingsTests extends Common {
 		}
 
 		Map<String, Object> developmentSettings = readSettings(Path.of("testnet/settings-test.json"));
-		assertEquals(Boolean.TRUE, developmentSettings.get("developmentPeerClaimOrphaningEnabled"));
+		assertEquals(Boolean.FALSE, developmentSettings.get("developmentPeerClaimOrphaningEnabled"));
 		assertEquals(Boolean.FALSE, developmentSettings.get("recoveryWatchdogEnabled"));
 	}
 
@@ -69,6 +72,12 @@ public class RecoveryWatchdogSettingsTests extends Common {
 		Path settingsPath = directory.resolve("settings.json");
 		Files.writeString(settingsPath, json);
 		Settings.fileInstance(settingsPath.toString());
+	}
+
+	@SuppressWarnings("deprecation")
+	private static void assertPeerClaimOrphaningDisabled() {
+		assertFalse(Settings.getInstance().isRecoveryWatchdogEnabled());
+		assertFalse(Settings.getInstance().isDevelopmentPeerClaimOrphaningEnabled());
 	}
 
 	private static Map<String, Object> readSettings(Path path) throws Exception {
