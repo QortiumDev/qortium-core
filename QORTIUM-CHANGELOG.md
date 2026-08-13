@@ -34,6 +34,37 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(at): use local height for chain-query activation gates
+
+Makes the three AT chain-query activation checks follow the block height Core
+derives from its own repository rather than the height claimed by an incoming
+block. A peer can no longer make trust-status, balance, or AT code-hash queries
+appear active early, or make an active query appear unavailable, by supplying a
+different unsigned height. Boundary tests now exercise both hostile mismatch
+directions for every affected query while the existing bytecode tests continue
+to cover normal pre-activation and activation behavior.
+
+### 2026-08-13 - docs: refine ultra-review tranche boundaries
+
+Clarifies the ultra-review execution plan after an independent plan audit. The
+recovery tranche now explicitly owns genesis-height mint deferral and treats
+coordinated rollout as a release condition rather than a code dependency;
+Docker configuration has one owner; keystore permissions have a separate local
+secret-file tranche; and the first consensus repair requires both hostile
+height-mismatch directions for all three affected AT queries.
+
+### 2026-08-13 - docs: track ultra-review remediation plan
+
+Records the independently verified 2026-08 Core review as a durable execution
+plan instead of leaving the findings in a private review transcript. The plan
+preserves all fifteen capped findings and seven lower-severity items, corrects
+the public-write path claim that does not reproduce against the shipped handler
+chain, groups the accepted work into small dependency-aware tranches, and sets
+explicit tests and review gates before any item can be marked complete. The
+first authorized tranche is limited to the AT chain-query activation-height
+consensus repair; later recovery, bootstrap, transport, networking, repository,
+Docker, and configuration work remains planned or decision-gated.
+
 ### 2026-08-12 - feat: add the API-key-protected /admin/dbpool endpoint
 
 Completes the accepted Qortal 6.1.9 triage worksheet. Node operators who
