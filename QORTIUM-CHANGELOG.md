@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(minting): defer genesis minting to a fresh higher peer
+
+Prevents a fresh or restored genesis-only node from creating a competing block
+2 when a current-version peer already advertises a recent signed higher tip.
+The node now defers locally so normal synchronization can retrieve and validate
+the established chain. Equal-height, stale, unsigned, and obsolete peer claims
+do not trigger the brake, preserving delayed launch of a genuinely new network;
+block formats and validation rules are unchanged.
+
 ### 2026-08-13 - fix(sync): exit recovery mode when a recent peer returns
 
 Restores normal synchronization policy as soon as any recent eligible peer is
