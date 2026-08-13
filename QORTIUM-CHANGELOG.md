@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: complete ultra-review watchdog retirement tranche
+
+Records the completed security decision to remove automatic peer-claim
+orphaning instead of building a second chain-reorganization path. The tracker
+now marks that finding complete, records the adversarial, rollback, focused,
+full-suite, and independent-review evidence, and preserves a separately
+unassigned hardening item for failure atomicity in normal fork adoption. No
+release, deployment, or live-network verification is claimed.
+
 ### 2026-08-13 - fix(settings): keep retired orphan flags disabled on rollback
 
 Extends managed-settings rollback protection to both retired peer-claim
@@ -55,13 +64,12 @@ introduced here.
 
 ### 2026-08-13 - docs: start ultra-review watchdog evidence redesign
 
-Starts the separately bounded redesign of the disabled peer-claim orphaning
-experiment. This tranche will require locally anchored and validated
-alternative-block evidence before a confirmed local block can be removed, with
-adversarial and transactional tests proving that peer height and archive claims
-alone cannot authorize the action. It does not enable the mechanism in public
-profiles, change normal block validity or chain weighting, or authorize a
-release or deployment.
+Starts the separately bounded design review of the disabled peer-claim
+orphaning experiment. Locally anchored alternative-block evidence was the
+initial candidate, but the review was required to prefer retirement if normal
+synchronization already handled the motivating case more safely. It did not
+enable the mechanism in public profiles, change normal block validity or chain
+weighting, or authorize a release or deployment.
 
 ### 2026-08-13 - fix(sync): contain recovery and genesis fork hazards
 
