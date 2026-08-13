@@ -1014,6 +1014,9 @@ public class ArbitraryDataFileManager extends Thread {
             Long value = entry.getValue();
             if (value == null || value < requestMinimumTimestamp) {
                 clearTimedOutChunkRequest(entry.getKey());
+                // AIMD feedback: this hash's qdnRequestTimeoutMillis bookkeeping just expired - drives the
+                // multiplicative decrease of the adaptive chunk-batching window.
+                ArbitraryDataFileRequestThread.getInstance().onChunkRequestExpired(entry.getKey());
                 return true;
             }
             return false;

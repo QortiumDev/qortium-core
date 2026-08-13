@@ -2064,13 +2064,21 @@ public class Synchronizer extends Thread {
         // Ensure that we don't request more blocks than specified in the settings
         int maxBlocksPerRequest = Settings.getInstance().getMaxBlocksPerRequest();
 
+        // Auto-degrade state (Settings.blocksBatchAutoDegrade): the count actually requested from this
+        // peer, which halves on a GET_BLOCKS timeout and slowly recovers (doubles) after a success. Scoped
+        // to this sync attempt only (a local variable) - nothing persists across sessions, on Peer, or in
+        // Settings. Starts at the full configured cap, same as before this change.
+        int currentBlocksRequestCap = maxBlocksPerRequest;
+
         while (ourHeight < peerHeight && ourHeight < maxBatchHeight) {
             if (Controller.isStopping())
                 return SynchronizationResult.SHUTTING_DOWN;
 
-            int numberRequested = Math.min(maxBatchHeight - ourHeight, maxBlocksPerRequest);
+            int numberRequested = Math.min(maxBatchHeight - ourHeight, currentBlocksRequestCap);
 
-            List<Block> blocks = this.fetchBlocks(repository, peer, latestPeerSignature, numberRequested);
+            BlocksFetchResult fetchResult = this.fetchBlocksWithAutoDegrade(repository, peer, latestPeerSignature, numberRequested, maxBlocksPerRequest);
+            List<Block> blocks = fetchResult.blocks;
+            currentBlocksRequestCap = fetchResult.nextRequestCap;
 
             if (blocks == null || blocks.isEmpty()) {
                 // A valid-but-empty BLOCKS reply usually means the peer has archived and pruned
@@ -2318,7 +2326,8 @@ public class Synchronizer extends Thread {
 		}
 	}
 
-    private List<Block> fetchBlocks(Repository repository, Peer peer, byte[] parentSignature, int numberRequested) throws InterruptedException {
+    /** Single, un-degraded GET_BLOCKS attempt at exactly {@code numberRequested} blocks. Exact previous {@code fetchBlocks()} behavior, unchanged. */
+    private List<Block> fetchBlocksAttempt(Repository repository, Peer peer, byte[] parentSignature, int numberRequested) throws InterruptedException {
         LOGGER.trace("Building GetBlocksMessage with parentSignature: {}, numberRequested: {}", parentSignature, numberRequested);
         Message getBlocksMessage = new GetBlocksMessage(parentSignature, numberRequested);
 
@@ -2337,6 +2346,84 @@ public class Synchronizer extends Thread {
         }
 
         return blocksMessage.getBlocks();
+    }
+
+    /** Result of {@link #fetchBlocksWithAutoDegrade}: the fetched blocks (or null on terminal failure), plus the count to request next time. */
+    private static final class BlocksFetchResult {
+        final List<Block> blocks;
+        final int nextRequestCap;
+
+        BlocksFetchResult(List<Block> blocks, int nextRequestCap) {
+            this.blocks = blocks;
+            this.nextRequestCap = nextRequestCap;
+        }
+    }
+
+    /**
+     * Pure arithmetic: requested count to retry with immediately after a GET_BLOCKS response timeout.
+     * Halves (integer division), floored at 1.
+     */
+    static int nextBlocksCountAfterTimeout(int count) {
+        return Math.max(1, count / 2);
+    }
+
+    /**
+     * Pure arithmetic: requested count to use for the NEXT (separate) GET_BLOCKS request after a
+     * successful response at a possibly-degraded count. Doubles, capped at {@code maxBlocksPerRequest}
+     * (slow recovery within the session).
+     */
+    static int nextBlocksCountAfterSuccess(int lastRequestedCount, int maxBlocksPerRequest) {
+        return Math.min(Math.max(lastRequestedCount, 1) * 2, Math.max(1, maxBlocksPerRequest));
+    }
+
+    /**
+     * GET_BLOCKS with auto-degrade (Settings.blocksBatchAutoDegrade, default true): on a response timeout
+     * at the requested count, halves the count for THIS peer (floor 1) and retries immediately - within
+     * this one call, not a separate sync round - up to a bounded number of halvings (until count reaches
+     * 1, then one final attempt at 1; e.g. starting from 100 that's at most 7 timeouts total, in line with
+     * ~log2(100)+1). A genuinely dead peer therefore costs at most that many timeouts before the existing
+     * failure handling takes over exactly as before this change: fetchBlocksAttempt() returning null here
+     * causes applyNewBlocksUsingFastSync's caller to fall back to slow sync for this batch, WITHOUT
+     * touching failedSyncCount/MAX_CONSECUTIVE_FAILED_SYNC_ATTEMPTS - that accounting only ever applied to
+     * fetchBlock() (singular, slow sync), never to fetchBlocks(), so this preserves that pre-existing
+     * asymmetry unchanged. A successful response at a degraded count lets the caller's next (separate)
+     * request try double the count again, capped at maxBlocksPerRequest - slow recovery within the sync
+     * session, with no state persisted anywhere beyond this call's local variables.
+     *
+     * When blocksBatchAutoDegrade is false, this is exactly one fetchBlocksAttempt() call at the requested
+     * count with no retry and no cap change, i.e. the previous behavior unchanged.
+     */
+    private BlocksFetchResult fetchBlocksWithAutoDegrade(Repository repository, Peer peer, byte[] parentSignature,
+                                                          int requestedCount, int maxBlocksPerRequest) throws InterruptedException {
+        if (!Settings.getInstance().isBlocksBatchAutoDegrade()) {
+            List<Block> blocks = this.fetchBlocksAttempt(repository, peer, parentSignature, requestedCount);
+            return new BlocksFetchResult(blocks, requestedCount);
+        }
+
+        int attemptCount = Math.max(1, requestedCount);
+        while (true) {
+            List<Block> blocks = this.fetchBlocksAttempt(repository, peer, parentSignature, attemptCount);
+            if (blocks != null) {
+                int nextCap = nextBlocksCountAfterSuccess(attemptCount, maxBlocksPerRequest);
+                if (attemptCount != requestedCount) {
+                    LOGGER.debug("GET_BLOCKS succeeded from {} at degraded count {} (originally requested {}); next request will try {}",
+                            peer, attemptCount, requestedCount, nextCap);
+                }
+                return new BlocksFetchResult(blocks, nextCap);
+            }
+
+            if (attemptCount <= 1) {
+                // Minimal request also timed out - terminal failure for this call. Preserve pre-existing
+                // fetchBlocks() semantics exactly: return null and let the caller fall back to slow sync,
+                // without touching failedSyncCount (that accounting belongs to fetchBlock(), not here).
+                return new BlocksFetchResult(null, attemptCount);
+            }
+
+            int next = nextBlocksCountAfterTimeout(attemptCount);
+            LOGGER.debug("GET_BLOCKS timeout requesting {} blocks from {}; auto-degrading to {} and retrying immediately",
+                    attemptCount, peer, next);
+            attemptCount = next;
+        }
     }
 
 	public void populateBlockSummariesMinterLevels(Repository repository, List<BlockSummaryData> blockSummaries) throws DataException {
