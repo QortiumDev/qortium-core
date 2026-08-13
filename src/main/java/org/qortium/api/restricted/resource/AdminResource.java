@@ -34,6 +34,7 @@ import org.qortium.controller.Synchronizer.SynchronizationResult;
 import org.qortium.controller.repository.BlockArchiveRebuilder;
 import org.qortium.data.account.MintingAccountData;
 import org.qortium.data.account.RewardShareData;
+import org.qortium.data.system.DbConnectionInfo;
 import org.qortium.network.Network;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerAddress;
@@ -42,7 +43,9 @@ import org.qortium.repository.Bootstrap;
 import org.qortium.repository.DataException;
 import org.qortium.repository.ReindexManager;
 import org.qortium.repository.Repository;
+import org.qortium.repository.RepositoryFactory;
 import org.qortium.repository.RepositoryManager;
+import org.qortium.repository.hsqldb.HSQLDBRepositoryFactory;
 import org.qortium.settings.Settings;
 import org.qortium.data.system.SystemInfo;
 import org.qortium.utils.Base58;
@@ -68,6 +71,7 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -681,6 +685,37 @@ public class AdminResource {
 		Security.checkApiCallAllowed(request);
 
 		return Controller.getInstance().getStatsSnapshot();
+	}
+
+	@GET
+	@Path("/dbpool")
+	@Operation(
+		summary = "Fetch database connection pool states",
+		description = "Returns one entry per tracked pooled connection when connection-pool monitoring is enabled; an empty list otherwise. Unlike upstream Qortal's variant, this endpoint requires the API key because it reveals connection allocation state, owning-thread identity, and timestamps.",
+		responses = {
+			@ApiResponse(
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = DbConnectionInfo.class
+						)
+					)
+				)
+			)
+		}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public List<DbConnectionInfo> getDbConnectionPoolStates(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+		Security.checkApiCallAllowed(request);
+
+		RepositoryFactory repositoryFactory = RepositoryManager.getRepositoryFactory();
+
+		if (repositoryFactory instanceof HSQLDBRepositoryFactory) {
+			return ((HSQLDBRepositoryFactory) repositoryFactory).getDbConnectionsStates();
+		}
+
+		return Collections.emptyList();
 	}
 
 	@GET
