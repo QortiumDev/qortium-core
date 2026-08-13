@@ -639,7 +639,7 @@ public class ChainATAPI extends API {
 				return;
 		}
 
-		if (this.blockHeight < activationHeight)
+		if (this.getGateBlockHeight() < activationHeight)
 			throw new IllegalFunctionCodeException("Chain function " + chainFunctionCode.name()
 					+ " is not active at this block height");
 	}

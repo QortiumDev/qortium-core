@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(at): use local height for chain-query activation gates
+
+Makes the three AT chain-query activation checks follow the block height Core
+derives from its own repository rather than the height claimed by an incoming
+block. A peer can no longer make trust-status, balance, or AT code-hash queries
+appear active early, or make an active query appear unavailable, by supplying a
+different unsigned height. Boundary tests now exercise both hostile mismatch
+directions for every affected query while the existing bytecode tests continue
+to cover normal pre-activation and activation behavior.
+
 ### 2026-08-13 - docs: refine ultra-review tranche boundaries
 
 Clarifies the ultra-review execution plan after an independent plan audit. The

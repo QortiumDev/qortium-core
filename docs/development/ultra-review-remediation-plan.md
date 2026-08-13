@@ -37,7 +37,7 @@ runs must never overlap in the same checkout because they share `target/` and
 
 | Tranche | Scope | Status | Dependencies | Acceptance evidence |
 | --- | --- | --- | --- | --- |
-| T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | In progress | None | For each opcode, a high claimed height cannot activate it before the local trigger and a low claimed height cannot deactivate it at or after the local trigger |
+| T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | Complete | None | `fix(at): use local height for chain-query activation gates`; adversarial red test failed 2/2 before the repair; focused tests passed 29/29; full suite passed 3,004 with 68 skips; independent Codex review passed |
 | T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Planned | T1 accepted and committed | State-transition, genesis-height minting-policy, and watchdog default/profile tests; coordinated rollout and live-height verification remain a release condition |
 | T3 | Redesign watchdog orphaning around validated, locally anchored alternative-block evidence. | Planned | T2 containment | Adversarial peer-claim tests and transactional orphan/adoption tests |
 | T4 | Make bootstrap acquisition and repository replacement fail-safe. | Planned | Operator trust/provenance decision | HTTPS/provenance, digest, truncation, staging, validation, rollback tests |
@@ -52,7 +52,7 @@ runs must never overlap in the same checkout because they share `target/` and
 
 | ID | Verified disposition | Priority | Tranche | Status | Completion evidence |
 | --- | --- | --- | --- | --- | --- |
-| C-01 | `ChainATAPI` selects three opcode gates from peer-supplied `blockHeight` instead of the local parent height plus one. | Critical | T1 | In progress | Pending |
+| C-01 | `ChainATAPI` selects three opcode gates from peer-supplied `blockHeight` instead of the local parent height plus one. | Critical | T1 | Complete | Both height-mismatch directions pass at the exact trigger boundary for all three opcodes; existing bytecode-level pre-trigger and at-trigger tests pass |
 | C-02 | Unknown feature-trigger names are accepted and silently unused. This is currently intentional forward-compatibility behavior, and `featureTriggers` is excluded from the chain-config handshake hash. | High safety / design | T9 | Decision | Decide strict registry plus activation-schedule compatibility mechanism |
 | C-03 | A genesis-height node can bypass stale-tip protections and mint a competing block 2 despite fresh higher peers. This is local fork/liveness policy, not remote block-validation bypass. | Medium | T2 | Planned | Pending |
 | N-01 | Java defaults combine mainnet chain identity with Previewnet seed addresses; an empty/default configuration cannot handshake with those seeds. | High | T5 | Planned | Pending |
