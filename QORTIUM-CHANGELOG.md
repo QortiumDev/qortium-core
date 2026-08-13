@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - security(sync): disable peer-claim recovery watchdog by default
+
+Stops peer-advertised height and archive claims from authorizing automatic
+orphaning in generic or Preview configurations. The former default-on setting
+is now ignored, managed profile upgrades force its legacy value to `false` for
+downgrade safety, and all Preview templates explicitly stay disabled. The
+existing experiment remains available only through a newly named, deliberate
+test-network opt-in so its orphan-selection design can be replaced separately
+without silently discarding confirmed blocks in shipped profiles.
+
 ### 2026-08-13 - docs: start ultra-review recovery containment tranche
 
 Advances the tracked Core review work to its second bounded tranche after the

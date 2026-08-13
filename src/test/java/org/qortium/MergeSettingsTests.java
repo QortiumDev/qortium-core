@@ -141,6 +141,19 @@ public class MergeSettingsTests {
 	}
 
 	@Test
+	public void testMigrationRemovesLegacyPeerClaimOrphaningOverride() throws Exception {
+		writeJson(templatePath, "{\"developmentPeerClaimOrphaningEnabled\":false}");
+		writeJson(snapshotPath, "{\"apiPort\":24891}");
+		writeJson(settingsPath, "{\"apiPort\":24891,\"recoveryWatchdogEnabled\":true}");
+
+		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(Boolean.FALSE, merged.get("developmentPeerClaimOrphaningEnabled"));
+		assertEquals(Boolean.FALSE, merged.get("recoveryWatchdogEnabled"));
+	}
+
+	@Test
 	public void testNestedValuesCompareByContent() throws Exception {
 		writeJson(snapshotPath, "{\"initialPeers\": [\"1.2.3.4:24892\"], \"wallets\": {\"BTC\": false}}");
 		writeJson(settingsPath, "{\"initialPeers\": [\"1.2.3.4:24892\"], \"wallets\": {\"BTC\": true}}");

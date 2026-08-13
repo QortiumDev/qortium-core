@@ -89,6 +89,8 @@
   "minPeerConnectionTime": 7200,
   "maxPeerConnectionTime": 21600,
   "recoveryModeTimeout": 0,
+  "developmentPeerClaimOrphaningEnabled": false,
+  "recoveryWatchdogEnabled": false,
   "autoUpdateMode": "NOTIFY",
   "qdnEnabled": true,
   "qdnAuthBypassEnabled": true,

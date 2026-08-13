@@ -311,12 +311,16 @@ public class Settings {
 	/** The number of seconds of no activity before recovery mode begins */
 	public long recoveryModeTimeout = 9999999999999L;
 
-	/** Tier 3 fork-recovery watchdog: when our chain tip is stale and a quorum of fresh, healthy,
-	 * strictly-higher peers exists (i.e. we are wedged behind a live network, e.g. on a short
-	 * self-minted fork the weight comparison refuses to give up), auto-orphan our short top fork so
-	 * normal validated synchronization can adopt the network chain. Default true (intended for
-	 * previewnet; operators can disable until vetted). */
-	public boolean recoveryWatchdogEnabled = true;
+	/**
+	 * Deprecated compatibility input. Legacy values are ignored because peer-advertised tip and archive
+	 * claims are insufficient authority to discard confirmed local blocks.
+	 */
+	private Boolean recoveryWatchdogEnabled = null;
+	/**
+	 * Development-only opt-in for the legacy peer-claim orphaning experiment. This remains unavailable
+	 * on mainnet even when configured, and is disabled in every shipped Preview profile.
+	 */
+	private boolean developmentPeerClaimOrphaningEnabled = false;
 	/** Milliseconds the stuck condition must persist continuously before the watchdog acts. */
 	public long recoveryWatchdogStuckThresholdMillis = 5 * 60 * 1000L;
 	/** Minimum milliseconds between watchdog orphan actions, to prevent thrashing. */
@@ -1786,6 +1790,10 @@ public class Settings {
 	private void validate() {
 		normaliseBitcoinyNetworks();
 		normaliseBitcoinyServers();
+		if (Boolean.TRUE.equals(this.recoveryWatchdogEnabled))
+			LOGGER.warn("Setting recoveryWatchdogEnabled is deprecated and ignored; peer-claim orphaning now requires the test-network-only developmentPeerClaimOrphaningEnabled opt-in");
+		if (this.developmentPeerClaimOrphaningEnabled && !this.isTestNet)
+			LOGGER.warn("Setting developmentPeerClaimOrphaningEnabled is ignored outside test networks");
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
 			throwValidationError("minBlockchainPeers must be at least 1");
@@ -2494,7 +2502,13 @@ public class Settings {
 		return recoveryModeTimeout;
 	}
 
-	public boolean isRecoveryWatchdogEnabled() { return this.recoveryWatchdogEnabled; }
+	/** @deprecated legacy input is ignored; use {@link #isDevelopmentPeerClaimOrphaningEnabled()}. */
+	@Deprecated
+	public boolean isRecoveryWatchdogEnabled() { return this.isDevelopmentPeerClaimOrphaningEnabled(); }
+
+	public boolean isDevelopmentPeerClaimOrphaningEnabled() {
+		return this.isTestNet && this.developmentPeerClaimOrphaningEnabled;
+	}
 
 	public long getRecoveryWatchdogStuckThresholdMillis() { return this.recoveryWatchdogStuckThresholdMillis; }
 

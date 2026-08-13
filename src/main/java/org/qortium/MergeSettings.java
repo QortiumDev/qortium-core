@@ -98,6 +98,14 @@ public class MergeSettings {
 			}
 		}
 
+		// Security migration: the legacy Core defaulted peer-claim orphaning on. Keep an explicit
+		// false value in managed settings so both the current release and an older downgraded binary
+		// fail closed. Local legacy true overrides must never survive a template carrying the new key.
+		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
+			merged.put("recoveryWatchdogEnabled", false);
+			result.preserved.remove("recoveryWatchdogEnabled");
+		}
+
 		writeJsonObject(settingsPath, merged);
 		Files.copy(templatePath, snapshotPath, StandardCopyOption.REPLACE_EXISTING);
 
