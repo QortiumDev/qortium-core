@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: refine ultra-review tranche boundaries
+
+Clarifies the ultra-review execution plan after an independent plan audit. The
+recovery tranche now explicitly owns genesis-height mint deferral and treats
+coordinated rollout as a release condition rather than a code dependency;
+Docker configuration has one owner; keystore permissions have a separate local
+secret-file tranche; and the first consensus repair requires both hostile
+height-mismatch directions for all three affected AT queries.
+
 ### 2026-08-13 - docs: track ultra-review remediation plan
 
 Records the independently verified 2026-08 Core review as a durable execution
