@@ -98,22 +98,26 @@ public class MergeSettings {
 			}
 		}
 
-		// Security migration: the legacy Core defaulted peer-claim orphaning on. Keep an explicit
-		// false value in managed settings so both the current release and an older downgraded binary
-		// fail closed. Local legacy true overrides must never survive a template carrying the new key.
+		// Security migration: retired Core versions exposed two peer-claim orphaning enable keys.
+		// Keep both explicitly false in managed settings so the current release and either older
+		// implementation fail closed. Local true overrides must never survive a managed upgrade.
 		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
 			merged.put("recoveryWatchdogEnabled", false);
+			merged.put("developmentPeerClaimOrphaningEnabled", false);
 			result.preserved.remove("recoveryWatchdogEnabled");
+			result.preserved.remove("developmentPeerClaimOrphaningEnabled");
 			result.removed.remove("recoveryWatchdogEnabled");
+			result.removed.remove("developmentPeerClaimOrphaningEnabled");
 		}
 
 		writeJsonObject(settingsPath, merged);
 		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
-			// Deliberately omit the legacy key from the snapshot while retaining false in the runtime
-			// file. If a complete release rollback restores an old template, the old merge algorithm
-			// then sees runtime false as a local addition and preserves it instead of restoring default-on.
+			// Deliberately omit both retired keys from the snapshot while retaining false in the runtime
+			// file. If a complete release rollback restores an old template, its merge algorithm then
+			// sees each runtime false as a local addition and preserves it instead of restoring an opt-in.
 			LinkedHashMap<String, Object> safeSnapshot = new LinkedHashMap<>(template);
 			safeSnapshot.remove("recoveryWatchdogEnabled");
+			safeSnapshot.remove("developmentPeerClaimOrphaningEnabled");
 			writeJsonObject(snapshotPath, safeSnapshot);
 		} else {
 			Files.copy(templatePath, snapshotPath, StandardCopyOption.REPLACE_EXISTING);

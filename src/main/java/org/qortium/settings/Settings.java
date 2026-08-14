@@ -311,20 +311,9 @@ public class Settings {
 	/** The number of seconds of no activity before recovery mode begins */
 	public long recoveryModeTimeout = 9999999999999L;
 
-	/**
-	 * Deprecated compatibility input. Legacy values are ignored because peer-advertised tip and archive
-	 * claims are insufficient authority to discard confirmed local blocks.
-	 */
+	/** Deprecated compatibility inputs retained only so managed upgrades can fail closed. */
 	private Boolean recoveryWatchdogEnabled = null;
-	/**
-	 * Development-only opt-in for the legacy peer-claim orphaning experiment. This remains unavailable
-	 * on mainnet even when configured, and is disabled in every shipped Preview profile.
-	 */
-	private boolean developmentPeerClaimOrphaningEnabled = false;
-	/** Milliseconds the stuck condition must persist continuously before the watchdog acts. */
-	public long recoveryWatchdogStuckThresholdMillis = 5 * 60 * 1000L;
-	/** Minimum milliseconds between watchdog orphan actions, to prevent thrashing. */
-	public long recoveryWatchdogCooldownMillis = 10 * 60 * 1000L;
+	private Boolean developmentPeerClaimOrphaningEnabled = null;
 
 	/** Minimum peer version number required in order to sync with them */
 	private String minPeerVersion = "1.0.0";
@@ -1790,10 +1779,9 @@ public class Settings {
 	private void validate() {
 		normaliseBitcoinyNetworks();
 		normaliseBitcoinyServers();
-		if (Boolean.TRUE.equals(this.recoveryWatchdogEnabled))
-			LOGGER.warn("Setting recoveryWatchdogEnabled is deprecated and ignored; peer-claim orphaning now requires the test-network-only developmentPeerClaimOrphaningEnabled opt-in");
-		if (this.developmentPeerClaimOrphaningEnabled && !this.isTestNet)
-			LOGGER.warn("Setting developmentPeerClaimOrphaningEnabled is ignored outside test networks");
+		if (Boolean.TRUE.equals(this.recoveryWatchdogEnabled)
+				|| Boolean.TRUE.equals(this.developmentPeerClaimOrphaningEnabled))
+			LOGGER.warn("Peer-claim orphaning settings are retired and ignored; synchronization never discards confirmed blocks based only on peer claims");
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
 			throwValidationError("minBlockchainPeers must be at least 1");
@@ -2502,17 +2490,15 @@ public class Settings {
 		return recoveryModeTimeout;
 	}
 
-	/** @deprecated legacy input is ignored; use {@link #isDevelopmentPeerClaimOrphaningEnabled()}. */
+	/** @deprecated peer-claim orphaning has been retired and this compatibility input is ignored. */
 	@Deprecated
-	public boolean isRecoveryWatchdogEnabled() { return this.isDevelopmentPeerClaimOrphaningEnabled(); }
+	public boolean isRecoveryWatchdogEnabled() { return false; }
 
+	/** @deprecated peer-claim orphaning has been retired and this compatibility input is ignored. */
+	@Deprecated
 	public boolean isDevelopmentPeerClaimOrphaningEnabled() {
-		return this.isTestNet && this.developmentPeerClaimOrphaningEnabled;
+		return false;
 	}
-
-	public long getRecoveryWatchdogStuckThresholdMillis() { return this.recoveryWatchdogStuckThresholdMillis; }
-
-	public long getRecoveryWatchdogCooldownMillis() { return this.recoveryWatchdogCooldownMillis; }
 
 	public String getMinPeerVersion() { return this.minPeerVersion; }
 

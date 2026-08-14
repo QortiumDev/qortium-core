@@ -34,6 +34,43 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: complete ultra-review watchdog retirement tranche
+
+Records the completed security decision to remove automatic peer-claim
+orphaning instead of building a second chain-reorganization path. The tracker
+now marks that finding complete, records the adversarial, rollback, focused,
+full-suite, and independent-review evidence, and preserves a separately
+unassigned hardening item for failure atomicity in normal fork adoption. No
+release, deployment, or live-network verification is claimed.
+
+### 2026-08-13 - fix(settings): keep retired orphan flags disabled on rollback
+
+Extends managed-settings rollback protection to both retired peer-claim
+orphaning keys. A local `true` value for either name is forced to `false`, and
+both keys are omitted from the template snapshot so an older merger preserves
+the safe runtime values as local overrides instead of reviving the former
+development experiment after a downgrade.
+
+### 2026-08-13 - security(sync): retire peer-claim orphaning
+
+Removes the automatic path that could discard confirmed local blocks from peer
+height, freshness, quorum, and archive-capability claims. The old setting names
+remain accepted only as permanently disabled compatibility inputs, every public
+and development profile declares them false, and managed rollback continues to
+preserve both safe values across older releases. The corrected recovery policy
+and normal synchronizer already retry and adopt a valid higher chain; no
+replacement reorg path, chain-selection rule, release, or deployment is
+introduced here.
+
+### 2026-08-13 - docs: start ultra-review watchdog evidence redesign
+
+Starts the separately bounded design review of the disabled peer-claim
+orphaning experiment. Locally anchored alternative-block evidence was the
+initial candidate, but the review was required to prefer retirement if normal
+synchronization already handled the motivating case more safely. It did not
+enable the mechanism in public profiles, change normal block validity or chain
+weighting, or authorize a release or deployment.
+
 ### 2026-08-13 - fix(sync): contain recovery and genesis fork hazards
 
 Completes the second ultra-review remediation tranche without changing block

@@ -141,24 +141,27 @@ public class MergeSettingsTests {
 	}
 
 	@Test
-	public void testMigrationAndRollbackKeepLegacyPeerClaimOrphaningDisabled() throws Exception {
+	public void testMigrationAndRollbackKeepRetiredPeerClaimOrphaningDisabled() throws Exception {
 		writeJson(templatePath, "{\"developmentPeerClaimOrphaningEnabled\":false}");
 		writeJson(snapshotPath, "{\"apiPort\":24891}");
-		writeJson(settingsPath, "{\"apiPort\":24891,\"recoveryWatchdogEnabled\":true}");
+		writeJson(settingsPath, "{\"apiPort\":24891,\"recoveryWatchdogEnabled\":true,"
+				+ "\"developmentPeerClaimOrphaningEnabled\":true}");
 
 		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
 
 		Map<String, Object> merged = readJson(settingsPath);
 		assertEquals(Boolean.FALSE, merged.get("developmentPeerClaimOrphaningEnabled"));
 		assertEquals(Boolean.FALSE, merged.get("recoveryWatchdogEnabled"));
-		assertFalse(readJson(snapshotPath).containsKey("recoveryWatchdogEnabled"));
+		Map<String, Object> safeSnapshot = readJson(snapshotPath);
+		assertFalse(safeSnapshot.containsKey("recoveryWatchdogEnabled"));
+		assertFalse(safeSnapshot.containsKey("developmentPeerClaimOrphaningEnabled"));
 
 		// Model a full rollback: the old template and merge behavior have no new-key special case.
 		writeJson(templatePath, "{}");
 		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
 
 		Map<String, Object> rolledBack = readJson(settingsPath);
-		assertFalse(rolledBack.containsKey("developmentPeerClaimOrphaningEnabled"));
+		assertEquals(Boolean.FALSE, rolledBack.get("developmentPeerClaimOrphaningEnabled"));
 		assertEquals(Boolean.FALSE, rolledBack.get("recoveryWatchdogEnabled"));
 	}
 
