@@ -1,8 +1,8 @@
 # Previewnet Node Minting Reward Bundles
 
-Status: approved implementation design for Previewnet. The first bundle-aware
-batch payout is scheduled for height `100000`. This document does not claim
-that the change has been released or deployed.
+Status: implemented and locally validated for Previewnet. The first
+bundle-aware batch payout is scheduled for height `100000`. This document does
+not claim that the change has been released or deployed.
 
 ## Why This Change Is Needed
 
@@ -351,3 +351,31 @@ The activation PR is not ready for rollout until it demonstrates:
 - a clean serialized full test suite, packaged-artifact inspection, independent
   consensus/security review, and an operator rollout check before height
   `99990`.
+
+## Local Acceptance Evidence
+
+As of 2026-08-14, the source implementation is complete on the feature branch:
+
+- the focused identity, codec, message, configuration, block-format, bundle
+  selection, reward, orphan, no-native-asset, and legacy reward matrix passed
+  `96/96` tests with no failures, errors, or skips;
+- the shipped Previewnet boundary regression accepts version 1 at `99989`,
+  requires version 2 for capture blocks `99990` and `99999` and payout block
+  `100000`, and rejects the opposite representation at each height;
+- the clean serialized package run passed `3063` tests with no failures or
+  errors and `67` skips;
+- the resulting shaded JAR contains the reward identity, bundle protocol,
+  resolver, payout planner, and version-2 block implementation; its bundled
+  `previewchain.json` activates the first payout at `100000`, while the generic
+  `blockchain.json` omits the trigger;
+- independent consensus, security, test-design, and orphan-ordering reviews
+  found no remaining source or PR-acceptance blocker; and
+- `git diff --check` passed for the implementation range and completion-document
+  diff.
+
+This is source and local-artifact evidence only. Before release, operators must
+run the exact candidate on multiple Previewnet nodes, verify bundle gossip and
+block interoperability, confirm the live height still leaves enough time to
+update every block producer before `99990`, and move the payout trigger to a
+later batch boundary if that rollout cannot finish safely. No release,
+deployment, live-network validation, or chain activation is claimed here.

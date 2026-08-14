@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs(consensus): complete node reward bundle source validation
+
+Records the completed local acceptance gate for Previewnet node reward bundles.
+The focused feature and legacy reward matrix passed 96 tests, the exact shipped
+transition regression passed at heights 99,989, 99,990, 99,999, and 100,000,
+and the clean serialized package run passed 3,063 tests with 67 skips and no
+failures or errors. The packaged JAR contains the new identity, bundle protocol,
+selection, payout, and version-2 block paths; its embedded Previewnet config
+schedules the first bundle-aware payout at height 100,000 while the generic
+chain remains unactivated. Independent consensus, security, test-design, and
+orphan-ordering reviews found no remaining source blocker. This records source
+and local-artifact readiness only: release still requires exact-candidate
+multi-node Previewnet testing and a coordinated rollout before capture height
+99,990, or a move to a later batch boundary.
+
 ### 2026-08-14 - test(consensus): pin Previewnet node reward transition heights
 
 Pins the shipped Previewnet transition at the exact four operational boundary
