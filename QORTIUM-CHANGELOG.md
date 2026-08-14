@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(minting): persist reward-node identity
+
+Adds a dedicated persistent Ed25519 identity for binding one Core runtime's
+minting keys into a signed reward bundle. The 32-byte private seed is created
+atomically at a caller-selected runtime path, kept owner-only where supported,
+and reused across restarts; corrupt, unreadable, non-regular, or symlinked
+identity paths fail closed instead of silently rotating the node's reward
+identity. Focused tests cover creation, concurrent convergence, permissions,
+copying, signing, and failure cleanup. The identity is not yet used by block
+consensus in this foundation commit.
+
 ### 2026-08-14 - docs(consensus): specify Previewnet node reward bundles
 
 Records the approved Previewnet design for grouping every eligible minting key
