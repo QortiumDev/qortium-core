@@ -40,7 +40,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | Complete | None | `fix(at): use local height for chain-query activation gates`; adversarial red test failed 2/2 before the repair; focused tests passed 29/29; full suite passed 3,004 with 68 skips; independent Codex review passed |
 | T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Complete | T1 accepted and committed | Six implementation commits plus focused tests passed 42/42 and the serialized full suite passed 3,020 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; coordinated rollout and live-height verification remain a release condition |
 | T3 | Retire automatic peer-claim orphaning while retaining both old setting names as permanently disabled compatibility inputs. | Complete | T2 containment | `security(sync): retire peer-claim orphaning` plus the two-key rollback follow-up; red tests failed 2/4 before retirement and 1/1 before rollback repair; focused tests passed 30/30; serialized full suite passed 3,008 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
-| T4 | Make bootstrap acquisition and repository replacement fail-safe. | Planned | Operator trust/provenance decision | HTTPS/provenance, digest, truncation, staging, validation, rollback tests |
+| T4 | Retire the dormant hosted whole-database bootstrap importer while preserving checkpoint-anchored peer archive fast-sync and the non-destructive local export/validation tools. | In progress | None | Legacy-setting, API/tray, exporter, archive-fast-sync, managed upgrade/rollback, focused/full-suite, and independent-review evidence |
 | T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Planned | Decide whether generic Docker targets no network or explicit Previewnet | Cross-profile and container configuration invariants |
 | T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | Planned | None | Request/response and chain/data x IP/I2P matrix tests |
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Planned | T2 recovery-state semantics for the catch-up signal | Deterministic loss, peer isolation, deadline, cancellation, and ping-order tests |
@@ -62,7 +62,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | N-05 | QDN yielding uses `Controller.isUpToDate()`, so a fresh node below the minting/sync peer quorum is permanently capped as if it were catching up. | Medium | T7 | Planned | Pending |
 | N-06 | AIMD halves a process-global window once per expired chunk-map entry, allowing one stalled peer to collapse batching for all transfers. | High | T7 | Planned | Pending |
 | N-07 | `peerPingTimeoutMillis` may exceed the fixed ping interval, permitting overlapping tasks and out-of-order consecutive-miss accounting. | Medium | T7 | Planned | Pending |
-| S-01 | Bootstrap download does not verify trustworthy integrity/provenance and deletes the live repository before extraction or replacement validation. | High | T4 | Planned | Pending |
+| S-01 | The dormant hosted whole-database bootstrap path accepts an unauthenticated archive and deletes the live repository before extraction or replacement validation. Qortium operates no such bootstrap servers; checkpoint-anchored peer archive fast-sync is a separate content-addressed replay path. | High | T4 | In progress | Retire the hosted importer and every automatic/manual replacement entry point; keep legacy settings inert and downgrade-safe; preserve archive fast-sync unchanged |
 | S-02 | Public-write protection classifies several endpoints by exact path. The reported anonymous bypass is false for shipped profiles because the preceding access handler exact-matches the same path; shared classification remains necessary defense-in-depth. | Hardening | T9 | Hardening | Pending |
 | S-03 | NAT/QDN request and response paths can disclose an I2P data destination to a clearnet peer, correlating IP and I2P identities. | High privacy | T6 | Planned | Pending |
 | S-04 | Data-layer I2P HELLO messages expose the separate chain-layer I2P destination because capability construction knows transport but not network layer. | High privacy | T6 | Planned | Pending |
@@ -112,19 +112,26 @@ choose whether generic Docker starts with no bootstrap network or starts an
 explicit Previewnet profile. Ports, health checks, generated settings, chain
 configuration, and seeds then move together.
 
-### Bootstrap provenance
+### Legacy hosted bootstrap retirement
 
-A checksum fetched from the same compromised server detects accidental damage
-but does not authenticate the archive. Before T4, choose a trust root such as a
-pinned release digest, signed manifest, or explicit operator-supplied digest.
+The reviewed `.7z` downloader/importer is not Qortium's active bootstrap
+architecture: Qortium operates no hosted whole-database bootstrap servers, all
+shipped profiles disable that path, and fresh Preview nodes use peer-served
+archive chunks bound to a release-pinned checkpoint and replayed through block
+validation. T4 therefore removes the dormant hosted importer instead of
+introducing a new snapshot publisher, signing key, or trust root. Local
+bootstrap export and validation remain available as non-destructive operator
+utilities, but cannot authorize automatic database replacement.
 
 ## Current Work Boundary
 
-No implementation tranche is active. T3 is complete in source and local
-validation but is not released or deployed. T4 remains the next planned
-ultra-review tranche and cannot start until the bootstrap provenance trust-root
-decision above is made. A-01 is separately unassigned and is not implicitly
-authorized as part of T4.
+T4 is active and is limited to retiring hosted whole-database acquisition and
+replacement, making its legacy configuration inert and rollback-safe, and
+preserving checkpoint-anchored archive fast-sync. T3 is complete in source and
+local validation but is not released or deployed. T4 does not authorize a new
+bootstrap service or signing key, changes to checkpoint or replay consensus
+rules, release/deployment work, or the separately unassigned A-01 normal-reorg
+atomicity design.
 
 T3 was completed by `security(sync): retire peer-claim orphaning` and
 `fix(settings): keep retired orphan flags disabled on rollback`. The autonomous

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: start ultra-review legacy bootstrap retirement
+
+Starts the bounded removal of the dormant hosted whole-database bootstrap
+importer. Qortium operates no servers for that inherited path: fresh nodes use
+peer-served archive chunks whose content is checked and whose replay is anchored
+to a release-pinned checkpoint. The tranche will therefore remove destructive
+hosted download/replacement entry points and make their legacy settings inert
+without introducing another signing key, publisher role, network service, or
+change to checkpointed archive replay.
+
 ### 2026-08-13 - docs: complete ultra-review watchdog retirement tranche
 
 Records the completed security decision to remove automatic peer-claim
