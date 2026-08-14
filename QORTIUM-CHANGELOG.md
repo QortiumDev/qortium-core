@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - test(config): pin explicit Previewnet profiles
+
+Adds a cross-profile invariant for the participant and both seed templates so
+their Preview chain identity, test-network mode, `2489x` listener ports, and
+separate nonempty chain/data seed lists cannot drift independently. This
+protects the explicit profile contract after generic Java defaults stop
+supplying Previewnet peers.
+
 ### 2026-08-14 - docs(preview): align documented outbound-peer target
 
 Corrects the Preview participant guide and tester expectations to match the

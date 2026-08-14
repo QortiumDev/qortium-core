@@ -1,5 +1,6 @@
 package org.qortium.test;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 
@@ -17,6 +18,11 @@ import static org.junit.Assert.fail;
 public class DockerConfigurationTests {
 
 	private static final Path PREVIEW_SETTINGS = Path.of("preview/settings-preview.json");
+	private static final Path[] PREVIEW_PROFILES = new Path[] {
+			PREVIEW_SETTINGS,
+			Path.of("preview/settings-preview-seed.json"),
+			Path.of("preview/settings-preview-seed-netcup.json")
+	};
 
 	@Test
 	public void testMissingSettingsAreCopiedByteForByteFromPreviewTemplate() throws Exception {
@@ -123,10 +129,35 @@ public class DockerConfigurationTests {
 		}
 	}
 
+	@Test
+	public void testTrackedPreviewProfilesCarryCompleteNetworkIdentity() throws Exception {
+		for (Path profile : PREVIEW_PROFILES) {
+			JSONObject settings = new JSONObject(Files.readString(profile));
+
+			assertTrue(profile.toString(), settings.getBoolean("isTestNet"));
+			assertFalse(profile.toString(), settings.getBoolean("singleNodeTestnet"));
+			assertEquals(profile.toString(), "previewchain.json", settings.getString("blockchainConfig"));
+			assertEquals(profile.toString(), 24891, settings.getInt("apiPort"));
+			assertEquals(profile.toString(), 24892, settings.getInt("listenPort"));
+			assertEquals(profile.toString(), 24894, settings.getInt("listenDataPort"));
+			assertPeerPorts(profile, settings.getJSONArray("initialPeers"), 24892);
+			assertPeerPorts(profile, settings.getJSONArray("initialDataPeers"), 24894);
+		}
+	}
+
 	private static void assertContainsPreviewExposedPorts(String compose) {
 		assertTrue(compose.contains("- \"${QORTIUM_API_PORT:-24891}\""));
 		assertTrue(compose.contains("- \"${QORTIUM_P2P_PORT:-24892}\""));
 		assertTrue(compose.contains("- \"${QORTIUM_QDN_PORT:-24894}\""));
+	}
+
+	private static void assertPeerPorts(Path profile, JSONArray peers, int expectedClearnetPort) {
+		assertTrue(profile.toString(), peers.length() > 0);
+		for (int index = 0; index < peers.length(); ++index) {
+			String peer = peers.getString(index);
+			assertTrue(profile + ": " + peer,
+					peer.endsWith(".b32.i2p") || peer.endsWith(":" + expectedClearnetPort));
+		}
 	}
 
 	private static void runInitializer(Path templatePath, Path settingsPath) throws Exception {
