@@ -48,6 +48,7 @@ import org.qortium.transform.block.BlockTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Amounts;
 import org.qortium.utils.Base58;
+import org.qortium.utils.ByteArray;
 import org.qortium.utils.Groups;
 import org.qortium.utils.NTP;
 
@@ -272,6 +273,27 @@ public class Block {
 
 	/** Always use getExpandedAccounts() to access this, as it's lazy-instantiated. */
 	private List<ExpandedAccount> cachedExpandedAccounts = null;
+	/** Bundle-aware payout plan, resolved from this payout block's permanent cohort. */
+	private NodeBundleRewardPlan cachedNodeBundleRewardPlan = null;
+
+	private static final class NodeBundleRewardPlan {
+		private final List<NodeBundleRewardGroup> bundles;
+
+		private NodeBundleRewardPlan(List<NodeBundleRewardGroup> bundles) {
+			this.bundles = List.copyOf(bundles);
+		}
+	}
+
+	private static final class NodeBundleRewardGroup {
+		private final List<ExpandedAccount> members;
+		private final int blocksMintedCreditPerMember;
+
+		private NodeBundleRewardGroup(List<ExpandedAccount> members,
+				int blocksMintedCreditPerMember) {
+			this.members = List.copyOf(members);
+			this.blocksMintedCreditPerMember = blocksMintedCreditPerMember;
+		}
+	}
 
 	/** Opportunistic cache of this block's valid online self-shares. Only created by call to isValid(). */
 	private List<RewardShareData> cachedOnlineRewardShares = null;
@@ -909,6 +931,76 @@ public class Block {
 			rewardSharePublicKeys.add(onlineRewardShare.getRewardSharePublicKey());
 
 		return rewardSharePublicKeys;
+	}
+
+	private boolean usesNodeBundleRewardAccounting() {
+		return usesOnlineNodeRewardBundles(this.blockData.getVersion())
+				&& this.isBatchRewardDistributionBlock();
+	}
+
+	/**
+	 * Resolve the payout cohort from permanent block bytes and the state entering this payout block.
+	 * Duplicate ownership is resolved before mutable payout-height eligibility, as specified by
+	 * {@link NodeRewardBundlePayoutPlan}.
+	 */
+	private NodeBundleRewardPlan getNodeBundleRewardPlan() throws DataException {
+		if (!this.usesNodeBundleRewardAccounting())
+			throw new DataException("Node-bundle reward plan requested outside a bundle-aware payout block");
+
+		if (this.cachedNodeBundleRewardPlan != null)
+			return this.cachedNodeBundleRewardPlan;
+
+		List<OnlineAccountBundleData> declaredBundles;
+		try {
+			declaredBundles = OnlineAccountBundleTransformer.fromBlockCohortBytes(
+					this.blockData.getOnlineAccountBundles(),
+					OnlineAccountBundleTransformer.ChainIdentity.current());
+		} catch (TransformationException | RuntimeException e) {
+			throw new DataException("Unable to decode payout node bundles", e);
+		}
+
+		Map<ByteArray, ExpandedAccount> eligibleAccounts = new HashMap<>();
+		for (OnlineAccountBundleData bundle : declaredBundles) {
+			for (OnlineAccountBundleData.Member member : bundle.getMembers()) {
+				byte[] memberPublicKey = member.getPublicKey();
+				ByteArray key = ByteArray.copyOf(memberPublicKey);
+				if (eligibleAccounts.containsKey(key))
+					continue;
+
+				RewardShareData rewardShareData = this.repository.getAccountRepository()
+						.getRewardShare(memberPublicKey);
+				if (rewardShareData == null || !rewardShareData.isSelfShare())
+					continue;
+
+				ExpandedAccount expandedAccount = new ExpandedAccount(this.repository,
+						rewardShareData, this.blockData.getHeight());
+				if (expandedAccount.isMinterMember)
+					eligibleAccounts.put(key, expandedAccount);
+			}
+		}
+
+		List<byte[]> eligibleMemberPublicKeys = eligibleAccounts.keySet().stream()
+				.map(key -> Arrays.copyOf(key.value, key.value.length))
+				.collect(Collectors.toList());
+		List<NodeBundleRewardGroup> rewardGroups = new ArrayList<>();
+		for (NodeRewardBundlePayoutPlan.PayoutBundle payoutBundle
+				: NodeRewardBundlePayoutPlan.resolve(declaredBundles,
+						eligibleMemberPublicKeys,
+						BlockChain.getInstance().getBlockRewardBatchSize())) {
+			List<ExpandedAccount> members = new ArrayList<>();
+			for (byte[] memberPublicKey : payoutBundle.getMemberPublicKeys()) {
+				ExpandedAccount expandedAccount = eligibleAccounts.get(ByteArray.wrap(memberPublicKey));
+				if (expandedAccount == null)
+					throw new DataException("Resolved node-bundle member is not payout eligible");
+				members.add(expandedAccount);
+			}
+
+			rewardGroups.add(new NodeBundleRewardGroup(members,
+					payoutBundle.getBlocksMintedCreditPerMember()));
+		}
+
+		this.cachedNodeBundleRewardPlan = new NodeBundleRewardPlan(rewardGroups);
+		return this.cachedNodeBundleRewardPlan;
 	}
 
 	// Navigation
@@ -2042,6 +2134,11 @@ public class Block {
 	}
 
 	protected void increaseAccountLevels() throws DataException {
+		if (this.usesNodeBundleRewardAccounting()) {
+			this.applyNodeBundleBlocksMintedCredits(1);
+			return;
+		}
+
 		// We are only interested in accounts that are NOT already lowest level
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
@@ -2105,6 +2202,53 @@ public class Block {
 						LOGGER.trace("Also bumped {} to level {}", expandedAccount.recipientAccountData.getAddress(), newLevel);
 					}
 				}
+			}
+		}
+	}
+
+	private void applyNodeBundleBlocksMintedCredits(int direction) throws DataException {
+		if (direction != 1 && direction != -1)
+			throw new IllegalArgumentException("Node-bundle credit direction must be +1 or -1");
+
+		NodeBundleRewardPlan rewardPlan = this.getNodeBundleRewardPlan();
+		Map<String, Integer> creditByAddress = new HashMap<>();
+		Map<String, AccountData> accountDataByAddress = new HashMap<>();
+		for (NodeBundleRewardGroup bundle : rewardPlan.bundles) {
+			for (ExpandedAccount member : bundle.members) {
+				String address = member.mintingAccountData.getAddress();
+				int signedCredit = Math.multiplyExact(direction,
+						bundle.blocksMintedCreditPerMember);
+				creditByAddress.merge(address, signedCredit, Math::addExact);
+				accountDataByAddress.putIfAbsent(address, member.mintingAccountData);
+			}
+		}
+
+		List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
+		for (Map.Entry<String, Integer> creditEntry : creditByAddress.entrySet()) {
+			int credit = creditEntry.getValue();
+			if (credit == 0)
+				continue;
+
+			String address = creditEntry.getKey();
+			AccountData accountData = accountDataByAddress.get(address);
+			int newBlocksMinted = Math.addExact(accountData.getBlocksMinted(), credit);
+			if (newBlocksMinted < 0)
+				throw new DataException("Node-bundle blocksMinted reversal would become negative");
+
+			this.repository.getAccountRepository().modifyMintedBlockCount(address, credit);
+			accountData.setBlocksMinted(newBlocksMinted);
+
+			int newLevel = 0;
+			for (int level = cumulativeBlocksByLevel.size() - 1; level >= 0; --level) {
+				if (newBlocksMinted >= cumulativeBlocksByLevel.get(level)) {
+					newLevel = level;
+					break;
+				}
+			}
+
+			if (accountData.getLevel() != newLevel) {
+				accountData.setLevel(newLevel);
+				this.repository.getAccountRepository().setLevel(accountData);
 			}
 		}
 	}
@@ -2410,9 +2554,18 @@ public class Block {
 		// Undo any group-approval decisions that happen at this block
 		orphanGroupApprovalTransactions();
 
+		boolean bundleRewardTrustRestored = false;
+		if (this.usesNodeBundleRewardAccounting() && trustInputsChanged) {
+			// Forward payout eligibility is based on state entering this block. Restore that exact
+			// trust view after undoing transactions/groups and before rebuilding the payout plan.
+			refreshTrustDerivationSnapshotsAfterOrphan();
+			bundleRewardTrustRestored = true;
+		}
+
 		if (this.blockData.getHeight() > 1) {
 			// Invalidate expandedAccounts as they may have changed due to orphaning TRANSFER_PRIVS transactions, etc.
 			this.cachedExpandedAccounts = null;
+			this.cachedNodeBundleRewardPlan = null;
 
 			// Account levels and block rewards are only processed/orphaned on block reward distribution blocks
 			if (this.isRewardDistributionBlock()) {
@@ -2424,7 +2577,7 @@ public class Block {
 			}
 		}
 
-		if (trustInputsChanged)
+		if (trustInputsChanged && !bundleRewardTrustRestored)
 			refreshTrustDerivationSnapshotsAfterOrphan();
 
 		// Remove this block's local (non-consensus) online-accounts index entry.
@@ -2595,6 +2748,11 @@ public class Block {
 	}
 
 	protected void decreaseAccountLevels() throws DataException {
+		if (this.usesNodeBundleRewardAccounting()) {
+			this.applyNodeBundleBlocksMintedCredits(-1);
+			return;
+		}
+
 		// We are only interested in accounts that are NOT already lowest level
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
@@ -2794,9 +2952,11 @@ public class Block {
 			long sharedAmount = rewardCandidate.distribute(distributionAmount, balanceChanges);
 			remainingAmount -= sharedAmount;
 
-			// Reallocate any amount that could not be distributed by this candidate.
+			// Legacy mode reallocates an inactive/rounded candidate shortfall. Bundle mode leaves
+			// per-bin, per-node and per-member integer dust deliberately unassigned.
 			long undistributedAmount = distributionAmount - sharedAmount;
-			if (undistributedAmount > 0 && rewardCandidate.share < Amounts.MULTIPLIER)
+			if (!this.usesNodeBundleRewardAccounting() && undistributedAmount > 0
+					&& rewardCandidate.share < Amounts.MULTIPLIER)
 				distributionTotal += Amounts.scaledDivide(undistributedAmount, Amounts.MULTIPLIER - rewardCandidate.share);
 
 			final long remainingAmountForLogging = remainingAmount;
@@ -2817,6 +2977,9 @@ public class Block {
 	}
 
 	protected List<BlockRewardCandidate> determineBlockRewardCandidates() throws DataException {
+		if (this.usesNodeBundleRewardAccounting())
+			return this.determineNodeBundleRewardCandidates();
+
 		// How to distribute reward among groups, with ratio, IN ORDER
 		List<BlockRewardCandidate> rewardCandidates = new ArrayList<>();
 
@@ -2917,6 +3080,83 @@ public class Block {
 
 			BlockRewardCandidate rewardCandidate = new BlockRewardCandidate(description, accountLevelShareBin.share, accountLevelBinDistributor);
 			rewardCandidates.add(rewardCandidate);
+		}
+
+		normalizeRewardCandidateShares(rewardCandidates);
+		return rewardCandidates;
+	}
+
+	private List<BlockRewardCandidate> determineNodeBundleRewardCandidates() throws DataException {
+		List<AccountLevelShareBin> configuredBins = BlockChain.getInstance()
+				.getAccountLevelShareBins(this.repository, this.blockData.getHeight());
+		AccountLevelShareBin[] binsByLevel = BlockChain.getInstance()
+				.getShareBinsByAccountLevel(this.repository, this.blockData.getHeight());
+		List<AccountLevelShareBin> workingBins = new ArrayList<>();
+		Map<Integer, Integer> binIndexById = new HashMap<>();
+		for (int index = 0; index < configuredBins.size(); ++index) {
+			AccountLevelShareBin copy = (AccountLevelShareBin) configuredBins.get(index).clone();
+			workingBins.add(copy);
+			binIndexById.put(copy.id, index);
+		}
+
+		Map<Integer, List<NodeBundleRewardGroup>> bundlesForBin = new HashMap<>();
+		for (int index = 0; index < workingBins.size(); ++index)
+			bundlesForBin.put(index, new ArrayList<>());
+
+		for (NodeBundleRewardGroup bundle : this.getNodeBundleRewardPlan().bundles) {
+			int highestMemberLevel = bundle.members.stream()
+					.mapToInt(member -> member.mintingAccountData.getLevel())
+					.max().orElse(0);
+			if (highestMemberLevel <= 0 || highestMemberLevel > binsByLevel.length)
+				continue;
+
+			AccountLevelShareBin targetBin = binsByLevel[highestMemberLevel - 1];
+			if (targetBin == null)
+				continue;
+			Integer binIndex = binIndexById.get(targetBin.id);
+			if (binIndex == null)
+				throw new DataException("Unable to map node-bundle reward share bin");
+			bundlesForBin.get(binIndex).add(bundle);
+		}
+
+		int shareBinActivationMinLevel = BlockChain.getInstance().getShareBinActivationMinLevel();
+		int minBundlesToActivateShareBin = BlockChain.getInstance()
+				.getMinAccountsToActivateShareBin(this.repository, this.blockData.getHeight());
+		for (int binIndex = workingBins.size() - 1; binIndex >= 0; --binIndex) {
+			AccountLevelShareBin shareBin = workingBins.get(binIndex);
+			List<NodeBundleRewardGroup> binnedBundles = bundlesForBin.get(binIndex);
+			if (binIndex == 0 || shareBin.levels.get(0) < shareBinActivationMinLevel
+					|| binnedBundles.isEmpty()
+					|| binnedBundles.size() >= minBundlesToActivateShareBin)
+				continue;
+
+			bundlesForBin.get(binIndex - 1).addAll(binnedBundles);
+			binnedBundles.clear();
+			AccountLevelShareBin previousBin = workingBins.get(binIndex - 1);
+			previousBin.share += shareBin.share;
+			shareBin.share = 0L;
+		}
+
+		List<BlockRewardCandidate> rewardCandidates = new ArrayList<>();
+		for (int binIndex = 0; binIndex < workingBins.size(); ++binIndex) {
+			AccountLevelShareBin shareBin = workingBins.get(binIndex);
+			List<NodeBundleRewardGroup> binnedBundles = bundlesForBin.get(binIndex);
+			if (binnedBundles.isEmpty())
+				continue;
+
+			BlockRewardDistributor distributor = (distributionAmount, balanceChanges) -> {
+				long perBundleAmount = distributionAmount / binnedBundles.size();
+				long sharedAmount = 0L;
+				for (NodeBundleRewardGroup bundle : binnedBundles) {
+					long perMemberAmount = perBundleAmount / bundle.members.size();
+					for (ExpandedAccount member : bundle.members)
+						sharedAmount = Math.addExact(sharedAmount,
+								member.distribute(perMemberAmount, balanceChanges));
+				}
+				return sharedAmount;
+			};
+			rewardCandidates.add(new BlockRewardCandidate(
+					String.format("Node bundle bin %d", binIndex), shareBin.share, distributor));
 		}
 
 		normalizeRewardCandidateShares(rewardCandidates);

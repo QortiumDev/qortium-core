@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(rewards): distribute batch rewards per node bundle
+
+Switches bundle-aware batch payouts to one allocation per declared reward node
+after deterministic account-overlap resolution and an entering-payout-state
+eligibility check. Each surviving member receives
+`floor(batchSize / survivingMembers)` raw block credit, account levels update
+before the node is placed in its highest member's share bin, and share-bin
+activation counts nodes rather than keys. Native rewards and fees divide in
+order by bin, node, and member with integer dust left unassigned; each member's
+existing external reward shares are then applied only to that member's slice.
+Chains without asset `0` still advance raw credits and levels without creating
+a monetary payout. Orphaning restores the prior trust snapshot before rebuilding
+the payout plan, reverses balances while post-credit levels are still present,
+and then removes each member's exact nonuniform credit. Legacy blocks retain
+their existing reward and dust behavior.
+
 ### 2026-08-14 - feat(consensus): validate node reward bundle cohorts
 
 Builds version-2 capture blocks from the bounded, eligible reward-node bundle
