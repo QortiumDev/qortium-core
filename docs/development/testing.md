@@ -9,7 +9,7 @@ mvn test -DskipJUnitTests=false
 ```
 
 Default coverage should prefer local stand-ins for external systems. Local archive
-export tests use an isolated disk-backed repository, and ElectrumX tests exercise
+export tests use their own disk-backed test repository, and ElectrumX tests exercise
 protocol parsing with mock RPC responses. Public hosts remain integration checks.
 
 ## Coverage Reports

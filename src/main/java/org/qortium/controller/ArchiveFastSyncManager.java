@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Requester/consumer of the archive-chunk fast-sync. On a fresh node (and only when explicitly enabled), this
+ * Requester/consumer of the archive-chunk fast-sync. On a fresh node (and only when enabled), this
  * downloads byte-identical block-archive {@code .dat} chunks from archive-advertising peers, verifies each
  * against its SHA-256 (content-addressing — a tampered chunk is rejected), cross-binds the chunk covering the
  * release-pinned checkpoint against the pinned block signature, imports the chunks, and replays their blocks
@@ -48,7 +48,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Trust: the release-pinned checkpoint is the only anchor; the manifest is untrusted/recomputable. The feature
  * is enabled by default ({@link Settings#isArchiveFastReplayEnabled()}) but inert unless the chain config pins a
  * checkpoint — so it only engages on a net that has one (currently previewnet); when disabled, or with no
-	 * checkpoint, this manager's {@link #run()} returns immediately. It is a one-shot startup fast-sync — it never
+ * checkpoint, this manager's {@link #run()} returns immediately. It is a one-shot startup fast-sync — it never
  * re-arms — and cooperates with the {@link Synchronizer} via the blockchain lock.
  */
 public class ArchiveFastSyncManager extends Thread {

@@ -34,10 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: complete ultra-review hosted bootstrap retirement
+
+Records completion of the hosted whole-database importer retirement with exact
+focused, clean full-suite, packaged-artifact, rollback, and independent-review
+evidence. The tracker distinguishes the retained checkpoint-anchored peer
+archive fast-sync from the removed hosted path, documents the managed versus
+unmanaged rollback boundary, and preserves follow-ups for copy-isolated local
+export plus stale controls in external node and CLI tools. No release,
+deployment, hosted service, or new signing authority is claimed.
+
 ### 2026-08-13 - fix(bootstrap): make local export restoration fail closed
 
-Guarantees that local archive creation releases the blockchain lock and removes
-its operation directory even if restoring node-local data fails. Restoration
+Guarantees that local archive creation releases the blockchain lock and attempts
+operation-directory cleanup even if restoring node-local data fails. Restoration
 errors now fail the export instead of returning success after potentially
 losing minting or trade-bot records. Tests capture block and archive state before
 export, verify exact state afterward, exercise an injected restoration failure,
