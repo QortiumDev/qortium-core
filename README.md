@@ -128,7 +128,9 @@ Stop the node with:
 The root scripts look for `qortium.jar` first and otherwise use a built
 `target/qortium*.jar`. Runtime state such as `settings.json`, `run.log`, and
 the database directory is local to the repository working directory unless
-configured otherwise.
+configured otherwise. Generic Core defaults do not select public chain or data
+seed peers; use the explicit `preview/` launcher or Docker distribution for
+Previewnet, or configure both peer layers for another network yourself.
 
 ### Optional I2P Fallback
 
@@ -144,7 +146,11 @@ Operators who do not want I2P attempts can set `"i2pEnabled": false` in
 
 ## Docker
 
-Docker support is available for developers who prefer a containerized node.
+Docker support is available for developers who prefer a containerized
+Previewnet node. On the first start of a new volume, the image copies the
+tracked participant profile from `preview/settings-preview.json` to
+`./data/qortium/settings.json`; its chain identity, seed lists, and ports are
+therefore explicit rather than inherited from generic Core defaults.
 
 ```sh
 cp .env.example .env
@@ -160,7 +166,26 @@ docker compose -f docker-compose.internal.yml up -d --build
 ```
 
 Container data and `settings.json` are stored under `./data/qortium`. The JVM
-start arguments file is stored at `./data/qortium/start-arguments.txt`.
+start arguments file is stored at `./data/qortium/start-arguments.txt`. Once a
+settings file exists, Docker never replaces or merges it, including when it is
+empty, malformed, or customized. The port values in `.env` control Compose
+publishing and the container health check; they do not rewrite Core settings,
+so they must match the existing settings file.
+
+When upgrading a pre-T5 Docker volume whose settings still use generic `1489x`
+ports, preserve that settings file and set the three port values in `.env` to
+`14891`, `14892`, and `14894` before starting the new Compose definition. To
+move that volume to Previewnet instead, first back up its settings and database,
+then deliberately install the Previewnet profile; the image will not convert or
+delete either one.
+
+A volume first initialized by T5 remains Previewnet on rollback because its
+settings are preserved. A pre-T5 image, however, hard-codes its health check to
+API port `14891`. Either override or disable that old health check so it probes
+the preserved Preview API port `24891`, or deliberately change both the
+preserved settings `apiPort` and Compose API mapping to `14891`. Keep Preview
+P2P and QDN on `24892` and `24894`; back up the volume before either rollback
+procedure.
 
 ## Development
 

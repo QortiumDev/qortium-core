@@ -4,10 +4,9 @@ set -eu
 DEFAULT_JVM_MEMORY_ARGS='-XX:MaxRAMPercentage=25 -XX:+UseG1GC -Xss1024k'
 START_ARGS_FILE="${QORTIUM_START_ARGUMENTS_FILE:-/qortium/start-arguments.txt}"
 SETTINGS_FILE="${QORTIUM_SETTINGS_FILE:-/qortium/settings.json}"
+SETTINGS_TEMPLATE="${QORTIUM_DEFAULT_SETTINGS_TEMPLATE:-/usr/local/qortium/settings-preview.json}"
 
-if [ ! -f "${SETTINGS_FILE}" ]; then
-    printf '{}\n' > "${SETTINGS_FILE}"
-fi
+/usr/local/bin/docker-init-settings.sh "${SETTINGS_TEMPLATE}" "${SETTINGS_FILE}"
 
 if [ ! -f "${START_ARGS_FILE}" ]; then
     printf '%s\n' "${QORTIUM_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}" > "${START_ARGS_FILE}"

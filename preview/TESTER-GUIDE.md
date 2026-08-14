@@ -167,7 +167,7 @@ preview\reset.bat
   genesis, and settle into the current preview height.
 - The first useful tests are connecting to the seed nodes, staying synced, sending
   chat messages, trying QDN features, and reporting issues.
-- Preview participant nodes try to keep four outbound chain peers when enough
+- Preview participant nodes try to keep eight outbound chain peers when enough
   reachable peers are available. Nodes behind a firewall or router can still use
   preview normally. On I2P-capable builds with a working local `i2pd`, they can
   also connect to other I2P-capable nodes that are not directly reachable over

@@ -458,32 +458,19 @@ public class Settings {
 	/**
 	 * Chain-network bootstrap addresses, seeding Network's known-peers list at startup.
 	 * Accepts clearnet (host:port) and I2P (.b32.i2p) chain-seed entries; a node only attempts
-	 * entries reachable on a transport it supports. Default port is the chain P2P port (24892).
-	 * Mirrors {@link #initialDataPeers}.
+	 * entries reachable on a transport it supports. Generic settings do not select a network's
+	 * seeds; deployment profiles configure them explicitly. Mirrors {@link #initialDataPeers}.
 	 */
-	private String[] initialPeers = new String[] {
-			"185.207.104.78:24892",
-			"146.103.42.59:24892",
-			"80.241.221.139:24892",
-			"3u25ana5e5hvriqqiuh6fcetxezsqm7la276ljtjxaoxt767n4hq.b32.i2p",
-			"zqcackxkhjzfbbc6daigc73zqhzdpgwua3mjc7xgn3hwjed5z3ca.b32.i2p",
-			"q25q6gbn2x67x5sos5fgcr5td2xzazzkibovavthha6dpjg3cc6a.b32.i2p"
-	};
+	private String[] initialPeers = new String[0];
 	/**
 	 * Data-layer (QDN) bootstrap addresses, seeding NetworkData's known-peers list at startup.
 	 * Mirrors the chain {@code initialPeers} format. Accepts clearnet (host:port) and I2P
 	 * (.b32.i2p) data-seed entries; a node only attempts entries reachable on a transport it
 	 * supports. The I2P data identity is never advertised in the chain handshake, so the data
-	 * layer is bootstrapped via these peers instead. Default port is the QDN/data port (24894).
+	 * layer is bootstrapped via these peers instead. Generic settings leave this list empty;
+	 * deployment profiles configure network-specific data seeds explicitly.
 	 */
-	private String[] initialDataPeers = new String[] {
-			"185.207.104.78:24894",
-			"146.103.42.59:24894",
-			"80.241.221.139:24894",
-			"qhk6g5hl7vqf5fmlgj6knbajtiszotaf2w26fwjapsr75kbz7fma.b32.i2p",
-			"hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p",
-			"ksbtmej35uvkhhedslrk6zekvjijxaegwnueavcm4ws5zzsadhrq.b32.i2p"
-	};
+	private String[] initialDataPeers = new String[0];
 	private List<String> fixedNetwork;
 
 	// Export/import

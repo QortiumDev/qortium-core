@@ -12,8 +12,8 @@ if [ ! -w /qortium ]; then
     exit 70
 fi
 
-if [ ! -f /qortium/settings.json ]; then
-    printf '{}\n' > /qortium/settings.json
-fi
+SETTINGS_FILE="${QORTIUM_SETTINGS_FILE:-/qortium/settings.json}"
+SETTINGS_TEMPLATE="${QORTIUM_DEFAULT_SETTINGS_TEMPLATE:-/usr/local/qortium/settings-preview.json}"
+/usr/local/bin/docker-init-settings.sh "${SETTINGS_TEMPLATE}" "${SETTINGS_FILE}"
 
 exec /usr/local/bin/docker-start.sh "$@"

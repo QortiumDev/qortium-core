@@ -34,6 +34,76 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs: complete ultra-review configuration coherence
+
+Records completion of the generic-versus-Preview configuration repair. Bare
+Core defaults no longer inject Previewnet peers, while new Docker volumes use
+the canonical Preview participant profile and coherent `2489x` surfaces without
+overwriting existing settings. The tracker records focused, Compose, full-suite,
+diff, and independent-review evidence plus the legacy-volume and pre-T5 rollback
+boundaries. No release, deployment, live-network, chain, checkpoint, or
+consensus change is claimed.
+
+### 2026-08-14 - docs(docker): clarify generic startup and rollback
+
+Clarifies that fresh generic root-script starts no longer receive public
+bootstrap peers, while Previewnet users should use its dedicated launcher or
+Docker profile and other networks should select the peer layers they need. The
+Docker rollback guidance now accounts for pre-T5 images' fixed `14891` health
+check and explains how to preserve a T5 Preview volume without silently
+changing its network identity or data.
+
+### 2026-08-14 - fix(docker): harden first-run settings installation
+
+Uses an exclusively created same-directory staging file before atomically
+installing first-run Docker settings, preventing PID-namespace collisions or a
+pre-created staging symlink from exposing partial data or overwriting another
+file. Adversarial tests cover concurrent initializers, staging symlinks,
+operator-owned settings symlinks, and temporary-file cleanup.
+
+### 2026-08-14 - test(config): pin explicit Previewnet profiles
+
+Adds a cross-profile invariant for the participant and both seed templates so
+their Preview chain identity, test-network mode, `2489x` listener ports, and
+separate nonempty chain/data seed lists cannot drift independently. This
+protects the explicit profile contract after generic Java defaults stop
+supplying Previewnet peers.
+
+### 2026-08-14 - docs(preview): align documented outbound-peer target
+
+Corrects the Preview participant guide and tester expectations to match the
+tracked profile's existing target of eight outbound chain peers. This is a
+documentation-only correction; peer-selection behavior and the live Previewnet
+configuration are unchanged.
+
+### 2026-08-14 - fix(docker): initialize new volumes as Previewnet
+
+Makes the Docker distribution explicitly Previewnet: a missing settings file
+is installed byte-for-byte from the tracked participant profile, and Dockerfile,
+Compose, health, and example environment defaults use its `2489x` ports. An
+existing settings path is never overwritten or merged, including empty,
+malformed, or custom files. Existing generic `1489x` volumes remain unchanged
+and must retain matching Compose port values or be deliberately migrated after
+backup; no database or settings conversion is automatic.
+
+### 2026-08-14 - fix(settings): separate generic defaults from Previewnet seeds
+
+Removes Previewnet chain and data seeds from generic Java defaults so a bare
+Core start keeps its default chain identity without silently dialing another
+network's peers. Explicit Previewnet participant and seed profiles retain both
+seed layers and their existing `2489x` ports; remembered and operator-configured
+peers are not purged. No chain configuration, network identity, checkpoint, or
+consensus rule changes.
+
+### 2026-08-13 - docs: start ultra-review configuration coherence tranche
+
+Starts the bounded repair of mismatched generic, Docker, and Previewnet network
+settings. Generic Core will retain its default chain identity without silently
+dialing Previewnet seeds, while a newly initialized Docker volume will receive
+an explicit tracked Previewnet profile and matching `2489x` ports. Existing
+container settings remain operator-owned and are never overwritten; this
+tranche changes no live network, checkpoint, feature trigger, or consensus rule.
+
 ### 2026-08-13 - docs: complete ultra-review hosted bootstrap retirement
 
 Records completion of the hosted whole-database importer retirement with exact
