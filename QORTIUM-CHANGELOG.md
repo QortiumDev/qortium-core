@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs(docker): clarify generic startup and rollback
+
+Clarifies that generic root-script starts now require explicitly configured
+chain and data peers, while Previewnet users should use its dedicated launcher
+or Docker profile. The Docker rollback guidance now accounts for pre-T5 images'
+fixed `14891` health check and explains how to preserve a T5 Preview volume
+without silently changing its network identity or data.
+
 ### 2026-08-14 - fix(docker): harden first-run settings installation
 
 Uses an exclusively created same-directory staging file before atomically

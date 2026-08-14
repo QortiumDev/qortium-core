@@ -128,7 +128,9 @@ Stop the node with:
 The root scripts look for `qortium.jar` first and otherwise use a built
 `target/qortium*.jar`. Runtime state such as `settings.json`, `run.log`, and
 the database directory is local to the repository working directory unless
-configured otherwise.
+configured otherwise. Generic Core defaults do not select public chain or data
+seed peers; use the explicit `preview/` launcher or Docker distribution for
+Previewnet, or configure both peer layers for another network yourself.
 
 ### Optional I2P Fallback
 
@@ -175,8 +177,15 @@ ports, preserve that settings file and set the three port values in `.env` to
 `14891`, `14892`, and `14894` before starting the new Compose definition. To
 move that volume to Previewnet instead, first back up its settings and database,
 then deliberately install the Previewnet profile; the image will not convert or
-delete either one. Conversely, keep `2489x` settings and port values if rolling
-back a volume that was first initialized by this Previewnet image.
+delete either one.
+
+A volume first initialized by T5 remains Previewnet on rollback because its
+settings are preserved. A pre-T5 image, however, hard-codes its health check to
+API port `14891`. Either override or disable that old health check so it probes
+the preserved Preview API port `24891`, or deliberately change both the
+preserved settings `apiPort` and Compose API mapping to `14891`. Keep Preview
+P2P and QDN on `24892` and `24894`; back up the volume before either rollback
+procedure.
 
 ## Development
 
