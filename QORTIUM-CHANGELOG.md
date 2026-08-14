@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - fix(minting): announce every eligible local key as one node bundle
+
+Fixes the hidden two-key omission by producing a signed reward-node bundle from
+every eligible self-share installed on one Core instance, while retaining the
+two-key limit only for legacy flat announcements before activation. Incoming
+bundles are chain-bound and fully checked for membership, trust, signatures,
+and MemoryPoW before admission; copied-identity conflicts resolve
+deterministically. Per-epoch caches, concurrent queues, scheduled validation
+work, message threads, and relayed batches are all bounded so hostile bundle
+traffic cannot grow memory without limit or monopolize verification workers.
+Focused tests exercise real three-key production and the adversarial cache,
+queue, eligibility, proof, routing, and load boundaries.
+
 ### 2026-08-14 - feat(rewards): plan per-node bundle payouts
 
 Adds the deterministic payout planner that turns a committed bundle cohort into

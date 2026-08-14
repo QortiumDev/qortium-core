@@ -2105,6 +2105,10 @@ public class Settings {
 		maxThreadsPerMessageType.add(new ThreadLimit("GET_TRANSACTION", 50));
 		maxThreadsPerMessageType.add(new ThreadLimit("TRANSACTION_SIGNATURES", 50));
 		maxThreadsPerMessageType.add(new ThreadLimit("TRADE_PRESENCES", 50));
+		// Bundle import can entail bounded Ed25519 and MemoryPoW verification; keep it from
+		// monopolizing network workers. Inventory responses are cheaper but still serialize cohorts.
+		maxThreadsPerMessageType.add(new ThreadLimit("ONLINE_ACCOUNT_BUNDLES", 2));
+		maxThreadsPerMessageType.add(new ThreadLimit("GET_ONLINE_ACCOUNT_BUNDLES", 5));
 		// Archive-chunk fast-sync serving handlers: bound them like the other GET_* serving types so a peer can't
 		// pin the network worker pool with concurrent archive manifest/chunk reads.
 		maxThreadsPerMessageType.add(new ThreadLimit("GET_ARCHIVE_MANIFEST", 5));

@@ -11,19 +11,28 @@ import org.qortium.block.BlockChain;
 import org.qortium.crypto.Crypto;
 import org.qortium.crypto.MemoryPoW;
 import org.qortium.crypto.Ed25519Extras;
+import org.qortium.crypto.RewardNodeIdentity;
 import org.qortium.data.account.MintingAccountData;
 import org.qortium.data.account.RewardShareData;
-import org.qortium.data.group.GroupMemberData;
 import org.qortium.data.network.OnlineAccountData;
+import org.qortium.data.network.OnlineAccountBundleData;
+import org.qortium.data.network.OnlineAccountBundleData.Member;
 import org.qortium.network.Network;
 import org.qortium.network.Peer;
+import org.qortium.network.message.GetOnlineAccountBundlesMessage;
+import org.qortium.network.message.GetOnlineAccountBundlesMessage.BundleIdentifier;
 import org.qortium.network.message.GetOnlineAccountsMessage;
 import org.qortium.network.message.Message;
+import org.qortium.network.message.MessageException;
+import org.qortium.network.message.OnlineAccountBundlesMessage;
 import org.qortium.network.message.OnlineAccountsMessage;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
+import org.qortium.transform.OnlineAccountBundleTransformer;
+import org.qortium.transform.OnlineAccountBundleTransformer.ChainIdentity;
+import org.qortium.transform.TransformationException;
 import org.qortium.transform.Transformer;
 import org.qortium.utils.Base58;
 import org.qortium.utils.Groups;
@@ -32,6 +41,8 @@ import org.qortium.utils.NamedThreadFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.*;
@@ -62,6 +73,13 @@ public class OnlineAccountsManager {
      * How many timestamp-sets of successful V2 signature verifications we cache.
      */
     private static final int MAX_CACHED_SIGNATURE_TIMESTAMP_SETS = MAX_CACHED_TIMESTAMP_SETS + MAX_BLOCKS_CACHED_ONLINE_ACCOUNTS;
+    static final int MAX_QUEUED_ONLINE_ACCOUNT_BUNDLES =
+            MAX_CACHED_TIMESTAMP_SETS * OnlineAccountBundleTransformer.MAX_BUNDLES_PER_COHORT;
+    static final int MAX_ONLINE_ACCOUNT_BUNDLES_VALIDATED_PER_CYCLE = 64;
+    static final int MAX_ONLINE_ACCOUNT_BUNDLE_MEMBER_OCCURRENCES_VALIDATED_PER_CYCLE =
+            OnlineAccountBundleTransformer.MAX_MEMBERS_PER_BUNDLE;
+    static final int MAX_CACHED_ONLINE_ACCOUNT_BUNDLES_PER_TIMESTAMP =
+            OnlineAccountBundleTransformer.MAX_BUNDLES_PER_COHORT;
 
     private static final long ONLINE_ACCOUNTS_QUEUE_INTERVAL = 100L; // ms
     private static final long ONLINE_ACCOUNTS_TASKS_INTERVAL = 10 * 1000L; // ms
@@ -91,6 +109,8 @@ public class OnlineAccountsManager {
     private volatile boolean isStopping = false;
 
     private final Set<OnlineAccountData> onlineAccountsImportQueue = ConcurrentHashMap.newKeySet();
+    private final Object onlineAccountBundlesImportQueueLock = new Object();
+    private final Map<String, OnlineAccountBundleData> onlineAccountBundlesImportQueue = new LinkedHashMap<>();
 
     /**
      * Cache of 'current' online accounts, keyed by timestamp
@@ -100,6 +120,8 @@ public class OnlineAccountsManager {
      * Cache of hash-summary of 'current' online accounts, keyed by timestamp, then leading byte of public key.
      */
     private final Map<Long, Map<Byte, byte[]>> currentOnlineAccountsHashes = new ConcurrentHashMap<>();
+    /** One deterministic bundle per reward-node identity and timestamp. */
+    private final Map<Long, Map<String, OnlineAccountBundleData>> currentOnlineAccountBundles = new ConcurrentHashMap<>();
 
     /**
      * Cache of online accounts for latest blocks - not necessarily 'current' / now.
@@ -114,6 +136,9 @@ public class OnlineAccountsManager {
     private long lastOnlineAccountsRequest = 0;
 
     private boolean hasOurOnlineAccounts = false;
+
+    private Path rewardNodeIdentityPath;
+    private RewardNodeIdentity rewardNodeIdentity;
 
     public static long getOnlineTimestampModulus() {
         return ONLINE_TIMESTAMP_MODULUS;
@@ -205,6 +230,7 @@ public class OnlineAccountsManager {
 
         // Process import queue
         executor.scheduleWithFixedDelay(this::processOnlineAccountsImportQueue, ONLINE_ACCOUNTS_QUEUE_INTERVAL, ONLINE_ACCOUNTS_QUEUE_INTERVAL, TimeUnit.MILLISECONDS);
+        executor.scheduleWithFixedDelay(this::processOnlineAccountBundlesImportQueue, ONLINE_ACCOUNTS_QUEUE_INTERVAL, ONLINE_ACCOUNTS_QUEUE_INTERVAL, TimeUnit.MILLISECONDS);
 
         // Send our online accounts (using increased initial delay)
         // This allows some time for initial online account lists to be retrieved, and
@@ -560,6 +586,11 @@ public class OnlineAccountsManager {
         final long cutoffThreshold = now - MAX_CACHED_TIMESTAMP_SETS * getOnlineTimestampModulus();
         this.currentOnlineAccounts.keySet().removeIf(timestamp -> timestamp < cutoffThreshold);
         this.currentOnlineAccountsHashes.keySet().removeIf(timestamp -> timestamp < cutoffThreshold);
+        this.currentOnlineAccountBundles.keySet().removeIf(timestamp -> timestamp < cutoffThreshold);
+        synchronized (this.onlineAccountBundlesImportQueueLock) {
+            this.onlineAccountBundlesImportQueue.entrySet().removeIf(
+                    entry -> entry.getValue().getTimestamp() < cutoffThreshold);
+        }
 
         final long signatureCutoffThreshold = now - MAX_CACHED_SIGNATURE_TIMESTAMP_SETS * getOnlineTimestampModulus();
         this.verifiedOnlineAccountSignatures.keySet().removeIf(timestamp -> timestamp < signatureCutoffThreshold);
@@ -607,6 +638,13 @@ public class OnlineAccountsManager {
         lastOnlineAccountsRequest = now;
         Message message = new GetOnlineAccountsMessage(currentOnlineAccountsHashes);
         Network.getInstance().broadcast(peer -> message);
+
+        try {
+            Message bundleRequest = new GetOnlineAccountBundlesMessage(getOnlineAccountBundleInventory());
+            Network.getInstance().broadcast(peer -> bundleRequest);
+        } catch (MessageException e) {
+            LOGGER.warn("Unable to build online-account bundle inventory request", e);
+        }
     }
 
     /**
@@ -643,6 +681,18 @@ public class OnlineAccountsManager {
     }
 
     private boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp) {
+        return computeOurAccountsForTimestamp(onlineAccountsTimestamp, getRewardNodeIdentityPath());
+    }
+
+    /** Package-visible overload exercises the production path without changing process-wide settings. */
+    boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp, Path identityPath) {
+        boolean legacyAccountsAvailable = computeOurLegacyAccountsForTimestamp(onlineAccountsTimestamp);
+        if (onlineAccountsTimestamp != null)
+            computeOurBundleForTimestamp(onlineAccountsTimestamp, identityPath);
+        return legacyAccountsAvailable;
+    }
+
+    private boolean computeOurLegacyAccountsForTimestamp(Long onlineAccountsTimestamp) {
         if (onlineAccountsTimestamp != null) {
             List<MintingAccountData> mintingAccounts;
             int nextBlockHeight;
@@ -786,6 +836,116 @@ public class OnlineAccountsManager {
         return false;
     }
 
+    private void computeOurBundleForTimestamp(long onlineAccountsTimestamp, Path identityPath) {
+        List<MintingAccountData> mintingAccounts = new ArrayList<>();
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            int nextBlockHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+            Set<String> mintingGroupMembers = new HashSet<>(Groups.getAllMembers(
+                    repository.getGroupRepository(),
+                    Groups.getGroupIdsToMint(BlockChain.getInstance(), nextBlockHeight)));
+
+            for (MintingAccountData mintingAccountData : repository.getAccountRepository().getMintingAccounts()) {
+                byte[] privateKey = mintingAccountData.getPrivateKey();
+                if (privateKey == null || privateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+                    continue;
+                byte[] publicKey = Crypto.toPublicKey(privateKey);
+                if (!Arrays.equals(publicKey, mintingAccountData.getPublicKey()))
+                    continue;
+
+                RewardShareData rewardShareData = repository.getAccountRepository()
+                        .getRewardShare(publicKey);
+                if (rewardShareData == null || !rewardShareData.isSelfShare()
+                        || !mintingGroupMembers.contains(rewardShareData.getMinter()))
+                    continue;
+
+                Account mintingAccount = new Account(repository, rewardShareData.getMinter());
+                if (mintingAccount.canMint(true))
+                    mintingAccounts.add(mintingAccountData);
+            }
+        } catch (DataException e) {
+            LOGGER.warn("Repository issue trying to prepare online-account bundle: {}", e.getMessage());
+            return;
+        }
+
+        if (mintingAccounts.isEmpty())
+            return;
+
+        try {
+            Map<String, byte[]> privateKeysByPublicKey = new HashMap<>();
+            List<Member> unsignedMembers = new ArrayList<>(mintingAccounts.size());
+            Set<OnlineAccountData> cachedAccounts = this.currentOnlineAccounts.computeIfAbsent(
+                    onlineAccountsTimestamp, ignored -> ConcurrentHashMap.newKeySet());
+
+            for (MintingAccountData mintingAccountData : mintingAccounts) {
+                byte[] privateKey = mintingAccountData.getPrivateKey();
+                byte[] publicKey = Crypto.toPublicKey(privateKey);
+                OnlineAccountData cachedAccount = cachedAccounts.stream()
+                        .filter(account -> Arrays.equals(account.getPublicKey(), publicKey))
+                        .filter(account -> verifyMemoryPoW(account, null))
+                        .findFirst()
+                        .orElse(null);
+
+                Integer nonce = cachedAccount == null ? null : cachedAccount.getNonce();
+                if (nonce == null)
+                    nonce = computeMemoryPoW(getMemoryPoWBytes(publicKey, onlineAccountsTimestamp),
+                            publicKey, onlineAccountsTimestamp);
+                if (nonce == null || !verifyMemoryPoW(
+                        new OnlineAccountData(onlineAccountsTimestamp, null, publicKey, nonce), null))
+                    throw new IOException("Invalid MemoryPoW nonce for bundle member " + Base58.encode(publicKey));
+
+                unsignedMembers.add(new Member(publicKey, nonce, null));
+                privateKeysByPublicKey.put(Base58.encode(publicKey), privateKey);
+            }
+
+            RewardNodeIdentity identity = getRewardNodeIdentity(identityPath);
+            ChainIdentity chainIdentity = ChainIdentity.current();
+            byte[] nodePublicKey = identity.getPublicKey();
+            List<Member> canonicalMembers = OnlineAccountBundleTransformer.canonicalizeMembers(unsignedMembers);
+            byte[] commitmentHash = OnlineAccountBundleTransformer.computeMemberCommitment(chainIdentity,
+                    OnlineAccountBundleTransformer.PROTOCOL_VERSION, onlineAccountsTimestamp,
+                    nodePublicKey, canonicalMembers);
+
+            List<Member> signedMembers = new ArrayList<>(canonicalMembers.size());
+            for (Member member : canonicalMembers) {
+                byte[] privateKey = privateKeysByPublicKey.get(Base58.encode(member.getPublicKey()));
+                signedMembers.add(member.withSignature(
+                        OnlineAccountBundleTransformer.signMember(privateKey, commitmentHash)));
+            }
+
+            byte[] nodeApproval = OnlineAccountBundleTransformer.computeNodeApproval(commitmentHash,
+                    signedMembers);
+            OnlineAccountBundleData bundle = OnlineAccountBundleTransformer.createBundle(chainIdentity,
+                    OnlineAccountBundleTransformer.PROTOCOL_VERSION, onlineAccountsTimestamp,
+                    nodePublicKey, signedMembers, identity.sign(nodeApproval));
+
+            if (cacheValidatedOnlineAccountBundle(bundle)) {
+                OnlineAccountBundlesMessage message = new OnlineAccountBundlesMessage(List.of(bundle));
+                Network.getInstance().broadcast(peer -> message);
+                LOGGER.debug("Broadcasted online-account bundle with {} members and timestamp {}",
+                        signedMembers.size(), onlineAccountsTimestamp);
+            }
+        } catch (IOException | TimeoutException | TransformationException | MessageException | RuntimeException e) {
+            // Bundle production fails independently so legacy announcements and synchronization continue.
+            LOGGER.warn("Unable to produce online-account reward bundle for timestamp {}: {}",
+                    onlineAccountsTimestamp, e.getMessage());
+        }
+    }
+
+    private static Path getRewardNodeIdentityPath() {
+        String userPath = Settings.getInstance().getUserPath();
+        return Paths.get(userPath == null ? "" : userPath)
+                .resolve("reward-node").resolve("identity.key");
+    }
+
+    private synchronized RewardNodeIdentity getRewardNodeIdentity(Path identityPath) throws IOException {
+        Path normalizedPath = identityPath.toAbsolutePath().normalize();
+        if (this.rewardNodeIdentity == null || !normalizedPath.equals(this.rewardNodeIdentityPath)) {
+            this.rewardNodeIdentity = RewardNodeIdentity.loadOrCreate(normalizedPath);
+            this.rewardNodeIdentityPath = normalizedPath;
+        }
+        return this.rewardNodeIdentity;
+    }
+
 
 
     // MemoryPoW
@@ -912,6 +1072,303 @@ public class OnlineAccountsManager {
         return getOnlineAccounts(onlineAccountsTimestamp);
     }
 
+    /**
+     * Returns the deterministic, fully validated reward-node bundle cohort for a minting height.
+     */
+    public List<OnlineAccountBundleData> getOnlineAccountBundles(long onlineTimestamp, int blockHeight) {
+        Map<String, OnlineAccountBundleData> bundlesForTimestamp =
+                this.currentOnlineAccountBundles.get(onlineTimestamp);
+        if (bundlesForTimestamp == null || bundlesForTimestamp.isEmpty())
+            return Collections.emptyList();
+
+        List<OnlineAccountBundleData> cachedBundles;
+        synchronized (bundlesForTimestamp) {
+            cachedBundles = new ArrayList<>(bundlesForTimestamp.values());
+        }
+
+        try (Repository repository = RepositoryManager.getRepository()) {
+            List<String> mintingGroupMembers = Groups.getAllMembers(repository.getGroupRepository(),
+                    Groups.getGroupIdsToMint(BlockChain.getInstance(), blockHeight));
+            List<OnlineAccountBundleData> validBundles = cachedBundles.stream()
+                    .filter(bundle -> {
+                        try {
+                            // Cryptographic proofs and PoW were checked before caching; only mutable
+                            // height-dependent membership/trust eligibility needs rechecking here.
+                            return areBundleMembersEligible(repository, mintingGroupMembers, bundle);
+                        } catch (DataException e) {
+                            return false;
+                        }
+                    })
+                    .sorted((left, right) -> OnlineAccountBundleData.compareUnsigned(
+                            left.getNodePublicKey(), right.getNodePublicKey()))
+                    .collect(Collectors.toList());
+            return buildBlockBundleBatch(validBundles);
+        } catch (DataException e) {
+            LOGGER.warn("Repository issue retrieving online-account bundles for timestamp {}: {}",
+                    onlineTimestamp, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private static boolean isValidCurrentBundle(Repository repository,
+            List<String> mintingGroupMemberAddresses, OnlineAccountBundleData bundle,
+            long[] powWorkBuffer)
+            throws DataException {
+        Long now = NTP.getTime();
+        if (now == null || bundle == null)
+            return false;
+
+        long timestamp = bundle.getTimestamp();
+        long allowedSkew = getOnlineTimestampModulus() * 2;
+        if (timestamp < now - allowedSkew || timestamp > now + allowedSkew
+                || timestamp % getOnlineTimestampModulus() != 0)
+            return false;
+
+        // Reject cheap repository/state failures before spending Ed25519 or MemoryPoW work.
+        if (!areBundleMembersEligible(repository, mintingGroupMemberAddresses, bundle))
+            return false;
+
+        try {
+            if (!OnlineAccountBundleTransformer.verifySignatures(bundle, ChainIdentity.current()))
+                return false;
+        } catch (TransformationException | RuntimeException e) {
+            return false;
+        }
+
+        return isBundleMemoryPoWValid(bundle, powWorkBuffer);
+    }
+
+    private static boolean areBundleMembersEligible(Repository repository,
+            List<String> mintingGroupMemberAddresses, OnlineAccountBundleData bundle)
+            throws DataException {
+        for (Member member : bundle.getMembers()) {
+            byte[] rewardSharePublicKey = member.getPublicKey();
+            RewardShareData rewardShareData = repository.getAccountRepository()
+                    .getRewardShare(rewardSharePublicKey);
+            if (rewardShareData == null || !rewardShareData.isSelfShare()
+                    || !mintingGroupMemberAddresses.contains(rewardShareData.getMinter()))
+                return false;
+
+            Account mintingAccount = new Account(repository, rewardShareData.getMinter());
+            if (!mintingAccount.canMint(true))
+                return false;
+
+        }
+
+        return true;
+    }
+
+    private static boolean isBundleMemoryPoWValid(OnlineAccountBundleData bundle,
+            long[] powWorkBuffer) {
+        for (Member member : bundle.getMembers()) {
+            OnlineAccountData proof = new OnlineAccountData(bundle.getTimestamp(), null,
+                    member.getPublicKey(), member.getNonce());
+            if (!getInstance().verifyMemoryPoW(proof, powWorkBuffer))
+                return false;
+        }
+        return true;
+    }
+
+    /** Cache only after complete validation. Returns true if this bundle became the winner. */
+    boolean cacheValidatedOnlineAccountBundle(OnlineAccountBundleData candidate) {
+        String nodeKey = Base58.encode(candidate.getNodePublicKey());
+        Map<String, OnlineAccountBundleData> bundlesForTimestamp =
+                this.currentOnlineAccountBundles.computeIfAbsent(candidate.getTimestamp(),
+                        ignored -> new ConcurrentHashMap<>());
+
+        synchronized (bundlesForTimestamp) {
+            OnlineAccountBundleData existing = bundlesForTimestamp.get(nodeKey);
+            if (existing != null) {
+                if (!isPreferredBundle(candidate, existing))
+                    return false;
+                bundlesForTimestamp.put(nodeKey, candidate);
+                return true;
+            }
+
+            if (bundlesForTimestamp.size() < MAX_CACHED_ONLINE_ACCOUNT_BUNDLES_PER_TIMESTAMP) {
+                bundlesForTimestamp.put(nodeKey, candidate);
+                return true;
+            }
+
+            Map.Entry<String, OnlineAccountBundleData> largestNodeEntry = bundlesForTimestamp.entrySet()
+                    .stream()
+                    .max((left, right) -> OnlineAccountBundleData.compareUnsigned(
+                            left.getValue().getNodePublicKey(), right.getValue().getNodePublicKey()))
+                    .orElseThrow();
+            if (OnlineAccountBundleData.compareUnsigned(candidate.getNodePublicKey(),
+                    largestNodeEntry.getValue().getNodePublicKey()) >= 0)
+                return false;
+
+            bundlesForTimestamp.remove(largestNodeEntry.getKey());
+            bundlesForTimestamp.put(nodeKey, candidate);
+            return true;
+        }
+    }
+
+    private static boolean isPreferredBundle(OnlineAccountBundleData candidate,
+            OnlineAccountBundleData existing) {
+        int memberCountComparison = Integer.compare(candidate.getMembers().size(),
+                existing.getMembers().size());
+        if (memberCountComparison != 0)
+            return memberCountComparison > 0;
+
+        return OnlineAccountBundleData.compareUnsigned(candidate.getCommitmentHash(),
+                existing.getCommitmentHash()) < 0;
+    }
+
+    void processOnlineAccountBundlesImportQueue() {
+        List<OnlineAccountBundleData> queuedBundles = getOnlineAccountBundlesValidationBatch();
+        if (queuedBundles.isEmpty())
+            return;
+
+        List<OnlineAccountBundleData> acceptedBundles = new ArrayList<>();
+        try (Repository repository = RepositoryManager.getRepository()) {
+            int nextBlockHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+            List<String> mintingGroupMembers = Groups.getAllMembers(repository.getGroupRepository(),
+                    Groups.getGroupIdsToMint(BlockChain.getInstance(), nextBlockHeight));
+            long[] bundlePowWorkBuffer = new long[getPoWBufferSize() / 8];
+            for (OnlineAccountBundleData bundle : queuedBundles) {
+                if (isStopping)
+                    return;
+                if (isValidCurrentBundle(repository, mintingGroupMembers, bundle,
+                        bundlePowWorkBuffer)
+                        && cacheValidatedOnlineAccountBundle(bundle))
+                    acceptedBundles.add(bundle);
+            }
+        } catch (DataException e) {
+            LOGGER.error("Repository issue while verifying online-account bundles", e);
+            return;
+        } finally {
+            synchronized (this.onlineAccountBundlesImportQueueLock) {
+                for (OnlineAccountBundleData bundle : queuedBundles)
+                    this.onlineAccountBundlesImportQueue.remove(bundleQueueKey(bundle), bundle);
+            }
+        }
+
+        if (!acceptedBundles.isEmpty()) {
+            try {
+                OnlineAccountBundlesMessage relayMessage = new OnlineAccountBundlesMessage(
+                        buildGossipBundleBatch(acceptedBundles));
+                Network.getInstance().broadcast(peer -> relayMessage);
+            } catch (MessageException e) {
+                LOGGER.warn("Unable to relay validated online-account bundles", e);
+            }
+        }
+    }
+
+    private List<OnlineAccountBundleData> getOnlineAccountBundlesValidationBatch() {
+        synchronized (this.onlineAccountBundlesImportQueueLock) {
+            List<OnlineAccountBundleData> validationBatch = new ArrayList<>();
+            int memberOccurrences = 0;
+            for (OnlineAccountBundleData bundle : this.onlineAccountBundlesImportQueue.values()) {
+                if (validationBatch.size() >= MAX_ONLINE_ACCOUNT_BUNDLES_VALIDATED_PER_CYCLE)
+                    break;
+
+                int bundleMemberOccurrences = bundle.getMembers().size();
+                if (memberOccurrences + bundleMemberOccurrences
+                        > MAX_ONLINE_ACCOUNT_BUNDLE_MEMBER_OCCURRENCES_VALIDATED_PER_CYCLE)
+                    break;
+
+                validationBatch.add(bundle);
+                memberOccurrences += bundleMemberOccurrences;
+            }
+            return validationBatch;
+        }
+    }
+
+    int queueOnlineAccountBundles(Collection<OnlineAccountBundleData> bundles) {
+        int queued = 0;
+        synchronized (this.onlineAccountBundlesImportQueueLock) {
+            for (OnlineAccountBundleData bundle : bundles) {
+                String queueKey = bundleQueueKey(bundle);
+                if (this.onlineAccountBundlesImportQueue.containsKey(queueKey))
+                    continue;
+                if (this.onlineAccountBundlesImportQueue.size() >= MAX_QUEUED_ONLINE_ACCOUNT_BUNDLES)
+                    break;
+                this.onlineAccountBundlesImportQueue.put(queueKey, bundle);
+                ++queued;
+            }
+        }
+        return queued;
+    }
+
+    int getOnlineAccountBundlesImportQueueSize() {
+        synchronized (this.onlineAccountBundlesImportQueueLock) {
+            return this.onlineAccountBundlesImportQueue.size();
+        }
+    }
+
+    List<BundleIdentifier> getOnlineAccountBundleInventory() {
+        return getCachedOnlineAccountBundles().stream()
+                .limit(GetOnlineAccountBundlesMessage.MAX_IDENTIFIERS)
+                .map(bundle -> new BundleIdentifier(bundle.getTimestamp(), bundle.getNodePublicKey(),
+                        bundle.getCommitmentHash()))
+                .collect(Collectors.toList());
+    }
+
+    private List<OnlineAccountBundleData> getCachedOnlineAccountBundles() {
+        List<OnlineAccountBundleData> bundles = new ArrayList<>();
+        for (Map<String, OnlineAccountBundleData> bundlesByNode
+                : this.currentOnlineAccountBundles.values()) {
+            synchronized (bundlesByNode) {
+                bundles.addAll(bundlesByNode.values());
+            }
+        }
+        bundles.sort(Comparator.comparingLong(OnlineAccountBundleData::getTimestamp).reversed()
+                .thenComparing(OnlineAccountBundleData::getNodePublicKey,
+                        OnlineAccountBundleData::compareUnsigned));
+        return bundles;
+    }
+
+    private static List<OnlineAccountBundleData> buildGossipBundleBatch(
+            Collection<OnlineAccountBundleData> candidates) {
+        return buildBundleBatch(candidates, OnlineAccountBundleTransformer.MAX_BUNDLES_PER_COHORT,
+                OnlineAccountBundleTransformer.MAX_GOSSIP_MEMBER_OCCURRENCES,
+                OnlineAccountBundleTransformer.MAX_GOSSIP_PAYLOAD_SIZE);
+    }
+
+    private static List<OnlineAccountBundleData> buildBlockBundleBatch(
+            Collection<OnlineAccountBundleData> candidates) {
+        return buildBundleBatch(candidates, OnlineAccountBundleTransformer.MAX_BUNDLES_PER_COHORT,
+                OnlineAccountBundleTransformer.MAX_BLOCK_MEMBER_OCCURRENCES,
+                OnlineAccountBundleTransformer.MAX_BLOCK_PAYLOAD_SIZE);
+    }
+
+    private static List<OnlineAccountBundleData> buildBundleBatch(
+            Collection<OnlineAccountBundleData> candidates, int maxBundles,
+            int maxMemberOccurrences, int maxPayloadSize) {
+        List<OnlineAccountBundleData> batch = new ArrayList<>();
+        int memberOccurrences = 0;
+        int payloadSize = Transformer.INT_LENGTH;
+        for (OnlineAccountBundleData bundle : candidates) {
+            if (batch.size() >= maxBundles)
+                break;
+            int nextMemberOccurrences = memberOccurrences + bundle.getMembers().size();
+            if (nextMemberOccurrences > maxMemberOccurrences)
+                break;
+
+            try {
+                int nextPayloadSize = payloadSize + Transformer.INT_LENGTH
+                        + OnlineAccountBundleTransformer.toBytes(bundle, ChainIdentity.current()).length;
+                if (nextPayloadSize > maxPayloadSize)
+                    break;
+                batch.add(bundle);
+                memberOccurrences = nextMemberOccurrences;
+                payloadSize = nextPayloadSize;
+            } catch (TransformationException | RuntimeException e) {
+                // Cached entries were already validated, but skip safely if chain context changed.
+                LOGGER.warn("Unable to include cached online-account bundle in gossip batch: {}",
+                        e.getMessage());
+            }
+        }
+        return batch;
+    }
+
+    private static String bundleQueueKey(OnlineAccountBundleData bundle) {
+        return bundle.getTimestamp() + ":" + Base58.encode(bundle.getNodePublicKey()) + ":"
+                + Base58.encode(bundle.getCommitmentHash());
+    }
+
     // Block processing
 
     /**
@@ -969,6 +1426,10 @@ public class OnlineAccountsManager {
         LOGGER.warn("removeAllOnlineAccounts() called - clearing current online accounts cache", new IllegalStateException("removeAllOnlineAccounts caller trace"));
         this.currentOnlineAccounts.clear();
         this.verifiedOnlineAccountSignatures.clear();
+        this.currentOnlineAccountBundles.clear();
+        synchronized (this.onlineAccountBundlesImportQueueLock) {
+            this.onlineAccountBundlesImportQueue.clear();
+        }
     }
 
 
@@ -1069,5 +1530,30 @@ public class OnlineAccountsManager {
 
         if (importCount > 0)
             LOGGER.debug("Added {} online accounts to queue", importCount);
+    }
+
+    public void onNetworkGetOnlineAccountBundlesMessage(Peer peer, Message message) {
+        GetOnlineAccountBundlesMessage request = (GetOnlineAccountBundlesMessage) message;
+        Set<BundleIdentifier> knownBundles = new HashSet<>(request.getKnownBundles());
+        List<OnlineAccountBundleData> outgoingBundles = getCachedOnlineAccountBundles().stream()
+                .filter(bundle -> !knownBundles.contains(new BundleIdentifier(bundle.getTimestamp(),
+                        bundle.getNodePublicKey(), bundle.getCommitmentHash())))
+                .collect(Collectors.toList());
+        outgoingBundles = buildGossipBundleBatch(outgoingBundles);
+
+        try {
+            peer.sendMessage(new OnlineAccountBundlesMessage(outgoingBundles));
+            LOGGER.trace("Sent {} online-account bundles to {}", outgoingBundles.size(), peer);
+        } catch (MessageException e) {
+            LOGGER.warn("Unable to send online-account bundles to {}", peer, e);
+        }
+    }
+
+    public void onNetworkOnlineAccountBundlesMessage(Peer peer, Message message) {
+        OnlineAccountBundlesMessage bundlesMessage = (OnlineAccountBundlesMessage) message;
+        int queued = queueOnlineAccountBundles(bundlesMessage.getBundles());
+
+        if (queued > 0)
+            LOGGER.debug("Added {} online-account bundles from {} to validation queue", queued, peer);
     }
 }
