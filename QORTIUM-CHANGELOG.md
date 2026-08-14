@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - test(consensus): pin Previewnet node reward transition heights
+
+Pins the shipped Previewnet transition at the exact four operational boundary
+heights: legacy version 1 at 99,989, bundle-aware capture blocks at 99,990 and
+99,999, and the first bundle-aware payout at 100,000. The regression also
+proves that consensus rejects the opposite block representation on each side of
+the boundary while retaining the existing locally derived height check.
+
 ### 2026-08-14 - feat(rewards): distribute batch rewards per node bundle
 
 Switches bundle-aware batch payouts to one allocation per declared reward node

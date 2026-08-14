@@ -774,6 +774,14 @@ public class Block {
 		return isOnlineNodeRewardBundlesActive(nextHeight) ? ONLINE_NODE_REWARD_BUNDLES_VERSION : CURRENT_VERSION;
 	}
 
+	/** Whether {@code version} is the consensus block representation required at {@code height}. */
+	public static boolean isVersionValidAtHeight(int version, long height) {
+		int expectedVersion = isOnlineNodeRewardBundlesActive(height)
+				? ONLINE_NODE_REWARD_BUNDLES_VERSION
+				: CURRENT_VERSION;
+		return version == expectedVersion;
+	}
+
 	/** Whether the bundle-aware block representation is required at {@code height}. */
 	public static boolean isOnlineNodeRewardBundlesActive(long height) {
 		long captureStartHeight = BlockChain.getInstance().getOnlineNodeRewardBundlesCaptureStartHeight();
@@ -1728,7 +1736,7 @@ public class Block {
 		}
 
 		// Check block version
-		if (this.blockData.getVersion() != parentBlock.getNextBlockVersion())
+		if (!isVersionValidAtHeight(this.blockData.getVersion(), (long) parentBlockData.getHeight() + 1L))
 			return ValidationResult.VERSION_INCORRECT;
 
 		// Check minter is allowed to mint this block

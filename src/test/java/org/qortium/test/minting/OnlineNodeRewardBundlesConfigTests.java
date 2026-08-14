@@ -20,8 +20,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class OnlineNodeRewardBundlesConfigTests extends Common {
 
@@ -49,17 +51,20 @@ public class OnlineNodeRewardBundlesConfigTests extends Common {
 	}
 
 	@Test
-	public void testShippedPreviewTriggerTargetsHeight100000() throws IOException {
-		ObjectMapper objectMapper = new ObjectMapper();
-		try (InputStream in = OnlineNodeRewardBundlesConfigTests.class.getClassLoader()
-				.getResourceAsStream("previewchain.json")) {
-			assertNotNull("Bundled Preview chain JSON file not found", in);
-			ObjectNode chainJson = (ObjectNode) objectMapper.readTree(in);
-			assertEquals(100, chainJson.path("blockRewardBatchSize").asInt());
-			assertEquals(10, chainJson.path("blockRewardBatchAccountsBlockCount").asInt());
-			assertEquals(100000L,
-					chainJson.path("featureTriggers").path("onlineNodeRewardBundlesPayoutHeight").asLong());
-		}
+	public void testShippedPreviewTransitionHeightsAndRepresentations() throws IOException {
+		ObjectNode chainJson = readChainConfig("previewchain.json");
+		assertEquals(100, chainJson.path("blockRewardBatchSize").asInt());
+		assertEquals(10, chainJson.path("blockRewardBatchAccountsBlockCount").asInt());
+		assertEquals(100000L,
+				chainJson.path("featureTriggers").path("onlineNodeRewardBundlesPayoutHeight").asLong());
+
+		loadConfig(chainJson);
+		assertEquals(99990L, BlockChain.getInstance().getOnlineNodeRewardBundlesCaptureStartHeight());
+
+		assertRepresentationAtHeight(99989, Block.CURRENT_VERSION);
+		assertRepresentationAtHeight(99990, Block.ONLINE_NODE_REWARD_BUNDLES_VERSION);
+		assertRepresentationAtHeight(99999, Block.ONLINE_NODE_REWARD_BUNDLES_VERSION);
+		assertRepresentationAtHeight(100000, Block.ONLINE_NODE_REWARD_BUNDLES_VERSION);
 	}
 
 	@Test
@@ -93,13 +98,19 @@ public class OnlineNodeRewardBundlesConfigTests extends Common {
 		return new Block(null, blockData);
 	}
 
+	private static void assertRepresentationAtHeight(int height, int expectedVersion) {
+		int wrongVersion = expectedVersion == Block.CURRENT_VERSION
+				? Block.ONLINE_NODE_REWARD_BUNDLES_VERSION
+				: Block.CURRENT_VERSION;
+
+		assertEquals(expectedVersion, blockAtHeight(height - 1).getNextBlockVersion());
+		assertTrue(Block.isVersionValidAtHeight(expectedVersion, height));
+		assertFalse("Consensus must reject the wrong block representation at height " + height,
+				Block.isVersionValidAtHeight(wrongVersion, height));
+	}
+
 	private static void loadConfig(Long payoutHeight, long batchStartHeight) throws IOException {
-		ObjectMapper objectMapper = new ObjectMapper();
-		ObjectNode chainJson;
-		try (InputStream in = OnlineNodeRewardBundlesConfigTests.class.getClassLoader().getResourceAsStream("test-chain-v2.json")) {
-			assertNotNull("Bundled test chain JSON file not found", in);
-			chainJson = (ObjectNode) objectMapper.readTree(in);
-		}
+		ObjectNode chainJson = readChainConfig("test-chain-v2.json");
 
 		ObjectNode featureTriggers = (ObjectNode) chainJson.with("featureTriggers");
 		featureTriggers.put("blockRewardBatchStartHeight", batchStartHeight);
@@ -108,6 +119,19 @@ public class OnlineNodeRewardBundlesConfigTests extends Common {
 		else
 			featureTriggers.put("onlineNodeRewardBundlesPayoutHeight", payoutHeight);
 
+		loadConfig(chainJson);
+	}
+
+	private static ObjectNode readChainConfig(String resourceName) throws IOException {
+		ObjectMapper objectMapper = new ObjectMapper();
+		try (InputStream in = OnlineNodeRewardBundlesConfigTests.class.getClassLoader().getResourceAsStream(resourceName)) {
+			assertNotNull("Bundled chain JSON file not found: " + resourceName, in);
+			return (ObjectNode) objectMapper.readTree(in);
+		}
+	}
+
+	private static void loadConfig(ObjectNode chainJson) throws IOException {
+		ObjectMapper objectMapper = new ObjectMapper();
 		Path tempDir = Files.createTempDirectory("qortium-online-node-bundle-config");
 		Path chainConfigPath = tempDir.resolve("test-chain-v2-online-node-bundles.json");
 		Path settingsPath = tempDir.resolve("test-settings-online-node-bundles.json");
