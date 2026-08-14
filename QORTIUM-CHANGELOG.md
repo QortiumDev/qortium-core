@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs(preview): align documented outbound-peer target
+
+Corrects the Preview participant guide and tester expectations to match the
+tracked profile's existing target of eight outbound chain peers. This is a
+documentation-only correction; peer-selection behavior and the live Previewnet
+configuration are unchanged.
+
 ### 2026-08-14 - fix(docker): initialize new volumes as Previewnet
 
 Makes the Docker distribution explicitly Previewnet: a missing settings file
