@@ -43,6 +43,8 @@ public enum MessageType {
     
     ONLINE_ACCOUNTS(84, OnlineAccountsMessage::fromByteBuffer),
     GET_ONLINE_ACCOUNTS(85, GetOnlineAccountsMessage::fromByteBuffer),
+	ONLINE_ACCOUNT_BUNDLES(86, OnlineAccountBundlesMessage::fromByteBuffer),
+	GET_ONLINE_ACCOUNT_BUNDLES(87, GetOnlineAccountBundlesMessage::fromByteBuffer),
 
     ARBITRARY_DATA(90, ArbitraryDataMessage::fromByteBuffer),
     GET_ARBITRARY_DATA(91, GetArbitraryDataMessage::fromByteBuffer),

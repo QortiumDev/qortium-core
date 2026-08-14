@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(network): add signed online-account reward bundles
+
+Adds the canonical network representation for a reward node to bind its online
+minting accounts into one signed bundle. Every member signs the exact node,
+network, timestamp, nonce, and full sorted membership commitment, and the
+reward-node identity then approves those paired signatures, preventing relays
+from regrouping observed account proofs. New bounded request and response
+messages relay complete self-contained bundles, while strict size, count,
+ordering, duplicate, truncation, and aggregate-work checks reject malformed or
+excessive payloads before expensive verification. This protocol foundation does
+not yet select bundles for blocks or change reward accounting.
+
 ### 2026-08-14 - feat(rewards): resolve duplicate node bundle members
 
 Adds the deterministic payout resolver for an account declared in more than
