@@ -34,13 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs: complete ultra-review configuration coherence
+
+Records completion of the generic-versus-Preview configuration repair. Bare
+Core defaults no longer inject Previewnet peers, while new Docker volumes use
+the canonical Preview participant profile and coherent `2489x` surfaces without
+overwriting existing settings. The tracker records focused, Compose, full-suite,
+diff, and independent-review evidence plus the legacy-volume and pre-T5 rollback
+boundaries. No release, deployment, live-network, chain, checkpoint, or
+consensus change is claimed.
+
 ### 2026-08-14 - docs(docker): clarify generic startup and rollback
 
-Clarifies that generic root-script starts now require explicitly configured
-chain and data peers, while Previewnet users should use its dedicated launcher
-or Docker profile. The Docker rollback guidance now accounts for pre-T5 images'
-fixed `14891` health check and explains how to preserve a T5 Preview volume
-without silently changing its network identity or data.
+Clarifies that fresh generic root-script starts no longer receive public
+bootstrap peers, while Previewnet users should use its dedicated launcher or
+Docker profile and other networks should select the peer layers they need. The
+Docker rollback guidance now accounts for pre-T5 images' fixed `14891` health
+check and explains how to preserve a T5 Preview volume without silently
+changing its network identity or data.
 
 ### 2026-08-14 - fix(docker): harden first-run settings installation
 

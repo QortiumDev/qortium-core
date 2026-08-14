@@ -41,7 +41,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Complete | T1 accepted and committed | Six implementation commits plus focused tests passed 42/42 and the serialized full suite passed 3,020 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; coordinated rollout and live-height verification remain a release condition |
 | T3 | Retire automatic peer-claim orphaning while retaining both old setting names as permanently disabled compatibility inputs. | Complete | T2 containment | `security(sync): retire peer-claim orphaning` plus the two-key rollback follow-up; red tests failed 2/4 before retirement and 1/1 before rollback repair; focused tests passed 30/30; serialized full suite passed 3,008 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
 | T4 | Retire the dormant hosted whole-database bootstrap importer while preserving checkpoint-anchored peer archive fast-sync and the non-replacement local archive creation/validation tools. | Complete | None | Four implementation commits plus the tracked start; focused tests passed 95/95; clean serialized full suite passed 2,998 with 67 skips; packaged JAR contains archive fast-sync/local export but neither deleted importer class; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
-| T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | In progress | Explicit Docker Previewnet target approved | Cross-profile and container configuration invariants |
+| T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Complete | Explicit Docker Previewnet target approved | Six bounded implementation, test, and operator-documentation commits following the tracked start; focused configuration tests passed 41/41; shell syntax, fresh Preview and retained-generic Compose renders passed; the clean serialized full suite passed 3,008 with 67 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; daemon-backed image smoke was unavailable to this user |
 | T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | Planned | None | Request/response and chain/data x IP/I2P matrix tests |
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Planned | T2 recovery-state semantics for the catch-up signal | Deterministic loss, peer isolation, deadline, cancellation, and ping-order tests |
 | T8 | Repository and API correctness: archive temp filtering, chat fee persistence, websocket envelope filtering, and malformed PEERS rejection. | Planned | None | Focused repository, serialization, websocket, and parser tests |
@@ -55,7 +55,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | C-01 | `ChainATAPI` selects three opcode gates from peer-supplied `blockHeight` instead of the local parent height plus one. | Critical | T1 | Complete | Both height-mismatch directions pass at the exact trigger boundary for all three opcodes; existing bytecode-level pre-trigger and at-trigger tests pass |
 | C-02 | Unknown feature-trigger names are accepted and silently unused. This is currently intentional forward-compatibility behavior, and `featureTriggers` is excluded from the chain-config handshake hash. | High safety / design | T9 | Decision | Decide strict registry plus activation-schedule compatibility mechanism |
 | C-03 | A genesis-height node can bypass stale-tip protections and mint a competing block 2 despite fresh higher peers. This is local fork/liveness policy, not remote block-validation bypass. | Medium | T2 | Complete | Recent-higher, equal, stale, missing-signature-field, old-version, and post-genesis cases pass. Genesis discovery retains a peer whose later-chain tip signer is not yet known locally while sequential block validation remains authoritative. The advertisement remains unverified and only defers local minting |
-| N-01 | Java defaults combine mainnet chain identity with Previewnet seed addresses; an empty/default configuration cannot handshake with those seeds. | High | T5 | Planned | Pending |
+| N-01 | Java defaults combine mainnet chain identity with Previewnet seed addresses; an empty/default configuration cannot handshake with those seeds. | High | T5 | Complete | Generic Java defaults expose empty chain and data seed lists while retaining the default identity and `1489x` listeners. All three explicit Previewnet profiles remain test-network `previewchain.json` profiles with `2489x` listeners and separate nonempty, correctly ported chain/data seeds. Remembered and operator-configured peers are not purged |
 | N-02 | The recovery watchdog can orphan up to three local tip blocks based on unverified peer tip and archive-capability claims. Peer connections are handshaked, but the asserted chain evidence is not authenticated. | High | T2/T3 | Complete | Automatic peer-claim orphaning was removed rather than replaced. Both former enable settings remain accepted but always evaluate false; all managed profiles declare both false; managed upgrade and rollback force and preserve both false values. Peer height, freshness, quorum, and archive claims cannot authorize local block deletion |
 | N-03 | Recovery mode remains active with a mixed fresh/stale peer set because exit requires every retained peer to be recent. | High | T2 | Complete | Mixed and fresh peer sets exit to recent-only selection in the same attempt; stale-only recovery, timeout-gated entry, and no-handshake behavior pass |
 | N-04 | GET_BLOCKS auto-degrade can spend about seven full batch timeouts on one dead peer before fallback. The loop is bounded and interruptible, but monopolizes the Synchronizer thread and delays fallback or later synchronization work. | Medium | T7 | Planned | Pending |
@@ -72,7 +72,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | R-03 | Group-chat history filters private control envelopes, but websocket live push forwards them as ordinary group messages. | Medium privacy/API | T8 | Planned | Pending |
 | R-04 | A zero-entry PEERS message reaches `peerAddresses.get(0)`, producing repeated exception logging while leaving the peer connected. | Low | T8 | Planned | Pending |
 | T-01 | The manual local-testnet profile omits the current feature-trigger schedule and therefore exercises different consensus behavior from Previewnet. | Medium test fidelity | T9 | Planned | Pending |
-| D-01 | `.env.example` still maps legacy `1239x` ports while current generic Core defaults and Compose fallbacks use `1489x`. | Medium Docker | T5 | Planned | Pending |
+| D-01 | `.env.example` maps legacy `1239x` ports while Docker lacks a coherent explicit network profile. | Medium Docker | T5 | Complete | The canonical Preview participant settings, Dockerfile, both Compose variants, dynamic health probe, and `.env.example` agree on `2489x`, with legacy `1239x` removed. Missing settings install byte-for-byte; existing empty, malformed, custom, or symlinked settings are preserved; concurrent initialization is complete and temporary-file-clean. Generic-volume upgrade and pre-T5 rollback boundaries are documented |
 | D-02 | The three adaptive-networking merges lack their required human-readable changelog entries. | Low documentation | T9 | Planned | Pending |
 
 ## Adjacent Hardening Discovered During Remediation
@@ -103,7 +103,16 @@ block, archive, and minting-account preservation, but it does not redesign
 export against an isolated repository copy or restore the prior learned-peer
 set.
 
-## Compatibility Decisions Still Required
+### A-03 — Windows developer-reference API exposure
+
+Status: unassigned; release hardening outside T5.
+
+`WindowsInstaller/Install Files/AppData/settings.json` explicitly disables both
+API restriction and whitelist enforcement. T5 leaves that developer-reference
+profile generic and unseeded, but its API exposure policy requires a dedicated
+review before any Windows distribution is treated as release-ready.
+
+## Compatibility Decisions
 
 ### Feature-trigger validation
 
@@ -158,12 +167,29 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-T5 is active and limited to coherent generic defaults plus an explicit
-Previewnet Docker distribution. It does not authorize changing Previewnet chain
-identity, checkpoints, feature triggers, consensus rules, live nodes, releases,
-or deployment. T4 is complete in source and local validation but is not released
-or deployed. The separately unassigned A-01 normal-reorg atomicity design and
-A-02 copy-isolated local exporter remain outside this tranche.
+No implementation tranche is active. T5 is complete in source and local
+validation but is not released or deployed; T6 is the next planned boundary.
+T5 made generic starts unseeded and new Docker settings explicitly Previewnet,
+without migrating or overwriting an existing settings file or database. A
+retained generic Docker volume must keep matching `1489x` Compose values; a T5
+Preview volume rolled back to pre-T5 assets must account for the old fixed
+`14891` health probe. T5 changed no chain identity, checkpoint, feature trigger,
+consensus rule, live node, release, or deployment.
+
+T5 was completed by `fix(settings): separate generic defaults from Previewnet
+seeds`, `fix(docker): initialize new volumes as Previewnet`, `docs(preview):
+align documented outbound-peer target`, `test(config): pin explicit Previewnet
+profiles`, `fix(docker): harden first-run settings installation`, and
+`docs(docker): clarify generic startup and rollback`, following the tracked
+start commit. The focused five-class suite passed 41/41; syntax checks passed
+for all three Docker scripts; public and internal fresh-Preview Compose renders
+and the retained-generic `1489x` override render passed; the clean serialized
+full suite passed 3,008 tests with 67 skips; `git diff --check` passed; and three
+independent Codex reviews found no remaining blocker. Docker daemon access is
+not available to this user, so these results do not claim a daemon-backed image
+smoke, release, deployment, or live-network verification. The separately
+unassigned A-01 normal-reorg atomicity, A-02 copy-isolated local exporter, and
+A-03 Windows API-profile hardening remain outside this tranche.
 
 T4 was completed by `security(bootstrap): retire hosted database replacement`,
 `fix(settings): keep hosted bootstrap retired on rollback`,
