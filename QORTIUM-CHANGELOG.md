@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(rewards): plan per-node bundle payouts
+
+Adds the deterministic payout planner that turns a committed bundle cohort into
+one effective allocation per reward node. It resolves copied accounts using the
+original declared bundle sizes before applying payout-height eligibility, drops
+empty bundles without re-ranking overlap winners, and assigns each surviving
+member `floor(batchSize / survivingMembers)` raw block credit. Focused tests pin
+the 1, 2, 3, 100, 101, and 1024-member boundaries and the ordering between
+overlap resolution and later eligibility filtering. Block processing is not yet
+switched to this planner in this foundation commit.
+
 ### 2026-08-14 - feat(consensus): activate Previewnet node reward block format
 
 Activates the bundle-aware block representation for Previewnet's capture window
