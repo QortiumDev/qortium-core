@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(rewards): resolve duplicate node bundle members
+
+Adds the deterministic payout resolver for an account declared in more than
+one node reward bundle. The smallest original bundle retains the account, with
+unsigned node-public-key order breaking equal-size ties; losing copies are
+removed without circular re-ranking, empty bundles disappear, and results are
+canonical regardless of input order. Focused tests pin overlap, tie, duplicate,
+and order-independence behavior. Block reward processing is not yet switched to
+this resolver in this foundation commit.
+
 ### 2026-08-14 - feat(minting): persist reward-node identity
 
 Adds a dedicated persistent Ed25519 identity for binding one Core runtime's
