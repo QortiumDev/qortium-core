@@ -135,25 +135,26 @@ public class ArchiveFastSyncManager extends Thread {
 		return hasActiveReplayState();
 	}
 
-	/** Master gate. Off by default; only runs for a non-lite, archive-enabled node with a pinned checkpoint. */
+	/** Master gate. Enabled by default; only runs for a non-lite, archive-enabled node with a pinned checkpoint. */
 	private boolean shouldRun() {
 		Settings settings = Settings.getInstance();
+		return shouldRun(settings, hasActiveReplayState(), !BlockChain.getInstance().getCheckpoints().isEmpty());
+	}
 
+	// Package-private for deterministic policy tests without starting network/repository singletons.
+	static boolean shouldRun(Settings settings, boolean activeReplayState, boolean hasCheckpoint) {
 		if (settings.isLite())
 			return false;
 
-		if (hasActiveReplayState())
+		if (activeReplayState)
 			return true;
 
 		if (!settings.isArchiveFastReplayEnabled())
 			return false;
 		if (!settings.isArchiveEnabled())
 			return false;
-		// Defer to a configured bootstrap, which builds a full DB on its own.
-		if (settings.isArchiveFastReplayOnlyWhenBootstrapDisabled() && settings.getBootstrap() && settings.hasBootstrapHostsConfigured())
-			return false;
 		// The checkpoint is the only trust anchor; never fast-replay without one.
-		if (BlockChain.getInstance().getCheckpoints().isEmpty())
+		if (!hasCheckpoint)
 			return false;
 
 		return true;

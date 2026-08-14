@@ -1,9 +1,12 @@
 package org.qortium.controller;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Test;
 import org.qortium.data.block.ArchiveChunkData;
 import org.qortium.data.block.ArchiveManifest;
+import org.qortium.settings.Settings;
 
+import java.lang.reflect.Constructor;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -20,6 +23,12 @@ import static org.junit.Assert.assertTrue;
  * be trusted. The selection also stops exactly at the chunk spanning the checkpoint (no over-fetching).
  */
 public class ArchiveFastSyncManagerTests {
+
+	private static Settings newSettingsInstance() throws ReflectiveOperationException {
+		Constructor<Settings> constructor = Settings.class.getDeclaredConstructor();
+		constructor.setAccessible(true);
+		return constructor.newInstance();
+	}
 
 	private static ArchiveChunkData chunk(int start, int end) {
 		// sha256/size are irrelevant to the coverage gate; the integrity checks happen later, per chunk.
@@ -153,5 +162,30 @@ public class ArchiveFastSyncManagerTests {
 		// Can't legitimately have more chunks than blocks below the checkpoint.
 		assertFalse(ArchiveFastSyncManager.isWithinReplayBudget(
 				Arrays.asList(sized(1), sized(1), sized(1), sized(1), sized(1)), 3));
+	}
+
+	@Test
+	public void testLegacyHostedBootstrapInputsCannotSuppressFastSync() throws Exception {
+		Settings settings = newSettingsInstance();
+		FieldUtils.writeField(settings, "bootstrap", true, true);
+		FieldUtils.writeField(settings, "bootstrapHosts", new String[] {"https://attacker.invalid"}, true);
+		FieldUtils.writeField(settings, "archiveFastReplayOnlyWhenBootstrapDisabled", true, true);
+
+		assertTrue(ArchiveFastSyncManager.shouldRun(settings, false, true));
+	}
+
+	@Test
+	public void testFastSyncEligibilityGatesRemainUnchanged() throws Exception {
+		Settings settings = newSettingsInstance();
+
+		assertTrue(ArchiveFastSyncManager.shouldRun(settings, false, true));
+		assertFalse(ArchiveFastSyncManager.shouldRun(settings, false, false));
+
+		FieldUtils.writeField(settings, "archiveFastReplayEnabled", false, true);
+		assertFalse(ArchiveFastSyncManager.shouldRun(settings, false, true));
+		assertTrue(ArchiveFastSyncManager.shouldRun(settings, true, false));
+
+		FieldUtils.writeField(settings, "lite", true, true);
+		assertFalse(ArchiveFastSyncManager.shouldRun(settings, true, true));
 	}
 }

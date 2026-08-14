@@ -312,7 +312,7 @@ public class NamesDatabaseIntegrityCheck {
         }
 
         if (integrityCheckFailed) {
-            LOGGER.warn("Registered names database integrity check failed. Bootstrapping is recommended.");
+            LOGGER.warn("Registered names database integrity check failed. Reset or rebuild the repository and re-sync from genesis.");
         } else {
             LOGGER.info("Registered names database integrity check passed.");
         }

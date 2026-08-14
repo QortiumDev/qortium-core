@@ -84,7 +84,7 @@ public class BootstrapResource {
 	@Path("/validate")
 	@Operation(
 			summary = "Validate blockchain",
-			description = "Useful to check database integrity prior to creating or after installing a bootstrap. " +
+			description = "Useful to check current database integrity before creating a local archive export. " +
 					"This process is intensive and can take over an hour to run.",
 			responses = {
 					@ApiResponse(

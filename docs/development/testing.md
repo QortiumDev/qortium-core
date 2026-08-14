@@ -43,8 +43,6 @@ for live, display-backed, funded-wallet, or long-running checks.
 - `-Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false`
   Allows GUI display tests to open the splash frame and system tray when a desktop display is available. Headless Maven runs still exercise the splash no-op path.
   A manual `GUI display tests` GitHub Actions workflow runs the same checks under `xvfb`.
-- `-Dqortium.runLiveBootstrapChecks=true`
-  Checks configured bootstrap hosts with live HTTP requests. Use `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two` to override settings. Explicit live runs fail if no bootstrap hosts are configured.
 - `-Dqortium.runLiveElectrumXTests=true`
   Runs public ElectrumX server checks. The default suite uses mock ElectrumX responses for deterministic protocol coverage. Explicit live infrastructure checks prefer Bitcoin TEST4 servers, while legacy funded-address fixture checks still use Bitcoin TEST3 fixtures.
 - `-Dqortium.runLiveCrosschainTests=true`
@@ -71,9 +69,6 @@ mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.hea
 
 # Display-backed GUI checks under xvfb, matching the manual GitHub Actions workflow
 xvfb-run -a mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=GuiTests
-
-# Live bootstrap host checks
-mvn test -DskipJUnitTests=false -Dqortium.runLiveBootstrapChecks=true -Dtest=BootstrapTests
 
 # Live ElectrumX server checks
 mvn test -DskipJUnitTests=false -Dqortium.runLiveElectrumXTests=true -Dtest=ElectrumXTests

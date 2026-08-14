@@ -276,8 +276,8 @@ public class Settings {
 	/** Serialization version to use when building an archive */
 	private int defaultArchiveVersion = 1;
 
-	/** Whether to automatically bootstrap instead of syncing from genesis */
-	private boolean bootstrap = false;
+	/** Deprecated hosted whole-database bootstrap input. Retained only so old settings parse safely. */
+	private Boolean bootstrap = null;
 
 	/** Registered names integrity check */
 	private boolean namesIntegrityCheckEnabled = false;
@@ -424,10 +424,8 @@ public class Settings {
 	 *  Inert unless the chain config pins a checkpoint to act as the trust floor (so this only engages where a
 	 *  checkpoint exists — currently previewnet; mainnet/testnet have none and are unaffected). */
 	private boolean archiveFastReplayEnabled = true;
-	/** When true (default), archive fast-replay defers to a configured bootstrap: if bootstrap is enabled and
-	 *  has hosts, the node lets bootstrap build initial state instead of fast-replaying (the two are competing
-	 *  ways to skip the slow genesis sync). */
-	private boolean archiveFastReplayOnlyWhenBootstrapDisabled = true;
+	/** Deprecated compatibility input from the retired hosted whole-database bootstrap path. */
+	private Boolean archiveFastReplayOnlyWhenBootstrapDisabled = null;
 
 	// Which blockchains this node is running
 	@XmlJavaTypeAdapter(WalletsMapXmlAdapter.class)
@@ -494,7 +492,7 @@ public class Settings {
 	// Bootstrap
 	private String bootstrapFilenamePrefix = "";
 
-	// Bootstrap sources
+	// Deprecated hosted whole-database bootstrap sources. Retained only so old settings parse safely.
 	private String[] bootstrapHosts = new String[0];
 
 	// Lists
@@ -1186,7 +1184,6 @@ public class Settings {
 		settings.put("pirateChainNet", new WritableSetting(WritableSettingType.PIRATE_CHAIN_NET, true));
 		settings.put("autoUpdateMode", new WritableSetting(WritableSettingType.AUTO_UPDATE_MODE, true));
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
-		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("allowedTransports", new WritableSetting(WritableSettingType.ALLOWED_TRANSPORTS, true)); // changes binding/advertisement -> restart
 		settings.put("uPnPEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true)); // only read during Network/NetworkData start() -> restart
@@ -1779,6 +1776,12 @@ public class Settings {
 	private void validate() {
 		normaliseBitcoinyNetworks();
 		normaliseBitcoinyServers();
+		if (Boolean.TRUE.equals(this.bootstrap) || (this.bootstrapHosts != null && this.bootstrapHosts.length > 0)
+				|| Boolean.TRUE.equals(this.archiveFastReplayOnlyWhenBootstrapDisabled))
+			LOGGER.warn("Hosted whole-database bootstrap settings are retired and ignored; checkpoint-anchored peer archive fast-sync remains available");
+		this.bootstrap = false;
+		this.bootstrapHosts = new String[0];
+		this.archiveFastReplayOnlyWhenBootstrapDisabled = false;
 		if (Boolean.TRUE.equals(this.recoveryWatchdogEnabled)
 				|| Boolean.TRUE.equals(this.developmentPeerClaimOrphaningEnabled))
 			LOGGER.warn("Peer-claim orphaning settings are retired and ignored; synchronization never discards confirmed blocks based only on peer claims");
@@ -2697,8 +2700,10 @@ public class Settings {
 		return this.archiveFastReplayEnabled;
 	}
 
+	/** @deprecated hosted whole-database bootstrap has been retired and cannot suppress archive fast-sync. */
+	@Deprecated
 	public boolean isArchiveFastReplayOnlyWhenBootstrapDisabled() {
-		return this.archiveFastReplayOnlyWhenBootstrapDisabled;
+		return false;
 	}
 
 	public AutoUpdateMode getAutoUpdateMode() {
@@ -2713,24 +2718,11 @@ public class Settings {
 	}
 
 	public String[] getBootstrapHosts() {
-		if (this.bootstrapHosts == null || this.bootstrapHosts.length == 0)
-			return new String[0];
-
-		List<String> configuredHosts = new ArrayList<>(this.bootstrapHosts.length);
-		for (String bootstrapHost : this.bootstrapHosts) {
-			if (bootstrapHost == null)
-				continue;
-
-			String trimmedHost = bootstrapHost.trim();
-			if (!trimmedHost.isEmpty())
-				configuredHosts.add(trimmedHost);
-		}
-
-		return configuredHosts.toArray(new String[0]);
+		return new String[0];
 	}
 
 	public boolean hasBootstrapHostsConfigured() {
-		return this.getBootstrapHosts().length > 0;
+		return false;
 	}
 
 	public String getListsPath() {
@@ -2894,8 +2886,10 @@ public class Settings {
 	}
 
 
+	/** @deprecated hosted whole-database bootstrap has been retired; use archive fast-sync or normal sync. */
+	@Deprecated
 	public boolean getBootstrap() {
-		return this.bootstrap;
+		return false;
 	}
 
 

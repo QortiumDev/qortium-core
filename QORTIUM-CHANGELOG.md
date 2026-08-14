@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - security(bootstrap): retire hosted database replacement
+
+Removes the inherited hosted whole-database downloader and every automatic,
+tray, helper-process, and repository-replacement path that could invoke it.
+Legacy settings now parse as inert compatibility inputs, the authenticated
+admin route returns a deterministic retirement error, and fresh nodes continue
+through checkpoint-anchored peer archive fast-sync or normal synchronization.
+Local archive creation and current-repository validation remain available; no
+new signing key, publisher, hosted service, or archive replay rule is added.
+
 ### 2026-08-13 - docs: start ultra-review legacy bootstrap retirement
 
 Starts the bounded removal of the dormant hosted whole-database bootstrap

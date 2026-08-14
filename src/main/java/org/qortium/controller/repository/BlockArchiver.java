@@ -43,7 +43,7 @@ public class BlockArchiver implements Runnable {
 			// Don't attempt to archive if we have no ATStatesHeightIndex, as it will be too slow
 			boolean hasAtStatesHeightIndex = repository.getATRepository().hasAtStatesHeightIndex();
 			if (!hasAtStatesHeightIndex) {
-				LOGGER.info("Unable to start block archiver due to missing ATStatesHeightIndex. Bootstrapping is recommended.");
+				LOGGER.info("Unable to start block archiver due to missing ATStatesHeightIndex. Reset or rebuild the repository and re-sync.");
 				repository.discardChanges();
 				return;
 			}
@@ -119,9 +119,9 @@ public class BlockArchiver implements Runnable {
 
 							case BLOCK_NOT_FOUND:
 								// We tried to archive a block that didn't exist. This is a major failure and likely means
-								// that a bootstrap or re-sync is needed. Try again every minute until then.
+								// that a repository rebuild or re-sync is needed. Try again every minute until then.
 								LOGGER.info("Error: block not found when building archive. If this error persists, " +
-										"a bootstrap or re-sync may be needed.");
+										"a repository rebuild or re-sync may be needed.");
 								repository.discardChanges();
 								Thread.sleep(60 * 1000L); // 1 minute
 								break;

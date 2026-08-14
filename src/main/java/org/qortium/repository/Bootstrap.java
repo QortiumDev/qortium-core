@@ -10,20 +10,12 @@ import org.qortium.data.account.MintingAccountData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.crosschain.TradeBotData;
 import org.qortium.network.Network;
-import org.qortium.repository.hsqldb.HSQLDBRepositoryFactory;
 import org.qortium.settings.Settings;
 import org.qortium.utils.NTP;
 import org.qortium.utils.SevenZ;
-import org.qortium.utils.StartupStatus;
 
-import java.io.BufferedInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.file.*;
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
@@ -36,8 +28,6 @@ public class Bootstrap {
 
     private Repository repository;
 
-    private int retryMinutes = 1;
-
     private static final Logger LOGGER = LogManager.getLogger(Bootstrap.class);
 
     /** The maximum number of untrimmed blocks allowed to be included in a bootstrap, beyond the trim threshold */
@@ -46,12 +36,9 @@ public class Bootstrap {
     /** The maximum number of unpruned blocks allowed to be included in a bootstrap, beyond the prune threshold */
     private static final int MAXIMUM_UNPRUNED_BLOCKS = 100;
 
-    public static final String MISSING_BOOTSTRAP_HOSTS_MESSAGE =
-            "No bootstrap hosts are configured. Add bootstrapHosts in settings.json before bootstrapping.";
+    public static final String HOSTED_IMPORT_RETIRED_MESSAGE =
+            "Hosted whole-database bootstrap has been retired; use checkpoint-anchored archive fast-sync or normal synchronization.";
 
-
-    public Bootstrap() {
-    }
 
     public Bootstrap(Repository repository) {
         this.repository = repository;
@@ -315,61 +302,6 @@ public class Bootstrap {
         }
     }
 
-    public static void ensureBootstrapHostsConfigured() throws DataException {
-        if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
-            throw new DataException(MISSING_BOOTSTRAP_HOSTS_MESSAGE);
-        }
-    }
-
-    public void startImport() throws InterruptedException, DataException {
-        ensureBootstrapHostsConfigured();
-
-        while (!Controller.isStopping()) {
-            try (final Repository repository = RepositoryManager.getRepository()) {
-                this.repository = repository;
-
-                this.updateStatus("Starting import of bootstrap...");
-
-                this.doImport();
-                break;
-
-            } catch (DataException e) {
-                LOGGER.info("Bootstrap import failed", e);
-                this.updateStatus(String.format("Bootstrapping failed. Retrying in %d minutes...", retryMinutes));
-                Thread.sleep(retryMinutes * 60 * 1000L);
-                retryMinutes *= 2;
-            }
-        }
-    }
-
-    private void doImport() throws DataException {
-        Path path = null;
-        try {
-            Path tempDir = this.createTempDirectory();
-            String filename = String.format("%s%s", Settings.getInstance().getBootstrapFilenamePrefix(), this.getFilename());
-            path = Paths.get(tempDir.toString(), filename);
-
-            this.downloadToPath(path);
-            this.importFromPath(path);
-
-        } catch (DataException e) {
-            throw e;
-        } catch (InterruptedException | IOException e) {
-            throw new DataException("Unable to import bootstrap", e);
-        }
-        finally {
-            if (path != null) {
-                try {
-                    Files.delete(path);
-
-                } catch (IOException e) {
-                    // Temp folder will be cleaned up below, so ignore this failure
-                }
-            }
-            this.deleteAllTempDirectories();
-        }
-    }
-
     private String getFilename() {
         boolean isTopOnly = Settings.getInstance().isTopOnly();
         boolean archiveEnabled = Settings.getInstance().isArchiveEnabled();
@@ -384,115 +316,6 @@ public class Bootstrap {
         }
         else {
             return prefix.concat("bootstrap-full.7z");
-        }
-    }
-
-    private void downloadToPath(Path path) throws DataException {
-        ensureBootstrapHostsConfigured();
-
-        String bootstrapHost = this.getRandomHost();
-        String bootstrapFilename = this.getFilename();
-        String bootstrapUrl = String.format("%s/%s", bootstrapHost, bootstrapFilename);
-        String type = Settings.getInstance().isTopOnly() ? "top-only" : "full node";
-
-        StartupStatus.update(String.format("Downloading %s bootstrap...", type));
-        LOGGER.info(String.format("Downloading %s bootstrap from %s ...", type, bootstrapUrl));
-
-        // Delete an existing file if it exists
-        try {
-            Files.delete(path);
-        } catch (IOException e) {
-            // No need to do anything
-        }
-
-        // Get the total file size
-        URL url;
-        long fileSize;
-        try {
-            url = new URL(bootstrapUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("HEAD");
-            connection.connect();
-            fileSize = connection.getContentLengthLong();
-            connection.disconnect();
-
-        } catch (MalformedURLException e) {
-            throw new DataException(String.format("Malformed URL when downloading bootstrap: %s", e.getMessage()));
-        } catch (IOException e) {
-            throw new DataException(String.format("Unable to get bootstrap file size from %s. " +
-                    "Please check your internet connection.", e.getMessage()));
-        }
-
-        // Download the file and update the status with progress
-        try (BufferedInputStream in = new BufferedInputStream(url.openStream());
-             FileOutputStream fileOutputStream = new FileOutputStream(path.toFile())) {
-            byte[] buffer = new byte[1024 * 1024];
-            long downloaded = 0;
-            int bytesRead;
-            while ((bytesRead = in.read(buffer, 0, 1024)) != -1) {
-                fileOutputStream.write(buffer, 0, bytesRead);
-                downloaded += bytesRead;
-
-                if (fileSize > 0) {
-                    double progress = (double)downloaded / (double)fileSize * 100;
-                    StartupStatus.update(String.format("Downloading %s bootstrap... (%.1f%%)", type, progress));
-                }
-            }
-
-        } catch (IOException e) {
-            throw new DataException(String.format("Unable to download bootstrap: %s", e.getMessage()));
-        }
-    }
-
-    public String getRandomHost() throws DataException {
-        // Select a random host from bootstrapHosts
-        ensureBootstrapHostsConfigured();
-
-        String[] hosts = Settings.getInstance().getBootstrapHosts();
-        int index = new SecureRandom().nextInt(hosts.length);
-        String bootstrapHost = hosts[index];
-        return bootstrapHost;
-    }
-
-    public void importFromPath(Path path) throws InterruptedException, DataException, IOException {
-
-        ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
-        blockchainLock.lockInterruptibly();
-
-        try {
-            this.updateStatus("Stopping repository...");
-            // Close the repository while we are still able to
-            // Otherwise, the caller will run into difficulties when it tries to close it
-            repository.discardChanges();
-            repository.close();
-            // Now close the repository factory so that we can swap out the database files
-            RepositoryManager.closeRepositoryFactory();
-
-            this.updateStatus("Deleting existing repository...");
-            Path input = path.toAbsolutePath();
-            Path output = path.toAbsolutePath().getParent().toAbsolutePath();
-            Path inputPath = Paths.get(output.toString(), "bootstrap");
-            Path outputPath = Paths.get(Settings.getInstance().getRepositoryPath());
-            FileUtils.deleteDirectory(outputPath.toFile());
-
-            this.updateStatus("Extracting bootstrap...");
-            SevenZ.decompress(input.toString(), output.toFile());
-
-            if (!inputPath.toFile().exists()) {
-                throw new DataException("Extracted bootstrap doesn't exist");
-            }
-
-            // Move the "bootstrap" folder in place of the "db" folder
-            this.updateStatus("Moving files to output directory...");
-            Files.move(inputPath, outputPath);
-
-            this.updateStatus("Starting repository from bootstrap...");
-        }
-        finally {
-            RepositoryFactory repositoryFactory = new HSQLDBRepositoryFactory(Controller.getRepositoryUrl());
-            RepositoryManager.setRepositoryFactory(repositoryFactory);
-
-            blockchainLock.unlock();
         }
     }
 
@@ -520,11 +343,6 @@ public class Bootstrap {
         String compressedFilename = String.format("%s%s", Settings.getInstance().getBootstrapFilenamePrefix(), this.getFilename());
         Path compressedOutputPath = Paths.get(initialPath.toString(), compressedFilename);
         return compressedOutputPath;
-    }
-
-    private void updateStatus(String text) {
-        LOGGER.info(text);
-        StartupStatus.update(text);
     }
 
 }

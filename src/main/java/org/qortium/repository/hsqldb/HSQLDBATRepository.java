@@ -1348,7 +1348,7 @@ public class HSQLDBATRepository implements ATRepository {
 
 			if (atCount > 0) {
 				LOGGER.warn(() -> String.format("Missing %d latest AT state data row%s!", atCount, (atCount != 1 ? "s" : "")));
-				LOGGER.warn("Export key data then resync using bootstrap as soon as possible");
+				LOGGER.warn("Export key data, reset the repository, and resync from genesis as soon as possible");
 			}
 		} catch (SQLException e) {
 			throw new DataException("Unable to check AT repository consistency", e);

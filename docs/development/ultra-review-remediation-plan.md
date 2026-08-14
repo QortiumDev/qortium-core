@@ -40,7 +40,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T1 | Use the locally derived execution height for all three AT chain-query activation gates; add hostile claimed-height tests. | Complete | None | `fix(at): use local height for chain-query activation gates`; adversarial red test failed 2/2 before the repair; focused tests passed 29/29; full suite passed 3,004 with 68 skips; independent Codex review passed |
 | T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Complete | T1 accepted and committed | Six implementation commits plus focused tests passed 42/42 and the serialized full suite passed 3,020 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; coordinated rollout and live-height verification remain a release condition |
 | T3 | Retire automatic peer-claim orphaning while retaining both old setting names as permanently disabled compatibility inputs. | Complete | T2 containment | `security(sync): retire peer-claim orphaning` plus the two-key rollback follow-up; red tests failed 2/4 before retirement and 1/1 before rollback repair; focused tests passed 30/30; serialized full suite passed 3,008 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
-| T4 | Retire the dormant hosted whole-database bootstrap importer while preserving checkpoint-anchored peer archive fast-sync and the non-destructive local export/validation tools. | In progress | None | Legacy-setting, API/tray, exporter, archive-fast-sync, managed upgrade/rollback, focused/full-suite, and independent-review evidence |
+| T4 | Retire the dormant hosted whole-database bootstrap importer while preserving checkpoint-anchored peer archive fast-sync and the non-replacement local archive creation/validation tools. | In progress | None | Legacy-setting, API/tray, exporter, archive-fast-sync, managed upgrade/rollback, focused/full-suite, and independent-review evidence |
 | T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Planned | Decide whether generic Docker targets no network or explicit Previewnet | Cross-profile and container configuration invariants |
 | T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | Planned | None | Request/response and chain/data x IP/I2P matrix tests |
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Planned | T2 recovery-state semantics for the catch-up signal | Deterministic loss, peer isolation, deadline, cancellation, and ping-order tests |
@@ -119,9 +119,10 @@ architecture: Qortium operates no hosted whole-database bootstrap servers, all
 shipped profiles disable that path, and fresh Preview nodes use peer-served
 archive chunks bound to a release-pinned checkpoint and replayed through block
 validation. T4 therefore removes the dormant hosted importer instead of
-introducing a new snapshot publisher, signing key, or trust root. Local
-bootstrap export and validation remain available as non-destructive operator
-utilities, but cannot authorize automatic database replacement.
+introducing a new snapshot publisher, signing key, or trust root. Local archive
+creation and validation remain available as operator utilities that do not
+acquire or replace a remote repository, but creation still performs its existing
+temporary live-repository data preparation and restoration.
 
 ## Current Work Boundary
 

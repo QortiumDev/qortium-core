@@ -69,7 +69,7 @@ public class HSQLDBDatabaseUpdates {
 
 		if (databaseVersion != 0)
 			throw new SQLException(String.format(
-					"Unsupported HSQLDB repository schema version %d. Qortium starts fresh repositories at schema version %d and no longer upgrades inherited upstream database versions. Reset the repository path or bootstrap from a fresh Qortium database.",
+					"Unsupported HSQLDB repository schema version %d. Qortium starts fresh repositories at schema version %d and no longer upgrades inherited upstream database versions. Reset the repository path and resync from genesis.",
 					databaseVersion, CURRENT_SCHEMA_VERSION));
 
 		StartupStatus.update("Initializing Qortium database, please wait...");

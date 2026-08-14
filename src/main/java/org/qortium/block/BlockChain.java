@@ -1520,13 +1520,8 @@ public class BlockChain {
 	public static void validate() throws DataException {
 
 		Settings settings = Settings.getInstance();
-		boolean isTopOnly = settings.isTopOnly();
-		boolean archiveEnabled = settings.isArchiveEnabled();
 		boolean isLite = settings.isLite();
 		boolean isSingleNodeTestnet = settings.isSingleNodeTestnet();
-		boolean bootstrapEnabled = settings.getBootstrap();
-		boolean hasBootstrapHostsConfigured = settings.hasBootstrapHostsConfigured();
-		boolean canBootstrap = bootstrapEnabled && hasBootstrapHostsConfigured;
 		boolean needsArchiveRebuild = false;
 		int checkHeight = 0;
 		BlockData chainTip;
@@ -1535,32 +1530,13 @@ public class BlockChain {
 			chainTip = repository.getBlockRepository().getLastBlock();
 			checkHeight = repository.getBlockRepository().getBlockchainHeight();
 
-			// Ensure archive is (at least partially) intact, and force a bootstrap if it isn't
-			if (!isTopOnly && archiveEnabled && canBootstrap) {
-				needsArchiveRebuild = (repository.getBlockArchiveRepository().fromHeight(2) == null);
-				if (needsArchiveRebuild) {
-					LOGGER.info("Couldn't retrieve block 2 from archive. Bootstrapping...");
-
-					// If there are minting accounts, make sure to back them up
-					// Don't backup if there are no minting accounts, as this can cause problems
-					if (!repository.getAccountRepository().getMintingAccounts().isEmpty()) {
-						Controller.getInstance().exportRepositoryData();
-					}
-				}
-			}
-
-			if (!canBootstrap && !isSingleNodeTestnet) {
+			if (!isSingleNodeTestnet) {
 				if (checkHeight > 2) {
 					LOGGER.info("Retrieved block 2 from archive. Syncing from genesis block resumed!");
 				} else {
 					needsArchiveRebuild = (repository.getBlockArchiveRepository().fromHeight(2) == null);
-					if (needsArchiveRebuild) {
-						if (bootstrapEnabled && !hasBootstrapHostsConfigured) {
-							LOGGER.info("Couldn't retrieve block 2 from archive. {} Syncing from genesis block!", Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
-						} else {
-							LOGGER.info("Couldn't retrieve block 2 from archive. Bootstrapping is disabled. Syncing from genesis block!");
-						}
-					}
+					if (needsArchiveRebuild)
+						LOGGER.info("Couldn't retrieve block 2 from archive. Starting from genesis; checkpoint-anchored archive fast-sync can accelerate replay after networking starts.");
 				}
 			}
 
@@ -1584,7 +1560,7 @@ public class BlockChain {
 					byte[] signature = Base58.decode(checkpoint.signature);
 					if (!Arrays.equals(signature, blockData.getSignature())) {
 						if (checkHeight < 3) {
-							// Near-empty chain: safe to resync from genesis (bootstrap is disabled / no hosts),
+							// Near-empty chain: safe to rebuild and resync from genesis,
 							// so fall through to rebuildBlockchain() below.
 							LOGGER.error("Block at height {} with signature {} doesn't match checkpoint sig: {}. Chain is near-empty; resyncing from genesis.", checkpoint.height, Base58.encode(blockData.getSignature()), checkpoint.signature);
 							needsArchiveRebuild = true;
@@ -1613,8 +1589,7 @@ public class BlockChain {
 			}
 		}
 
-		// We need to create a new connection, as the previous repository and its connections may be been
-		// closed by rebuildBlockchain() if a bootstrap was applied
+		// We need a new connection because rebuildBlockchain() can replace the repository.
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			repository.checkConsistency();
 
@@ -1626,14 +1601,14 @@ public class BlockChain {
 			if (detachedBlockData != null) {
 				LOGGER.error(String.format("Block %d's reference does not match any block's signature",
 						detachedBlockData.getHeight()));
-				LOGGER.error(String.format("Your chain may be invalid and you should consider bootstrapping" +
-						" or re-syncing from genesis."));
+				LOGGER.error("Your chain may be invalid; reset or rebuild it and re-sync from genesis. " +
+						"Checkpoint-anchored archive fast-sync can accelerate initial synchronization when available.");
 			}
 		}
 	}
 
 	/**
-	 * More thorough blockchain validation method. Useful for validating bootstraps.
+	 * More thorough validation of the current blockchain repository.
 	 * A DataException is thrown if anything is invalid.
 	 *
 	 * @throws DataException
@@ -1691,19 +1666,6 @@ public class BlockChain {
 	}
 
 	private static void rebuildBlockchain() throws DataException, InterruptedException {
-		Settings settings = Settings.getInstance();
-		boolean shouldBootstrap = settings.getBootstrap();
-		if (shouldBootstrap && settings.hasBootstrapHostsConfigured()) {
-			// Settings indicate that we should apply a bootstrap rather than rebuilding and syncing from genesis
-			Bootstrap bootstrap = new Bootstrap();
-			bootstrap.startImport();
-			return;
-		}
-
-		if (shouldBootstrap) {
-			LOGGER.warn("{} Rebuilding repository and syncing from genesis instead.", Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
-		}
-
 		// (Re)build repository
 		if (!RepositoryManager.wasPristineAtOpen())
 			RepositoryManager.rebuild();

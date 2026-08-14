@@ -26,7 +26,6 @@ import org.qortium.api.model.NodeInfo;
 import org.qortium.api.model.NodeStatus;
 import org.qortium.block.BlockChain;
 import org.qortium.controller.AutoUpdate;
-import org.qortium.controller.BootstrapNode;
 import org.qortium.controller.Controller;
 import org.qortium.controller.RestartNode;
 import org.qortium.controller.Synchronizer;
@@ -566,30 +565,25 @@ public class AdminResource {
 
 	@GET
 	@Path("/bootstrap")
+	@Deprecated
 	@Operation(
-		summary = "Bootstrap",
-		description = "Delete and download new database archive",
+		summary = "Hosted database bootstrap retired",
+		description = "This compatibility route no longer downloads or replaces the repository. Fresh nodes use checkpoint-anchored peer archive fast-sync or normal synchronization.",
+		deprecated = true,
 		responses = {
 			@ApiResponse(
-				description = "\"true\"",
-				content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+				description = "Hosted bootstrap is retired",
+				content = @Content(mediaType = MediaType.APPLICATION_JSON)
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.OPERATION_IN_PROGRESS})
+	@ApiErrors({ApiError.INVALID_CRITERIA})
 	@SecurityRequirement(name = "apiKey")
 	public String bootstrap(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 
-		if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
-		}
-
-		if (!BootstrapNode.scheduleBootstrap())
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
-					"Bootstrap apply is already scheduled or running");
-
-		return "true";
+		throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+				Bootstrap.HOSTED_IMPORT_RETIRED_MESSAGE);
 	}
 
 	@GET
@@ -1235,7 +1229,7 @@ public class AdminResource {
 	@Path("/repository/reindex")
 	@Operation(
 			summary = "Reindex repository",
-			description = "Rebuilds all transactions and balances from archived blocks. Warning: takes around 1 week, and the core will not function normally during this time. If 'false' is returned, the database may be left in an inconsistent state, requiring another reindex or a bootstrap to correct it.",
+			description = "Rebuilds all transactions and balances from archived blocks. Warning: takes around 1 week, and the core will not function normally during this time. If 'false' is returned, the database may be left in an inconsistent state, requiring another reindex or a repository reset and genesis resync to correct it.",
 			responses = {
 					@ApiResponse(
 							description = "\"true\"",

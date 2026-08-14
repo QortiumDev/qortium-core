@@ -569,15 +569,15 @@ public class Controller extends Thread {
 			ArbitraryDataCacheManager.populateLatestSignaturesIfNecessary(repository.getConnection());
 		
 			if (RepositoryManager.needsTransactionSequenceRebuild(repository)) {
-				// Don't allow the node to start if transaction sequences haven't been built yet
-				// This is needed to handle a case when bootstrapping
+				// Don't allow the node to start if transaction sequences haven't been built yet.
+				// A repository rebuild or schema upgrade can leave this follow-up work pending.
 				LOGGER.error("Database upgrade needed. Please restart the core to complete the upgrade process.");
 				Gui.getInstance().fatalError("Database upgrade needed", "Please restart the core to complete the upgrade process.");
 				return;
 			}
 			if (ArbitraryDataCacheManager.getInstance().needsArbitraryResourcesCacheRebuild(repository)) {
-				// Don't allow the node to start if arbitrary resources cache hasn't been built yet
-				// This is needed to handle a case when bootstrapping
+				// Don't allow the node to start if arbitrary resources cache hasn't been built yet.
+				// A repository rebuild or schema upgrade can leave this follow-up work pending.
 				LOGGER.error("Database upgrade needed. Please restart the core to complete the upgrade process.");
 				Gui.getInstance().fatalError("Database upgrade needed", "Please restart the core to complete the upgrade process.");
 				return;
@@ -615,7 +615,7 @@ public class Controller extends Thread {
 			}
 		});
 
-		// One-shot archive-chunk fast-sync bootstrap (enabled by default, but inert unless a checkpoint is pinned
+		// One-shot archive-chunk fast-sync (enabled by default, but inert unless a checkpoint is pinned
 		// and the node is genesis-fresh; gated by ArchiveFastSyncManager.shouldRun()).
 		ArchiveFastSyncManager.getInstance().start();
 
@@ -675,8 +675,8 @@ public class Controller extends Thread {
             PirateChainWalletController.getInstance().start();
         }
 
-		// Start the DB cache only now, after any bootstrap import (BlockChain.validate) has replaced the
-		// repository, so the cache is built from the final database rather than a stale pre-bootstrap one.
+		// Start the DB cache only after blockchain validation and any repository rebuild, so the cache
+		// is built from the final database rather than a stale pre-validation one.
 		if( Settings.getInstance().isDbCacheEnabled() ) {
 			LOGGER.info("Starting Db Cache...");
 			HSQLDBDataCacheManager hsqldbDataCacheManager = new HSQLDBDataCacheManager();
@@ -786,10 +786,6 @@ public class Controller extends Thread {
 			@Override
 			public void run() {
 				LOGGER.debug("Start sync from genesis check.");
-				Settings settings = Settings.getInstance();
-				boolean bootstrapEnabled = settings.getBootstrap();
-				boolean hasBootstrapHostsConfigured = settings.hasBootstrapHostsConfigured();
-				boolean canBootstrap = bootstrapEnabled && hasBootstrapHostsConfigured;
 				boolean needsArchiveRebuild = false;
 				int checkHeight = 0;
 
@@ -800,16 +796,13 @@ public class Controller extends Thread {
 					throw new RuntimeException(e);
 				}
 
-				if (canBootstrap || !needsArchiveRebuild || checkHeight > 3) {
-					LOGGER.debug("Bootstrap is available, archive rebuild is not needed, or we have more than 2 blocks. Cancel sync from genesis check.");
+				if (!needsArchiveRebuild || checkHeight > 3) {
+					LOGGER.debug("Archive rebuild is not needed, or we have more than 2 blocks. Cancel sync from genesis check.");
 					syncFromGenesis.cancel();
 					return;
 				}
 
-				if (needsArchiveRebuild && !canBootstrap) {
-					if (bootstrapEnabled && !hasBootstrapHostsConfigured) {
-						LOGGER.info("{} Starting sync from genesis instead.", Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
-					}
+				if (needsArchiveRebuild) {
 					LOGGER.info("Start syncing from genesis!");
 					List<Peer> seeds = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
 
@@ -1022,7 +1015,7 @@ public class Controller extends Thread {
 
 	/**
 	 * Import current trade bot states and minting accounts.
-	 * This is needed because the user may have bootstrapped, or there could be a database inconsistency
+	 * This is needed after a repository reset, or when there could be a database inconsistency
 	 * if the core crashed when computing the nonce during the start of the trade process.
 	 */
 	private static void importRepositoryData() {
