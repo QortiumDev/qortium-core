@@ -4,6 +4,7 @@ import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortium.account.Account;
+import org.qortium.block.Block;
 import org.qortium.block.BlockChain;
 import org.qortium.controller.Controller;
 import org.qortium.repository.DataException;
@@ -225,7 +226,25 @@ public class BlockData implements Serializable {
 		this.onlineAccountsSignatures = onlineAccountsSignatures;
 	}
 
+	/**
+	 * Version-aware semantic alias for the bundle cohort stored in the existing
+	 * {@code online_accounts_signatures} repository column.
+	 */
+	public byte[] getOnlineAccountBundles() {
+		return Block.usesOnlineNodeRewardBundles(this.version) ? this.onlineAccountsSignatures : null;
+	}
+
+	public void setOnlineAccountBundles(byte[] onlineAccountBundles) {
+		if (!Block.usesOnlineNodeRewardBundles(this.version))
+			throw new IllegalStateException("Online account bundles require a bundle-aware block version");
+
+		this.onlineAccountsSignatures = onlineAccountBundles;
+	}
+
 	public int getOnlineAccountsSignaturesCount() {
+		if (Block.usesOnlineNodeRewardBundles(this.version))
+			return 0;
+
 		if (this.onlineAccountsSignatures != null && this.onlineAccountsSignatures.length > 0) {
 			// The stored bytes are: (signaturesCount * SIGNATURE_LENGTH) + (onlineAccountsCount * INT_LENGTH) nonces.
 			// Derive the signature count from the actual bytes so it works for both the legacy aggregate

@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(consensus): activate Previewnet node reward block format
+
+Activates the bundle-aware block representation for Previewnet's capture window
+beginning at height `99990`, leading to the first bundle-aware payout at height
+`100000`. Version-2 blocks permanently store the canonical reward-node bundle
+cohort, bind its shared epoch and complete bytes into the block-minter signature,
+and retain that evidence during repository trimming; version-1 block bytes and
+signatures remain unchanged. Configuration validation keeps the trigger on a
+batch boundary and after legacy batch activation. This format foundation does
+not yet change which bundles a minter selects or how rewards are divided.
+
 ### 2026-08-14 - feat(network): add signed online-account reward bundles
 
 Adds the canonical network representation for a reward node to bind its online

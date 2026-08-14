@@ -121,6 +121,7 @@ public class Block {
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 	public static final int CURRENT_VERSION = 1;
+	public static final int ONLINE_NODE_REWARD_BUNDLES_VERSION = 2;
 
 	/** Number of left-shifts to apply to block's online accounts count when calculating block's weight. */
 	private static final int ACCOUNTS_COUNT_SHIFT = Transformer.PUBLIC_KEY_LENGTH * 8;
@@ -669,13 +670,25 @@ public class Block {
 	 * <p>
 	 * Qortium starts from its own baseline block version.
 	 *
-	 * @return current Qortium block version
+	 * @return height-selected Qortium block version
 	 */
 	public int getNextBlockVersion() {
 		if (this.blockData.getHeight() == null)
 			throw new IllegalStateException("Can't determine next block's version as this block has no height set");
 
-		return CURRENT_VERSION;
+		long nextHeight = (long) this.blockData.getHeight() + 1L;
+		return isOnlineNodeRewardBundlesActive(nextHeight) ? ONLINE_NODE_REWARD_BUNDLES_VERSION : CURRENT_VERSION;
+	}
+
+	/** Whether the bundle-aware block representation is required at {@code height}. */
+	public static boolean isOnlineNodeRewardBundlesActive(long height) {
+		long captureStartHeight = BlockChain.getInstance().getOnlineNodeRewardBundlesCaptureStartHeight();
+		return captureStartHeight != BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT && height >= captureStartHeight;
+	}
+
+	/** Whether a serialized block version uses the bundle-aware online-account section. */
+	public static boolean usesOnlineNodeRewardBundles(int version) {
+		return version >= ONLINE_NODE_REWARD_BUNDLES_VERSION;
 	}
 
 	/**

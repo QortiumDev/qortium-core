@@ -12,6 +12,7 @@ import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.DataException;
 import org.qortium.transaction.Transaction;
 import org.qortium.transaction.Transaction.TransactionType;
+import org.qortium.transform.OnlineAccountBundleTransformer;
 import org.qortium.transform.TransformationException;
 import org.qortium.transform.Transformer;
 import org.qortium.transform.transaction.TransactionTransformer;
@@ -48,6 +49,11 @@ public class BlockTransformer extends Transformer {
 	protected static final int ONLINE_ACCOUNTS_SIZE_LENGTH = INT_LENGTH;
 	protected static final int ONLINE_ACCOUNTS_TIMESTAMP_LENGTH = TIMESTAMP_LENGTH;
 	protected static final int ONLINE_ACCOUNTS_SIGNATURES_COUNT_LENGTH = INT_LENGTH;
+	protected static final int ONLINE_ACCOUNT_BUNDLES_LENGTH = INT_LENGTH;
+	public static final int MAX_ONLINE_ACCOUNT_BUNDLES_SIZE = OnlineAccountBundleTransformer.MAX_BLOCK_PAYLOAD_SIZE;
+
+	private static final byte ONLINE_ACCOUNT_BUNDLES_ABSENT = 0;
+	private static final byte ONLINE_ACCOUNT_BUNDLES_PRESENT = 1;
 
 	public static final int AT_ENTRY_LENGTH = ADDRESS_LENGTH + SHA256_LENGTH + AMOUNT_LENGTH;
 
@@ -234,25 +240,42 @@ public class BlockTransformer extends Transformer {
 		if (accountsIndexes.size() != onlineAccountsCount)
 			throw new TransformationException("Block's online account data malformed");
 
-		// Note: number of signatures, not byte length
-		int onlineAccountsSignaturesCount = byteBuffer.getInt();
+		if (Block.usesOnlineNodeRewardBundles(version)) {
+			int bundlePayloadLength = byteBuffer.getInt();
+			int maxPayloadLength = Math.min(MAX_ONLINE_ACCOUNT_BUNDLES_SIZE, BlockChain.getInstance().getMaxBlockSize());
+			if (bundlePayloadLength < 0 || bundlePayloadLength > maxPayloadLength)
+				throw new TransformationException("Byte data invalid length for online account bundles");
 
-		if (onlineAccountsSignaturesCount > 0) {
-			// Online accounts timestamp is only present if there are also signatures
-			onlineAccountsTimestamp = byteBuffer.getLong();
+			if (bundlePayloadLength > 0) {
+				if (byteBuffer.remaining() < ONLINE_ACCOUNTS_TIMESTAMP_LENGTH + bundlePayloadLength)
+					throw new TransformationException("Byte data too short for online account bundles");
 
-			// Both counts are attacker-controlled ints, so computing this in int arithmetic can
-			// overflow to a negative value that then passes the upper bound and reaches the
-			// allocation. Compute in long, bound it, and only then narrow.
-			final long signaturesByteLengthAsLong = ((long) onlineAccountsSignaturesCount * Transformer.SIGNATURE_LENGTH)
-					+ ((long) onlineAccountsCount * INT_LENGTH);
-			if (signaturesByteLengthAsLong < 0 || signaturesByteLengthAsLong > BlockChain.getInstance().getMaxBlockSize())
-				throw new TransformationException("Byte data invalid length for online accounts signatures");
+				onlineAccountsTimestamp = byteBuffer.getLong();
+				onlineAccountsSignatures = new byte[bundlePayloadLength];
+				byteBuffer.get(onlineAccountsSignatures);
+				validateBundlePayload(onlineAccountsTimestamp, onlineAccountsSignatures);
+			}
+		} else {
+			// Note: number of signatures, not byte length
+			int onlineAccountsSignaturesCount = byteBuffer.getInt();
 
-			final int signaturesByteLength = (int) signaturesByteLengthAsLong;
+			if (onlineAccountsSignaturesCount > 0) {
+				// Online accounts timestamp is only present if there are also signatures
+				onlineAccountsTimestamp = byteBuffer.getLong();
 
-			onlineAccountsSignatures = new byte[signaturesByteLength];
-			byteBuffer.get(onlineAccountsSignatures);
+				// Both counts are attacker-controlled ints, so computing this in int arithmetic can
+				// overflow to a negative value that then passes the upper bound and reaches the
+				// allocation. Compute in long, bound it, and only then narrow.
+				final long signaturesByteLengthAsLong = ((long) onlineAccountsSignaturesCount * Transformer.SIGNATURE_LENGTH)
+						+ ((long) onlineAccountsCount * INT_LENGTH);
+				if (signaturesByteLengthAsLong < 0 || signaturesByteLengthAsLong > BlockChain.getInstance().getMaxBlockSize())
+					throw new TransformationException("Byte data invalid length for online accounts signatures");
+
+				final int signaturesByteLength = (int) signaturesByteLengthAsLong;
+
+				onlineAccountsSignatures = new byte[signaturesByteLength];
+				byteBuffer.get(onlineAccountsSignatures);
+			}
 		}
 
 		// We don't have a height!
@@ -272,11 +295,19 @@ public class BlockTransformer extends Transformer {
 
 		blockLength += AT_BYTES_LENGTH + blockData.getATCount() * AT_ENTRY_LENGTH;
 		blockLength += ONLINE_ACCOUNTS_COUNT_LENGTH + ONLINE_ACCOUNTS_SIZE_LENGTH + blockData.getEncodedOnlineAccounts().length;
-		blockLength += ONLINE_ACCOUNTS_SIGNATURES_COUNT_LENGTH;
+		if (Block.usesOnlineNodeRewardBundles(blockData.getVersion())) {
+			blockLength += ONLINE_ACCOUNT_BUNDLES_LENGTH;
 
-		byte[] onlineAccountsSignatures = blockData.getOnlineAccountsSignatures();
-		if (onlineAccountsSignatures != null && onlineAccountsSignatures.length > 0)
-			blockLength += ONLINE_ACCOUNTS_TIMESTAMP_LENGTH + blockData.getOnlineAccountsSignatures().length;
+			byte[] onlineAccountBundles = blockData.getOnlineAccountBundles();
+			if (onlineAccountBundles != null && onlineAccountBundles.length > 0)
+				blockLength += ONLINE_ACCOUNTS_TIMESTAMP_LENGTH + onlineAccountBundles.length;
+		} else {
+			blockLength += ONLINE_ACCOUNTS_SIGNATURES_COUNT_LENGTH;
+
+			byte[] onlineAccountsSignatures = blockData.getOnlineAccountsSignatures();
+			if (onlineAccountsSignatures != null && onlineAccountsSignatures.length > 0)
+				blockLength += ONLINE_ACCOUNTS_TIMESTAMP_LENGTH + onlineAccountsSignatures.length;
+		}
 
 		try {
 			// Short cut for no transactions
@@ -387,19 +418,33 @@ public class BlockTransformer extends Transformer {
 				bytes.write(Ints.toByteArray(0)); // encodedOnlineAccounts length
 			}
 
-			byte[] onlineAccountsSignatures = blockData.getOnlineAccountsSignatures();
+			if (Block.usesOnlineNodeRewardBundles(blockData.getVersion())) {
+				byte[] onlineAccountBundles = blockData.getOnlineAccountBundles();
+				validateBundlePayloadState(blockData.getOnlineAccountsTimestamp(), onlineAccountBundles);
 
-			if (onlineAccountsSignatures != null && onlineAccountsSignatures.length > 0) {
-				// Note: we write the number of signatures, not the number of bytes
-				bytes.write(Ints.toByteArray(blockData.getOnlineAccountsSignaturesCount()));
-
-				// We only write online accounts timestamp if we have signatures
-				bytes.write(Longs.toByteArray(blockData.getOnlineAccountsTimestamp()));
-
-				bytes.write(onlineAccountsSignatures);
+				if (onlineAccountBundles != null && onlineAccountBundles.length > 0) {
+					validateBundlePayload(blockData.getOnlineAccountsTimestamp(), onlineAccountBundles);
+					bytes.write(Ints.toByteArray(onlineAccountBundles.length));
+					bytes.write(Longs.toByteArray(blockData.getOnlineAccountsTimestamp()));
+					bytes.write(onlineAccountBundles);
+				} else {
+					bytes.write(Ints.toByteArray(0));
+				}
 			} else {
-				// Zero online accounts signatures (timestamp omitted also)
-				bytes.write(Ints.toByteArray(0));
+				byte[] onlineAccountsSignatures = blockData.getOnlineAccountsSignatures();
+
+				if (onlineAccountsSignatures != null && onlineAccountsSignatures.length > 0) {
+					// Note: we write the number of signatures, not the number of bytes
+					bytes.write(Ints.toByteArray(blockData.getOnlineAccountsSignaturesCount()));
+
+					// We only write online accounts timestamp if we have signatures
+					bytes.write(Longs.toByteArray(blockData.getOnlineAccountsTimestamp()));
+
+					bytes.write(onlineAccountsSignatures);
+				} else {
+					// Zero online accounts signatures (timestamp omitted also)
+					bytes.write(Ints.toByteArray(0));
+				}
 			}
 
 			return bytes.toByteArray();
@@ -409,7 +454,8 @@ public class BlockTransformer extends Transformer {
 	}
 
 	public static byte[] getBytesForMinterSignature(BlockData blockData) {
-		return getBytesForMinterSignature(blockData.getReference(), blockData.getMinterPublicKey(), blockData.getEncodedOnlineAccounts());
+		return getBytesForMinterSignature(blockData.getReference(), blockData.getVersion(), blockData.getMinterPublicKey(),
+				blockData.getEncodedOnlineAccounts(), blockData.getOnlineAccountsTimestamp(), blockData.getOnlineAccountBundles());
 	}
 
 	public static byte[] getBytesForMinterSignature(BlockData parentBlockData, byte[] minterPublicKey, byte[] encodedOnlineAccounts) {
@@ -426,6 +472,60 @@ public class BlockTransformer extends Transformer {
 		System.arraycopy(encodedOnlineAccounts, 0, bytes, referenceBytes.length + MINTER_PUBLIC_KEY_LENGTH, encodedOnlineAccounts.length);
 
 		return bytes;
+	}
+
+	public static byte[] getBytesForMinterSignature(BlockData parentBlockData, int blockVersion, byte[] minterPublicKey,
+			byte[] encodedOnlineAccounts, Long onlineAccountsTimestamp, byte[] onlineAccountBundles) {
+		return getBytesForMinterSignature(parentBlockData.getSignature(), blockVersion, minterPublicKey,
+				encodedOnlineAccounts, onlineAccountsTimestamp, onlineAccountBundles);
+	}
+
+	private static byte[] getBytesForMinterSignature(byte[] referenceBytes, int blockVersion, byte[] minterPublicKey,
+			byte[] encodedOnlineAccounts, Long onlineAccountsTimestamp, byte[] onlineAccountBundles) {
+		if (!Block.usesOnlineNodeRewardBundles(blockVersion))
+			return getBytesForMinterSignature(referenceBytes, minterPublicKey, encodedOnlineAccounts);
+
+		validateBundlePayloadState(onlineAccountsTimestamp, onlineAccountBundles);
+		boolean hasBundles = onlineAccountBundles != null && onlineAccountBundles.length > 0;
+
+		int byteLength = referenceBytes.length + MINTER_PUBLIC_KEY_LENGTH + VERSION_LENGTH
+				+ ONLINE_ACCOUNTS_SIZE_LENGTH + encodedOnlineAccounts.length + BYTE_LENGTH;
+		if (hasBundles)
+			byteLength += ONLINE_ACCOUNTS_TIMESTAMP_LENGTH + ONLINE_ACCOUNT_BUNDLES_LENGTH + onlineAccountBundles.length;
+
+		ByteBuffer byteBuffer = ByteBuffer.allocate(byteLength);
+		byteBuffer.put(referenceBytes);
+		byteBuffer.put(minterPublicKey);
+		byteBuffer.putInt(blockVersion);
+		byteBuffer.putInt(encodedOnlineAccounts.length);
+		byteBuffer.put(encodedOnlineAccounts);
+		byteBuffer.put(hasBundles ? ONLINE_ACCOUNT_BUNDLES_PRESENT : ONLINE_ACCOUNT_BUNDLES_ABSENT);
+		if (hasBundles) {
+			byteBuffer.putLong(onlineAccountsTimestamp);
+			byteBuffer.putInt(onlineAccountBundles.length);
+			byteBuffer.put(onlineAccountBundles);
+		}
+
+		return byteBuffer.array();
+	}
+
+	private static void validateBundlePayloadState(Long onlineAccountsTimestamp, byte[] onlineAccountBundles) {
+		boolean hasTimestamp = onlineAccountsTimestamp != null;
+		boolean hasBundles = onlineAccountBundles != null && onlineAccountBundles.length > 0;
+		if (hasTimestamp != hasBundles)
+			throw new IllegalStateException("Bundle-aware online accounts timestamp and payload must either both be present or both be absent");
+
+		if (hasBundles && onlineAccountBundles.length > MAX_ONLINE_ACCOUNT_BUNDLES_SIZE)
+			throw new IllegalStateException("Online account bundle payload exceeds maximum size");
+	}
+
+	private static void validateBundlePayload(long onlineAccountsTimestamp, byte[] onlineAccountBundles)
+			throws TransformationException {
+		for (var bundle : OnlineAccountBundleTransformer.fromBlockCohortBytes(onlineAccountBundles,
+				OnlineAccountBundleTransformer.ChainIdentity.current())) {
+			if (bundle.getTimestamp() != onlineAccountsTimestamp)
+				throw new TransformationException("Bundle timestamp does not match block online-accounts timestamp");
+		}
 	}
 
 	public static byte[] getBytesForTransactionsSignature(Block block) throws TransformationException {
