@@ -34,6 +34,63 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: complete ultra-review hosted bootstrap retirement
+
+Records completion of the hosted whole-database importer retirement with exact
+focused, clean full-suite, packaged-artifact, rollback, and independent-review
+evidence. The tracker distinguishes the retained checkpoint-anchored peer
+archive fast-sync from the removed hosted path, documents the managed versus
+unmanaged rollback boundary, and preserves follow-ups for copy-isolated local
+export plus stale controls in external node and CLI tools. No release,
+deployment, hosted service, or new signing authority is claimed.
+
+### 2026-08-13 - fix(bootstrap): make local export restoration fail closed
+
+Guarantees that local archive creation releases the blockchain lock and attempts
+operation-directory cleanup even if restoring node-local data fails. Restoration
+errors now fail the export instead of returning success after potentially
+losing minting or trade-bot records. Tests capture block and archive state before
+export, verify exact state afterward, exercise an injected restoration failure,
+and cover the remaining archive-fast-sync eligibility gate.
+
+### 2026-08-13 - fix(bootstrap): isolate local export temporary files
+
+Limits local archive creation cleanup to its own operation-specific temporary
+directory instead of deleting the repository parent's entire shared `tmp`
+tree. The unnecessary five-second cleanup delay is removed, checksum files are
+always truncated before rewriting, and regression coverage verifies unrelated
+temporary files plus live block, archive, and minting-account state survive the
+export.
+
+### 2026-08-13 - fix(settings): keep hosted bootstrap retired on rollback
+
+Forces both legacy hosted-bootstrap controls to `false` and an empty host list
+in every managed runtime profile, even when an operator previously set unsafe
+values. Generated template snapshots omit both names so a complete rollback to
+older Core and merge logic preserves the safe values as local overrides. The
+same snapshot construction retains the existing rollback protection for the
+two retired peer-claim orphaning controls.
+
+### 2026-08-13 - security(bootstrap): retire hosted database replacement
+
+Removes the inherited hosted whole-database downloader and every automatic,
+tray, helper-process, and repository-replacement path that could invoke it.
+Legacy settings now parse as inert compatibility inputs, the authenticated
+admin route returns a deterministic retirement error, and fresh nodes continue
+through checkpoint-anchored peer archive fast-sync or normal synchronization.
+Local archive creation and current-repository validation remain available; no
+new signing key, publisher, hosted service, or archive replay rule is added.
+
+### 2026-08-13 - docs: start ultra-review legacy bootstrap retirement
+
+Starts the bounded removal of the dormant hosted whole-database bootstrap
+importer. Qortium operates no servers for that inherited path: fresh nodes use
+peer-served archive chunks whose content is checked and whose replay is anchored
+to a release-pinned checkpoint. The tranche will therefore remove destructive
+hosted download/replacement entry points and make their legacy settings inert
+without introducing another signing key, publisher role, network service, or
+change to checkpointed archive replay.
+
 ### 2026-08-13 - docs: complete ultra-review watchdog retirement tranche
 
 Records the completed security decision to remove automatic peer-claim

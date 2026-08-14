@@ -86,6 +86,7 @@
     "POST /transactions/process"
   ],
   "bootstrap": false,
+  "bootstrapHosts": [],
   "minPeerConnectionTime": 7200,
   "maxPeerConnectionTime": 21600,
   "recoveryModeTimeout": 0,

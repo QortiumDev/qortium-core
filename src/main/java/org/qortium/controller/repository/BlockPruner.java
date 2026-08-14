@@ -47,7 +47,7 @@ public class BlockPruner implements Runnable {
 			// Don't attempt to prune if we have no ATStatesHeightIndex, as it will be too slow
 			boolean hasAtStatesHeightIndex = repository.getATRepository().hasAtStatesHeightIndex();
 			if (!hasAtStatesHeightIndex) {
-				LOGGER.info("Unable to start block pruner due to missing ATStatesHeightIndex. Bootstrapping is recommended.");
+				LOGGER.info("Unable to start block pruner due to missing ATStatesHeightIndex. Reset or rebuild the repository and re-sync.");
 				return;
 			}
 		} catch (Exception e) {

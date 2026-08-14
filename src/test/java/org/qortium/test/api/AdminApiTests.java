@@ -4,12 +4,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.ApiError;
+import org.qortium.api.ApiException;
 import org.qortium.api.ApiRequest;
 import org.qortium.api.restricted.resource.AdminResource;
-import org.qortium.controller.BootstrapNode;
 import org.qortium.controller.RestartNode;
 import org.qortium.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
 import org.qortium.settings.Settings;
+import org.qortium.repository.Bootstrap;
 import org.qortium.test.common.ApiCommon;
 import org.qortium.test.common.Common;
 
@@ -23,6 +24,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class AdminApiTests extends ApiCommon {
 
@@ -32,7 +34,6 @@ public class AdminApiTests extends ApiCommon {
 	public void beforeTest() throws Exception {
 		Common.useDefaultSettings();
 		ApiCommon.installTestApiKey();
-		releaseBootstrapApply();
 		releaseRestartApply();
 	}
 
@@ -43,7 +44,6 @@ public class AdminApiTests extends ApiCommon {
 
 	@After
 	public void afterTest() throws Exception {
-		releaseBootstrapApply();
 		releaseRestartApply();
 		ApiCommon.clearTestApiKey();
 		Common.useDefaultSettings();
@@ -189,14 +189,20 @@ public class AdminApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testBootstrapRejectsConcurrentApply() throws Exception {
+	public void testHostedBootstrapEndpointIsRetired() throws Exception {
+		assertApiError(ApiError.UNAUTHORIZED, () -> this.adminResource.bootstrap(null));
+
 		Path settingsPath = createWritableApiSettings("{\"bootstrapHosts\":[\"https://bootstrap.example\"]}");
 		Settings.fileInstance(settingsPath.toString());
 		AdminResource authenticatedAdminResource = (AdminResource) ApiCommon.buildResource(AdminResource.class, ApiCommon.TEST_API_KEY);
 
-		assertTrue(tryAcquireBootstrapApply());
-
-		assertApiError(ApiError.OPERATION_IN_PROGRESS, () -> authenticatedAdminResource.bootstrap(null));
+		try {
+			authenticatedAdminResource.bootstrap(null);
+			fail("Expected hosted bootstrap compatibility route to reject the request");
+		} catch (ApiException e) {
+			assertEquals(ApiError.INVALID_CRITERIA.getCode(), e.error);
+			assertEquals(Bootstrap.HOSTED_IMPORT_RETIRED_MESSAGE, e.message);
+		}
 	}
 
 	@Test
@@ -213,18 +219,6 @@ public class AdminApiTests extends ApiCommon {
 		Path settingsPath = directory.resolve("settings.json");
 		Files.write(settingsPath, (json + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
 		return settingsPath;
-	}
-
-	private static boolean tryAcquireBootstrapApply() throws Exception {
-		Method method = BootstrapNode.class.getDeclaredMethod("tryAcquireBootstrapApply");
-		method.setAccessible(true);
-		return (Boolean) method.invoke(null);
-	}
-
-	private static void releaseBootstrapApply() throws Exception {
-		Method method = BootstrapNode.class.getDeclaredMethod("releaseBootstrapApply");
-		method.setAccessible(true);
-		method.invoke(null);
 	}
 
 	private static boolean tryAcquireRestartApply() throws Exception {

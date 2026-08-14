@@ -1,25 +1,36 @@
 package org.qortium.repository;
 
-import org.apache.commons.lang3.reflect.FieldUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.apache.commons.lang3.reflect.FieldUtils;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.qortium.settings.Settings;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.lang.reflect.Constructor;
+import java.security.Security;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class BootstrapConfigurationTests {
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<Map<String, Object>>() {};
 
 	private Object originalSettingsInstance;
 
 	@Before
 	public void captureOriginalSettingsInstance() throws IllegalAccessException {
+		if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)
+			Security.insertProviderAt(new BouncyCastleProvider(), 1);
 		this.originalSettingsInstance = FieldUtils.readStaticField(Settings.class, "instance", true);
 	}
 
@@ -44,28 +55,34 @@ public class BootstrapConfigurationTests {
 	}
 
 	@Test
-	public void testBootstrapHostsAreTrimmedAndFiltered() throws ReflectiveOperationException, IllegalAccessException {
-		Settings settings = newSettingsInstance();
-		FieldUtils.writeField(settings, "bootstrapHosts", new String[] {null, " ", "\t", " https://bootstrap.example "}, true);
+	public void testLegacyHostedBootstrapInputsAreInert() throws Exception {
+		Path settingsPath = Files.createTempFile("retired-hosted-bootstrap", ".json");
+		Files.write(settingsPath, ("{\"bootstrap\":true,\"bootstrapHosts\":[\"https://attacker.invalid\"],"
+				+ "\"archiveFastReplayOnlyWhenBootstrapDisabled\":true}" + System.lineSeparator())
+				.getBytes(StandardCharsets.UTF_8));
 
-		assertArrayEquals(new String[] {"https://bootstrap.example"}, settings.getBootstrapHosts());
-		assertTrue(settings.hasBootstrapHostsConfigured());
+		Settings.fileInstance(settingsPath.toString());
+		Settings settings = Settings.getInstance();
+
+		assertFalse(settings.getBootstrap());
+		assertArrayEquals(new String[0], settings.getBootstrapHosts());
+		assertFalse(settings.hasBootstrapHostsConfigured());
+		assertFalse(settings.isArchiveFastReplayOnlyWhenBootstrapDisabled());
+		assertEquals(Boolean.FALSE, FieldUtils.readField(settings, "bootstrap", true));
+		assertArrayEquals(new String[0], (String[]) FieldUtils.readField(settings, "bootstrapHosts", true));
+		assertEquals(Boolean.FALSE, FieldUtils.readField(settings, "archiveFastReplayOnlyWhenBootstrapDisabled", true));
 	}
 
 	@Test
-	public void testBootstrapHostsRequireAtLeastOneConfiguredValue() throws ReflectiveOperationException, IllegalAccessException {
-		Settings settings = newSettingsInstance();
-		FieldUtils.writeField(settings, "bootstrapHosts", new String[] {"", "   ", null}, true);
-		FieldUtils.writeStaticField(Settings.class, "instance", settings, true);
-
-		assertFalse(settings.hasBootstrapHostsConfigured());
-		assertArrayEquals(new String[0], settings.getBootstrapHosts());
-
-		try {
-			Bootstrap.ensureBootstrapHostsConfigured();
-			fail("Expected bootstrap host validation to fail without configured hosts");
-		} catch (DataException e) {
-			assertEquals(Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE, e.getMessage());
+	public void testManagedProfilesExplicitlyRetireHostedBootstrap() throws Exception {
+		for (String profile : List.of(
+				"preview/settings-preview.json",
+				"preview/settings-preview-seed.json",
+				"preview/settings-preview-seed-netcup.json",
+				"testnet/settings-test.json")) {
+			Map<String, Object> settings = MAPPER.readValue(Files.readAllBytes(Path.of(profile)), MAP_TYPE);
+			assertEquals(profile, Boolean.FALSE, settings.get("bootstrap"));
+			assertEquals(profile, List.of(), settings.get("bootstrapHosts"));
 		}
 	}
 }

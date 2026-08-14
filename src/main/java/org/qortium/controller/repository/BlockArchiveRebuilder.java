@@ -97,9 +97,9 @@ public class BlockArchiveRebuilder {
 
                         case BLOCK_NOT_FOUND:
                             // We tried to archive a block that didn't exist. This is a major failure and likely means
-                            // that a bootstrap or re-sync is needed. Try again every minute until then.
+                            // that a repository rebuild or re-sync is needed. Try again every minute until then.
                             LOGGER.info("Error: block not found when rebuilding archive. If this error persists, " +
-                                    "a bootstrap or re-sync may be needed.");
+                                    "a repository rebuild or re-sync may be needed.");
                             repository.discardChanges();
                             throw new DataException("Unable to rebuild archive because a block is missing.");
                     }

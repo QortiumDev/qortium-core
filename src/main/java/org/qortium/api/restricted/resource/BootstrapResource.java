@@ -40,8 +40,8 @@ public class BootstrapResource {
 	@POST
 	@Path("/create")
 	@Operation(
-		summary = "Create bootstrap",
-		description = "Builds a bootstrap file for distribution",
+		summary = "Create local repository archive export",
+		description = "Builds an archive export from the current local repository. Current Core does not download, install, or replace repositories from this file.",
 		responses = {
 			@ApiResponse(
 				description = "path to file on success, an exception on failure",
@@ -84,7 +84,7 @@ public class BootstrapResource {
 	@Path("/validate")
 	@Operation(
 			summary = "Validate blockchain",
-			description = "Useful to check database integrity prior to creating or after installing a bootstrap. " +
+			description = "Useful to check current database integrity before creating a local archive export. " +
 					"This process is intensive and can take over an hour to run.",
 			responses = {
 					@ApiResponse(

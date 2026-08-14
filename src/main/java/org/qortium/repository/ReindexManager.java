@@ -51,7 +51,7 @@ public class ReindexManager {
     private void runPreChecks() throws DataException, InterruptedException {
         LOGGER.info("Running pre-checks...");
         if (Settings.getInstance().isTopOnly()) {
-            throw new DataException("Reindexing not supported in top-only mode. Please bootstrap or resync from genesis.");
+            throw new DataException("Reindexing not supported in top-only mode. Reset the repository and resync from genesis.");
         }
         if (Settings.getInstance().isLite()) {
             throw new DataException("Reindexing not supported in lite mode.");

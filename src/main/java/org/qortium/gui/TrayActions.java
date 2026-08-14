@@ -3,7 +3,6 @@ package org.qortium.gui;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortium.controller.AutoUpdate;
-import org.qortium.controller.BootstrapNode;
 import org.qortium.controller.Controller;
 import org.qortium.controller.RestartNode;
 import org.qortium.globalization.Translator;
@@ -62,12 +61,6 @@ final class TrayActions {
 				actions.add(new TrayMenuAction(8, label,
 						() -> runAction(beforeAction, () -> confirmAndInstall(describeBuild(cached.commitHash, cached.updateTimestamp)))));
 			}
-		}
-
-		// Only offer Bootstrap when hosts are configured; without them the action would just fail.
-		if (Settings.getInstance().hasBootstrapHostsConfigured()) {
-			actions.add(new TrayMenuAction(6, Translator.INSTANCE.translate("SysTray", "BOOTSTRAP"),
-					() -> runAction(beforeAction, TrayActions::bootstrap)));
 		}
 
 		actions.add(new TrayMenuAction(5, Translator.INSTANCE.translate("SysTray", "RESTART"),
@@ -211,25 +204,6 @@ final class TrayActions {
 				Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"), JOptionPane.INFORMATION_MESSAGE));
 	}
 
-	private static void bootstrap() {
-		// Bootstrapping is destructive: it deletes the local database and downloads a fresh
-		// copy, so confirm before scheduling. The dialog/scheduling run on the EDT to stay
-		// safe regardless of which tray backend invoked the action.
-		SwingUtilities.invokeLater(() -> {
-			int choice = JOptionPane.showConfirmDialog(null,
-					Translator.INSTANCE.translate("SysTray", "BOOTSTRAP_CONFIRM"),
-					Translator.INSTANCE.translate("SysTray", "BOOTSTRAP"),
-					JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-			if (choice != JOptionPane.YES_OPTION)
-				return;
-
-			// scheduleBootstrap() spawns its own worker and returns false if a bootstrap or
-			// restart apply is already scheduled or running.
-			if (!BootstrapNode.scheduleBootstrap())
-				LOGGER.info("Ignoring tray bootstrap request: a bootstrap or restart is already scheduled or running");
-		});
-	}
-
 	private static void restart() {
 		// Restart shuts down and relaunches the node, so confirm before scheduling to guard
 		// against an accidental tray click. The dialog/scheduling run on the EDT to stay safe
@@ -243,7 +217,7 @@ final class TrayActions {
 				return;
 
 			// scheduleRestart() spawns its own worker that performs the shutdown and relaunch,
-			// and returns false if a restart/bootstrap apply is already scheduled or running.
+			// and returns false if a restart is already scheduled or running.
 			if (!RestartNode.scheduleRestart())
 				LOGGER.info("Ignoring tray restart request: a restart is already scheduled or running");
 		});

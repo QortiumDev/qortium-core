@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
@@ -38,20 +37,40 @@ public class SettingsSaveTests extends Common {
 		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
 		Settings.fileInstance(settingsPath.toString());
 
-		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"bootstrapHosts\":[\" https://bootstrap.example \"],\"qdnEnabled\":false}");
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"qdnEnabled\":false}");
 
 		assertTrue(result.saved);
 		assertEquals(settingsPath.toAbsolutePath().normalize().toString(), result.settingsPath);
-		assertTrue(result.updated.contains("bootstrapHosts"));
 		assertTrue(result.updated.contains("qdnEnabled"));
-		assertTrue(result.applied.contains("bootstrapHosts"));
 		assertTrue(result.restartRequired.contains("qdnEnabled"));
-		assertArrayEquals(new String[] {"https://bootstrap.example"}, Settings.getInstance().getBootstrapHosts());
 		assertFalse(Settings.getInstance().isQdnEnabled());
 
 		Map<String, Object> savedSettings = readSettings(settingsPath);
 		assertEquals(Boolean.FALSE, savedSettings.get("qdnEnabled"));
-		assertTrue(savedSettings.containsKey("bootstrapHosts"));
+	}
+
+	@Test
+	public void testRetiredHostedBootstrapSettingsAreNotWritable() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		for (String retiredPatch : new String[] {
+				"{\"bootstrap\":true}",
+				"{\"bootstrapHosts\":[\"https://attacker.invalid\"]}",
+				"{\"archiveFastReplayOnlyWhenBootstrapDisabled\":true}"
+		}) {
+			try {
+				Settings.updateAndSave(retiredPatch);
+				fail("Expected retired hosted bootstrap setting to be rejected: " + retiredPatch);
+			} catch (IllegalArgumentException e) {
+				assertTrue(e.getMessage().contains("not writable"));
+			}
+
+			assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+			assertFalse(Settings.getInstance().getBootstrap());
+			assertEquals(0, Settings.getInstance().getBootstrapHosts().length);
+		}
 	}
 
 	@Test
@@ -750,6 +769,9 @@ public class SettingsSaveTests extends Common {
 
 		assertEquals(settingsPath.toAbsolutePath().normalize().toString(), metadata.settingsPath);
 		assertTrue(metadata.writable.containsKey("qdnEnabled"));
+		assertFalse(metadata.writable.containsKey("bootstrap"));
+		assertFalse(metadata.writable.containsKey("bootstrapHosts"));
+		assertFalse(metadata.writable.containsKey("archiveFastReplayOnlyWhenBootstrapDisabled"));
 		assertEquals("BOOLEAN", metadata.writable.get("qdnEnabled").type);
 		assertTrue(metadata.writable.get("qdnEnabled").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheRows").type);

@@ -403,7 +403,7 @@ public class HSQLDBRepository implements Repository {
 	public void close() throws DataException {
 		// Already closed? No need to do anything but maybe report double-call
 		if (this.connection == null) {
-			LOGGER.warn("HSQLDBRepository.close() called when repository already closed. This is expected when bootstrapping.");
+			LOGGER.warn("HSQLDBRepository.close() called when repository already closed");
 			return;
 		}
 

@@ -37,6 +37,7 @@
   "apiDocumentationEnabled": true,
   "apiRestricted": false,
   "bootstrap": false,
+  "bootstrapHosts": [],
   "maxPeerConnectionTime": 999999999,
   "recoveryModeTimeout": 0,
   "developmentPeerClaimOrphaningEnabled": false,
