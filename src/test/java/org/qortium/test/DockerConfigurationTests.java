@@ -7,7 +7,9 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -32,6 +34,7 @@ public class DockerConfigurationTests {
 		runInitializer(PREVIEW_SETTINGS, settingsPath);
 
 		assertArrayEquals(Files.readAllBytes(PREVIEW_SETTINGS), Files.readAllBytes(settingsPath));
+		assertNoInitializerTemporaryFiles(tempDirectory, settingsPath);
 	}
 
 	@Test
@@ -64,6 +67,75 @@ public class DockerConfigurationTests {
 	}
 
 	@Test
+	public void testExistingSettingsSymlinksRemainOperatorOwned() throws Exception {
+		Path tempDirectory = Files.createTempDirectory("qortium-docker-settings-symlinks");
+		Path target = tempDirectory.resolve("operator-settings.json");
+		Path settingsPath = tempDirectory.resolve("settings.json");
+		Path brokenSettingsPath = tempDirectory.resolve("broken-settings.json");
+		Path missingTarget = tempDirectory.resolve("missing-target.json");
+		byte[] operatorSettings = "{\"network\":\"operator-owned\"}\n".getBytes(StandardCharsets.UTF_8);
+		Files.write(target, operatorSettings);
+		Files.createSymbolicLink(settingsPath, target.getFileName());
+		Files.createSymbolicLink(brokenSettingsPath, missingTarget.getFileName());
+
+		runInitializer(PREVIEW_SETTINGS, settingsPath);
+		runInitializer(PREVIEW_SETTINGS, brokenSettingsPath);
+
+		assertTrue(Files.isSymbolicLink(settingsPath));
+		assertArrayEquals(operatorSettings, Files.readAllBytes(target));
+		assertTrue(Files.isSymbolicLink(brokenSettingsPath));
+		assertFalse(Files.exists(missingTarget));
+	}
+
+	@Test
+	public void testPredictableStagingSymlinkCannotOverwriteAnotherFile() throws Exception {
+		Path tempDirectory = Files.createTempDirectory("qortium-docker-settings-staging-symlink");
+		Path template = tempDirectory.resolve("template.json");
+		Path settingsPath = tempDirectory.resolve("settings.json");
+		Path victim = tempDirectory.resolve("victim.txt");
+		byte[] templateBytes = "{\"profile\":\"preview\"}\n".getBytes(StandardCharsets.UTF_8);
+		byte[] victimBytes = "operator data\n".getBytes(StandardCharsets.UTF_8);
+		Files.write(template, templateBytes);
+		Files.write(victim, victimBytes);
+
+		String command = "ln -s \"$4\" \"$2.tmp.$$\"; exec sh \"$1\" \"$3\" \"$2\"";
+		Process process = new ProcessBuilder("sh", "-c", command, "sh",
+				"docker-init-settings.sh", settingsPath.toString(), template.toString(), victim.toString())
+				.redirectErrorStream(true)
+				.start();
+		ProcessResult result = waitFor(process);
+
+		assertEquals(result.output, 0, result.exitCode);
+		assertArrayEquals(victimBytes, Files.readAllBytes(victim));
+		assertArrayEquals(templateBytes, Files.readAllBytes(settingsPath));
+	}
+
+	@Test
+	public void testConcurrentInitializersInstallOneCompleteTemplate() throws Exception {
+		Path tempDirectory = Files.createTempDirectory("qortium-docker-settings-concurrent");
+		Path firstTemplate = tempDirectory.resolve("first-template.json");
+		Path secondTemplate = tempDirectory.resolve("second-template.json");
+		Path settingsPath = tempDirectory.resolve("settings.json");
+		byte[] firstBytes = new byte[1024 * 1024];
+		byte[] secondBytes = new byte[1024 * 1024];
+		Arrays.fill(firstBytes, (byte) 'A');
+		Arrays.fill(secondBytes, (byte) 'B');
+		Files.write(firstTemplate, firstBytes);
+		Files.write(secondTemplate, secondBytes);
+
+		Process first = startInitializer(firstTemplate, settingsPath);
+		Process second = startInitializer(secondTemplate, settingsPath);
+		ProcessResult firstResult = waitFor(first);
+		ProcessResult secondResult = waitFor(second);
+		byte[] installed = Files.readAllBytes(settingsPath);
+
+		assertEquals(firstResult.output, 0, firstResult.exitCode);
+		assertEquals(secondResult.output, 0, secondResult.exitCode);
+		assertTrue(Arrays.equals(firstBytes, installed) || Arrays.equals(secondBytes, installed));
+		assertNoInitializerTemporaryFiles(tempDirectory, settingsPath);
+	}
+
+	@Test
 	public void testMissingTemplateFailsWithoutCreatingSettings() throws Exception {
 		Path tempDirectory = Files.createTempDirectory("qortium-docker-settings-missing-template");
 		Path settingsPath = tempDirectory.resolve("settings.json");
@@ -74,6 +146,7 @@ public class DockerConfigurationTests {
 		assertTrue(result.output.contains("template is not readable"));
 		assertTrue(result.exitCode != 0);
 		assertFalse(Files.exists(settingsPath));
+		assertNoInitializerTemporaryFiles(tempDirectory, settingsPath);
 	}
 
 	@Test
@@ -166,11 +239,17 @@ public class DockerConfigurationTests {
 	}
 
 	private static ProcessResult runInitializerExpectingResult(Path templatePath, Path settingsPath) throws Exception {
-		Process process = new ProcessBuilder("sh", "docker-init-settings.sh",
+		return waitFor(startInitializer(templatePath, settingsPath));
+	}
+
+	private static Process startInitializer(Path templatePath, Path settingsPath) throws Exception {
+		return new ProcessBuilder("sh", "docker-init-settings.sh",
 				templatePath.toString(), settingsPath.toString())
 				.redirectErrorStream(true)
 				.start();
+	}
 
+	private static ProcessResult waitFor(Process process) throws Exception {
 		if (!process.waitFor(5, TimeUnit.SECONDS)) {
 			process.destroyForcibly();
 			fail("Docker settings initializer timed out");
@@ -178,6 +257,13 @@ public class DockerConfigurationTests {
 
 		String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 		return new ProcessResult(process.exitValue(), output);
+	}
+
+	private static void assertNoInitializerTemporaryFiles(Path directory, Path settingsPath) throws Exception {
+		String prefix = settingsPath.getFileName() + ".tmp.";
+		try (Stream<Path> entries = Files.list(directory)) {
+			assertFalse(entries.anyMatch(path -> path.getFileName().toString().startsWith(prefix)));
+		}
 	}
 
 	private record ProcessResult(int exitCode, String output) {

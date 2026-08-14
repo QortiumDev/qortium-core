@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - fix(docker): harden first-run settings installation
+
+Uses an exclusively created same-directory staging file before atomically
+installing first-run Docker settings, preventing PID-namespace collisions or a
+pre-created staging symlink from exposing partial data or overwriting another
+file. Adversarial tests cover concurrent initializers, staging symlinks,
+operator-owned settings symlinks, and temporary-file cleanup.
+
 ### 2026-08-14 - test(config): pin explicit Previewnet profiles
 
 Adds a cross-profile invariant for the participant and both seed templates so

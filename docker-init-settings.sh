@@ -28,7 +28,7 @@ if [ ! -d "${settings_directory}" ] || [ ! -w "${settings_directory}" ]; then
 fi
 
 umask 077
-temporary_file="${settings_file}.tmp.$$"
+temporary_file=$(mktemp "${settings_file}.tmp.XXXXXX")
 trap 'rm -f "${temporary_file}"' EXIT HUP INT TERM
 cp "${template_file}" "${temporary_file}"
 
