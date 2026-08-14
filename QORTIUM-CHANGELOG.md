@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs(consensus): specify Previewnet node reward bundles
+
+Records the approved Previewnet design for grouping every eligible minting key
+on one Core instance into one node reward allocation, while allowing separate
+Core instances to remain independent. It specifies persistent signed bundle
+identity, deterministic duplicate-account handling, level-bin and batch reward
+arithmetic, exact orphan symmetry, and the first bundle-aware payout at height
+`100000` with capture beginning at `99990`. Implementation and activation will
+ship together; if acceptance or rollout cannot finish before the capture
+boundary, the payout height must be moved to a later batch boundary. This entry
+does not claim release or deployment.
+
 ### 2026-08-14 - docs: complete ultra-review configuration coherence
 
 Records completion of the generic-versus-Preview configuration repair. Bare
