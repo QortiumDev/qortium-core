@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - fix(settings): separate generic defaults from Previewnet seeds
+
+Removes Previewnet chain and data seeds from generic Java defaults so a bare
+Core start keeps its default chain identity without silently dialing another
+network's peers. Explicit Previewnet participant and seed profiles retain both
+seed layers and their existing `2489x` ports; remembered and operator-configured
+peers are not purged. No chain configuration, network identity, checkpoint, or
+consensus rule changes.
+
 ### 2026-08-13 - docs: start ultra-review configuration coherence tranche
 
 Starts the bounded repair of mismatched generic, Docker, and Previewnet network
