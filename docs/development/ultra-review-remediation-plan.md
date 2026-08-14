@@ -41,7 +41,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T2 | Repair mixed-peer recovery-mode exit and genesis-height peer-ahead mint deferral, then contain the peer-claim watchdog by disabling it outside an explicit development profile. | Complete | T1 accepted and committed | Six implementation commits plus focused tests passed 42/42 and the serialized full suite passed 3,020 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; coordinated rollout and live-height verification remain a release condition |
 | T3 | Retire automatic peer-claim orphaning while retaining both old setting names as permanently disabled compatibility inputs. | Complete | T2 containment | `security(sync): retire peer-claim orphaning` plus the two-key rollback follow-up; red tests failed 2/4 before retirement and 1/1 before rollback repair; focused tests passed 30/30; serialized full suite passed 3,008 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
 | T4 | Retire the dormant hosted whole-database bootstrap importer while preserving checkpoint-anchored peer archive fast-sync and the non-replacement local archive creation/validation tools. | Complete | None | Four implementation commits plus the tracked start; focused tests passed 95/95; clean serialized full suite passed 2,998 with 67 skips; packaged JAR contains archive fast-sync/local export but neither deleted importer class; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
-| T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Planned | Decide whether generic Docker targets no network or explicit Previewnet | Cross-profile and container configuration invariants |
+| T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | In progress | Explicit Docker Previewnet target approved | Cross-profile and container configuration invariants |
 | T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | Planned | None | Request/response and chain/data x IP/I2P matrix tests |
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Planned | T2 recovery-state semantics for the catch-up signal | Deterministic loss, peer isolation, deadline, cancellation, and ping-order tests |
 | T8 | Repository and API correctness: archive temp filtering, chat fee persistence, websocket envelope filtering, and malformed PEERS rejection. | Planned | None | Focused repository, serialization, websocket, and parser tests |
@@ -119,10 +119,13 @@ T9 must therefore decide both parts together:
 
 ### Generic Docker network target
 
-An empty settings file must not silently mix identities. T5 must explicitly
-choose whether generic Docker starts with no bootstrap network or starts an
-explicit Previewnet profile. Ports, health checks, generated settings, chain
-configuration, and seeds then move together.
+An empty generic settings file must not silently mix identities. The approved
+T5 boundary keeps generic Core on its default/mainnet chain identity but removes
+baked-in public Previewnet chain and data seeds. Docker becomes an explicit
+Previewnet distribution: on first start only, it installs a tracked Previewnet
+settings template; an existing volume settings file is never overwritten.
+Container ports, health checks, `.env.example`, chain configuration, and both
+seed layers move together to the Previewnet `2489x` values.
 
 ### Legacy hosted bootstrap retirement
 
@@ -155,12 +158,12 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. T4 is complete in source and local
-validation but is not released or deployed; T5 is the next planned boundary.
-T4 introduced no bootstrap service or signing key and changed no checkpoint,
-content-validation, or replay consensus rule. The separately unassigned A-01
-normal-reorg atomicity design and A-02 copy-isolated local exporter remain
-outside the completed tranche.
+T5 is active and limited to coherent generic defaults plus an explicit
+Previewnet Docker distribution. It does not authorize changing Previewnet chain
+identity, checkpoints, feature triggers, consensus rules, live nodes, releases,
+or deployment. T4 is complete in source and local validation but is not released
+or deployed. The separately unassigned A-01 normal-reorg atomicity design and
+A-02 copy-isolated local exporter remain outside this tranche.
 
 T4 was completed by `security(bootstrap): retire hosted database replacement`,
 `fix(settings): keep hosted bootstrap retired on rollback`,

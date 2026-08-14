@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - docs: start ultra-review configuration coherence tranche
+
+Starts the bounded repair of mismatched generic, Docker, and Previewnet network
+settings. Generic Core will retain its default chain identity without silently
+dialing Previewnet seeds, while a newly initialized Docker volume will receive
+an explicit tracked Previewnet profile and matching `2489x` ports. Existing
+container settings remain operator-owned and are never overwritten; this
+tranche changes no live network, checkpoint, feature trigger, or consensus rule.
+
 ### 2026-08-13 - docs: complete ultra-review hosted bootstrap retirement
 
 Records completion of the hosted whole-database importer retirement with exact
