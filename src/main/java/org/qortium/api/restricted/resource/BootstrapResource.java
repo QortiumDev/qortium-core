@@ -40,8 +40,8 @@ public class BootstrapResource {
 	@POST
 	@Path("/create")
 	@Operation(
-		summary = "Create bootstrap",
-		description = "Builds a bootstrap file for distribution",
+		summary = "Create local repository archive export",
+		description = "Builds an archive export from the current local repository. Current Core does not download, install, or replace repositories from this file.",
 		responses = {
 			@ApiResponse(
 				description = "path to file on success, an exception on failure",

@@ -48,7 +48,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Trust: the release-pinned checkpoint is the only anchor; the manifest is untrusted/recomputable. The feature
  * is enabled by default ({@link Settings#isArchiveFastReplayEnabled()}) but inert unless the chain config pins a
  * checkpoint — so it only engages on a net that has one (currently previewnet); when disabled, or with no
- * checkpoint, this manager's {@link #run()} returns immediately. It is a one-shot startup bootstrap — it never
+	 * checkpoint, this manager's {@link #run()} returns immediately. It is a one-shot startup fast-sync — it never
  * re-arms — and cooperates with the {@link Synchronizer} via the blockchain lock.
  */
 public class ArchiveFastSyncManager extends Thread {
@@ -191,7 +191,7 @@ public class ArchiveFastSyncManager extends Thread {
 			return resumeStagedReplay(activeReplayState, null);
 
 		if (Controller.getInstance().getChainHeight() > MAX_START_HEIGHT_FOR_FAST_SYNC) {
-			// e.g. a local genesis-bootstrap minter produced block 2 during the settle window — fast-sync no
+			// e.g. a local genesis-only minter produced block 2 during the settle window — fast-sync no
 			// longer applies. Log at INFO so an operator who enabled it isn't left wondering why it didn't engage.
 			LOGGER.info("Archive fast-sync: chain already past genesis; leaving to normal sync");
 			return true;
@@ -329,7 +329,7 @@ public class ArchiveFastSyncManager extends Thread {
 		for (Peer peer : Network.getInstance().getImmutableHandshakedPeers()) {
 			// Deliberately NOT filtering on hasInvalidSigner here. That predicate validates a peer's
 			// chain-tip minter against our own repository — something a genesis-fresh node (the only state
-			// that fast-replays) cannot do, so it would exclude every peer and the bootstrap could never
+			// that fast-replays) cannot do, so it would exclude every peer and fast-sync could never
 			// start. Archive integrity does not depend on trusting the peer: each chunk is verified by
 			// SHA-256 content-addressing and the checkpoint-spanning chunk is cross-bound to the
 			// release-pinned signature, so a dishonest peer cannot smuggle in a bad chain.

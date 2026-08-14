@@ -83,6 +83,13 @@ public class BootstrapTests extends Common {
 			Files.createDirectories(tempRoot);
 			Path unrelatedTempFile = tempRoot.resolve("unrelated-operation.sentinel");
 			Files.writeString(unrelatedTempFile, "preserve");
+			long initialTempEntryCount = countEntries(tempRoot);
+
+			byte[] originalArchiveContents = Files.readAllBytes(archivePath);
+			BlockData originalBlock1000 = repository.getBlockRepository().fromHeight(1000);
+			assertNotNull(originalBlock1000);
+			BlockData originalArchivedBlock10 = repository.getBlockArchiveRepository().fromHeight(10);
+			assertNotNull(originalArchivedBlock10);
 
             // Ensure the compressed bootstrap doesn't exist
             assertFalse(Files.exists(bootstrapPath));
@@ -93,35 +100,66 @@ public class BootstrapTests extends Common {
                 // Create bootstrap
                 assertEquals(bootstrapPath.toAbsolutePath().toString(), bootstrap.create());
 				assertTrue("Local archive creation must not delete unrelated sibling temp files", Files.exists(unrelatedTempFile));
-            } finally {
+				assertEquals("Local archive creation must remove its operation directory", initialTempEntryCount, countEntries(tempRoot));
+
+                // Ensure the compressed bootstrap exists
+                assertTrue(Files.exists(bootstrapPath));
+
+                // Ensure the original block archive file exists
+                assertTrue(Files.exists(archivePath));
+
+                // Ensure block 1000 exists in the repository
+                BlockData block1000 = repository.getBlockRepository().fromHeight(1000);
+                assertNotNull(block1000);
+
+                // Ensure we can retrieve block 10 from the archive
+                BlockData archivedBlock10 = repository.getBlockArchiveRepository().fromHeight(10);
+                assertNotNull(archivedBlock10);
+
+                assertTrue(Files.exists(checksumPath));
+                assertEquals(Crypto.digestHexString(bootstrapPath.toFile(), 1024 * 1024), Files.readString(checksumPath).trim());
+
+                assertArrayEquals(originalBlock1000.getSignature(), block1000.getSignature());
+                assertArrayEquals(originalArchiveContents, Files.readAllBytes(archivePath));
+                assertArrayEquals(originalArchivedBlock10.getSignature(), archivedBlock10.getSignature());
+                assertMintingAccountRestored(repository, mintingAccount);
+
+				Bootstrap failingAfterRestore = new Bootstrap(repository) {
+					@Override
+					protected void restoreNodeLocalData() throws DataException, IOException {
+						super.restoreNodeLocalData();
+						throw new DataException("injected restoration failure");
+					}
+				};
+
+				try {
+					failingAfterRestore.create();
+					fail("Expected injected restoration failure");
+				} catch (DataException e) {
+					assertTrue(e.getMessage().contains("injected restoration failure"));
+				}
+
+				assertFalse("Restoration failure must not leak the blockchain lock",
+						Controller.getInstance().getBlockchainLock().isHeldByCurrentThread());
+				assertEquals("Restoration failure must remove its operation directory", initialTempEntryCount, countEntries(tempRoot));
+				assertMintingAccountRestored(repository, mintingAccount);
+			} finally {
 				Files.deleteIfExists(unrelatedTempFile);
 			}
-
-            // Ensure the compressed bootstrap exists
-            assertTrue(Files.exists(bootstrapPath));
-
-            // Ensure the original block archive file exists
-            assertTrue(Files.exists(archivePath));
-            byte[] originalArchiveContents = Files.readAllBytes(archivePath);
-
-            // Ensure block 1000 exists in the repository
-            BlockData block1000 = repository.getBlockRepository().fromHeight(1000);
-            assertNotNull(block1000);
-
-            // Ensure we can retrieve block 10 from the archive
-            assertNotNull(repository.getBlockArchiveRepository().fromHeight(10));
-
-            assertTrue(Files.exists(checksumPath));
-            assertEquals(Crypto.digestHexString(bootstrapPath.toFile(), 1024 * 1024), Files.readString(checksumPath).trim());
-
-            assertArrayEquals(block1000.getSignature(), repository.getBlockRepository().fromHeight(1000).getSignature());
-            assertArrayEquals(originalArchiveContents, Files.readAllBytes(archivePath));
-            assertNotNull(repository.getBlockArchiveRepository().fromHeight(10));
-            MintingAccountData restoredMintingAccount = repository.getAccountRepository().getMintingAccount(mintingAccount.getPrivateKey());
-            assertNotNull(restoredMintingAccount);
-            assertArrayEquals(mintingAccount.getPublicKey(), restoredMintingAccount.getPublicKey());
         }
     }
+
+	private static long countEntries(Path directory) throws IOException {
+		try (var entries = Files.list(directory)) {
+			return entries.count();
+		}
+	}
+
+	private static void assertMintingAccountRestored(Repository repository, PrivateKeyAccount mintingAccount) throws DataException {
+		MintingAccountData restoredMintingAccount = repository.getAccountRepository().getMintingAccount(mintingAccount.getPrivateKey());
+		assertNotNull(restoredMintingAccount);
+		assertArrayEquals(mintingAccount.getPublicKey(), restoredMintingAccount.getPublicKey());
+	}
 
 
     private void buildDummyBlockchain(Repository repository) throws DataException, InterruptedException, TransformationException, IOException {

@@ -205,11 +205,13 @@ public class Bootstrap {
         Path inputPath = null;
         Path outputPath = null;
         Path operationTempDirectory = null;
+        boolean localDataExported = false;
 
         try {
 
             LOGGER.info("Exporting local data...");
             repository.exportNodeLocalData();
+            localDataExported = true;
 
             LOGGER.info("Deleting trade bot states...");
             List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
@@ -282,27 +284,30 @@ public class Bootstrap {
         }
         finally {
             try {
-                LOGGER.info("Re-importing local data...");
-                repository.importDataFromFile("TradeBotStates.json");
-                repository.importDataFromFile("MintingAccounts.json");
-                repository.saveChanges();
+                if (localDataExported)
+                    this.restoreNodeLocalData();
+            } finally {
+                LOGGER.info("Unlocking blockchain...");
+                blockchainLock.unlock();
 
-            } catch (IOException e) {
-                LOGGER.info("Unable to re-import local data, but created bootstrap is still valid. {}", e);
+                if (operationTempDirectory != null) {
+                    LOGGER.info("Cleaning up local archive export directory {}", operationTempDirectory);
+                    try {
+                        FileUtils.deleteDirectory(operationTempDirectory.toFile());
+                    } catch (IOException e) {
+                        LOGGER.warn("Unable to delete local archive export directory {}", operationTempDirectory, e);
+                    }
+                }
             }
-
-            LOGGER.info("Unlocking blockchain...");
-            blockchainLock.unlock();
-
-			if (operationTempDirectory != null) {
-				LOGGER.info("Cleaning up local archive export directory {}", operationTempDirectory);
-				try {
-					FileUtils.deleteDirectory(operationTempDirectory.toFile());
-				} catch (IOException e) {
-					LOGGER.warn("Unable to delete local archive export directory {}", operationTempDirectory, e);
-				}
-			}
         }
+    }
+
+    /** Restore node-local credentials after preparing the distributable repository backup. */
+    protected void restoreNodeLocalData() throws DataException, IOException {
+        LOGGER.info("Re-importing local data...");
+        repository.importDataFromFile("TradeBotStates.json");
+        repository.importDataFromFile("MintingAccounts.json");
+        repository.saveChanges();
     }
 
     private String getFilename() {

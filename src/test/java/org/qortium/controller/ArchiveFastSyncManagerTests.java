@@ -185,6 +185,11 @@ public class ArchiveFastSyncManagerTests {
 		assertFalse(ArchiveFastSyncManager.shouldRun(settings, false, true));
 		assertTrue(ArchiveFastSyncManager.shouldRun(settings, true, false));
 
+		FieldUtils.writeField(settings, "archiveFastReplayEnabled", true, true);
+		FieldUtils.writeField(settings, "archiveEnabled", false, true);
+		assertFalse(ArchiveFastSyncManager.shouldRun(settings, false, true));
+		assertTrue(ArchiveFastSyncManager.shouldRun(settings, true, true));
+
 		FieldUtils.writeField(settings, "lite", true, true);
 		assertFalse(ArchiveFastSyncManager.shouldRun(settings, true, true));
 	}

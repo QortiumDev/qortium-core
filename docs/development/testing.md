@@ -8,8 +8,8 @@ Run the deterministic tests with:
 mvn test -DskipJUnitTests=false
 ```
 
-Default coverage should prefer local stand-ins for external systems. Bootstrap tests
-exercise HTTP HEAD handling with a loopback server, and ElectrumX tests exercise
+Default coverage should prefer local stand-ins for external systems. Local archive
+export tests use an isolated disk-backed repository, and ElectrumX tests exercise
 protocol parsing with mock RPC responses. Public hosts remain integration checks.
 
 ## Coverage Reports
