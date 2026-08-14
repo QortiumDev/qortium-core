@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(settings): keep hosted bootstrap retired on rollback
+
+Forces both legacy hosted-bootstrap controls to `false` and an empty host list
+in every managed runtime profile, even when an operator previously set unsafe
+values. Generated template snapshots omit both names so a complete rollback to
+older Core and merge logic preserves the safe values as local overrides. The
+same snapshot construction retains the existing rollback protection for the
+two retired peer-claim orphaning controls.
+
 ### 2026-08-13 - security(bootstrap): retire hosted database replacement
 
 Removes the inherited hosted whole-database downloader and every automatic,

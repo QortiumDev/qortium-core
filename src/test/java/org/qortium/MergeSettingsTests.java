@@ -166,6 +166,57 @@ public class MergeSettingsTests {
 	}
 
 	@Test
+	public void testMigrationAndRollbackKeepHostedBootstrapRetired() throws Exception {
+		writeJson(templatePath, "{\"bootstrap\":false,\"bootstrapHosts\":[]}");
+		writeJson(snapshotPath, "{\"apiPort\":24891}");
+		writeJson(settingsPath, "{\"apiPort\":24891,\"bootstrap\":true,"
+				+ "\"bootstrapHosts\":[\"https://attacker.invalid\"]}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(Boolean.FALSE, merged.get("bootstrap"));
+		assertEquals(MAPPER.readValue("[]", Object.class), merged.get("bootstrapHosts"));
+		assertFalse(result.preserved.contains("bootstrap"));
+		assertFalse(result.preserved.contains("bootstrapHosts"));
+		assertFalse(result.removed.contains("bootstrap"));
+		assertFalse(result.removed.contains("bootstrapHosts"));
+		Map<String, Object> safeSnapshot = readJson(snapshotPath);
+		assertFalse(safeSnapshot.containsKey("bootstrap"));
+		assertFalse(safeSnapshot.containsKey("bootstrapHosts"));
+
+		// Model a full rollback to a template without the retirement marker. The generic merger must
+		// preserve both safe runtime additions, including the empty host list required by old manual paths.
+		writeJson(templatePath, "{}");
+		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> rolledBack = readJson(settingsPath);
+		assertEquals(Boolean.FALSE, rolledBack.get("bootstrap"));
+		assertEquals(MAPPER.readValue("[]", Object.class), rolledBack.get("bootstrapHosts"));
+	}
+
+	@Test
+	public void testCombinedRetirementSnapshotOmitsAllFourKeys() throws Exception {
+		writeJson(templatePath, "{\"bootstrap\":false,\"bootstrapHosts\":[],"
+				+ "\"recoveryWatchdogEnabled\":false,\"developmentPeerClaimOrphaningEnabled\":false}");
+		writeJson(settingsPath, "{\"bootstrap\":true,\"bootstrapHosts\":[\"https://attacker.invalid\"],"
+				+ "\"recoveryWatchdogEnabled\":true,\"developmentPeerClaimOrphaningEnabled\":true}");
+
+		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(Boolean.FALSE, merged.get("bootstrap"));
+		assertEquals(MAPPER.readValue("[]", Object.class), merged.get("bootstrapHosts"));
+		assertEquals(Boolean.FALSE, merged.get("recoveryWatchdogEnabled"));
+		assertEquals(Boolean.FALSE, merged.get("developmentPeerClaimOrphaningEnabled"));
+		Map<String, Object> safeSnapshot = readJson(snapshotPath);
+		assertFalse(safeSnapshot.containsKey("bootstrap"));
+		assertFalse(safeSnapshot.containsKey("bootstrapHosts"));
+		assertFalse(safeSnapshot.containsKey("recoveryWatchdogEnabled"));
+		assertFalse(safeSnapshot.containsKey("developmentPeerClaimOrphaningEnabled"));
+	}
+
+	@Test
 	public void testNestedValuesCompareByContent() throws Exception {
 		writeJson(snapshotPath, "{\"initialPeers\": [\"1.2.3.4:24892\"], \"wallets\": {\"BTC\": false}}");
 		writeJson(settingsPath, "{\"initialPeers\": [\"1.2.3.4:24892\"], \"wallets\": {\"BTC\": true}}");

@@ -98,10 +98,13 @@ public class MergeSettings {
 			}
 		}
 
-		// Security migration: retired Core versions exposed two peer-claim orphaning enable keys.
-		// Keep both explicitly false in managed settings so the current release and either older
-		// implementation fail closed. Local true overrides must never survive a managed upgrade.
-		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
+		boolean retirePeerClaimOrphaning = template.containsKey("developmentPeerClaimOrphaningEnabled");
+		boolean retireHostedBootstrap = template.containsKey("bootstrapHosts");
+
+		// Security migrations keep retired behavior explicitly disabled in managed runtime settings.
+		// Local unsafe overrides must never survive an upgrade, and the old names remain present only
+		// where an older release needs a safe value after rollback.
+		if (retirePeerClaimOrphaning) {
 			merged.put("recoveryWatchdogEnabled", false);
 			merged.put("developmentPeerClaimOrphaningEnabled", false);
 			result.preserved.remove("recoveryWatchdogEnabled");
@@ -109,15 +112,29 @@ public class MergeSettings {
 			result.removed.remove("recoveryWatchdogEnabled");
 			result.removed.remove("developmentPeerClaimOrphaningEnabled");
 		}
+		if (retireHostedBootstrap) {
+			merged.put("bootstrap", false);
+			merged.put("bootstrapHosts", new ArrayList<>());
+			result.preserved.remove("bootstrap");
+			result.preserved.remove("bootstrapHosts");
+			result.removed.remove("bootstrap");
+			result.removed.remove("bootstrapHosts");
+		}
 
 		writeJsonObject(settingsPath, merged);
-		if (template.containsKey("developmentPeerClaimOrphaningEnabled")) {
-			// Deliberately omit both retired keys from the snapshot while retaining false in the runtime
-			// file. If a complete release rollback restores an old template, its merge algorithm then
-			// sees each runtime false as a local addition and preserves it instead of restoring an opt-in.
+		if (retirePeerClaimOrphaning || retireHostedBootstrap) {
+			// Deliberately omit retired keys from the snapshot while retaining safe runtime values. If a
+			// complete release rollback restores an old template, its generic merge then sees those values
+			// as local additions and preserves them instead of restoring an unsafe default or configured path.
 			LinkedHashMap<String, Object> safeSnapshot = new LinkedHashMap<>(template);
-			safeSnapshot.remove("recoveryWatchdogEnabled");
-			safeSnapshot.remove("developmentPeerClaimOrphaningEnabled");
+			if (retirePeerClaimOrphaning) {
+				safeSnapshot.remove("recoveryWatchdogEnabled");
+				safeSnapshot.remove("developmentPeerClaimOrphaningEnabled");
+			}
+			if (retireHostedBootstrap) {
+				safeSnapshot.remove("bootstrap");
+				safeSnapshot.remove("bootstrapHosts");
+			}
 			writeJsonObject(snapshotPath, safeSnapshot);
 		} else {
 			Files.copy(templatePath, snapshotPath, StandardCopyOption.REPLACE_EXISTING);
