@@ -25,6 +25,7 @@ import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
 import org.qortium.data.block.BlockTransactionData;
 import org.qortium.data.blockchain.ChainParameterData;
+import org.qortium.data.network.OnlineAccountBundleData;
 import org.qortium.data.network.OnlineAccountData;
 import org.qortium.data.transaction.CreateGroupTransactionData;
 import org.qortium.data.transaction.GroupBanTransactionData;
@@ -42,6 +43,7 @@ import org.qortium.transaction.Transaction.ApprovalStatus;
 import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.transform.TransformationException;
 import org.qortium.transform.Transformer;
+import org.qortium.transform.OnlineAccountBundleTransformer;
 import org.qortium.transform.block.BlockTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Amounts;
@@ -406,6 +408,7 @@ public class Block {
 		byte[] encodedOnlineAccounts = new byte[0];
 		int onlineAccountsCount = 0;
 		byte[] onlineAccountsSignatures = null;
+		boolean bundleAware = usesOnlineNodeRewardBundles(version);
 
 		if (isBatchRewardDistributionBlock(height)) {
 			// Batch reward distribution block - copy online accounts from recent block with highest online accounts count.
@@ -419,19 +422,86 @@ public class Block {
 			BlockData highOnlineAccountsBlock = repository.getBlockRepository().getBlockInRangeWithHighestOnlineAccountsCount(firstBlock, lastBlock);
 			encodedOnlineAccounts = highOnlineAccountsBlock.getEncodedOnlineAccounts();
 			onlineAccountsCount = highOnlineAccountsBlock.getOnlineAccountsCount();
-			// No point in copying signatures since these aren't revalidated, and because of this onlineAccountsTimestamp must be null too
-			onlineAccountsSignatures = null;
-			onlineAccountsTimestamp = null;
+			if (bundleAware) {
+				// Bundle grouping and its proofs are permanent consensus data. Payout validation requires
+				// all four fields to be an exact copy of the deterministically selected capture block.
+				onlineAccountsTimestamp = highOnlineAccountsBlock.getOnlineAccountsTimestamp();
+				onlineAccountsSignatures = highOnlineAccountsBlock.getOnlineAccountBundles();
+			} else {
+				// Legacy payout blocks do not revalidate or copy timestamp signatures.
+				onlineAccountsSignatures = null;
+				onlineAccountsTimestamp = null;
+			}
 		}
 		else if (isOnlineAccountsBlock(height)) {
-			// Standard online accounts block - add online accounts in regular way
+			if (bundleAware) {
+				if (onlineAccountsTimestamp == null) {
+					LOGGER.error("Unable to determine online-account bundle timestamp; we will fail to mint");
+					return null;
+				}
 
-			// Fetch accounts with signatures valid for this block height, then remove any missing a nonce.
-			List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts(onlineAccountsTimestamp, height);
-			onlineAccounts.removeIf(a -> a.getNonce() == null || a.getNonce() < 0);
+				List<OnlineAccountBundleData> onlineAccountBundles = new ArrayList<>(OnlineAccountsManager
+						.getInstance().getOnlineAccountBundles(onlineAccountsTimestamp, height));
+				if (onlineAccountBundles.isEmpty()) {
+					LOGGER.error("No valid online-account bundles; we will fail to mint");
+					return null;
+				}
 
-			// Remove any online accounts that are not backed by an eligible minting account.
-			onlineAccounts.removeIf(a -> {
+				// The block cohort has one deterministic representation even if manager internals change.
+				onlineAccountBundles.sort((left, right) -> OnlineAccountBundleData.compareUnsigned(
+						left.getNodePublicKey(), right.getNodePublicKey()));
+
+				TreeSet<byte[]> uniqueMemberPublicKeys = new TreeSet<>(OnlineAccountBundleData::compareUnsigned);
+				byte[] previousNodePublicKey = null;
+				for (OnlineAccountBundleData bundle : onlineAccountBundles) {
+					if (bundle.getTimestamp() != onlineAccountsTimestamp)
+						return null;
+
+					byte[] nodePublicKey = bundle.getNodePublicKey();
+					if (previousNodePublicKey != null
+							&& OnlineAccountBundleData.compareUnsigned(previousNodePublicKey, nodePublicKey) == 0)
+						return null;
+					previousNodePublicKey = nodePublicKey;
+
+					for (OnlineAccountBundleData.Member member : bundle.getMembers())
+						uniqueMemberPublicKeys.add(member.getPublicKey());
+				}
+
+				if (uniqueMemberPublicKeys.isEmpty())
+					return null;
+
+				try {
+					onlineAccountsSignatures = OnlineAccountBundleTransformer.toBlockCohortBytes(
+							onlineAccountBundles, OnlineAccountBundleTransformer.ChainIdentity.current());
+				} catch (TransformationException e) {
+					LOGGER.error("Unable to encode online-account bundles; we will fail to mint", e);
+					return null;
+				}
+
+				List<byte[]> allSelfSharePublicKeys = repository.getAccountRepository().getSelfSharePublicKeys();
+				List<Integer> accountIndexes = new ArrayList<>(uniqueMemberPublicKeys.size());
+				for (byte[] memberPublicKey : uniqueMemberPublicKeys) {
+					Integer accountIndex = getSelfShareIndex(memberPublicKey, allSelfSharePublicKeys);
+					if (accountIndex == null) {
+						LOGGER.error("Online-account bundle member is no longer a self-share; we will fail to mint");
+						return null;
+					}
+					accountIndexes.add(accountIndex);
+				}
+				accountIndexes.sort(null);
+
+				ConciseSet onlineAccountsSet = new ConciseSet().convert(accountIndexes);
+				encodedOnlineAccounts = BlockTransformer.encodeOnlineAccounts(onlineAccountsSet);
+				onlineAccountsCount = uniqueMemberPublicKeys.size();
+			} else {
+				// Standard legacy online accounts block - add online accounts in regular way
+
+				// Fetch accounts with signatures valid for this block height, then remove any missing a nonce.
+				List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts(onlineAccountsTimestamp, height);
+				onlineAccounts.removeIf(a -> a.getNonce() == null || a.getNonce() < 0);
+
+				// Remove any online accounts that are not backed by an eligible minting account.
+				onlineAccounts.removeIf(a -> {
 				try {
 					List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(), height);
 					String address = Account.getRewardShareMintingAddress(repository, a.getPublicKey());
@@ -441,9 +511,9 @@ public class Block {
 					// Something went wrong, so remove the account
 					return true;
 				}
-			});
+				});
 
-			if (onlineAccounts.isEmpty()) {
+				if (onlineAccounts.isEmpty()) {
 				// new v5.1.0, don't fail (25 blocks before payout) when isSingleNodeTestnet == true
 				if (Settings.getInstance().isSingleNodeTestnet()) {
 					Integer nonce = SECURE_RANDOM.nextInt(500000);
@@ -463,15 +533,15 @@ public class Block {
 					LOGGER.error("No online accounts - not even our own?; We will fail to Mint!");
 					return null;
 				}
-			}
+				}
 
 			// Load sorted list of self-share public keys into memory, so that the indexes can be obtained.
 			// This is up to 100x faster than querying each index separately. For 4150 self-share keys, it
 			// was taking around 5000ms to query individually, vs 50ms using this approach.
-			List<byte[]> allSelfSharePublicKeys = repository.getAccountRepository().getSelfSharePublicKeys();
+				List<byte[]> allSelfSharePublicKeys = repository.getAccountRepository().getSelfSharePublicKeys();
 
 			// Map using index into sorted list of self-shares as key.
-			Map<Integer, OnlineAccountData> indexedOnlineAccounts = new HashMap<>();
+				Map<Integer, OnlineAccountData> indexedOnlineAccounts = new HashMap<>();
 			for (OnlineAccountData onlineAccountData : onlineAccounts) {
 				Integer accountIndex = getSelfShareIndex(onlineAccountData.getPublicKey(), allSelfSharePublicKeys);
 				if (accountIndex == null)
@@ -480,23 +550,23 @@ public class Block {
 
 				indexedOnlineAccounts.put(accountIndex, onlineAccountData);
 			}
-			List<Integer> accountIndexes = new ArrayList<>(indexedOnlineAccounts.keySet());
-			accountIndexes.sort(null);
+				List<Integer> accountIndexes = new ArrayList<>(indexedOnlineAccounts.keySet());
+				accountIndexes.sort(null);
 
 			// Convert to compressed integer set
-			ConciseSet onlineAccountsSet = new ConciseSet();
-			onlineAccountsSet = onlineAccountsSet.convert(accountIndexes);
-			encodedOnlineAccounts = BlockTransformer.encodeOnlineAccounts(onlineAccountsSet);
-			onlineAccountsCount = onlineAccountsSet.size();
+				ConciseSet onlineAccountsSet = new ConciseSet();
+				onlineAccountsSet = onlineAccountsSet.convert(accountIndexes);
+				encodedOnlineAccounts = BlockTransformer.encodeOnlineAccounts(onlineAccountsSet);
+				onlineAccountsCount = onlineAccountsSet.size();
 
 			// After the signature V2 height we store each account's signature individually
 			// (secure per-account Ed25519), otherwise the legacy forgeable aggregate single signature.
-			boolean signatureV2 = OnlineAccountsManager.isSignatureV2Active(height);
+				boolean signatureV2 = OnlineAccountsManager.isSignatureV2Active(height);
 
 			// Build ordered lists of signatures and nonces, in account-index order, so that block
 			// validation can pair each signature/nonce with the correct reward-share public key.
-			List<byte[]> orderedSignatures = new ArrayList<>();
-			List<Integer> nonces = new ArrayList<>();
+				List<byte[]> orderedSignatures = new ArrayList<>();
+				List<Integer> nonces = new ArrayList<>();
 			for (int i = 0; i < onlineAccountsCount; ++i) {
 				Integer accountIndex = accountIndexes.get(i);
 				OnlineAccountData onlineAccountData = indexedOnlineAccounts.get(accountIndex);
@@ -504,15 +574,15 @@ public class Block {
 				nonces.add(onlineAccountData.getNonce());
 			}
 
-			if (signatureV2)
+				if (signatureV2)
 				// Per-account standard Ed25519 signatures, stored individually
 				onlineAccountsSignatures = BlockTransformer.encodeTimestampSignatures(orderedSignatures);
-			else
+				else
 				// Legacy aggregated, single signature
 				onlineAccountsSignatures = Ed25519Extras.aggregateSignatures(orderedSignatures);
 
 			// Add nonces to the end of the online accounts signatures
-			try {
+				try {
 				// Encode the nonces to a byte array
 				byte[] encodedNonces = BlockTransformer.encodeOnlineAccountNonces(nonces);
 
@@ -521,10 +591,10 @@ public class Block {
 				outputStream.write(onlineAccountsSignatures);
 				outputStream.write(encodedNonces);
 				onlineAccountsSignatures = outputStream.toByteArray();
-			} catch (TransformationException | IOException e) {
-				return null;
+				} catch (TransformationException | IOException e) {
+					return null;
+				}
 			}
-
 		}
 		else {
 			// No online accounts should be included in this block
@@ -532,7 +602,8 @@ public class Block {
 		}
 
 		byte[] minterSignature = minter.sign(BlockTransformer.getBytesForMinterSignature(parentBlockData,
-				minter.getPublicKey(), encodedOnlineAccounts));
+				version, minter.getPublicKey(), encodedOnlineAccounts, onlineAccountsTimestamp,
+				bundleAware ? onlineAccountsSignatures : null));
 
 		int transactionCount = 0;
 		byte[] transactionsSignature = null;
@@ -590,7 +661,8 @@ public class Block {
 		byte[] reference = this.blockData.getReference();
 
 		byte[] minterSignature = minter.sign(BlockTransformer.getBytesForMinterSignature(parentBlockData,
-				minter.getPublicKey(), this.blockData.getEncodedOnlineAccounts()));
+				version, minter.getPublicKey(), this.blockData.getEncodedOnlineAccounts(),
+				this.blockData.getOnlineAccountsTimestamp(), this.blockData.getOnlineAccountBundles()));
 
 		// Minter is always an online self-share, so find actual minter and get their minting weight.
 		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, minter.getPublicKey());
@@ -802,6 +874,23 @@ public class Block {
 	 */
 	private List<byte[]> getOnlineRewardSharePublicKeys() throws DataException {
 		List<byte[]> rewardSharePublicKeys = new ArrayList<>();
+		if (usesOnlineNodeRewardBundles(this.blockData.getVersion())) {
+			byte[] bundlePayload = this.blockData.getOnlineAccountBundles();
+			if (bundlePayload == null || bundlePayload.length == 0)
+				return rewardSharePublicKeys;
+
+			try {
+				TreeSet<byte[]> uniqueMemberPublicKeys = new TreeSet<>(OnlineAccountBundleData::compareUnsigned);
+				for (OnlineAccountBundleData bundle : OnlineAccountBundleTransformer.fromBlockCohortBytes(
+						bundlePayload, OnlineAccountBundleTransformer.ChainIdentity.current()))
+					for (OnlineAccountBundleData.Member member : bundle.getMembers())
+						uniqueMemberPublicKeys.add(member.getPublicKey());
+				rewardSharePublicKeys.addAll(uniqueMemberPublicKeys);
+				return rewardSharePublicKeys;
+			} catch (TransformationException | RuntimeException e) {
+				throw new DataException("Unable to decode online-account bundle members", e);
+			}
+		}
 
 		List<RewardShareData> onlineRewardShares = this.cachedOnlineRewardShares;
 		if (onlineRewardShares == null) {
@@ -1196,6 +1285,9 @@ public class Block {
 		if (accountIndexes.size() != this.blockData.getOnlineAccountsCount())
 			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
 
+		if (usesOnlineNodeRewardBundles(this.blockData.getVersion()))
+			return this.areOnlineAccountBundlesValid(accountIndexes, trustedReplay);
+
 		// Online accounts should only be included in designated blocks; all others must be empty
 		if (!this.isOnlineAccountsBlock()) {
 			if (this.blockData.getOnlineAccountsCount() != 0 || !accountIndexes.isEmpty()) {
@@ -1336,6 +1428,150 @@ public class Block {
 		// Remember that the accounts are valid, to speed up subsequent checks
 		this.onlineAccountsAlreadyValid = true;
 
+		return ValidationResult.OK;
+	}
+
+	/** Validate the permanent node-bundle representation without consulting manager cache state. */
+	private ValidationResult areOnlineAccountBundlesValid(ConciseSet accountIndexes, boolean trustedReplay)
+			throws DataException {
+		byte[] bundlePayload = this.blockData.getOnlineAccountBundles();
+		Long onlineAccountsTimestamp = this.blockData.getOnlineAccountsTimestamp();
+
+		if (!this.isOnlineAccountsBlock()) {
+			if (!accountIndexes.isEmpty() || this.blockData.getOnlineAccountsCount() != 0
+					|| onlineAccountsTimestamp != null
+					|| (bundlePayload != null && bundlePayload.length != 0))
+				return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+			this.onlineAccountsAlreadyValid = true;
+			return ValidationResult.OK;
+		}
+
+		if (this.isBatchRewardDistributionBlock()) {
+			int firstBlock = this.blockData.getHeight()
+					- BlockChain.getInstance().getBlockRewardBatchAccountsBlockCount();
+			int lastBlock = this.blockData.getHeight() - 1;
+			BlockData selectedCaptureBlock = this.repository.getBlockRepository()
+					.getBlockInRangeWithHighestOnlineAccountsCount(firstBlock, lastBlock);
+
+			if (selectedCaptureBlock == null
+					|| this.blockData.getOnlineAccountsCount() != selectedCaptureBlock.getOnlineAccountsCount()
+					|| !Arrays.equals(this.blockData.getEncodedOnlineAccounts(),
+							selectedCaptureBlock.getEncodedOnlineAccounts())
+					|| !Objects.equals(onlineAccountsTimestamp,
+							selectedCaptureBlock.getOnlineAccountsTimestamp())
+					|| !Arrays.equals(bundlePayload, selectedCaptureBlock.getOnlineAccountBundles()))
+				return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+			if (onlineAccountsTimestamp == null || bundlePayload == null || bundlePayload.length == 0)
+				return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+			this.onlineAccountsAlreadyValid = true;
+			return ValidationResult.OK;
+		}
+
+		if (onlineAccountsTimestamp == null || bundlePayload == null || bundlePayload.length == 0)
+			return ValidationResult.ONLINE_ACCOUNT_SIGNATURES_MISSING;
+
+		long onlineTimestampModulus = OnlineAccountsManager.getOnlineTimestampModulus();
+		long allowedTimestampDelta;
+		try {
+			allowedTimestampDelta = Math.multiplyExact(onlineTimestampModulus, 2L);
+		} catch (ArithmeticException e) {
+			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+		}
+
+		if (onlineTimestampModulus <= 0 || onlineAccountsTimestamp % onlineTimestampModulus != 0
+				|| BigInteger.valueOf(onlineAccountsTimestamp)
+						.subtract(BigInteger.valueOf(this.blockData.getTimestamp())).abs()
+						.compareTo(BigInteger.valueOf(allowedTimestampDelta)) > 0)
+			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+		List<OnlineAccountBundleData> bundles;
+		try {
+			bundles = OnlineAccountBundleTransformer.fromBlockCohortBytes(bundlePayload,
+					OnlineAccountBundleTransformer.ChainIdentity.current());
+		} catch (TransformationException | RuntimeException e) {
+			return ValidationResult.ONLINE_ACCOUNT_SIGNATURES_MALFORMED;
+		}
+
+		if (bundles.isEmpty())
+			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+		List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(),
+				this.blockData.getHeight());
+		TreeSet<byte[]> uniqueMemberPublicKeys = new TreeSet<>(OnlineAccountBundleData::compareUnsigned);
+		long[] memoryPoWWorkBuffer = trustedReplay ? null
+				: OnlineAccountsManager.newMemoryPoWVerifyWorkBuffer();
+		byte[] previousNodePublicKey = null;
+
+		for (OnlineAccountBundleData bundle : bundles) {
+			if (bundle.getTimestamp() != onlineAccountsTimestamp)
+				return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+			byte[] nodePublicKey = bundle.getNodePublicKey();
+			if (previousNodePublicKey != null
+					&& OnlineAccountBundleData.compareUnsigned(previousNodePublicKey, nodePublicKey) >= 0)
+				return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+			previousNodePublicKey = nodePublicKey;
+
+			for (OnlineAccountBundleData.Member member : bundle.getMembers()) {
+				byte[] memberPublicKey = member.getPublicKey();
+				RewardShareData rewardShareData = this.repository.getAccountRepository()
+						.getRewardShare(memberPublicKey);
+				if (rewardShareData == null)
+					return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
+				if (!rewardShareData.isSelfShare()
+						|| !Groups.memberExistsInAnyGroup(this.repository.getGroupRepository(),
+								groupIdsToMint, rewardShareData.getMinter())
+						|| !new Account(this.repository, rewardShareData.getMinter()).canMint(true))
+					return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+				uniqueMemberPublicKeys.add(memberPublicKey);
+			}
+
+			if (!trustedReplay) {
+				try {
+					if (!OnlineAccountBundleTransformer.verifySignatures(bundle,
+							OnlineAccountBundleTransformer.ChainIdentity.current()))
+						return ValidationResult.ONLINE_ACCOUNT_SIGNATURE_INCORRECT;
+				} catch (TransformationException | RuntimeException e) {
+					return ValidationResult.ONLINE_ACCOUNT_SIGNATURE_INCORRECT;
+				}
+
+				for (OnlineAccountBundleData.Member member : bundle.getMembers()) {
+					OnlineAccountData onlineAccount = new OnlineAccountData(onlineAccountsTimestamp, null,
+							member.getPublicKey(), member.getNonce());
+					if (!OnlineAccountsManager.getInstance().verifyMemoryPoW(onlineAccount,
+							memoryPoWWorkBuffer))
+						return ValidationResult.ONLINE_ACCOUNT_NONCE_INCORRECT;
+				}
+			}
+		}
+
+		if (uniqueMemberPublicKeys.size() != this.blockData.getOnlineAccountsCount())
+			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+		List<byte[]> allSelfSharePublicKeys = this.repository.getAccountRepository().getSelfSharePublicKeys();
+		List<Integer> expectedAccountIndexes = new ArrayList<>(uniqueMemberPublicKeys.size());
+		for (byte[] memberPublicKey : uniqueMemberPublicKeys) {
+			Integer accountIndex = getSelfShareIndex(memberPublicKey, allSelfSharePublicKeys);
+			if (accountIndex == null)
+				return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
+			expectedAccountIndexes.add(accountIndex);
+		}
+		expectedAccountIndexes.sort(null);
+
+		if (!Arrays.equals(accountIndexes.toArray(), expectedAccountIndexes.stream()
+				.mapToInt(Integer::intValue).toArray()))
+			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
+
+		this.cachedOnlineRewardShares = this.repository.getAccountRepository()
+				.getSelfSharesByIndexes(accountIndexes.toArray());
+		if (this.cachedOnlineRewardShares == null)
+			return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
+
+		this.onlineAccountsAlreadyValid = true;
 		return ValidationResult.OK;
 	}
 

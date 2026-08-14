@@ -1005,6 +1005,18 @@ public class OnlineAccountsManager {
         return MemoryPoW.verify2(mempowBytes, workBuffer, getPoWBufferSize(), getPoWDifficulty(), nonce);
     }
 
+    /**
+     * Allocate a caller-owned MemoryPoW verification buffer.
+     * <p>
+     * Block validation can verify many online accounts and must reuse one local buffer rather than
+     * allocate the full working set for every proof. The returned array is deliberately not shared:
+     * {@link MemoryPoW#verify2(byte[], long[], int, long, int)} mutates it and block validation can run
+     * concurrently on several threads.
+     */
+    public static long[] newMemoryPoWVerifyWorkBuffer() {
+        return new long[getPoWBufferSize() / Long.BYTES];
+    }
+
 
     /**
      * Returns whether online accounts manager has any online accounts with timestamp recent enough to be considered currently online.

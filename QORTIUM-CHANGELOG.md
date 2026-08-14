@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - feat(consensus): validate node reward bundle cohorts
+
+Builds version-2 capture blocks from the bounded, eligible reward-node bundle
+cache and commits both the canonical bundle payload and the exact unique member
+set. Independent block validation checks canonical ordering, the shared
+ten-minute epoch within a two-epoch block-time window, capture-height
+eligibility, member and node signatures, MemoryPoW, and the exact flat-set
+union. Bundle-aware payout blocks copy the selected capture block's count, set,
+epoch, and payload byte-for-byte; reminting and block-minter signatures preserve
+the complete commitment. Validation reuses one caller-owned MemoryPoW buffer,
+and the local historical account index records absolute keys from the permanent
+payload so later self-share changes cannot alter it. Legacy version-1 block
+construction and validation remain unchanged; reward arithmetic is switched in
+a later commit.
+
 ### 2026-08-14 - fix(minting): announce every eligible local key as one node bundle
 
 Fixes the hidden two-key omission by producing a signed reward-node bundle from
