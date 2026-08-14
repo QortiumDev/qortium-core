@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-13 - fix(bootstrap): isolate local export temporary files
+
+Limits local archive creation cleanup to its own operation-specific temporary
+directory instead of deleting the repository parent's entire shared `tmp`
+tree. The unnecessary five-second cleanup delay is removed, checksum files are
+always truncated before rewriting, and regression coverage verifies unrelated
+temporary files plus live block, archive, and minting-account state survive the
+export.
+
 ### 2026-08-13 - fix(settings): keep hosted bootstrap retired on rollback
 
 Forces both legacy hosted-bootstrap controls to `false` and an empty host list

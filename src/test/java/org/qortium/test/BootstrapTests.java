@@ -79,12 +79,23 @@ public class BootstrapTests extends Common {
 
             Bootstrap bootstrap = new Bootstrap(repository);
             Path bootstrapPath = bootstrap.getBootstrapOutputPath();
+			Path tempRoot = Paths.get(Settings.getInstance().getRepositoryPath()).toAbsolutePath().getParent().resolve("tmp");
+			Files.createDirectories(tempRoot);
+			Path unrelatedTempFile = tempRoot.resolve("unrelated-operation.sentinel");
+			Files.writeString(unrelatedTempFile, "preserve");
 
             // Ensure the compressed bootstrap doesn't exist
             assertFalse(Files.exists(bootstrapPath));
+			Path checksumPath = Paths.get(bootstrapPath.toString() + ".sha256");
+			Files.writeString(checksumPath, "stale-checksum-with-extra-bytes");
 
-            // Create bootstrap
-            assertEquals(bootstrapPath.toAbsolutePath().toString(), bootstrap.create());
+            try {
+                // Create bootstrap
+                assertEquals(bootstrapPath.toAbsolutePath().toString(), bootstrap.create());
+				assertTrue("Local archive creation must not delete unrelated sibling temp files", Files.exists(unrelatedTempFile));
+            } finally {
+				Files.deleteIfExists(unrelatedTempFile);
+			}
 
             // Ensure the compressed bootstrap exists
             assertTrue(Files.exists(bootstrapPath));
@@ -100,7 +111,6 @@ public class BootstrapTests extends Common {
             // Ensure we can retrieve block 10 from the archive
             assertNotNull(repository.getBlockArchiveRepository().fromHeight(10));
 
-            Path checksumPath = Paths.get(bootstrapPath.toString() + ".sha256");
             assertTrue(Files.exists(checksumPath));
             assertEquals(Crypto.digestHexString(bootstrapPath.toFile(), 1024 * 1024), Files.readString(checksumPath).trim());
 

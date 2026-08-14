@@ -198,15 +198,13 @@ public class Bootstrap {
             throw new DataException("Repository instance required in order to create a boostrap");
         }
 
-        LOGGER.info("Deleting temp directory if it exists...");
-        this.deleteAllTempDirectories();
-
         LOGGER.info("Acquiring blockchain lock...");
         ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
         blockchainLock.lockInterruptibly();
 
         Path inputPath = null;
         Path outputPath = null;
+        Path operationTempDirectory = null;
 
         try {
 
@@ -241,7 +239,8 @@ public class Bootstrap {
 
             LOGGER.info("Moving files to output directory...");
             inputPath = Paths.get(Settings.getInstance().getRepositoryPath(), "bootstrap");
-            outputPath = Paths.get(this.createTempDirectory().toString(), "bootstrap");
+            operationTempDirectory = this.createTempDirectory();
+            outputPath = operationTempDirectory.resolve("bootstrap");
 
 
             // Move the db backup to a "bootstrap" folder in the root directory
@@ -271,7 +270,7 @@ public class Bootstrap {
             LOGGER.info("checksum: {}", checksum);
             Path checksumPath = Paths.get(String.format("%s.sha256", compressedOutputPath.toString()));
             LOGGER.info("Writing checksum to path: {}", checksumPath);
-            Files.writeString(checksumPath, checksum, StandardOpenOption.CREATE);
+            Files.writeString(checksumPath, checksum, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
             // Return the path to the compressed bootstrap file
             LOGGER.info("Bootstrap creation complete. Output file: {}", compressedOutputPath.toAbsolutePath().toString());
@@ -295,10 +294,14 @@ public class Bootstrap {
             LOGGER.info("Unlocking blockchain...");
             blockchainLock.unlock();
 
-            // Cleanup
-            LOGGER.info("Cleaning up...");
-            Thread.sleep(5000L);
-            this.deleteAllTempDirectories();
+			if (operationTempDirectory != null) {
+				LOGGER.info("Cleaning up local archive export directory {}", operationTempDirectory);
+				try {
+					FileUtils.deleteDirectory(operationTempDirectory.toFile());
+				} catch (IOException e) {
+					LOGGER.warn("Unable to delete local archive export directory {}", operationTempDirectory, e);
+				}
+			}
         }
     }
 
@@ -326,16 +329,6 @@ public class Bootstrap {
         Path tempDir = Paths.get(baseDir, identifier);
         Files.createDirectories(tempDir);
         return tempDir;
-    }
-
-    private void deleteAllTempDirectories() {
-        Path initialPath = Paths.get(Settings.getInstance().getRepositoryPath()).toAbsolutePath().getParent();
-        Path path = Paths.get(initialPath.toString(), "tmp");
-        try {
-            FileUtils.deleteDirectory(path.toFile());
-        } catch (IOException e) {
-            LOGGER.info("Unable to delete temp directory path: {}", path.toString(), e);
-        }
     }
 
     public Path getBootstrapOutputPath() {
