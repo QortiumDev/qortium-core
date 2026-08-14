@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - fix(docker): initialize new volumes as Previewnet
+
+Makes the Docker distribution explicitly Previewnet: a missing settings file
+is installed byte-for-byte from the tracked participant profile, and Dockerfile,
+Compose, health, and example environment defaults use its `2489x` ports. An
+existing settings path is never overwritten or merged, including empty,
+malformed, or custom files. Existing generic `1489x` volumes remain unchanged
+and must retain matching Compose port values or be deliberately migrated after
+backup; no database or settings conversion is automatic.
+
 ### 2026-08-14 - fix(settings): separate generic defaults from Previewnet seeds
 
 Removes Previewnet chain and data seeds from generic Java defaults so a bare

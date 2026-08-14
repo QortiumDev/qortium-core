@@ -144,7 +144,11 @@ Operators who do not want I2P attempts can set `"i2pEnabled": false` in
 
 ## Docker
 
-Docker support is available for developers who prefer a containerized node.
+Docker support is available for developers who prefer a containerized
+Previewnet node. On the first start of a new volume, the image copies the
+tracked participant profile from `preview/settings-preview.json` to
+`./data/qortium/settings.json`; its chain identity, seed lists, and ports are
+therefore explicit rather than inherited from generic Core defaults.
 
 ```sh
 cp .env.example .env
@@ -160,7 +164,19 @@ docker compose -f docker-compose.internal.yml up -d --build
 ```
 
 Container data and `settings.json` are stored under `./data/qortium`. The JVM
-start arguments file is stored at `./data/qortium/start-arguments.txt`.
+start arguments file is stored at `./data/qortium/start-arguments.txt`. Once a
+settings file exists, Docker never replaces or merges it, including when it is
+empty, malformed, or customized. The port values in `.env` control Compose
+publishing and the container health check; they do not rewrite Core settings,
+so they must match the existing settings file.
+
+When upgrading a pre-T5 Docker volume whose settings still use generic `1489x`
+ports, preserve that settings file and set the three port values in `.env` to
+`14891`, `14892`, and `14894` before starting the new Compose definition. To
+move that volume to Previewnet instead, first back up its settings and database,
+then deliberately install the Previewnet profile; the image will not convert or
+delete either one. Conversely, keep `2489x` settings and port values if rolling
+back a volume that was first initialized by this Previewnet image.
 
 ## Development
 

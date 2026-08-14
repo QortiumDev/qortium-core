@@ -5,14 +5,16 @@ services:
       dockerfile: Dockerfile
     container_name: ${QORTIUM_CONTAINER_NAME:-qortium-core}
     restart: unless-stopped
+    environment:
+      QORTIUM_API_PORT: "${QORTIUM_API_PORT:-24891}"
     ports:
-      - "${QORTIUM_API_BIND_HOST:-127.0.0.1}:${QORTIUM_API_PORT:-14891}:${QORTIUM_API_PORT:-14891}"
-      - "${QORTIUM_P2P_BIND_HOST:-0.0.0.0}:${QORTIUM_P2P_PORT:-14892}:${QORTIUM_P2P_PORT:-14892}"
-      - "${QORTIUM_QDN_BIND_HOST:-0.0.0.0}:${QORTIUM_QDN_PORT:-14894}:${QORTIUM_QDN_PORT:-14894}"
+      - "${QORTIUM_API_BIND_HOST:-127.0.0.1}:${QORTIUM_API_PORT:-24891}:${QORTIUM_API_PORT:-24891}"
+      - "${QORTIUM_P2P_BIND_HOST:-0.0.0.0}:${QORTIUM_P2P_PORT:-24892}:${QORTIUM_P2P_PORT:-24892}"
+      - "${QORTIUM_QDN_BIND_HOST:-0.0.0.0}:${QORTIUM_QDN_PORT:-24894}:${QORTIUM_QDN_PORT:-24894}"
     expose:
-      - "${QORTIUM_API_PORT:-14891}"
-      - "${QORTIUM_P2P_PORT:-14892}"
-      - "${QORTIUM_QDN_PORT:-14894}"
+      - "${QORTIUM_API_PORT:-24891}"
+      - "${QORTIUM_P2P_PORT:-24892}"
+      - "${QORTIUM_QDN_PORT:-24894}"
     volumes:
       - ./data/qortium:/qortium
     networks:
