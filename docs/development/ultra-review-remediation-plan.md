@@ -42,7 +42,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T3 | Retire automatic peer-claim orphaning while retaining both old setting names as permanently disabled compatibility inputs. | Complete | T2 containment | `security(sync): retire peer-claim orphaning` plus the two-key rollback follow-up; red tests failed 2/4 before retirement and 1/1 before rollback repair; focused tests passed 30/30; serialized full suite passed 3,008 with 68 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
 | T4 | Retire the dormant hosted whole-database bootstrap importer while preserving checkpoint-anchored peer archive fast-sync and the non-replacement local archive creation/validation tools. | Complete | None | Four implementation commits plus the tracked start; focused tests passed 95/95; clean serialized full suite passed 2,998 with 67 skips; packaged JAR contains archive fast-sync/local export but neither deleted importer class; `git diff --check` and three independent Codex reviews passed. Not released or deployed |
 | T5 | Make generic defaults, Docker, Previewnet profiles, ports, seed lists, and chain identities coherent, including `.env.example`. | Complete | Explicit Docker Previewnet target approved | Six bounded implementation, test, and operator-documentation commits following the tracked start; focused configuration tests passed 41/41; shell syntax, fresh Preview and retained-generic Compose renders passed; the clean serialized full suite passed 3,008 with 67 skips; `git diff --check` and three independent Codex reviews passed. Not released or deployed; daemon-backed image smoke was unavailable to this user |
-| T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | Planned | None | Request/response and chain/data x IP/I2P matrix tests |
+| T6 | Enforce transport-scoped QDN advertisements and chain/data HELLO identities. | In progress | Stable reward-node identity path repaired first | Request/response and chain/data x IP/I2P matrix tests |
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Planned | T2 recovery-state semantics for the catch-up signal | Deterministic loss, peer isolation, deadline, cancellation, and ping-order tests |
 | T8 | Repository and API correctness: archive temp filtering, chat fee persistence, websocket envelope filtering, and malformed PEERS rejection. | Planned | None | Focused repository, serialization, websocket, and parser tests |
 | T9 | Configuration and documentation hygiene: trigger registry/testnet parity, public-write classifier invariants, and missing changelog entries. | Decision | Trigger compatibility design | Config coverage, full handler-chain tests, docs reconciliation |
@@ -112,6 +112,19 @@ API restriction and whitelist enforcement. T5 leaves that developer-reference
 profile generic and unseeded, but its API exposure policy requires a dedicated
 review before any Windows distribution is treated as release-ready.
 
+### A-04 — Reward-node identity installation persistence
+
+Status: in progress; release blocker discovered during local PR #222 rollout.
+
+The reward-node identity path currently follows `Settings.userPath`, which is
+empty for the managed launcher because it supplies an absolute settings path.
+That places the identity under the replaceable installation directory instead
+of beside the persistent runtime settings. A package update could therefore
+rotate the identity and split one node's reward history. Before T6, move the
+authoritative path beside the active settings file, copy a valid legacy seed
+forward without deleting it for rollback, and fail closed on an unsafe or
+corrupt existing path.
+
 ## Compatibility Decisions
 
 ### Feature-trigger validation
@@ -167,8 +180,15 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. T5 is complete in source and local
-validation but is not released or deployed; T6 is the next planned boundary.
+T6 is active after the bounded A-04 identity-persistence repair. The identity
+repair may change only local path selection and safe copy-forward migration;
+it must not change bundle signatures, consensus data, or reward arithmetic.
+T6 may then change only QDN response advertisements and HELLO capability
+construction/filtering so addresses are scoped by both network layer and
+transport. It must not change peer admission, chain identity checks, QDN file
+authorization, or archive/reward consensus rules.
+
+T5 is complete in source and local validation but is not released or deployed.
 T5 made generic starts unseeded and new Docker settings explicitly Previewnet,
 without migrating or overwriting an existing settings file or database. A
 retained generic Docker volume must keep matching `1489x` Compose values; a T5

@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: start ultra-review transport privacy tranche
+
+Starts T6 with a deliberately narrow boundary: first make the reward-node
+identity survive managed Core installation replacement, then scope QDN response
+addresses and HELLO identity capabilities by both connection transport and
+network layer. The work does not alter bundle signatures, reward arithmetic,
+chain identity validation, peer admission, or archive consensus rules.
+
 ### 2026-08-14 - docs(consensus): complete node reward bundle source validation
 
 Records the completed local acceptance gate for Previewnet node reward bundles.
