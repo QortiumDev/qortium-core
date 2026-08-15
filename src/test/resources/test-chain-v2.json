@@ -91,7 +91,8 @@
 		"atBalanceQueryHeight": 0,
 		"atCodeHashCheckHeight": 0,
 		"atUnsigned256ArithmeticHeight": 0,
-		"atNoNativeAssetFeeWaiverHeight": 0
+		"atNoNativeAssetFeeWaiverHeight": 0,
+		"onlineNodeRewardBundlesPayoutHeight": 999999100
 	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,

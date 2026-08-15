@@ -34,6 +34,140 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-14 - docs(consensus): complete node reward bundle source validation
+
+Records the completed local acceptance gate for Previewnet node reward bundles.
+The focused feature and legacy reward matrix passed 96 tests, the exact shipped
+transition regression passed at heights 99,989, 99,990, 99,999, and 100,000,
+and the clean serialized package run passed 3,063 tests with 67 skips and no
+failures or errors. The packaged JAR contains the new identity, bundle protocol,
+selection, payout, and version-2 block paths; its embedded Previewnet config
+schedules the first bundle-aware payout at height 100,000 while the generic
+chain remains unactivated. Independent consensus, security, test-design, and
+orphan-ordering reviews found no remaining source blocker. This records source
+and local-artifact readiness only: release still requires exact-candidate
+multi-node Previewnet testing and a coordinated rollout before capture height
+99,990, or a move to a later batch boundary.
+
+### 2026-08-14 - test(consensus): pin Previewnet node reward transition heights
+
+Pins the shipped Previewnet transition at the exact four operational boundary
+heights: legacy version 1 at 99,989, bundle-aware capture blocks at 99,990 and
+99,999, and the first bundle-aware payout at 100,000. The regression also
+proves that consensus rejects the opposite block representation on each side of
+the boundary while retaining the existing locally derived height check.
+
+### 2026-08-14 - feat(rewards): distribute batch rewards per node bundle
+
+Switches bundle-aware batch payouts to one allocation per declared reward node
+after deterministic account-overlap resolution and an entering-payout-state
+eligibility check. Each surviving member receives
+`floor(batchSize / survivingMembers)` raw block credit, account levels update
+before the node is placed in its highest member's share bin, and share-bin
+activation counts nodes rather than keys. Native rewards and fees divide in
+order by bin, node, and member with integer dust left unassigned; each member's
+existing external reward shares are then applied only to that member's slice.
+Chains without asset `0` still advance raw credits and levels without creating
+a monetary payout. Orphaning restores the prior trust snapshot before rebuilding
+the payout plan, reverses balances while post-credit levels are still present,
+and then removes each member's exact nonuniform credit. Legacy blocks retain
+their existing reward and dust behavior.
+
+### 2026-08-14 - feat(consensus): validate node reward bundle cohorts
+
+Builds version-2 capture blocks from the bounded, eligible reward-node bundle
+cache and commits both the canonical bundle payload and the exact unique member
+set. Independent block validation checks canonical ordering, the shared
+ten-minute epoch within a two-epoch block-time window, capture-height
+eligibility, member and node signatures, MemoryPoW, and the exact flat-set
+union. Bundle-aware payout blocks copy the selected capture block's count, set,
+epoch, and payload byte-for-byte; reminting and block-minter signatures preserve
+the complete commitment. Validation reuses one caller-owned MemoryPoW buffer,
+and the local historical account index records absolute keys from the permanent
+payload so later self-share changes cannot alter it. Legacy version-1 block
+construction and validation remain unchanged; reward arithmetic is switched in
+a later commit.
+
+### 2026-08-14 - fix(minting): announce every eligible local key as one node bundle
+
+Fixes the hidden two-key omission by producing a signed reward-node bundle from
+every eligible self-share installed on one Core instance, while retaining the
+two-key limit only for legacy flat announcements before activation. Incoming
+bundles are chain-bound and fully checked for membership, trust, signatures,
+and MemoryPoW before admission; copied-identity conflicts resolve
+deterministically. Per-epoch caches, concurrent queues, scheduled validation
+work, message threads, and relayed batches are all bounded so hostile bundle
+traffic cannot grow memory without limit or monopolize verification workers.
+Focused tests exercise real three-key production and the adversarial cache,
+queue, eligibility, proof, routing, and load boundaries.
+
+### 2026-08-14 - feat(rewards): plan per-node bundle payouts
+
+Adds the deterministic payout planner that turns a committed bundle cohort into
+one effective allocation per reward node. It resolves copied accounts using the
+original declared bundle sizes before applying payout-height eligibility, drops
+empty bundles without re-ranking overlap winners, and assigns each surviving
+member `floor(batchSize / survivingMembers)` raw block credit. Focused tests pin
+the 1, 2, 3, 100, 101, and 1024-member boundaries and the ordering between
+overlap resolution and later eligibility filtering. Block processing is not yet
+switched to this planner in this foundation commit.
+
+### 2026-08-14 - feat(consensus): activate Previewnet node reward block format
+
+Activates the bundle-aware block representation for Previewnet's capture window
+beginning at height `99990`, leading to the first bundle-aware payout at height
+`100000`. Version-2 blocks permanently store the canonical reward-node bundle
+cohort, bind its shared epoch and complete bytes into the block-minter signature,
+and retain that evidence during repository trimming; version-1 block bytes and
+signatures remain unchanged. Configuration validation keeps the trigger on a
+batch boundary and after legacy batch activation. This format foundation does
+not yet change which bundles a minter selects or how rewards are divided.
+
+### 2026-08-14 - feat(network): add signed online-account reward bundles
+
+Adds the canonical network representation for a reward node to bind its online
+minting accounts into one signed bundle. Every member signs the exact node,
+network, timestamp, nonce, and full sorted membership commitment, and the
+reward-node identity then approves those paired signatures, preventing relays
+from regrouping observed account proofs. New bounded request and response
+messages relay complete self-contained bundles, while strict size, count,
+ordering, duplicate, truncation, and aggregate-work checks reject malformed or
+excessive payloads before expensive verification. This protocol foundation does
+not yet select bundles for blocks or change reward accounting.
+
+### 2026-08-14 - feat(rewards): resolve duplicate node bundle members
+
+Adds the deterministic payout resolver for an account declared in more than
+one node reward bundle. The smallest original bundle retains the account, with
+unsigned node-public-key order breaking equal-size ties; losing copies are
+removed without circular re-ranking, empty bundles disappear, and results are
+canonical regardless of input order. Focused tests pin overlap, tie, duplicate,
+and order-independence behavior. Block reward processing is not yet switched to
+this resolver in this foundation commit.
+
+### 2026-08-14 - feat(minting): persist reward-node identity
+
+Adds a dedicated persistent Ed25519 identity for binding one Core runtime's
+minting keys into a signed reward bundle. The 32-byte private seed is created
+atomically at a caller-selected runtime path, kept owner-only where supported,
+and reused across restarts; corrupt, unreadable, non-regular, or symlinked
+identity paths fail closed instead of silently rotating the node's reward
+identity. Focused tests cover creation, concurrent convergence, permissions,
+copying, signing, and failure cleanup. The identity is not yet used by block
+consensus in this foundation commit.
+
+### 2026-08-14 - docs(consensus): specify Previewnet node reward bundles
+
+Records the approved Previewnet design for grouping every eligible minting key
+on one Core instance into one node reward allocation, while allowing separate
+Core instances to remain independent. It specifies persistent signed bundle
+identity, deterministic duplicate-account handling, level-bin and batch reward
+arithmetic, exact orphan symmetry, and the first bundle-aware payout at height
+`100000` with capture beginning at `99990`. Implementation and activation will
+ship together; if acceptance or rollout cannot finish before the capture
+boundary, the payout height must be moved to a later batch boundary. This entry
+does not claim release or deployment.
+
 ### 2026-08-14 - docs: complete ultra-review configuration coherence
 
 Records completion of the generic-versus-Preview configuration repair. Bare

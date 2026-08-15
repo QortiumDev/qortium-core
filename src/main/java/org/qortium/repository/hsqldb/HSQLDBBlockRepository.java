@@ -486,6 +486,7 @@ public class HSQLDBBlockRepository implements BlockRepository {
 		// Limit updates to reduce CPU and memory load.
 		String sql = "UPDATE Blocks SET online_accounts_signatures = NULL "
 				+ "WHERE online_accounts_signatures IS NOT NULL "
+				+ "AND version = 1 "
 				+ "AND height BETWEEN ? AND ?";
 
 		try {

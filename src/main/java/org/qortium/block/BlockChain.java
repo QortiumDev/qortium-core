@@ -61,6 +61,7 @@ public class BlockChain {
 	private static final String ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER = "onlineAccountsSignatureV2Height";
 	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
 	private static final String BLOCK_REWARD_BATCH_START_TRIGGER = "blockRewardBatchStartHeight";
+	private static final String ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER = "onlineNodeRewardBundlesPayoutHeight";
 	private static final String DEV_GROUP_APPROVAL_SPLIT_TRIGGER = "devGroupApprovalSplitHeight";
 	private static final String DEPLOY_AT_WORKING_ASSET_TRIGGER = "deployAtWorkingAssetHeight";
 	private static final String AT_PAYOUT_SOLVENCY_TRIGGER = "atPayoutSolvencyHeight";
@@ -836,6 +837,19 @@ public class BlockChain {
 		return this.blockRewardBatchAccountsBlockCount;
 	}
 
+	/** First batch-payout height that uses node reward bundles. Disabled when omitted. */
+	public long getOnlineNodeRewardBundlesPayoutHeight() {
+		return getFeatureTriggerHeight(ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER);
+	}
+
+	/** First capture-block height whose online accounts use the bundle-aware block format. */
+	public long getOnlineNodeRewardBundlesCaptureStartHeight() {
+		long payoutHeight = getOnlineNodeRewardBundlesPayoutHeight();
+		return payoutHeight == FEATURE_TRIGGER_DISABLED_HEIGHT
+				? FEATURE_TRIGGER_DISABLED_HEIGHT
+				: payoutHeight - this.blockRewardBatchAccountsBlockCount;
+	}
+
 	public int getMempowFeeAlternativeDifficulty() {
 		return this.mempowSettings.feeAlternativeDifficulty;
 	}
@@ -1377,6 +1391,8 @@ public class BlockChain {
 		if (this.blockRewardBatchAccountsBlockCount > this.blockRewardBatchSize)
 			Settings.throwValidationError("\"blockRewardBatchAccountsBlockCount\" must be less than or equal to \"blockRewardBatchSize\"");
 
+		validateOnlineNodeRewardBundlesTrigger(blockRewardBatchStartHeight);
+
 		if (this.networkId != null) {
 			this.networkId = this.networkId.trim();
 
@@ -1386,6 +1402,25 @@ public class BlockChain {
 			if (this.networkId.length() > 128)
 				Settings.throwValidationError("\"networkId\" must not be longer than 128 characters");
 		}
+	}
+
+	private void validateOnlineNodeRewardBundlesTrigger(long blockRewardBatchStartHeight) {
+		if (this.featureTriggers == null || !this.featureTriggers.containsKey(ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER))
+			return;
+
+		long payoutHeight = getOnlineNodeRewardBundlesPayoutHeight();
+		if (payoutHeight <= 0)
+			Settings.throwValidationError(String.format("\"featureTriggers.%s\" must be greater than 0",
+					ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER));
+
+		if (payoutHeight % this.blockRewardBatchSize != 0)
+			Settings.throwValidationError(String.format("\"featureTriggers.%s\" must be a multiple of \"blockRewardBatchSize\"",
+					ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER));
+
+		long captureStartHeight = payoutHeight - this.blockRewardBatchAccountsBlockCount;
+		if (captureStartHeight <= blockRewardBatchStartHeight)
+			Settings.throwValidationError(String.format("\"featureTriggers.%s\" capture window must start after \"blockRewardBatchStartHeight\"",
+					ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER));
 	}
 
 	private static byte[] decodeMessageMagic(String fieldName, String messageMagic) {

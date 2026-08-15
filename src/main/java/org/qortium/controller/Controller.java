@@ -1756,6 +1756,14 @@ public class Controller extends Thread {
 				OnlineAccountsManager.getInstance().onNetworkOnlineAccountsMessage(peer, message);
 				break;
 
+			case ONLINE_ACCOUNT_BUNDLES:
+				OnlineAccountsManager.getInstance().onNetworkOnlineAccountBundlesMessage(peer, message);
+				break;
+
+			case GET_ONLINE_ACCOUNT_BUNDLES:
+				OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountBundlesMessage(peer, message);
+				break;
+
 			case GET_FOREIGN_FEES:
 				ForeignFeesManager.getInstance().onNetworkGetForeignFeesMessage(peer, message);
 				break;
