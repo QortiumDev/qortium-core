@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(minting): persist reward identity beside active settings
+
+Moves the local reward-node identity from a working-directory-dependent path to
+the active settings directory so managed installation replacement does not
+silently rotate a node's declared reward identity. On first use, Core copies a
+valid legacy seed forward atomically with owner-only permissions while retaining
+the old file for rollback; existing, corrupt, unreadable, non-regular, and
+symbolic-link paths remain fail-closed. Qortium Home must preserve the legacy
+file before replacing an older installation, and that separate integration is
+tracked as a managed-release requirement.
+
 ### 2026-08-15 - docs: start ultra-review transport privacy tranche
 
 Starts T6 with a deliberately narrow boundary: first make the reward-node

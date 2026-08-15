@@ -61,6 +61,15 @@ public class OnlineAccountBundleManagerTests extends Common {
 		this.identityPath = this.testRoot.resolve("reward-node").resolve("identity.key");
 	}
 
+	@Test
+	public void testProductionIdentityPathUsesActiveSettingsDirectory() {
+		Path activeSettingsPath = Settings.getActiveSettingsPath();
+		Path expectedIdentityPath = activeSettingsPath.getParent()
+				.resolve("reward-node").resolve("identity.key");
+
+		assertEquals(expectedIdentityPath, OnlineAccountsManager.getRewardNodeIdentityPath());
+	}
+
 	@After
 	public void afterTest() throws Exception {
 		if (this.manager != null)

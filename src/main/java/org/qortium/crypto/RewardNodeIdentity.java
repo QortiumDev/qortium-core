@@ -55,9 +55,23 @@ public final class RewardNodeIdentity {
 	 *                     be created and atomically published
 	 */
 	public static RewardNodeIdentity loadOrCreate(Path identityPath) throws IOException {
+		return loadOrCreate(identityPath, null);
+	}
+
+	/**
+	 * Loads the identity at {@code identityPath}, copying a valid identity from
+	 * {@code legacyIdentityPath} when the authoritative path is absent.
+	 *
+	 * <p>The legacy file is deliberately retained for rollback. An existing authoritative
+	 * path always wins and is never replaced; an unsafe or malformed legacy path fails
+	 * closed instead of silently rotating the node identity.</p>
+	 */
+	public static RewardNodeIdentity loadOrCreate(Path identityPath, Path legacyIdentityPath) throws IOException {
 		Objects.requireNonNull(identityPath, "identityPath");
 
 		Path normalizedPath = identityPath.toAbsolutePath().normalize();
+		Path normalizedLegacyPath = legacyIdentityPath == null ? null
+				: legacyIdentityPath.toAbsolutePath().normalize();
 		Object jvmLock = JVM_CREATION_LOCKS.computeIfAbsent(normalizedPath, ignored -> new Object());
 
 		synchronized (jvmLock) {
@@ -80,7 +94,15 @@ public final class RewardNodeIdentity {
 				if (existingIdentity != null)
 					return existingIdentity;
 
-				return createIdentity(normalizedPath, parentPath);
+				if (normalizedLegacyPath != null && !normalizedPath.equals(normalizedLegacyPath)) {
+					byte[] legacySeed = readSeedIfPresent(normalizedLegacyPath);
+					if (legacySeed != null)
+						return createIdentity(normalizedPath, parentPath, legacySeed);
+				}
+
+				byte[] seed = new byte[SEED_LENGTH];
+				SECURE_RANDOM.nextBytes(seed);
+				return createIdentity(normalizedPath, parentPath, seed);
 			}
 		}
 	}
@@ -95,6 +117,11 @@ public final class RewardNodeIdentity {
 	}
 
 	private static RewardNodeIdentity loadIfPresent(Path identityPath) throws IOException {
+		byte[] seed = readSeedIfPresent(identityPath);
+		return seed == null ? null : new RewardNodeIdentity(seed);
+	}
+
+	private static byte[] readSeedIfPresent(Path identityPath) throws IOException {
 		if (!Files.exists(identityPath, LinkOption.NOFOLLOW_LINKS))
 			return null;
 
@@ -124,13 +151,10 @@ public final class RewardNodeIdentity {
 		}
 
 		restrictPermissions(identityPath);
-		return new RewardNodeIdentity(seed);
+		return seed;
 	}
 
-	private static RewardNodeIdentity createIdentity(Path identityPath, Path parentPath) throws IOException {
-		byte[] seed = new byte[SEED_LENGTH];
-		SECURE_RANDOM.nextBytes(seed);
-
+	private static RewardNodeIdentity createIdentity(Path identityPath, Path parentPath, byte[] seed) throws IOException {
 		Path temporaryPath = createTemporaryIdentityFile(parentPath, identityPath.getFileName().toString());
 		try {
 			try (FileChannel channel = FileChannel.open(temporaryPath, StandardOpenOption.WRITE,

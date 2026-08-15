@@ -114,7 +114,7 @@ review before any Windows distribution is treated as release-ready.
 
 ### A-04 — Reward-node identity installation persistence
 
-Status: in progress; release blocker discovered during local PR #222 rollout.
+Status: Core repair complete; Qortium Home release integration required.
 
 The reward-node identity path currently follows `Settings.userPath`, which is
 empty for the managed launcher because it supplies an absolute settings path.
@@ -124,6 +124,18 @@ rotate the identity and split one node's reward history. Before T6, move the
 authoritative path beside the active settings file, copy a valid legacy seed
 forward without deleting it for rollback, and fail closed on an unsafe or
 corrupt existing path.
+
+Core can copy the legacy file only if it still exists when the new JAR first
+starts. Qortium Home replaces its installation tree before that point, so its
+installer must preserve `install/preview/reward-node/identity.key` into the
+persistent runtime directory before replacement. That cross-repository change
+is a managed-release blocker, though it is not a blocker to this Core source
+fix or PR.
+
+Core acceptance evidence: `fix(minting): persist reward identity beside active
+settings`; migration, target-precedence, corrupt/symlink fail-closed,
+permissions, concurrent-copy, and production-path tests passed 19/19. This is
+source validation only and does not claim the Qortium Home migration has shipped.
 
 ## Compatibility Decisions
 
@@ -176,7 +188,10 @@ controls in their own repositories:
   `bootstrapHosts`, and `archiveFastReplayOnlyWhenBootstrapDisabled`;
 - `Qortium-Python-CLI/qortium_cli/tools.py` and
   `Qortium-Python-CLI/qortium_cli/tools/__init__.py` still advertise the retired
-  authenticated `GET /admin/bootstrap` action.
+  authenticated `GET /admin/bootstrap` action;
+- `qortium-home` must copy a valid legacy reward-node identity from the
+  replaceable Core install into the persistent runtime before its first Core
+  package replacement containing the A-04 fix.
 
 ## Current Work Boundary
 

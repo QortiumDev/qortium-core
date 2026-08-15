@@ -170,6 +170,104 @@ public class RewardNodeIdentityTests {
 		assertOwnerOnlyPermissionsIfSupported(copiedIdentityPath);
 	}
 
+	@Test
+	public void testLegacyIdentityCopiesForwardAndRemainsForRollback() throws Exception {
+		Path legacyIdentityPath = this.testRoot.resolve("replaceable-install")
+				.resolve("reward-node").resolve("identity.key");
+		RewardNodeIdentity legacyIdentity = RewardNodeIdentity.loadOrCreate(legacyIdentityPath);
+		byte[] legacySeed = Files.readAllBytes(legacyIdentityPath);
+
+		RewardNodeIdentity migratedIdentity = RewardNodeIdentity.loadOrCreate(this.identityPath, legacyIdentityPath);
+
+		assertArrayEquals(legacyIdentity.getPublicKey(), migratedIdentity.getPublicKey());
+		assertArrayEquals(legacySeed, Files.readAllBytes(this.identityPath));
+		assertArrayEquals("Legacy identity must remain available to an older jar",
+				legacySeed, Files.readAllBytes(legacyIdentityPath));
+		assertOwnerOnlyPermissionsIfSupported(this.identityPath);
+	}
+
+	@Test
+	public void testExistingAuthoritativeIdentityWinsOverLegacyIdentity() throws Exception {
+		RewardNodeIdentity authoritativeIdentity = RewardNodeIdentity.loadOrCreate(this.identityPath);
+		Path legacyIdentityPath = this.testRoot.resolve("replaceable-install")
+				.resolve("reward-node").resolve("identity.key");
+		RewardNodeIdentity.loadOrCreate(legacyIdentityPath);
+
+		RewardNodeIdentity reloadedIdentity = RewardNodeIdentity.loadOrCreate(this.identityPath, legacyIdentityPath);
+
+		assertArrayEquals(authoritativeIdentity.getPublicKey(), reloadedIdentity.getPublicKey());
+	}
+
+	@Test
+	public void testCorruptLegacyIdentityFailsClosedWithoutCreatingAuthoritativeIdentity() throws Exception {
+		Path legacyIdentityPath = this.testRoot.resolve("replaceable-install")
+				.resolve("reward-node").resolve("identity.key");
+		Files.createDirectories(legacyIdentityPath.getParent());
+		Files.write(legacyIdentityPath, new byte[RewardNodeIdentity.SEED_LENGTH - 1]);
+
+		try {
+			RewardNodeIdentity.loadOrCreate(this.identityPath, legacyIdentityPath);
+			fail("Expected corrupt legacy reward-node identity to fail closed");
+		} catch (IOException expected) {
+			// Expected fail-closed behavior.
+		}
+
+		assertFalse(Files.exists(this.identityPath, LinkOption.NOFOLLOW_LINKS));
+		assertEquals(RewardNodeIdentity.SEED_LENGTH - 1, Files.size(legacyIdentityPath));
+	}
+
+	@Test
+	public void testSymbolicLinkLegacyIdentityFailsClosedWithoutCreatingAuthoritativeIdentity() throws Exception {
+		Path realLegacyPath = this.testRoot.resolve("real-legacy-identity.key");
+		Files.write(realLegacyPath, new byte[RewardNodeIdentity.SEED_LENGTH]);
+		Path legacyIdentityPath = this.testRoot.resolve("replaceable-install")
+				.resolve("reward-node").resolve("identity.key");
+		Files.createDirectories(legacyIdentityPath.getParent());
+		Files.createSymbolicLink(legacyIdentityPath, realLegacyPath);
+
+		try {
+			RewardNodeIdentity.loadOrCreate(this.identityPath, legacyIdentityPath);
+			fail("Expected symbolic-link legacy reward-node identity to fail closed");
+		} catch (IOException expected) {
+			// Expected fail-closed behavior.
+		}
+
+		assertFalse(Files.exists(this.identityPath, LinkOption.NOFOLLOW_LINKS));
+		assertTrue(Files.isSymbolicLink(legacyIdentityPath));
+	}
+
+	@Test
+	public void testConcurrentLegacyMigrationConvergesOnOneIdentity() throws Exception {
+		Path legacyIdentityPath = this.testRoot.resolve("replaceable-install")
+				.resolve("reward-node").resolve("identity.key");
+		byte[] expectedPublicKey = RewardNodeIdentity.loadOrCreate(legacyIdentityPath).getPublicKey();
+		int workerCount = 8;
+		ExecutorService executor = Executors.newFixedThreadPool(workerCount);
+		CountDownLatch ready = new CountDownLatch(workerCount);
+		CountDownLatch start = new CountDownLatch(1);
+		List<Future<byte[]>> futures = new ArrayList<>();
+
+		try {
+			for (int i = 0; i < workerCount; ++i) {
+				futures.add(executor.submit(() -> {
+					ready.countDown();
+					start.await();
+					return RewardNodeIdentity.loadOrCreate(this.identityPath, legacyIdentityPath)
+							.getPublicKey();
+				}));
+			}
+			assertTrue(ready.await(10, TimeUnit.SECONDS));
+			start.countDown();
+			for (Future<byte[]> future : futures)
+				assertArrayEquals(expectedPublicKey, future.get(10, TimeUnit.SECONDS));
+		} finally {
+			executor.shutdownNow();
+		}
+
+		assertArrayEquals(Files.readAllBytes(legacyIdentityPath), Files.readAllBytes(this.identityPath));
+		assertNoTemporaryIdentityFiles();
+	}
+
 	private void assertLoadFails(Path path) throws Exception {
 		try {
 			RewardNodeIdentity.loadOrCreate(path);
