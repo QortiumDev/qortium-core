@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: complete ultra-review transport privacy
+
+Records T6 complete in Core source and local artifact validation. QDN file-list
+requests, responses, ingress, and relays now scope addresses to the immediate
+transport; HELLO routing identities follow the chain/data by IP/I2P matrix; and
+online-account identity traffic remains on the chain layer. The focused suite
+passed 89/89 and the clean package passed 3,077 tests with 67 skips. This is not
+a release or deployment: mixed-version live testing and the Qortium Home legacy
+identity migration remain release conditions.
+
 ### 2026-08-15 - test(qdn): cover I2P-to-IP relay privacy
 
 Pins the original disclosure direction through the production response relay:
@@ -95,10 +105,11 @@ tracked as a managed-release requirement.
 ### 2026-08-15 - docs: start ultra-review transport privacy tranche
 
 Starts T6 with a deliberately narrow boundary: first make the reward-node
-identity survive managed Core installation replacement, then scope QDN response
-addresses and HELLO identity capabilities by both connection transport and
-network layer. The work does not alter bundle signatures, reward arithmetic,
-chain identity validation, peer admission, or archive consensus rules.
+identity survive managed Core installation replacement, then scope QDN
+file-list requests, responses, ingress, relays, and HELLO identity capabilities
+by both connection transport and network layer. The work does not alter bundle
+signatures, reward arithmetic, chain identity validation, peer admission, or
+archive consensus rules.
 
 ### 2026-08-14 - docs(consensus): complete node reward bundle source validation
 
