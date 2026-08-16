@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete copy-isolated local archive export
+
+Completes A-02 after focused and clean full-suite validation. Local archive
+creation now sanitizes a separately opened repository snapshot, leaves the live
+repository and block archive unchanged, and restores any previous completed
+archive and checksum if publication fails partway through. The packaged Core
+contains the retained local exporter but neither retired hosted importer. This
+is source and local-artifact completion only; no release or deployment is
+claimed.
+
 ### 2026-08-16 - fix(bootstrap): isolate local archive export from live state
 
 Creates local repository archives from a separately opened HSQLDB snapshot, so

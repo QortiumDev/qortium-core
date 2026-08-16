@@ -99,15 +99,18 @@ the atomic adoption path; and `git diff --check` passed.
 
 ### A-02 — Local archive export copy isolation
 
-Status: in progress; separately approved before the Core 1.7.0 prerelease.
+Status: complete in source and local validation; not released or deployed.
 
-`Bootstrap.create()` still prepares its backup by temporarily removing
-minting/trade-bot rows and replacing learned peers with initial peers in the live
-repository under the blockchain lock. T4 makes restoration failures explicit,
-guarantees unlock, always attempts operation-directory cleanup, and verifies
-block, archive, and minting-account preservation, but it does not redesign
-export against an isolated repository copy or restore the prior learned-peer
-set.
+`Bootstrap.create()` now captures an HSQLDB snapshot and block-archive copy
+under the blockchain lock, then opens and sanitizes only that private copy.
+Minting accounts, trade-bot rows, learned peers, the live tip, and live archive
+remain unchanged throughout export. The completed archive and checksum are
+published from a unique same-filesystem staging directory, and a failure after
+archive publication restores any prior completed archive and checksum. Focused
+bootstrap, import/export, API, and archive-fast-sync tests passed 48/48; the
+clean serialized full suite passed 3,120 tests with 67 skips and no failures or
+errors; the packaged JAR contains the local exporter and neither retired hosted
+importer class; and `git diff --check` passed.
 
 ### A-03 — Windows developer-reference API exposure
 
@@ -207,14 +210,18 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-A-02 copy-isolated local archive export is the only active implementation
-tranche. It may copy the live HSQLDB repository and archive under the blockchain
-lock, sanitize only that private copy, and atomically publish a completed local
-archive plus checksum. It must not mutate live minting, trade-bot, peer, block,
-or archive state; delete or replace an existing completed output before the new
-one is ready; or restore hosted acquisition/import/replacement behavior. A-03
-Windows developer-reference API hardening follows as a separate Core 1.7.0
-tranche. A-04 Home integration remains outside this Core-only boundary.
+No implementation tranche is active. A-02 is complete in source and local
+validation but is not released or deployed. A-03 Windows developer-reference
+API hardening is the next Core 1.7.0 tranche. A-04 Home integration remains
+outside this Core-only boundary.
+
+A-02 was completed by `fix(bootstrap): isolate local archive export from live
+state`, following the tracked start commit. The focused bootstrap,
+import/export, API, and archive-fast-sync matrix passed 48/48; the clean
+serialized full suite passed 3,120 tests with 67 skips and no failures or
+errors; the packaged JAR contains the retained local exporter and neither
+retired hosted importer class; and `git diff --check` passed. These results do
+not claim a release or deployment.
 
 A-01 was completed by `fix(sync): adopt peer forks atomically`, following the
 tracked start commit. The focused synchronization, block, and orphan matrix
