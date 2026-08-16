@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.data.network.KnownPeerDiagnostics;
 import org.qortium.data.network.PeerData;
+import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
 
@@ -207,6 +208,7 @@ public class NetworkDataCapacityTests extends Common {
 		Peer peer = new CapacityTestPeer(address);
 		peer.setPeersPublicKey(publicKey);
 		peer.setPeersNodeId("node-" + address);
+		peer.setPeersCapabilities(new PeerCapabilities(Handshake.buildHelloCapabilities(Peer.NETWORKDATA, false)));
 		return peer;
 	}
 

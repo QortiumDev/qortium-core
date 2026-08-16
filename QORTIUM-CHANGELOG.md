@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - test(network): make capacity peers handshake-compatible
+
+Gives the data-capacity test peers the real chain and feature-schedule
+capabilities that a completed HELLO supplies. This keeps the capacity fixture
+production-shaped now that handshake completion performs a final local-height
+compatibility check before beginning data work.
+
 ### 2026-08-15 - test(network): cover trigger schedule HELLO wire
 
 Round-trips each chain/data and IP/I2P HELLO through the production message
