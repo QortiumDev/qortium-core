@@ -64,6 +64,32 @@ public class TlsKeystoreFileTests {
 	}
 
 	@Test
+	public void testTemporaryFileIsOwnerOnlyBeforeKeystoreBytesAreWritten() throws Exception {
+		Path keystorePath = this.testDirectory.resolve("prewrite-keystore.p12");
+		byte[] keystoreBytes = encodedKeystore(emptyKeystore());
+		String temporaryPrefix = "." + keystorePath.getFileName() + ".";
+
+		TlsKeystoreFile.writeAtomically(keystorePath, outputStream -> {
+			Path temporaryPath;
+			try (Stream<Path> paths = Files.list(this.testDirectory)) {
+				var matchingPaths = paths
+						.filter(path -> path.getFileName().toString().startsWith(temporaryPrefix))
+						.toList();
+				assertEquals(1, matchingPaths.size());
+				temporaryPath = matchingPaths.get(0);
+			}
+
+			assertOwnerOnly(temporaryPath);
+			assertEquals(0L, Files.size(temporaryPath));
+			outputStream.write(keystoreBytes);
+		});
+
+		assertOwnerOnly(keystorePath);
+		assertEquals(0, loadKeystore(keystorePath).size());
+		assertNoTemporaryFiles(keystorePath);
+	}
+
+	@Test
 	public void testExistingBroadKeystoreIsRepairedWithoutChangingContents() throws Exception {
 		Path keystorePath = this.testDirectory.resolve("existing-keystore.p12");
 		byte[] originalBytes = encodedKeystore(emptyKeystore());
@@ -73,6 +99,8 @@ public class TlsKeystoreFileTests {
 				PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 		if (posixView != null)
 			Files.setPosixFilePermissions(keystorePath, PosixFilePermissions.fromString("rw-rw----"));
+		if (posixView != null)
+			assertEquals(PosixFilePermissions.fromString("rw-rw----"), posixView.readAttributes().permissions());
 
 		SslUtils.ensureKeystorePermissions(keystorePath);
 

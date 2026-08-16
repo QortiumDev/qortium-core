@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - test(api): prove keystore is restricted before writing
+
+Adds a write-time assertion that the unique sibling temporary file already has
+owner-only permissions and contains zero bytes before the PKCS12 writer receives
+it. The existing-file migration test also proves its deliberate `0660` fixture
+before repair, closing false positives that checked only the final installed
+file.
+
 ### 2026-08-16 - security(api): restrict TLS keystore permissions
 
 Persists the shared API TLS PKCS12 keystore through an owner-only temporary
