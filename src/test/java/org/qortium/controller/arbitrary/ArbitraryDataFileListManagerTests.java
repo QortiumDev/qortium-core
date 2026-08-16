@@ -15,6 +15,7 @@ import org.qortium.data.transaction.RegisterNameTransactionData;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerAddress;
 import org.qortium.network.message.ArbitraryDataFileListMessage;
+import org.qortium.network.message.GetArbitraryDataFileListMessage;
 import org.qortium.network.message.Message;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -45,6 +46,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ArbitraryDataFileListManagerTests extends Common {
+	private static final String I2P_ADDRESS =
+			"abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
 
     private ArbitraryDataFileListManager fileListManager;
     private ArbitraryDataFileManager fileManager;
@@ -62,6 +65,99 @@ public class ArbitraryDataFileListManagerTests extends Common {
     public void afterTest() throws Exception {
         clearRelayState();
         Common.useDefaultSettings();
+    }
+
+    @Test
+    public void testAdvertisedAddressSelectionIsScopedToRecipientTransport() {
+        assertEquals("198.51.100.10:24894",
+                ArbitraryDataFileListManager.selectAdvertisedDataAddress(false,
+                        "198.51.100.10", true, 24894, I2P_ADDRESS));
+        assertNull(ArbitraryDataFileListManager.selectAdvertisedDataAddress(false,
+                "198.51.100.10", false, 24894, I2P_ADDRESS));
+        assertEquals(I2P_ADDRESS,
+                ArbitraryDataFileListManager.selectAdvertisedDataAddress(true,
+                        "198.51.100.10", true, 24894, I2P_ADDRESS));
+        assertNull(ArbitraryDataFileListManager.selectAdvertisedDataAddress(true,
+                "198.51.100.10", true, 24894, null));
+    }
+
+    @Test
+    public void testConfiguredExternalIpIsAvailableBeforePeerObservations() throws Exception {
+        String previousExternalIp = (String) FieldUtils.readField(
+                org.qortium.network.NetworkData.getInstance(), "ourExternalIpAddress", true);
+        FieldUtils.writeField(Settings.getInstance(), "ourExternalIpAddress", "198.51.100.44", true);
+        FieldUtils.writeField(org.qortium.network.NetworkData.getInstance(), "ourExternalIpAddress", null, true);
+        Object reachability = FieldUtils.readField(org.qortium.network.NetworkData.getInstance(),
+                "inboundReachability", true);
+        boolean previousListenSocketAvailable = (boolean) FieldUtils.readField(reachability,
+                "listenSocketAvailable", true);
+        FieldUtils.writeField(reachability, "listenSocketAvailable", true, true);
+        try {
+            assertEquals("198.51.100.44:14894", this.fileListManager.getAdvertisedDataAddress(
+                    new CapturingPeer("198.51.100.20:14894")));
+        } finally {
+            FieldUtils.writeField(org.qortium.network.NetworkData.getInstance(), "ourExternalIpAddress",
+                    previousExternalIp, true);
+            FieldUtils.writeField(reachability, "listenSocketAvailable", previousListenSocketAvailable, true);
+        }
+    }
+
+    @Test
+    public void testRequestAndResponseForwardingScrubCrossTransportAddresses() throws Exception {
+        CapturingPeer ipPeer = new CapturingPeer("198.51.100.20:24894");
+        CapturingPeer i2pPeer = new CapturingPeer(I2P_ADDRESS);
+        byte[] signature = new byte[64];
+        byte[] hash = new byte[32];
+        List<byte[]> hashes = List.of(hash);
+
+        GetArbitraryDataFileListMessage sameTransportRequest =
+                ArbitraryDataFileListManager.buildTransportScopedFileListRequest(signature, hashes,
+                        100L, 1, "198.51.100.10:24894", ipPeer, 123);
+		sameTransportRequest = parseFileListRequest(sameTransportRequest);
+        assertEquals("198.51.100.10:24894", sameTransportRequest.getRequestingPeer());
+        assertEquals(123, sameTransportRequest.getId());
+
+        GetArbitraryDataFileListMessage crossTransportRequest =
+                ArbitraryDataFileListManager.buildTransportScopedFileListRequest(signature, hashes,
+                        100L, 1, "198.51.100.10:24894", i2pPeer, 123);
+        crossTransportRequest = parseFileListRequest(crossTransportRequest);
+        assertNull(crossTransportRequest.getRequestingPeer());
+
+		GetArbitraryDataFileListMessage i2pToIpRequest =
+				ArbitraryDataFileListManager.buildTransportScopedFileListRequest(signature, hashes,
+						100L, 1, I2P_ADDRESS, ipPeer, 125);
+		i2pToIpRequest = parseFileListRequest(i2pToIpRequest);
+		assertNull(i2pToIpRequest.getRequestingPeer());
+		assertEquals(125, i2pToIpRequest.getId());
+
+        ArbitraryDataFileListMessage relayCapable = new ArbitraryDataFileListMessage(signature, hashes,
+                100L, 1, "198.51.100.10:24894", "node", true, true);
+        relayCapable.setId(123);
+		relayCapable = parseFileList(relayCapable);
+        ArbitraryDataFileListMessage downgraded =
+                ArbitraryDataFileListManager.buildTransportScopedForwardedFileList(
+                        relayCapable, ipPeer, i2pPeer, 2);
+        assertNotNull(downgraded);
+		downgraded = parseFileList(downgraded);
+        assertNull(downgraded.getPeerAddress());
+        assertFalse(downgraded.isDirectConnectable());
+        assertTrue(downgraded.isRelayPossible());
+        assertEquals(Integer.valueOf(2), downgraded.getRequestHops());
+        assertEquals(123, downgraded.getId());
+
+        ArbitraryDataFileListMessage sameTransport =
+                ArbitraryDataFileListManager.buildTransportScopedForwardedFileList(
+                        relayCapable, ipPeer, new CapturingPeer("198.51.100.30:24894"), 2);
+		sameTransport = parseFileList(sameTransport);
+        assertEquals("198.51.100.10:24894", sameTransport.getPeerAddress());
+        assertTrue(sameTransport.isDirectConnectable());
+
+        ArbitraryDataFileListMessage directOnly = new ArbitraryDataFileListMessage(signature, hashes,
+                100L, 1, "198.51.100.10:24894", "node", false, true);
+		directOnly.setId(124);
+		directOnly = parseFileList(directOnly);
+        assertNull(ArbitraryDataFileListManager.buildTransportScopedForwardedFileList(
+                directOnly, ipPeer, i2pPeer, 2));
     }
 
     @Test
@@ -132,6 +228,79 @@ public class ArbitraryDataFileListManagerTests extends Common {
 
         assertEquals(1, requester.sentMessages.size());
         assertEquals(1, localResponseCount());
+
+		// Exercise the production response-forwarding path across transports. A relay-capable IP
+		// holder forwarded to an I2P requester must lose the IP address and direct flag while retaining
+		// its request identity, hashes, hop count, and relay path.
+		clearRelayState();
+		int crossTransportRequestId = 41005;
+		CapturingPeer i2pRequester = new CapturingPeer(I2P_ADDRESS);
+		this.fileListManager.arbitraryDataFileListRequests.put(crossTransportRequestId,
+				new Triple<>(signature58, i2pRequester, now));
+		ArbitraryDataFileListMessage crossTransportOutgoing = new ArbitraryDataFileListMessage(
+				signature, hashes, now, 1, "127.0.0.1:9101", "holder-1", true, true);
+		crossTransportOutgoing.setId(crossTransportRequestId);
+		this.fileListManager.processNetworkArbitraryDataFileListMessages(
+				List.of(new PeerMessage(firstHolder, parseFileList(crossTransportOutgoing))));
+
+		assertEquals(1, i2pRequester.sentMessages.size());
+		ArbitraryDataFileListMessage crossTransportForward =
+				parseFileList(i2pRequester.sentMessages.get(0));
+		assertEquals(crossTransportRequestId, crossTransportForward.getId());
+		assertArrayEquals(signature, crossTransportForward.getSignature());
+		assertArrayEquals(advertisedHash, crossTransportForward.getHashes().get(0));
+		assertEquals(Integer.valueOf(2), crossTransportForward.getRequestHops());
+		assertNull(crossTransportForward.getPeerAddress());
+		assertFalse(crossTransportForward.isDirectConnectable());
+		assertTrue(crossTransportForward.isRelayPossible());
+
+		// A cross-transport direct-only response has no usable route and must not be forwarded.
+		clearRelayState();
+		i2pRequester.sentMessages.clear();
+		int crossTransportDirectOnlyId = 41006;
+		this.fileListManager.arbitraryDataFileListRequests.put(crossTransportDirectOnlyId,
+				new Triple<>(signature58, i2pRequester, now));
+		ArbitraryDataFileListMessage crossTransportDirectOnly = new ArbitraryDataFileListMessage(
+				signature, hashes, now, 1, "127.0.0.1:9101", "holder-1", false, true);
+		crossTransportDirectOnly.setId(crossTransportDirectOnlyId);
+		this.fileListManager.processNetworkArbitraryDataFileListMessages(
+				List.of(new PeerMessage(firstHolder, parseFileList(crossTransportDirectOnly))));
+		assertTrue(i2pRequester.sentMessages.isEmpty());
+
+		// Mirror the production path in the original privacy finding's direction: an I2P holder
+		// forwarded to a clearnet requester must not disclose its data-layer destination.
+		clearRelayState();
+		CapturingPeer ipRequester = new CapturingPeer("127.0.0.1:9107");
+		CapturingPeer i2pHolder = new CapturingPeer(I2P_ADDRESS);
+		int i2pToIpRequestId = 41007;
+		this.fileListManager.arbitraryDataFileListRequests.put(i2pToIpRequestId,
+				new Triple<>(signature58, ipRequester, now));
+		ArbitraryDataFileListMessage i2pToIpOutgoing = new ArbitraryDataFileListMessage(
+				signature, hashes, now, 1, I2P_ADDRESS, "holder-i2p", true, true);
+		i2pToIpOutgoing.setId(i2pToIpRequestId);
+		this.fileListManager.processNetworkArbitraryDataFileListMessages(
+				List.of(new PeerMessage(i2pHolder, parseFileList(i2pToIpOutgoing))));
+
+		assertEquals(1, ipRequester.sentMessages.size());
+		ArbitraryDataFileListMessage i2pToIpForward = parseFileList(ipRequester.sentMessages.get(0));
+		assertEquals(i2pToIpRequestId, i2pToIpForward.getId());
+		assertArrayEquals(advertisedHash, i2pToIpForward.getHashes().get(0));
+		assertEquals(Integer.valueOf(2), i2pToIpForward.getRequestHops());
+		assertNull(i2pToIpForward.getPeerAddress());
+		assertFalse(i2pToIpForward.isDirectConnectable());
+		assertTrue(i2pToIpForward.isRelayPossible());
+
+		clearRelayState();
+		ipRequester.sentMessages.clear();
+		int i2pToIpDirectOnlyId = 41008;
+		this.fileListManager.arbitraryDataFileListRequests.put(i2pToIpDirectOnlyId,
+				new Triple<>(signature58, ipRequester, now));
+		ArbitraryDataFileListMessage i2pToIpDirectOnly = new ArbitraryDataFileListMessage(
+				signature, hashes, now, 1, I2P_ADDRESS, "holder-i2p", false, true);
+		i2pToIpDirectOnly.setId(i2pToIpDirectOnlyId);
+		this.fileListManager.processNetworkArbitraryDataFileListMessages(
+				List.of(new PeerMessage(i2pHolder, parseFileList(i2pToIpDirectOnly))));
+		assertTrue(ipRequester.sentMessages.isEmpty());
     }
 
     @Test
@@ -258,6 +427,12 @@ public class ArbitraryDataFileListManagerTests extends Common {
         assertNotNull(parsed);
         return (ArbitraryDataFileListMessage) parsed;
     }
+
+	private static GetArbitraryDataFileListMessage parseFileListRequest(Message message) throws Exception {
+		Message parsed = Message.fromByteBuffer(ByteBuffer.wrap(message.toBytes()));
+		assertNotNull(parsed);
+		return (GetArbitraryDataFileListMessage) parsed;
+	}
 
     @SuppressWarnings("unchecked")
     private List<ArbitraryFileListResponseInfo> localResponses() throws IllegalAccessException {

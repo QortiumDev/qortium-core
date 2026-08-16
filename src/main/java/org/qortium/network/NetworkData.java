@@ -429,9 +429,9 @@ public class NetworkData {
     }
 
     private boolean startI2PDataFallbackAttempt(Settings settings) {
-        // No session-up callback: the I2P data destination (I2P_QDN) is never advertised in a HELLO, so
-        // there is nothing to re-advertise when the data SAM session comes up. The I2P data layer is
-        // bootstrapped via initialDataPeers plus data-layer gossip instead.
+        // No session-up callback is needed here. A data-layer I2P HELLO can only be sent over an
+        // already-established I2P data connection, so its initial HELLO sees the live destination.
+        // Other data-peer discovery remains transport-scoped through initialDataPeers and gossip.
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
                 nextI2PDataSessionId(), settings.getI2PDataKeyPath(), null, this::onI2PDataSessionDown);
         ServerSocketChannel forwardServerChannel = null;
@@ -1272,15 +1272,11 @@ public class NetworkData {
     }
 
     private List<PeerData> buildQdnPeerDataFromNetworkPeer(Peer networkPeer, Long addedWhen, String addedBy) {
-        List<PeerData> qdnPeers = new ArrayList<>(2);
+        List<PeerData> qdnPeers = new ArrayList<>(1);
 
         PeerAddress directAddress = getDirectQdnPeerAddress(networkPeer);
         if (directAddress != null)
             qdnPeers.add(new PeerData(directAddress, addedWhen, addedBy));
-
-        PeerAddress i2pAddress = getI2PQdnPeerAddress(networkPeer);
-        if (i2pAddress != null)
-            qdnPeers.add(new PeerData(i2pAddress, addedWhen, addedBy));
 
         return qdnPeers;
     }
@@ -1314,37 +1310,6 @@ public class NetworkData {
         }
 
         return ((Number) qdnCapability).intValue();
-    }
-
-    private PeerAddress getI2PQdnPeerAddress(Peer networkPeer) {
-        if (!Settings.getInstance().isI2PEnabled())
-            return null;
-
-        Object i2pCapability = networkPeer.getPeerCapability(Handshake.I2P_QDN_CAPABILITY);
-        if (i2pCapability == null)
-            return null;
-
-        if (!(i2pCapability instanceof String)) {
-            LOGGER.warn("Peer {} has invalid I2P_QDN capability type: {}, skipping I2P QDN address",
-                    networkPeer.getPeerData().getAddress(), i2pCapability.getClass());
-            return null;
-        }
-
-        try {
-            PeerAddress i2pAddress = PeerAddress.fromString(((String) i2pCapability).trim());
-            if (!i2pAddress.isI2P())
-                throw new IllegalArgumentException("I2P_QDN was not an I2P address");
-            if (isLocalI2PAddress(i2pAddress)) {
-                LOGGER.debug("Peer {} advertised our own I2P QDN address {}, skipping",
-                        networkPeer.getPeerData().getAddress(), i2pAddress);
-                return null;
-            }
-            return i2pAddress;
-        } catch (IllegalArgumentException e) {
-            LOGGER.debug("Peer {} advertised invalid I2P_QDN capability: {}",
-                    networkPeer.getPeerData().getAddress(), e.getMessage());
-            return null;
-        }
     }
 
     private int addKnownPeersIfMissing(List<PeerData> candidatePeers, String nodeId) {
@@ -2684,9 +2649,8 @@ public class NetworkData {
         switch (message.getType()) {
 
             case HELLO:
-                // A HELLO after completion is a capability refresh (the peer's slow I2P session just came
-                // up and it is now advertising its I2P_QDN destination). Merge it instead of treating it as
-                // a protocol error; only disconnect if its chain identity is incompatible.
+				// A HELLO after completion is a capability refresh. Apply the same layer/transport sanitizer
+				// as the initial HELLO and disconnect only if its chain identity is incompatible.
                 if (!Handshake.applyPostHandshakeHello(peer, (HelloMessage) message))
                     peer.disconnect("incompatible post-handshake HELLO");
                 return;
@@ -3257,7 +3221,7 @@ public class NetworkData {
 
         List<PeerData> qdnPeers = buildQdnPeerDataFromNetworkPeer(p, System.currentTimeMillis(), "INIT");
         if (qdnPeers.isEmpty()) {
-            LOGGER.debug("Peer {} does not advertise a usable QDN or I2P_QDN capability, skipping NetworkData registration",
+            LOGGER.debug("Chain peer {} does not advertise a usable direct QDN capability, skipping NetworkData registration",
                     p.getPeerData().getAddress());
             return;
         }

@@ -34,6 +34,83 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: complete ultra-review transport privacy
+
+Records T6 complete in Core source and local artifact validation. QDN file-list
+requests, responses, ingress, and relays now scope addresses to the immediate
+transport; HELLO routing identities follow the chain/data by IP/I2P matrix; and
+online-account identity traffic remains on the chain layer. The focused suite
+passed 89/89 and the clean package passed 3,077 tests with 67 skips. This is not
+a release or deployment: mixed-version live testing and the Qortium Home legacy
+identity migration remain release conditions.
+
+### 2026-08-15 - test(qdn): cover I2P-to-IP relay privacy
+
+Pins the original disclosure direction through the production response relay:
+an I2P holder forwarded to a clearnet requester becomes addressless relay-only,
+while an unusable direct-only reply is dropped. The mirrored request assertion
+and isolated HELLO fixture keep the privacy matrix deterministic across tests.
+
+### 2026-08-15 - test(network): close T6 privacy acceptance matrix
+
+Exercises reward-identity migration through the production manager, initial
+HELLO sanitization for all layer and transport combinations, and all four
+chain-only online-identity message routes. Clarifies the compatibility comments
+for data-layer I2P HELLO capabilities and chain-layer refreshes.
+
+### 2026-08-15 - fix(qdn): preserve configured direct reachability
+
+Uses the configured external IP for transport-scoped QDN advertisements before
+peer observations populate the data network's runtime address. Production relay
+tests also pin that cross-transport replies discard their direct route and that
+direct-only replies with no usable route are dropped.
+
+### 2026-08-15 - fix(network): keep minting identity traffic on chain layer
+
+Ignores legacy online-account and node reward-bundle messages received through
+the QDN data overlay. These identities remain available through the chain
+network where they are produced and validated, preventing a data connection
+from being used as a second cross-layer identity query path.
+
+### 2026-08-15 - fix(qdn): scope file-list addresses to recipient transport
+
+Builds QDN file-list requests and responses separately for each immediate peer.
+Clearnet peers receive a direct address only when the data port is provably
+reachable; I2P peers receive only the live data-layer destination. Incoming and
+relayed addresses are parsed and retained only across the same transport,
+cross-transport direct-and-relay replies become relay-only, and unusable
+direct-only replies are dropped. Message IDs and wire formats remain unchanged.
+
+### 2026-08-15 - fix(network): scope HELLO identities by layer and transport
+
+Builds and sanitizes HELLO routing capabilities from both the connection layer
+and its transport. Chain/IP peers receive only the direct QDN port, chain/I2P
+peers only the chain I2P destination, data/IP peers no routing identity, and
+data/I2P peers only the data I2P destination. All four retain the chain identity
+triple, while legacy or malicious cross-layer address capabilities are stripped
+without disconnecting the peer. Chain connections can no longer seed data-layer
+I2P addresses.
+
+### 2026-08-15 - fix(minting): persist reward identity beside active settings
+
+Moves the local reward-node identity from a working-directory-dependent path to
+the active settings directory so managed installation replacement does not
+silently rotate a node's declared reward identity. On first use, Core copies a
+valid legacy seed forward atomically with owner-only permissions while retaining
+the old file for rollback; existing, corrupt, unreadable, non-regular, and
+symbolic-link paths remain fail-closed. Qortium Home must preserve the legacy
+file before replacing an older installation, and that separate integration is
+tracked as a managed-release requirement.
+
+### 2026-08-15 - docs: start ultra-review transport privacy tranche
+
+Starts T6 with a deliberately narrow boundary: first make the reward-node
+identity survive managed Core installation replacement, then scope QDN
+file-list requests, responses, ingress, relays, and HELLO identity capabilities
+by both connection transport and network layer. The work does not alter bundle
+signatures, reward arithmetic, chain identity validation, peer admission, or
+archive consensus rules.
+
 ### 2026-08-14 - docs(consensus): complete node reward bundle source validation
 
 Records the completed local acceptance gate for Previewnet node reward bundles.

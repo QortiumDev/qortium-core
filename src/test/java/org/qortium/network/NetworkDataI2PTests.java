@@ -44,7 +44,7 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
-	public void testAddPeerLearnsDirectAndI2PQdnAddresses() throws Exception {
+	public void testAddPeerLearnsOnlyDirectAddressFromChainLayer() throws Exception {
 		Map<String, Object> capabilities = new HashMap<>();
 		capabilities.put("QDN", 24894);
 		capabilities.put(Handshake.I2P_QDN_CAPABILITY, B32);
@@ -53,7 +53,7 @@ public class NetworkDataI2PTests extends Common {
 
 		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
 		assertTrue(containsAddress(knownPeers, "198.51.100.10:24894"));
-		assertTrue(containsAddress(knownPeers, B32 + ":0"));
+		assertFalse(containsAddress(knownPeers, B32 + ":0"));
 	}
 
 	@Test

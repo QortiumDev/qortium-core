@@ -1,6 +1,7 @@
 package org.qortium.controller;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,9 +16,11 @@ import org.qortium.data.network.PeerData;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerAddress;
 import org.qortium.network.message.GetOnlineAccountBundlesMessage;
+import org.qortium.network.message.GetOnlineAccountsMessage;
 import org.qortium.network.message.Message;
 import org.qortium.network.message.MessageType;
 import org.qortium.network.message.OnlineAccountBundlesMessage;
+import org.qortium.network.message.OnlineAccountsMessage;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.test.common.Common;
@@ -59,6 +62,43 @@ public class OnlineAccountBundleManagerTests extends Common {
 		this.manager.removeAllOnlineAccounts();
 		this.testRoot = Files.createTempDirectory("online-account-bundle-manager");
 		this.identityPath = this.testRoot.resolve("reward-node").resolve("identity.key");
+	}
+
+	@Test
+	public void testProductionIdentityPathUsesActiveSettingsDirectory() {
+		Path activeSettingsPath = Settings.getActiveSettingsPath();
+		Path expectedIdentityPath = activeSettingsPath.getParent()
+				.resolve("reward-node").resolve("identity.key");
+
+		assertEquals(expectedIdentityPath, OnlineAccountsManager.getRewardNodeIdentityPath());
+	}
+
+	@Test
+	public void testManagerMigratesLegacyIdentityAndSurvivesInstallReplacement() throws Exception {
+		configureThreeMintingAccounts();
+		Path runtimeIdentity = this.testRoot.resolve("runtime").resolve("reward-node")
+				.resolve("identity.key");
+		Path legacyIdentity = this.testRoot.resolve("replaceable-install").resolve("reward-node")
+				.resolve("identity.key");
+		byte[] expectedNodePublicKey = RewardNodeIdentity.loadOrCreate(legacyIdentity).getPublicKey();
+		long firstTimestamp = OnlineAccountsManager.getCurrentOnlineAccountTimestamp();
+
+		assertTrue(this.manager.computeOurAccountsForTimestamp(firstTimestamp,
+				runtimeIdentity, legacyIdentity));
+		OnlineAccountBundleData firstBundle = this.manager.getOnlineAccountBundles(firstTimestamp,
+				nextBlockHeight()).get(0);
+		assertArrayEquals(expectedNodePublicKey, firstBundle.getNodePublicKey());
+		assertArrayEquals(Files.readAllBytes(legacyIdentity), Files.readAllBytes(runtimeIdentity));
+
+		FieldUtils.writeField(this.manager, "rewardNodeIdentity", null, true);
+		FieldUtils.writeField(this.manager, "rewardNodeIdentityPath", null, true);
+		FileUtils.deleteDirectory(this.testRoot.resolve("replaceable-install").toFile());
+		long secondTimestamp = firstTimestamp + OnlineAccountsManager.getOnlineTimestampModulus();
+		assertTrue(this.manager.computeOurAccountsForTimestamp(secondTimestamp,
+				runtimeIdentity, legacyIdentity));
+		OnlineAccountBundleData secondBundle = this.manager.getOnlineAccountBundles(secondTimestamp,
+				nextBlockHeight()).get(0);
+		assertArrayEquals(expectedNodePublicKey, secondBundle.getNodePublicKey());
 	}
 
 	@After
@@ -114,6 +154,12 @@ public class OnlineAccountBundleManagerTests extends Common {
 				new GetOnlineAccountBundlesMessage(List.of(known)));
 		assertEquals(1, peer.sentMessages.size());
 		assertTrue(((OnlineAccountBundlesMessage) peer.sentMessages.get(0)).getBundles().isEmpty());
+
+		CapturingPeer dataPeer = new CapturingPeer(Peer.NETWORKDATA);
+		Controller.getInstance().onNetworkMessage(dataPeer,
+				new GetOnlineAccountBundlesMessage(Collections.emptyList()));
+		assertTrue("Reward bundle inventory must remain on the chain layer",
+				dataPeer.sentMessages.isEmpty());
 	}
 
 	@Test
@@ -139,6 +185,36 @@ public class OnlineAccountBundleManagerTests extends Common {
 		assertTrue(this.manager.cacheValidatedOnlineAccountBundle(twoMembersLowHash));
 		assertFalse(this.manager.cacheValidatedOnlineAccountBundle(twoMembersHighHash));
 		assertFalse(this.manager.cacheValidatedOnlineAccountBundle(oneMember));
+	}
+
+	@Test
+	public void testAllOnlineIdentityMessagesAreIgnoredOnDataLayer() throws Exception {
+		configureThreeMintingAccounts();
+		CapturingPeer dataPeer = new CapturingPeer(Peer.NETWORKDATA);
+		long timestamp = OnlineAccountsManager.toOnlineAccountTimestamp(System.currentTimeMillis());
+		OnlineAccountData account = new OnlineAccountData(timestamp, filled(64, 1), filled(32, 2), 3);
+		assertTrue(this.manager.computeOurAccountsForTimestamp(timestamp, this.identityPath));
+		OnlineAccountBundleData bundle = this.manager.getOnlineAccountBundles(timestamp,
+				nextBlockHeight()).get(0);
+		@SuppressWarnings("unchecked")
+		Set<OnlineAccountData> legacyQueue = (Set<OnlineAccountData>)
+				org.apache.commons.lang3.reflect.FieldUtils.readField(this.manager,
+						"onlineAccountsImportQueue", true);
+		int legacyQueueSize = legacyQueue.size();
+		int bundleQueueSize = this.manager.getOnlineAccountBundlesImportQueueSize();
+
+		Controller.getInstance().onNetworkMessage(dataPeer,
+				new GetOnlineAccountsMessage(Collections.emptyMap()));
+		Controller.getInstance().onNetworkMessage(dataPeer,
+				new OnlineAccountsMessage(List.of(account)));
+		Controller.getInstance().onNetworkMessage(dataPeer,
+				new OnlineAccountBundlesMessage(List.of(bundle)));
+		Controller.getInstance().onNetworkMessage(dataPeer,
+				new GetOnlineAccountBundlesMessage(Collections.emptyList()));
+
+		assertTrue(dataPeer.sentMessages.isEmpty());
+		assertEquals(legacyQueueSize, legacyQueue.size());
+		assertEquals(bundleQueueSize, this.manager.getOnlineAccountBundlesImportQueueSize());
 	}
 
 	@Test
@@ -382,7 +458,11 @@ public class OnlineAccountBundleManagerTests extends Common {
 		private final List<Message> sentMessages = new ArrayList<>();
 
 		private CapturingPeer() {
-			super(new PeerData(new PeerAddress("127.0.0.1:24892")), Peer.NETWORK);
+			this(Peer.NETWORK);
+		}
+
+		private CapturingPeer(int peerType) {
+			super(new PeerData(new PeerAddress("127.0.0.1:24892")), peerType);
 		}
 
 		@Override

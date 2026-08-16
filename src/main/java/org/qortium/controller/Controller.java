@@ -1749,19 +1749,23 @@ public class Controller extends Thread {
 				break;
 
 			case GET_ONLINE_ACCOUNTS:
-				OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountsMessage(peer, message);
+				if (peer == null || peer.getPeerType() == Peer.NETWORK)
+					OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountsMessage(peer, message);
 				break;
 
 			case ONLINE_ACCOUNTS:
-				OnlineAccountsManager.getInstance().onNetworkOnlineAccountsMessage(peer, message);
+				if (peer == null || peer.getPeerType() == Peer.NETWORK)
+					OnlineAccountsManager.getInstance().onNetworkOnlineAccountsMessage(peer, message);
 				break;
 
 			case ONLINE_ACCOUNT_BUNDLES:
-				OnlineAccountsManager.getInstance().onNetworkOnlineAccountBundlesMessage(peer, message);
+				if (peer == null || peer.getPeerType() == Peer.NETWORK)
+					OnlineAccountsManager.getInstance().onNetworkOnlineAccountBundlesMessage(peer, message);
 				break;
 
 			case GET_ONLINE_ACCOUNT_BUNDLES:
-				OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountBundlesMessage(peer, message);
+				if (peer == null || peer.getPeerType() == Peer.NETWORK)
+					OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountBundlesMessage(peer, message);
 				break;
 
 			case GET_FOREIGN_FEES:

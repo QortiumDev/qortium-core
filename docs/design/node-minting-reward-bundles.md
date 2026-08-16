@@ -79,8 +79,10 @@ Other chain configurations omit the trigger and retain legacy behavior.
 ## Reward-Node Identity
 
 Each Core runtime directory owns one persistent Ed25519 reward-node identity at
-`${Settings.userPath}/reward-node/identity.key`. It is separate from the
-transient chain and QDN handshake identities, which are
+`<active-settings-directory>/reward-node/identity.key`. The active settings
+file, rather than the process working directory or replaceable installation
+tree, defines the persistent runtime boundary. The identity is separate from
+the transient chain and QDN handshake identities, which are
 regenerated at process start and are unsuitable for consensus accounting.
 
 Core creates a missing identity using secure randomness at any height, writes
@@ -89,6 +91,13 @@ allows a genuinely new node to join after activation. Core never transmits the
 private seed. An existing identity path that is corrupt, the wrong size,
 unreadable, or a symbolic link fails closed for local online bundle production
 while ordinary synchronization remains available.
+
+When this location is first adopted, Core copies a valid identity from the
+legacy `Settings.userPath`/working-directory location if the new path is
+absent. It atomically publishes and verifies the copy with owner-only
+permissions, leaves the old file in place for rollback, and never overwrites an
+existing identity at the new path. An unsafe or malformed legacy path fails
+closed rather than causing an identity rotation.
 
 Copying a data directory also copies its reward-node identity. Concurrent
 instances using that identity are consequently treated as the same declared

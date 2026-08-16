@@ -23,12 +23,15 @@ public class HandshakeCompatibilityTests extends Common {
 
 	@Test
 	public void testHelloAdvertisesChainIdentity() {
-		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
 		BlockChain blockChain = BlockChain.getInstance();
-
-		assertEquals(blockChain.getNetworkId(), capabilities.get(Handshake.CHAIN_NETWORK_ID_CAPABILITY));
-		assertEquals(blockChain.getGenesisSignature(), capabilities.get(Handshake.CHAIN_GENESIS_SIGNATURE_CAPABILITY));
-		assertEquals(blockChain.getChainConfigHash(), capabilities.get(Handshake.CHAIN_CONFIG_HASH_CAPABILITY));
+		for (int peerType : new int[] { Peer.NETWORK, Peer.NETWORKDATA }) {
+			for (boolean i2p : new boolean[] { false, true }) {
+				Map<String, Object> capabilities = Handshake.buildHelloCapabilities(peerType, i2p);
+				assertEquals(blockChain.getNetworkId(), capabilities.get(Handshake.CHAIN_NETWORK_ID_CAPABILITY));
+				assertEquals(blockChain.getGenesisSignature(), capabilities.get(Handshake.CHAIN_GENESIS_SIGNATURE_CAPABILITY));
+				assertEquals(blockChain.getChainConfigHash(), capabilities.get(Handshake.CHAIN_CONFIG_HASH_CAPABILITY));
+			}
+		}
 		assertNotNull(blockChain.getChainConfigHash());
 		assertNotNull(blockChain.getGenesisSignature());
 	}

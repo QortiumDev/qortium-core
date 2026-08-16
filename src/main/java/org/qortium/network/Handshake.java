@@ -558,7 +558,7 @@ public enum Handshake {
 		long timestamp = timestampObj;
 		String senderPeerAddress = peer.getPeerData().getAddress().toString();
 		boolean isI2PTransport = peer.getPeerData().getAddress().isI2P();
-		Map<String, Object> capabilities = buildHelloCapabilities(isI2PTransport);
+		Map<String, Object> capabilities = buildHelloCapabilities(peer.getPeerType(), isI2PTransport);
 
 		Message helloMessage = new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
 
@@ -574,46 +574,48 @@ public enum Handshake {
 	 * Backward-compatible no-arg overload. Builds capabilities for a <em>clearnet</em> connection (the safe
 	 * default): it never advertises any I2P address, so callers that have not been made transport-aware can
 	 * never leak an I2P identity to the wrong transport. Transport-aware callers must use
-	 * {@link #buildHelloCapabilities(boolean)} instead.
+	 * {@link #buildHelloCapabilities(int, boolean)} instead.
 	 */
 	static Map<String, Object> buildHelloCapabilities() {
-		return buildHelloCapabilities(false);
+		return buildHelloCapabilities(Peer.NETWORK, false);
+	}
+
+	/** Backward-compatible chain-layer overload retained for existing callers and tests. */
+	static Map<String, Object> buildHelloCapabilities(boolean isI2PTransport) {
+		return buildHelloCapabilities(Peer.NETWORK, isI2PTransport);
 	}
 
 	/**
-	 * Build the capabilities advertised in a HELLO, scoped to the transport of the connection it will be sent
-	 * over. The transport is the privacy boundary: a node must never advertise an address reachable only via a
-	 * transport the receiving peer cannot use, and must never co-advertise its IP identity and its I2P identity
-	 * to the same peer.
+	 * Build the capabilities advertised in a HELLO, scoped to both the network layer and transport of the
+	 * connection it will be sent over. A node must never co-advertise identities from different layers or
+	 * transports to the same peer.
 	 * <ul>
-	 *   <li>On an <strong>I2P</strong> connection ({@code isI2PTransport == true}): advertise only the chain
-	 *       I2P destination ({@link #I2P_CAPABILITY}) plus the transport-neutral capabilities. Never advertise
-	 *       the clearnet QDN port and never advertise any clearnet info.</li>
-	 *   <li>On a <strong>clearnet</strong> connection: advertise the clearnet QDN listen port plus the
-	 *       transport-neutral capabilities. Never advertise the chain I2P destination.</li>
+	 *   <li>Chain/IP: advertise the clearnet QDN port.</li>
+	 *   <li>Chain/I2P: advertise only the chain I2P destination.</li>
+	 *   <li>Data/IP: advertise no additional routing identity.</li>
+	 *   <li>Data/I2P: advertise only the data I2P destination.</li>
 	 * </ul>
-	 * The data-layer I2P destination ({@link #I2P_QDN_CAPABILITY}) is NEVER advertised in a chain HELLO under
-	 * any transport; the I2P data layer is bootstrapped out of band (initialDataPeers + data-layer gossip).
 	 */
-	static Map<String, Object> buildHelloCapabilities(boolean isI2PTransport) {
+	static Map<String, Object> buildHelloCapabilities(int peerType, boolean isI2PTransport) {
 		Map<String, Object> capabilities = new HashMap<>();
 		BlockChain blockChain = BlockChain.getInstance();
 		capabilities.put(CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId());
 		capabilities.put(CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature());
 		capabilities.put(CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
 
-		if (isI2PTransport) {
-			// I2P peer: advertise only our chain I2P destination. No clearnet info, and never I2P_QDN.
+		if (peerType == Peer.NETWORK && isI2PTransport) {
 			String chainI2PDestination = Network.getInstance().getI2PChainDestination();
 			if (chainI2PDestination != null)
 				capabilities.put(I2P_CAPABILITY, chainI2PDestination);
-		} else {
-			// Clearnet peer: advertise our clearnet QDN port. Our data lives on the same already-public IP,
-			// so no privacy is lost. Never advertise our chain I2P destination, and never I2P_QDN.
+		} else if (peerType == Peer.NETWORK) {
 			if (Settings.getInstance().isQdnEnabled())
 				capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
 			else
 				capabilities.put("QDN", 0);
+		} else if (peerType == Peer.NETWORKDATA && isI2PTransport) {
+			String dataI2PDestination = NetworkData.getInstance().getI2PDataDestination();
+			if (dataI2PDestination != null)
+				capabilities.put(I2P_QDN_CAPABILITY, dataI2PDestination);
 		}
 
 		if (Settings.getInstance().isQdnEnabled()) {
@@ -634,8 +636,8 @@ public enum Handshake {
 				: 0;
 		capabilities.put(ARCHIVE_HEIGHT_CAPABILITY, archiveHeight);
 
-		// We accept a post-handshake HELLO as a capability refresh, so peers may re-advertise their I2P
-		// destination to us once their slow SAM session comes up. Unknown to older peers, who ignore it.
+		// We accept a post-handshake HELLO as a capability refresh so a chain peer can re-advertise its
+		// I2P destination after a slow SAM session comes up. Unknown to older peers, who ignore it.
 		capabilities.put(POST_HANDSHAKE_HELLO_CAPABILITY, true);
 		capabilities.put(HANDSHAKE_POW_V2_CAPABILITY, true);
 
@@ -670,8 +672,9 @@ public enum Handshake {
 
 	/**
 	 * Apply a HELLO that arrives <em>after</em> the handshake has already completed. Peers re-send HELLO
-	 * once their (slow) I2P SAM session comes up so we learn the {@code I2P}/{@code I2P_QDN} destination
-	 * that their first HELLO could not carry. This is purely a capability refresh: we do NOT re-run the
+	 * once their (slow) chain-layer I2P SAM session comes up so we learn the {@code I2P} destination that
+	 * their first HELLO could not carry. Data-layer I2P identities are carried by the data connection's
+	 * initial HELLO. This is purely a capability refresh: we do NOT re-run the
 	 * handshake state machine, change handshake state, or send anything back (the original handshake
 	 * already authenticated the peer and any reply would risk a HELLO ping-pong). The peer's chain
 	 * identity is re-checked so a post-handshake HELLO cannot flip us onto an incompatible chain, then the
@@ -687,17 +690,37 @@ public enum Handshake {
 					peer, describeChainCapabilityMismatch(updated));
 			return false;
 		}
-		// A post-handshake HELLO is only a legitimate vehicle for re-advertising the CHAIN I2P destination once
-		// a node's slow SAM session comes up. The data-layer I2P destination (I2P_QDN) is never advertised in a
-		// chain HELLO under any transport, so defensively strip it before merging: this guarantees we neither
-		// learn nor re-propagate a peer's I2P data identity through the chain handshake, even if a legacy or
-		// misbehaving peer still sends one.
-		Map<String, Object> mergeable = new HashMap<>(updated.getPeerCapabilities());
-		mergeable.remove(I2P_QDN_CAPABILITY);
-		boolean changed = peer.mergePeersCapabilities(mergeable);
+		Map<String, Object> current = peer.getPeersCapabilities() == null
+				? new HashMap<>()
+				: new HashMap<>(peer.getPeersCapabilities().getPeerCapabilities());
+		Map<String, Object> merged = new HashMap<>(current);
+		merged.putAll(updated.getPeerCapabilities());
+		merged = sanitizeAddressCapabilities(peer, new PeerCapabilities(merged));
+		boolean changed = !current.equals(merged);
+		peer.setPeersCapabilities(new PeerCapabilities(merged));
 		if (changed)
 			LOGGER.debug("Merged updated capabilities from post-handshake HELLO for {}", peer);
 		return true;
+	}
+
+	private static Map<String, Object> sanitizeAddressCapabilities(Peer peer, PeerCapabilities capabilities) {
+		Map<String, Object> sanitized = new HashMap<>(capabilities.getPeerCapabilities());
+		boolean isI2PTransport = peer.getPeerData().getAddress().isI2P();
+
+		if (peer.getPeerType() == Peer.NETWORK) {
+			sanitized.remove(I2P_QDN_CAPABILITY);
+			if (isI2PTransport)
+				sanitized.remove("QDN");
+			else
+				sanitized.remove(I2P_CAPABILITY);
+		} else {
+			sanitized.remove("QDN");
+			sanitized.remove(I2P_CAPABILITY);
+			if (!isI2PTransport)
+				sanitized.remove(I2P_QDN_CAPABILITY);
+		}
+
+		return sanitized;
 	}
 
 	/**
@@ -798,7 +821,8 @@ public enum Handshake {
 
 		peer.setPeersConnectionTimestamp(peersConnectionTimestamp);
 		peer.setPeersVersion(versionString, version);
-		peer.setPeersCapabilities(helloMessage.getCapabilities());
+		peer.setPeersCapabilities(new PeerCapabilities(
+				sanitizeAddressCapabilities(peer, helloMessage.getCapabilities())));
 
 		if (!Settings.getInstance().getAllowConnectionsWithOlderPeerVersions()) {
 			final String minPeerVersion = Settings.getInstance().getMinPeerVersion();

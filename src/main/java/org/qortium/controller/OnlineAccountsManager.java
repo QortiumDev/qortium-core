@@ -681,15 +681,22 @@ public class OnlineAccountsManager {
     }
 
     private boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp) {
-        return computeOurAccountsForTimestamp(onlineAccountsTimestamp, getRewardNodeIdentityPath());
+        return computeOurAccountsForTimestamp(onlineAccountsTimestamp, getRewardNodeIdentityPath(),
+                getLegacyRewardNodeIdentityPath());
+    }
+
+    /** Package-visible migration seam used by production and identity-path integration tests. */
+    boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp, Path identityPath,
+                                           Path legacyIdentityPath) {
+        boolean legacyAccountsAvailable = computeOurLegacyAccountsForTimestamp(onlineAccountsTimestamp);
+        if (onlineAccountsTimestamp != null)
+            computeOurBundleForTimestamp(onlineAccountsTimestamp, identityPath, legacyIdentityPath);
+        return legacyAccountsAvailable;
     }
 
     /** Package-visible overload exercises the production path without changing process-wide settings. */
     boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp, Path identityPath) {
-        boolean legacyAccountsAvailable = computeOurLegacyAccountsForTimestamp(onlineAccountsTimestamp);
-        if (onlineAccountsTimestamp != null)
-            computeOurBundleForTimestamp(onlineAccountsTimestamp, identityPath);
-        return legacyAccountsAvailable;
+        return computeOurAccountsForTimestamp(onlineAccountsTimestamp, identityPath, null);
     }
 
     private boolean computeOurLegacyAccountsForTimestamp(Long onlineAccountsTimestamp) {
@@ -836,7 +843,8 @@ public class OnlineAccountsManager {
         return false;
     }
 
-    private void computeOurBundleForTimestamp(long onlineAccountsTimestamp, Path identityPath) {
+    private void computeOurBundleForTimestamp(long onlineAccountsTimestamp, Path identityPath,
+                                              Path legacyIdentityPath) {
         List<MintingAccountData> mintingAccounts = new ArrayList<>();
         try (final Repository repository = RepositoryManager.getRepository()) {
             int nextBlockHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
@@ -897,7 +905,7 @@ public class OnlineAccountsManager {
                 privateKeysByPublicKey.put(Base58.encode(publicKey), privateKey);
             }
 
-            RewardNodeIdentity identity = getRewardNodeIdentity(identityPath);
+            RewardNodeIdentity identity = getRewardNodeIdentity(identityPath, legacyIdentityPath);
             ChainIdentity chainIdentity = ChainIdentity.current();
             byte[] nodePublicKey = identity.getPublicKey();
             List<Member> canonicalMembers = OnlineAccountBundleTransformer.canonicalizeMembers(unsignedMembers);
@@ -931,16 +939,25 @@ public class OnlineAccountsManager {
         }
     }
 
-    private static Path getRewardNodeIdentityPath() {
+    static Path getRewardNodeIdentityPath() {
+        Path activeSettingsPath = Settings.getActiveSettingsPath();
+        if (activeSettingsPath != null && activeSettingsPath.getParent() != null)
+            return activeSettingsPath.getParent().resolve("reward-node").resolve("identity.key");
+
+        return getLegacyRewardNodeIdentityPath();
+    }
+
+    static Path getLegacyRewardNodeIdentityPath() {
         String userPath = Settings.getInstance().getUserPath();
         return Paths.get(userPath == null ? "" : userPath)
                 .resolve("reward-node").resolve("identity.key");
     }
 
-    private synchronized RewardNodeIdentity getRewardNodeIdentity(Path identityPath) throws IOException {
+    private synchronized RewardNodeIdentity getRewardNodeIdentity(Path identityPath, Path legacyIdentityPath)
+            throws IOException {
         Path normalizedPath = identityPath.toAbsolutePath().normalize();
         if (this.rewardNodeIdentity == null || !normalizedPath.equals(this.rewardNodeIdentityPath)) {
-            this.rewardNodeIdentity = RewardNodeIdentity.loadOrCreate(normalizedPath);
+            this.rewardNodeIdentity = RewardNodeIdentity.loadOrCreate(normalizedPath, legacyIdentityPath);
             this.rewardNodeIdentityPath = normalizedPath;
         }
         return this.rewardNodeIdentity;
