@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(network): enforce feature-trigger schedules at activation
+
+Advertises the versioned feature-trigger schedule commitment on both peer
+layers while keeping the existing chain identity fields unchanged. Schedule
+differences remain connectable before the local cutoff; starting with the
+locally derived next-block height 99,990, new and already-connected peers must
+advertise the exact version and commitment. No peer-supplied height can move
+that boundary, and future commitment versions will require a separately staged
+compatibility epoch rather than weakening this frozen version-1 check.
+
 ### 2026-08-15 - fix(consensus): register and commit feature-trigger schedules
 
 Rejects misspelled or unknown feature-trigger names and derives a separate,
