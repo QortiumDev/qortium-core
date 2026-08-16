@@ -80,16 +80,16 @@ public class BlockChainConfigHashTests {
 	}
 
 	@Test
-	public void testFeatureTriggersObjectCanCarryUnknownTriggers() throws Exception {
+	public void testRegisteredFeatureTriggersCanBeReadByName() throws Exception {
 		BlockChain blockChain = unmarshal("{"
 				+ "\"featureTriggers\":{"
-				+ "\"futureTrigger\":27000,"
-				+ "\"anotherFutureTrigger\":31000"
+				+ "\"onlineAccountsSignatureV2Height\":27000,"
+				+ "\"assetOrderBoundsHeight\":31000"
 				+ "}"
 				+ "}");
 
-		assertEquals(27000L, blockChain.getFeatureTriggerHeight("futureTrigger"));
-		assertEquals(31000L, blockChain.getFeatureTriggerHeight("anotherFutureTrigger"));
+		assertEquals(27000L, blockChain.getFeatureTriggerHeight("onlineAccountsSignatureV2Height"));
+		assertEquals(31000L, blockChain.getFeatureTriggerHeight("assetOrderBoundsHeight"));
 		assertEquals(BlockChain.FEATURE_TRIGGER_DISABLED_HEIGHT, blockChain.getFeatureTriggerHeight("missingTrigger"));
 	}
 

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(consensus): register and commit feature-trigger schedules
+
+Rejects misspelled or unknown feature-trigger names and derives a separate,
+versioned commitment from every registered trigger's effective height,
+including legacy fallback fields. Previewnet requires that commitment at the
+99,990 reward-bundle capture boundary while leaving its existing base chain
+hash and all existing feature heights unchanged. The disposable local testnet
+now explicitly enables already-active behavior from genesis and rehearses the
+node-reward-bundle transition at height 100 after a reset.
+
 ### 2026-08-15 - docs(network): backfill adaptive networking changelog
 
 Adds the three missing exact-title entries for adaptive-networking PRs #212,

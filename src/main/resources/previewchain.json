@@ -83,6 +83,7 @@
 	],
 	"onlineAccountSignaturesMinLifetime": 43200000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
+	"featureTriggerScheduleEnforcementHeight": 99990,
 	"featureTriggers": {
 		"onlineAccountsSignatureV2Height": 32000,
 		"assetOrderBoundsHeight": 32000,
