@@ -57,7 +57,9 @@ public class BlockChain {
 	private static BlockChain instance = null;
 	private static final Set<String> CHAIN_CONFIG_HASH_EXCLUDED_FIELDS = Set.of(
 			"checkpoints",
-			"featureTriggers");
+			"featureTriggers",
+			"featureTriggerScheduleEnforcementHeight");
+	public static final int FEATURE_TRIGGER_SCHEDULE_VERSION = 1;
 	private static final String ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER = "onlineAccountsSignatureV2Height";
 	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
 	private static final String BLOCK_REWARD_BATCH_START_TRIGGER = "blockRewardBatchStartHeight";
@@ -74,6 +76,26 @@ public class BlockChain {
 	private static final String AT_CODE_HASH_CHECK_TRIGGER = "atCodeHashCheckHeight";
 	private static final String AT_UNSIGNED_256_ARITHMETIC_TRIGGER = "atUnsigned256ArithmeticHeight";
 	private static final String AT_NO_NATIVE_ASSET_FEE_WAIVER_TRIGGER = "atNoNativeAssetFeeWaiverHeight";
+	private static final String AVATAR_TRANSACTIONS_TRIGGER = "avatarTransactionsHeight";
+	private static final Set<String> REGISTERED_FEATURE_TRIGGERS = Collections.unmodifiableSet(
+			new LinkedHashSet<>(List.of(
+					ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER,
+					ASSET_ORDER_BOUNDS_TRIGGER,
+					BLOCK_REWARD_BATCH_START_TRIGGER,
+					ONLINE_NODE_REWARD_BUNDLES_PAYOUT_TRIGGER,
+					DEV_GROUP_APPROVAL_SPLIT_TRIGGER,
+					DEPLOY_AT_WORKING_ASSET_TRIGGER,
+					AT_PAYOUT_SOLVENCY_TRIGGER,
+					AT_MAP_STORAGE_TRIGGER,
+					AT_SWEEP_ASSETS_ON_FINISH_TRIGGER,
+					AT_HASHING_STEP_COST_TRIGGER,
+					AT_CHECKED_ARITHMETIC_TRIGGER,
+					AT_TRUST_STATUS_TRIGGER,
+					AT_BALANCE_QUERY_TRIGGER,
+					AT_CODE_HASH_CHECK_TRIGGER,
+					AVATAR_TRANSACTIONS_TRIGGER,
+					AT_UNSIGNED_256_ARITHMETIC_TRIGGER,
+					AT_NO_NATIVE_ASSET_FEE_WAIVER_TRIGGER)));
 
 	// Properties
 
@@ -82,7 +104,14 @@ public class BlockChain {
 	/** Human-readable chain/network identity advertised during peer handshakes. */
 	private String networkId;
 	private transient String chainConfigHash;
+	private transient String featureTriggerScheduleHash;
 	private transient String genesisSignature;
+
+	/**
+	 * First next-block height at which peers must advertise the exact versioned feature-trigger schedule.
+	 * This rollout metadata is intentionally separate from the stable base chain-config hash.
+	 */
+	private long featureTriggerScheduleEnforcementHeight = FEATURE_TRIGGER_DISABLED_HEIGHT;
 
 	/** Transaction expiry period, starting from transaction's timestamp, in milliseconds. */
 	private long transactionExpiryPeriod;
@@ -724,6 +753,7 @@ public class BlockChain {
 		blockchain.fixUp();
 
 		blockchain.chainConfigHash = computeChainConfigHash(jsonBytes);
+		blockchain.featureTriggerScheduleHash = blockchain.computeFeatureTriggerScheduleHash();
 
 		// Successfully read config now in effect
 		instance = blockchain;
@@ -789,6 +819,22 @@ public class BlockChain {
 
 	public String getChainConfigHash() {
 		return this.chainConfigHash;
+	}
+
+	public int getFeatureTriggerScheduleVersion() {
+		return FEATURE_TRIGGER_SCHEDULE_VERSION;
+	}
+
+	public String getFeatureTriggerScheduleHash() {
+		return this.featureTriggerScheduleHash;
+	}
+
+	public long getFeatureTriggerScheduleEnforcementHeight() {
+		return this.featureTriggerScheduleEnforcementHeight;
+	}
+
+	public static Set<String> getRegisteredFeatureTriggerNames() {
+		return REGISTERED_FEATURE_TRIGGERS;
 	}
 
 	public String getGenesisSignature() {
@@ -1065,7 +1111,24 @@ public class BlockChain {
 
 	/** From this height, SET_GROUP_AVATAR transactions are consensus-active. Disabled unless configured. */
 	public long getAvatarTransactionsHeight() {
-		return getFeatureTriggerHeight("avatarTransactionsHeight");
+		return getFeatureTriggerHeight(AVATAR_TRANSACTIONS_TRIGGER);
+	}
+
+	String computeFeatureTriggerScheduleHash() {
+		StringBuilder canonicalSchedule = new StringBuilder("qortium-feature-trigger-schedule-v1\n");
+		for (String triggerName : new TreeSet<>(REGISTERED_FEATURE_TRIGGERS))
+			canonicalSchedule.append(triggerName).append('=').append(getEffectiveFeatureTriggerHeight(triggerName)).append('\n');
+
+		return HashCode.fromBytes(Crypto.digest(canonicalSchedule.toString().getBytes(StandardCharsets.UTF_8))).toString();
+	}
+
+	private long getEffectiveFeatureTriggerHeight(String triggerName) {
+		return switch (triggerName) {
+			case ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER -> getOnlineAccountsSignatureV2Height();
+			case ASSET_ORDER_BOUNDS_TRIGGER -> getAssetOrderBoundsHeight();
+			case BLOCK_REWARD_BATCH_START_TRIGGER -> getBlockRewardBatchStartHeight();
+			default -> getFeatureTriggerHeight(triggerName);
+		};
 	}
 
 	public long getFeatureTriggerHeight(String triggerName) {
@@ -1438,6 +1501,9 @@ public class BlockChain {
 	}
 
 	private void validateFeatureTriggers() {
+		if (this.featureTriggerScheduleEnforcementHeight < 0)
+			Settings.throwValidationError("\"featureTriggerScheduleEnforcementHeight\" must not be negative");
+
 		if (this.featureTriggers == null)
 			return;
 
@@ -1445,6 +1511,8 @@ public class BlockChain {
 			String triggerName = entry.getKey();
 			if (triggerName == null || triggerName.isBlank())
 				Settings.throwValidationError("Feature trigger names must not be blank");
+			if (!REGISTERED_FEATURE_TRIGGERS.contains(triggerName))
+				Settings.throwValidationError(String.format("Unknown feature trigger \"%s\" in blockchain config", triggerName));
 
 			Long triggerHeight = entry.getValue();
 			if (triggerHeight == null || triggerHeight < 0)

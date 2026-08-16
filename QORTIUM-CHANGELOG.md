@@ -34,6 +34,104 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete ultra-review configuration and API hygiene
+
+Completes T9 with a strict 17-name trigger registry, a canonical versioned
+effective-schedule commitment enforced at Preview height 99,990, an explicit
+local-testnet rehearsal schedule, and shared public-write work classification
+on both API listeners. Focused and full serialized validation plus packaged-JAR
+inspection passed. This is source and local-artifact completion only: all
+Preview producers and peers still need a coordinated compatible release before
+the capture boundary.
+
+### 2026-08-16 - test(network): make capacity peers handshake-compatible
+
+Gives the data-capacity test peers the real chain and feature-schedule
+capabilities that a completed HELLO supplies. This keeps the capacity fixture
+production-shaped now that handshake completion performs a final local-height
+compatibility check before beginning data work.
+
+### 2026-08-15 - test(network): cover trigger schedule HELLO wire
+
+Round-trips each chain/data and IP/I2P HELLO through the production message
+codec and asserts that the schedule version remains numeric and the commitment
+remains exact. This closes the gap between map-construction tests and the actual
+capabilities peers compare at activation.
+
+### 2026-08-15 - test(api): prove gateway denial precedes work protection
+
+Adds an oversized non-public gateway write that must remain a 403 rather than
+being classified or charged by the outer work-protection handler, plus an
+in-limit public QDN write that reaches the Jersey resource. This locks the
+gateway's protection-before-routing but authorization-before-charging contract.
+
+### 2026-08-15 - fix(network): close feature-schedule handshake cutover race
+
+Rechecks the locally required feature-trigger schedule after a peer is inserted
+into the handshaked set. A peer that passed HELLO just before height 99,990 but
+was still completing challenge or proof-of-work when the boundary arrived can
+no longer miss both the HELLO check and the existing-session cutover sweep.
+
+### 2026-08-15 - test(consensus): cover trigger registry configuration failures
+
+Loads the actual local-testnet schedule through Core's settings path and pins
+its height-97 capture boundary. The registry tests now also reject blank,
+negative, null, unknown, and misspelled trigger entries through full chain
+configuration validation instead of relying only on map-level assertions.
+
+### 2026-08-15 - docs(testnet): explain feature-trigger rehearsal schedule
+
+Documents that the disposable local testnet starts already-active Previewnet
+features at genesis and rehearses reward-bundle capture at height 97 with its
+first payout at 100. Because the launcher intentionally preserves its generated
+local chain configuration, an existing testnet must be explicitly reset before
+it adopts the tracked schedule.
+
+### 2026-08-15 - fix(api): protect public writes on every API listener
+
+Uses one raw-path policy for public authorization and work classification,
+preserving the existing exact and terminal-wildcard grammar without decoding
+or normalizing request paths. Every allowlisted non-GET route now receives a
+bounded work class, including future custom routes, and the Preview seed
+gateway listener now applies the same body, rate, and concurrency protection
+as the main API listener. The originally reported path-variant bypass remains
+blocked by access control; this change also closes the real alternate-port gap.
+
+### 2026-08-15 - fix(network): enforce feature-trigger schedules at activation
+
+Advertises the versioned feature-trigger schedule commitment on both peer
+layers while keeping the existing chain identity fields unchanged. Schedule
+differences remain connectable before the local cutoff; starting with the
+locally derived next-block height 99,990, new and already-connected peers must
+advertise the exact version and commitment. No peer-supplied height can move
+that boundary, and future commitment versions will require a separately staged
+compatibility epoch rather than weakening this frozen version-1 check.
+
+### 2026-08-15 - fix(consensus): register and commit feature-trigger schedules
+
+Rejects misspelled or unknown feature-trigger names and derives a separate,
+versioned commitment from every registered trigger's effective height,
+including legacy fallback fields. Previewnet requires that commitment at the
+99,990 reward-bundle capture boundary while leaving its existing base chain
+hash and all existing feature heights unchanged. The disposable local testnet
+now explicitly enables already-active behavior from genesis and rehearses the
+node-reward-bundle transition at height 100 after a reset.
+
+### 2026-08-15 - docs(network): backfill adaptive networking changelog
+
+Adds the three missing exact-title entries for adaptive-networking PRs #212,
+#213, and #214. These entries document the original low-bandwidth settings,
+three-strikes and chain-first behavior, and feedback-based QDN/GET_BLOCKS
+adaptation separately from the later T7 correctness repairs.
+
+### 2026-08-15 - docs: start ultra-review configuration and API hygiene tranche
+
+Starts T9 with an approved activation-aware trigger-compatibility design,
+explicit local-testnet trigger decisions, shared public-write route semantics,
+and retrospective changelog entries for adaptive-networking PRs #212 through
+#214. The base chain hash and current Previewnet trigger heights remain fixed;
+implementation must preserve pre-enforcement mixed-version connectivity.
+
 ### 2026-08-15 - docs: complete ultra-review repository and API correctness
 
 Records T8 complete in Core source, tests, and the local packaged artifact.
@@ -608,6 +706,29 @@ explicit tests and review gates before any item can be marked complete. The
 first authorized tranche is limited to the AT chain-query activation-height
 consensus repair; later recovery, bootstrap, transport, networking, repository,
 Docker, and configuration work remains planned or decision-gated.
+
+### 2026-08-12 - Add feedback-based QDN batching and GET_BLOCKS auto-degrade (adaptive networking tranche 2) (#214)
+
+Adds feedback-based QDN batching and automatic GET_BLOCKS degradation for
+constrained links. QDN uses validated arrivals and expired requests to adjust
+its bounded batch window, while fast synchronization halves timed-out block
+batches and recovers after success. Both behaviors have explicit opt-outs and
+change no consensus or wire format; later T7 repairs made their accounting
+per-peer/coalesced and bounded total retry time.
+
+### 2026-08-12 - Add adaptive networking: three-strikes ping policy and chain-first QDN yielding (#213)
+
+Makes slow links tolerate consecutive ping misses before disconnecting and
+caps QDN chunk batches while chain catch-up needs priority. Settings retain an
+instant-disconnect compatibility option and bounded QDN progress. Later T7
+repairs made the catch-up signal quorum-independent and serialized ping tasks.
+
+### 2026-08-12 - Add low-bandwidth networking knobs: ping/QDN/block-sync timeouts and batch sizes (#212)
+
+Introduces validated operator settings for ping, QDN request, block response,
+and QDN batch timing while keeping the old constants as defaults. The operator
+guide records a constrained-link profile; these settings are local networking
+policy and do not change consensus or message formats.
 
 ### 2026-08-12 - feat: add the API-key-protected /admin/dbpool endpoint
 

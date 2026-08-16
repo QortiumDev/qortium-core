@@ -16,7 +16,6 @@ import org.qortium.settings.Settings;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.TimeUnit;
@@ -31,13 +30,6 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 
 	private static final long NANOS_PER_MINUTE = Duration.ofMinutes(1).toNanos();
 	private static final long QDN_BODY_OVERHEAD = 1024L * 1024L;
-
-	enum RequestClass {
-		NONE,
-		BUILDER,
-		PROCESS,
-		QDN
-	}
 
 	private final LongSupplier nanoClock;
 	private final Cache<String, RateBucket> clientBuckets = CacheBuilder.newBuilder()
@@ -64,10 +56,13 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 		String nodeApiKey = passedApiKey == null || passedApiKey.isBlank()
 				? null
 				: PublicApiAccessHandler.getNodeApiKey();
-		RequestClass requestClass = classify(request.getMethod(), request.getHttpURI().getPath());
+		PublicApiRoutePolicy.WorkClass requestClass = PublicApiRoutePolicy.classify(
+				request.getMethod(), request.getHttpURI().getPath(), settings.getPublicApiPaths()).workClass;
 
-		if (requestClass == RequestClass.NONE
-				|| PublicApiAccessHandler.isTrustedRequest(remoteAddress, passedApiKey, nodeApiKey, settings))
+		if (requestClass == PublicApiRoutePolicy.WorkClass.NONE
+				|| PublicApiAccessHandler.isTrustedRequest(remoteAddress, passedApiKey, nodeApiKey, settings)
+				|| !PublicApiAccessHandler.isRequestAllowed(remoteAddress, request.getMethod(),
+						request.getHttpURI().getPath(), passedApiKey, nodeApiKey, settings))
 			return super.handle(request, response, callback);
 
 		long now = this.nanoClock.getAsLong();
@@ -136,7 +131,7 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 		}
 	}
 
-	private boolean allowRate(String remoteAddress, RequestClass requestClass, Settings settings, long now) {
+	private boolean allowRate(String remoteAddress, PublicApiRoutePolicy.WorkClass requestClass, Settings settings, long now) {
 		String key = requestClass.name() + '\0' + (remoteAddress == null ? "unknown" : remoteAddress);
 		RateBucket bucket = this.clientBuckets.getIfPresent(key);
 		if (bucket == null) {
@@ -145,16 +140,16 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 			bucket = existing == null ? candidate : existing;
 		}
 
-		int rate = requestClass == RequestClass.PROCESS
+		int rate = requestClass == PublicApiRoutePolicy.WorkClass.PROCESS
 				? settings.getPublicApiProcessRequestsPerMinute()
 				: settings.getPublicApiBuilderRequestsPerMinute();
-		int burst = requestClass == RequestClass.PROCESS
+		int burst = requestClass == PublicApiRoutePolicy.WorkClass.PROCESS
 				? settings.getPublicApiProcessRateLimitBurst()
 				: settings.getPublicApiBuilderRateLimitBurst();
 		return bucket.tryAcquire(now, rate, burst);
 	}
 
-	private AtomicInteger activeCounter(RequestClass requestClass) {
+	private AtomicInteger activeCounter(PublicApiRoutePolicy.WorkClass requestClass) {
 		return switch (requestClass) {
 			case BUILDER -> this.activeBuilders;
 			case PROCESS -> this.activeProcesses;
@@ -163,7 +158,7 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 		};
 	}
 
-	private static int maxConcurrent(RequestClass requestClass, Settings settings) {
+	private static int maxConcurrent(PublicApiRoutePolicy.WorkClass requestClass, Settings settings) {
 		return switch (requestClass) {
 			case BUILDER -> settings.getPublicApiBuilderMaxConcurrentRequests();
 			case PROCESS -> settings.getPublicApiProcessMaxConcurrentRequests();
@@ -172,8 +167,8 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 		};
 	}
 
-	static long bodyLimit(RequestClass requestClass, Settings settings) {
-		if (requestClass != RequestClass.QDN)
+	static long bodyLimit(PublicApiRoutePolicy.WorkClass requestClass, Settings settings) {
+		if (requestClass != PublicApiRoutePolicy.WorkClass.QDN)
 			return settings.getPublicApiWriteMaxBodySize();
 
 		// Public QDN base64/ZIP bodies can be 4/3 larger than the decoded source.
@@ -182,34 +177,6 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 		if (publishLimit > (Long.MAX_VALUE - QDN_BODY_OVERHEAD - 2L) / 4L)
 			return Long.MAX_VALUE;
 		return (publishLimit * 4L + 2L) / 3L + QDN_BODY_OVERHEAD;
-	}
-
-	static RequestClass classify(String method, String path) {
-		if (method == null || path == null)
-			return RequestClass.NONE;
-
-		String normalizedMethod = method.trim().toUpperCase(Locale.ROOT);
-		if ("GET".equals(normalizedMethod) && isPublicStagedDataPath(path))
-			return RequestClass.QDN;
-		if (!"POST".equals(normalizedMethod))
-			return RequestClass.NONE;
-		if (path.startsWith("/arbitrary/public/"))
-			return RequestClass.QDN;
-		if ("/transactions/process".equals(path))
-			return RequestClass.PROCESS;
-		if ("/transactions/convert".equals(path)
-				|| "/chat/public/build".equals(path)
-				|| "/polls/public/create".equals(path)
-				|| "/polls/public/vote".equals(path)
-				|| "/polls/public/update".equals(path))
-			return RequestClass.BUILDER;
-		return RequestClass.NONE;
-	}
-
-	private static boolean isPublicStagedDataPath(String path) {
-		String prefix = "/arbitrary/public/data/";
-		return path.startsWith(prefix) && path.length() > prefix.length()
-				&& path.indexOf('/', prefix.length()) < 0;
 	}
 
 	static boolean tryAcquire(AtomicInteger active, int maximum) {

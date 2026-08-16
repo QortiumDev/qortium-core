@@ -4,6 +4,7 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortium.block.BlockChain;
 import org.qortium.controller.LiteNode;
 import org.qortium.data.network.PeerData;
 import org.qortium.network.helper.PeerCapabilities;
@@ -180,6 +181,10 @@ public class HandshakeTests {
 				Message parsed = Message.fromByteBuffer(ByteBuffer.wrap(peer.sentMessage.toBytes()));
 				Map<String, Object> capabilities = ((HelloMessage) parsed).getCapabilities()
 						.getPeerCapabilities();
+				assertEquals(BlockChain.getInstance().getFeatureTriggerScheduleVersion(),
+						((Number) capabilities.get(Handshake.FEATURE_TRIGGER_SCHEDULE_VERSION_CAPABILITY)).intValue());
+				assertEquals(BlockChain.getInstance().getFeatureTriggerScheduleHash(),
+						capabilities.get(Handshake.FEATURE_TRIGGER_SCHEDULE_HASH_CAPABILITY));
 				boolean i2p = address.endsWith(".i2p");
 				assertEquals(peerType == Peer.NETWORK && !i2p, capabilities.containsKey("QDN"));
 				assertEquals(peerType == Peer.NETWORK && i2p, capabilities.containsKey(Handshake.I2P_CAPABILITY));

@@ -45,6 +45,7 @@ import org.qortium.gui.TrayIconState;
 import org.qortium.gui.TrayMessageType;
 import org.qortium.network.Network;
 import org.qortium.network.NetworkData;
+import org.qortium.network.Handshake;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerSendManagement;
 import org.qortium.network.PeerAddress;
@@ -1538,6 +1539,12 @@ public class Controller extends Thread {
 				}
 			}
 		}
+
+		long nextBlockHeight = (long) blockDataCopy.getHeight() + 1L;
+		Handshake.disconnectPeersWithIncompatibleFeatureSchedule(
+				Network.getInstance().getImmutableHandshakedPeers(), nextBlockHeight);
+		Handshake.disconnectPeersWithIncompatibleFeatureSchedule(
+				NetworkData.getInstance().getImmutableHandshakedPeers(), nextBlockHeight);
 
 		this.onNewOrOrphanedBlock(blockDataCopy, NewBlockEvent::new);
 	}

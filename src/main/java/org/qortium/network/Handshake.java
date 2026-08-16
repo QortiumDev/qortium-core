@@ -502,6 +502,20 @@ public enum Handshake {
 		}
 	}
 
+	static boolean enforceCompletedPeerFeatureSchedule(Peer peer) {
+		int currentHeight = Controller.getInstance().getChainHeight();
+		int nextBlockHeight = currentHeight == Integer.MAX_VALUE ? Integer.MAX_VALUE : currentHeight + 1;
+		return enforceCompletedPeerFeatureSchedule(peer, nextBlockHeight);
+	}
+
+	static boolean enforceCompletedPeerFeatureSchedule(Peer peer, long nextBlockHeight) {
+		if (areChainCapabilitiesCompatible(peer.getPeersCapabilities(), nextBlockHeight))
+			return true;
+
+		peer.disconnect("incompatible feature-trigger schedule at handshake completion");
+		return false;
+	}
+
 	/** Maximum allowed difference between peer's reported timestamp and when they connected, in milliseconds. */
 	private static final long MAX_TIMESTAMP_DELTA = 30 * 1000L; // ms
 
@@ -510,6 +524,8 @@ public enum Handshake {
 	static final String CHAIN_NETWORK_ID_CAPABILITY = "CHAIN_NETWORK_ID";
 	static final String CHAIN_GENESIS_SIGNATURE_CAPABILITY = "CHAIN_GENESIS_SIGNATURE";
 	static final String CHAIN_CONFIG_HASH_CAPABILITY = "CHAIN_CONFIG_HASH";
+	static final String FEATURE_TRIGGER_SCHEDULE_VERSION_CAPABILITY = "FEATURE_TRIGGER_SCHEDULE_VERSION";
+	static final String FEATURE_TRIGGER_SCHEDULE_HASH_CAPABILITY = "FEATURE_TRIGGER_SCHEDULE_HASH";
 	static final String ARCHIVE_HEIGHT_CAPABILITY = "ARCHIVE_HEIGHT";
 	static final String I2P_CAPABILITY = "I2P";
 	static final String I2P_QDN_CAPABILITY = "I2P_QDN";
@@ -602,6 +618,8 @@ public enum Handshake {
 		capabilities.put(CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId());
 		capabilities.put(CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature());
 		capabilities.put(CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
+		capabilities.put(FEATURE_TRIGGER_SCHEDULE_VERSION_CAPABILITY, blockChain.getFeatureTriggerScheduleVersion());
+		capabilities.put(FEATURE_TRIGGER_SCHEDULE_HASH_CAPABILITY, blockChain.getFeatureTriggerScheduleHash());
 
 		if (peerType == Peer.NETWORK && isI2PTransport) {
 			String chainI2PDestination = Network.getInstance().getI2PChainDestination();
@@ -733,14 +751,46 @@ public enum Handshake {
 	}
 
 	static boolean areChainCapabilitiesCompatible(PeerCapabilities capabilities) {
+		int currentHeight = Controller.getInstance().getChainHeight();
+		int nextBlockHeight = currentHeight == Integer.MAX_VALUE ? Integer.MAX_VALUE : currentHeight + 1;
+		return areChainCapabilitiesCompatible(capabilities, nextBlockHeight);
+	}
+
+	static boolean areChainCapabilitiesCompatible(PeerCapabilities capabilities, long nextBlockHeight) {
 		if (capabilities == null)
 			return false;
 
 		BlockChain blockChain = BlockChain.getInstance();
 
-		return capabilityMatches(capabilities, CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId())
+		if (!(capabilityMatches(capabilities, CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId())
 				&& capabilityMatches(capabilities, CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature())
-				&& capabilityMatches(capabilities, CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
+				&& capabilityMatches(capabilities, CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash())))
+			return false;
+
+		if (nextBlockHeight < blockChain.getFeatureTriggerScheduleEnforcementHeight())
+			return true;
+
+		Object version = capabilities.getCapability(FEATURE_TRIGGER_SCHEDULE_VERSION_CAPABILITY);
+		return version instanceof Number
+				&& ((Number) version).intValue() == blockChain.getFeatureTriggerScheduleVersion()
+				&& capabilityMatches(capabilities, FEATURE_TRIGGER_SCHEDULE_HASH_CAPABILITY,
+						blockChain.getFeatureTriggerScheduleHash());
+	}
+
+	/**
+	 * Recheck sessions established before the local schedule-enforcement cutover. The caller supplies the
+	 * locally derived next-block height; peer claims never select the compatibility boundary.
+	 */
+	public static int disconnectPeersWithIncompatibleFeatureSchedule(Iterable<Peer> peers, long nextBlockHeight) {
+		int disconnected = 0;
+		for (Peer peer : peers) {
+			if (areChainCapabilitiesCompatible(peer.getPeersCapabilities(), nextBlockHeight))
+				continue;
+
+			peer.disconnect("incompatible feature-trigger schedule");
+			disconnected++;
+		}
+		return disconnected;
 	}
 
 	private static boolean capabilityMatches(PeerCapabilities capabilities, String capabilityName, String expectedValue) {
@@ -754,10 +804,14 @@ public enum Handshake {
 
 		BlockChain blockChain = BlockChain.getInstance();
 
-		return String.format("networkId %s/%s, genesis %s/%s, config %s/%s",
+		return String.format("networkId %s/%s, genesis %s/%s, config %s/%s, schedule v%s/%s hash %s/%s",
 				capabilities.getCapability(CHAIN_NETWORK_ID_CAPABILITY), blockChain.getNetworkId(),
 				capabilities.getCapability(CHAIN_GENESIS_SIGNATURE_CAPABILITY), blockChain.getGenesisSignature(),
-				capabilities.getCapability(CHAIN_CONFIG_HASH_CAPABILITY), blockChain.getChainConfigHash());
+				capabilities.getCapability(CHAIN_CONFIG_HASH_CAPABILITY), blockChain.getChainConfigHash(),
+				capabilities.getCapability(FEATURE_TRIGGER_SCHEDULE_VERSION_CAPABILITY),
+				blockChain.getFeatureTriggerScheduleVersion(),
+				capabilities.getCapability(FEATURE_TRIGGER_SCHEDULE_HASH_CAPABILITY),
+				blockChain.getFeatureTriggerScheduleHash());
 	}
 
 	private static Handshake processHelloMessage(Peer peer, HelloMessage helloMessage) {

@@ -45,7 +45,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T6 | Transport-scope QDN request/response advertisements, ingress, and relays; enforce chain/data x IP/I2P HELLO identities; keep online-account identity traffic on the chain layer. | Complete | Stable reward-node identity path repaired first | Seven bounded implementation and test commits following the tracked start; focused tests passed 89/89; clean serialized full suite passed 3,077 with 67 skips; packaged JAR inspection, `git diff --check`, and three independent Codex reviews passed. Not released, deployed, or live-network validated |
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Complete | T2 recovery-state semantics for the catch-up signal | Three bounded implementation commits following the tracked start; focused networking and archive non-regression tests passed 74/74; clean serialized full suite passed 3,092 with 67 skips; packaged JAR inspection, `git diff --check`, and integrated diff review passed. Not released or deployed |
 | T8 | Repository and API correctness: archive temp filtering, chat fee persistence, websocket envelope filtering, and malformed PEERS rejection. | Complete | None | Four repair commits plus a websocket lookup-gating follow-up after the tracked start; focused tests passed 80/80; clean serialized full suite passed 3,098 with 67 skips; packaged JAR, `git diff --check`, and integrated review passed. Not released or deployed |
-| T9 | Configuration and documentation hygiene: trigger registry/testnet parity, public-write classifier invariants, and missing changelog entries. | Decision | Trigger compatibility design | Config coverage, full handler-chain tests, docs reconciliation |
+| T9 | Configuration and documentation hygiene: strict trigger registry with activation-aware schedule compatibility, testnet parity, shared public-write classification, and missing changelog entries. | Complete | Activation-aware schedule capability approved | Ten bounded implementation, test, and documentation commits following the tracked start; focused T9 tests passed 81/81 and the post-cutover capacity regression passed 9/9; clean serialized full suite passed 3,108 with 67 skips; packaged JAR inspection, `git diff --check`, and three independent review lanes passed. Not released or deployed |
 | T10 | Restrict persistent API TLS keystore permissions to the owning account. | Planned | None | Creation and existing-file permission tests across supported filesystems |
 
 ## Finding Ledger
@@ -53,7 +53,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | ID | Verified disposition | Priority | Tranche | Status | Completion evidence |
 | --- | --- | --- | --- | --- | --- |
 | C-01 | `ChainATAPI` selects three opcode gates from peer-supplied `blockHeight` instead of the local parent height plus one. | Critical | T1 | Complete | Both height-mismatch directions pass at the exact trigger boundary for all three opcodes; existing bytecode-level pre-trigger and at-trigger tests pass |
-| C-02 | Unknown feature-trigger names are accepted and silently unused. This is currently intentional forward-compatibility behavior, and `featureTriggers` is excluded from the chain-config handshake hash. | High safety / design | T9 | Decision | Decide strict registry plus activation-schedule compatibility mechanism |
+| C-02 | Unknown feature-trigger names are accepted and silently unused. This is currently intentional forward-compatibility behavior, and `featureTriggers` is excluded from the chain-config handshake hash. | High safety / design | T9 | Complete | All 17 effective triggers use a strict registry and canonical versioned schedule commitment, including legacy fallbacks and disabled omissions. Base chain hashes remain stable; schedule differences are tolerated before local enforcement and rejected for new, completing, and existing chain/data peers at or after it |
 | C-03 | A genesis-height node can bypass stale-tip protections and mint a competing block 2 despite fresh higher peers. This is local fork/liveness policy, not remote block-validation bypass. | Medium | T2 | Complete | Recent-higher, equal, stale, missing-signature-field, old-version, and post-genesis cases pass. Genesis discovery retains a peer whose later-chain tip signer is not yet known locally while sequential block validation remains authoritative. The advertisement remains unverified and only defers local minting |
 | N-01 | Java defaults combine mainnet chain identity with Previewnet seed addresses; an empty/default configuration cannot handshake with those seeds. | High | T5 | Complete | Generic Java defaults expose empty chain and data seed lists while retaining the default identity and `1489x` listeners. All three explicit Previewnet profiles remain test-network `previewchain.json` profiles with `2489x` listeners and separate nonempty, correctly ported chain/data seeds. Remembered and operator-configured peers are not purged |
 | N-02 | The recovery watchdog can orphan up to three local tip blocks based on unverified peer tip and archive-capability claims. Peer connections are handshaked, but the asserted chain evidence is not authenticated. | High | T2/T3 | Complete | Automatic peer-claim orphaning was removed rather than replaced. Both former enable settings remain accepted but always evaluate false; all managed profiles declare both false; managed upgrade and rollback force and preserve both false values. Peer height, freshness, quorum, and archive claims cannot authorize local block deletion |
@@ -63,7 +63,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | N-06 | AIMD halves a process-global window once per expired chunk-map entry, allowing one stalled peer to collapse batching for all transfers. | High | T7 | Complete | Every immediate serving peer has its own bounded AIMD window. One cleanup pass coalesces all expired requests for that peer into one loss, successful delivery is attributed to its serving peer, and tests prove stalled-peer isolation plus clean-window recovery |
 | N-07 | `peerPingTimeoutMillis` may exceed the fixed ping interval, permitting overlapping tasks and out-of-order consecutive-miss accounting. | Medium | T7 | Complete | An atomic per-peer guard permits one ping task at a time and releases in `finally` after success, miss, disconnect, or interruption. Slow and interrupted task tests prove scheduling reopens without overlap |
 | S-01 | The dormant hosted whole-database bootstrap path accepts an unauthenticated archive and deletes the live repository before extraction or replacement validation. Qortium operates no such bootstrap servers; checkpoint-anchored peer archive fast-sync is a separate content-addressed replay path. | High | T4 | Complete | Hosted acquisition, extraction, helper, tray, automatic-startup, and repository-swap paths are removed. Legacy runtime settings are inert and non-writable; managed upgrade/rollback preserves `false` plus an empty host list. Archive fast-sync retains its checkpoint, content, budget, and replay rules, with only the obsolete hosted-bootstrap suppression removed |
-| S-02 | Public-write protection classifies several endpoints by exact path. The reported anonymous bypass is false for shipped profiles because the preceding access handler exact-matches the same path; shared classification remains necessary defense-in-depth. | Hardening | T9 | Hardening | Pending |
+| S-02 | Public-write protection classifies several endpoints by exact path. The reported anonymous bypass is false for shipped profiles because the preceding access handler exact-matches the same path; shared classification remains necessary defense-in-depth. | Hardening | T9 | Complete | Main and gateway listeners share exact raw-path and terminal-wildcard authorization/work classification. Actual handler-chain tests cover path variants, canonical builder/process/QDN writes, future allowlisted writes, and prove an oversized unauthorized gateway request remains 403 rather than consuming protection |
 | S-03 | NAT/QDN request and response paths can disclose an I2P data destination to a clearnet peer, correlating IP and I2P identities. | High privacy | T6 | Complete | Requests and responses are built per immediate recipient. IP addresses require proven clearnet reachability, including configured-address startup; live data-I2P destinations go only to I2P peers. Ingress and relays strip mismatches, cross-transport relay-capable replies become relay-only, and unusable direct-only replies are dropped without changing message IDs or encodings |
 | S-04 | Data-layer I2P HELLO messages expose the separate chain-layer I2P destination because capability construction knows transport but not network layer. | High privacy | T6 | Complete | Initial and post-handshake HELLO tests cover chain/IP, chain/I2P, data/IP, and data/I2P. Each retains only its permitted routing identity plus the chain identity triple; wrong-layer capabilities are sanitized without disconnecting solely for those extras, and chain peers no longer seed data-I2P addresses |
 | S-05 | The persistent API TLS PKCS12 keystore is written with ambient umask permissions rather than owner-only permissions. The inspected managed runtime file was mode `0660`. | Medium | T10 | Planned | Pending |
@@ -71,9 +71,9 @@ runs must never overlap in the same checkout because they share `target/` and
 | R-02 | Chat-store reconstruction replaces the signed transaction fee with zero, so a stored nonzero-fee CHAT cannot be faithfully re-served. | Medium correctness | T8 | Complete | Fresh and existing current-schema repositories carry a non-null fee column; the idempotent migration preserves existing rows at zero, while signature, batch, group, direct, and latest-direct reconstruction retain exact nonzero fees |
 | R-03 | Group-chat history filters private control envelopes, but websocket live push forwards them as ordinary group messages. | Medium privacy/API | T8 | Complete | Live group notification uses the same stored MESSAGE-or-unclassified rule as history after a cheap subscription match; key requests are hidden while normal private messages remain visible, and lookup failure is fail-closed |
 | R-04 | A zero-entry PEERS message reaches `peerAddresses.get(0)`, producing repeated exception logging while leaving the peer connected. | Low | T8 | Complete | Zero and negative counts are rejected at PEERS decoding before handler dispatch; a defensive chain-handler guard disconnects an empty legacy or internally constructed message before indexing |
-| T-01 | The manual local-testnet profile omits the current feature-trigger schedule and therefore exercises different consensus behavior from Previewnet. | Medium test fidelity | T9 | Planned | Pending |
+| T-01 | The manual local-testnet profile omits the current feature-trigger schedule and therefore exercises different consensus behavior from Previewnet. | Medium test fidelity | T9 | Complete | The local profile explicitly names all 17 registered triggers: 16 already-active behaviors begin at genesis and reward bundles capture at 97 for payout at 100. Full settings validation pins the schedule, and reset-required adoption is documented |
 | D-01 | `.env.example` maps legacy `1239x` ports while Docker lacks a coherent explicit network profile. | Medium Docker | T5 | Complete | The canonical Preview participant settings, Dockerfile, both Compose variants, dynamic health probe, and `.env.example` agree on `2489x`, with legacy `1239x` removed. Missing settings install byte-for-byte; existing empty, malformed, custom, or symlinked settings are preserved; concurrent initialization is complete and temporary-file-clean. Generic-volume upgrade and pre-T5 rollback boundaries are documented |
-| D-02 | The three adaptive-networking merges lack their required human-readable changelog entries. | Low documentation | T9 | Planned | Pending |
+| D-02 | The three adaptive-networking merges lack their required human-readable changelog entries. | Low documentation | T9 | Complete | `docs(network): backfill adaptive networking changelog` records exact original squash titles and plain-language descriptions for PRs #212, #213, and #214 |
 
 ## Adjacent Hardening Discovered During Remediation
 
@@ -142,15 +142,20 @@ replacing the old installation; that integration has not shipped.
 
 ### Feature-trigger validation
 
-Rejecting unknown trigger names prevents misspellings, but it intentionally
-reverses an existing forward-compatible configuration contract. More
-importantly, it does not detect an omitted known trigger or a different height:
-the whole `featureTriggers` map is currently excluded from the chain-config hash.
-T9 must therefore decide both parts together:
+T9 resolved feature-trigger validation as a versioned compatibility contract.
+This release accepts exactly the 17 registered trigger names and hashes their
+canonical effective heights, including legacy fallback fields and omitted
+disabled values, into a separately advertised version-1 schedule commitment.
+The existing base chain-config hash remains unchanged.
 
-1. whether this release line accepts only a registered set of trigger names;
-2. how peers compare the active activation schedule without making future
-   scheduling changes impossible.
+Preview peers tolerate missing or different schedules only before the locally
+derived next-block height 99,990, the reward-bundle capture/block-format
+boundary. At and after that height, new, completing, and already-handshaked
+chain and data peers must advertise the exact version and commitment; a peer's
+claimed height never controls enforcement. Future schedule changes must use a
+separately staged compatibility epoch/version while continuing to advertise
+the frozen version-1 contract long enough for coordinated rollout. The generic
+main profile omits an enforcement height and retains the disabled sentinel.
 
 ### Generic Docker network target
 
@@ -196,10 +201,35 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. T8 is complete in Core source, tests, and
-the local packaged artifact, but it is not released or deployed. T9 is the next
-planned boundary and still requires the documented trigger-compatibility
-decision before implementation.
+No implementation tranche is active. T9 is complete in Core source, tests, and
+the local packaged artifact but is not released or deployed; T10 is the next
+planned boundary.
+
+T9 was completed by `docs(network): backfill adaptive networking changelog`,
+`fix(consensus): register and commit feature-trigger schedules`, `fix(network):
+enforce feature-trigger schedules at activation`, `fix(api): protect public
+writes on every API listener`, `docs(testnet): explain feature-trigger rehearsal
+schedule`, `test(consensus): cover trigger registry configuration failures`,
+`fix(network): close feature-schedule handshake cutover race`, `test(api): prove
+gateway denial precedes work protection`, `test(network): cover trigger schedule
+HELLO wire`, and `test(network): make capacity peers handshake-compatible`,
+following the tracked start commit. The focused T9 matrix passed 81/81 and the
+post-cutover capacity regression passed 9/9; the clean serialized full suite
+passed 3,108 tests with 67 skips and no failures or errors; the packaged JAR
+contains the shared route policy, protected gateway, schedule-aware handshake,
+and strict trigger registry with Preview enforcement at 99,990; `git diff --check`
+and three independent review lanes passed.
+
+Aside from the deliberate disposable local-testnet schedule, T9 changed no
+configured Preview feature-trigger height or Preview transaction/block validity
+rule, base chain-config hash, API authorization rule, anti-abuse limit value,
+message type/schema, or chain selection rule. It adds schedule capabilities to
+HELLO, makes effective schedule agreement mandatory at the reward-bundle
+capture boundary, and applies existing public-write protection to the gateway
+listener. All Preview block producers and peers must run the compatible release
+before local next-block height 99,990. Exact-candidate mixed-version testing and
+coordinated rollout remain release conditions; these results do not claim
+either one.
 
 T8 was completed by `fix(archive): ignore temporary and malformed archive
 files`, `fix(chat): preserve stored transaction fees`, `fix(chat): filter live

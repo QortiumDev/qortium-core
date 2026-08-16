@@ -13,6 +13,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class PublicApiAccessHandlerTests extends Common {
@@ -341,6 +342,17 @@ public class PublicApiAccessHandlerTests extends Common {
 				jsonArrayContains(publicApiPaths, "POST /arbitrary/*"));
 		assertFalse(settingsPath + " should not expose server-side transaction signing",
 				jsonArrayContains(publicApiPaths, "POST /transactions/sign"));
+
+		String[] configuredRoutes = new String[publicApiPaths.length()];
+		for (int i = 0; i < publicApiPaths.length(); ++i)
+			configuredRoutes[i] = publicApiPaths.getString(i);
+		for (String configuredRoute : configuredRoutes) {
+			String[] parts = configuredRoute.trim().split("\\s+", 2);
+			if (parts.length == 2 && !"GET".equalsIgnoreCase(parts[0]))
+				assertNotEquals(settingsPath + " has an unprotected public write route " + configuredRoute,
+						PublicApiRoutePolicy.WorkClass.NONE,
+						PublicApiRoutePolicy.classify(parts[0], parts[1].replace("*", "probe"), configuredRoutes).workClass);
+		}
 	}
 
 	private static void assertPreviewChainPeerRotationContract(Path settingsPath) throws Exception {

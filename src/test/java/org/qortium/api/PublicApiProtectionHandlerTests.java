@@ -11,7 +11,7 @@ import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.Callback;
 import org.qortium.api.PublicApiProtectionHandler.RateBucket;
-import org.qortium.api.PublicApiProtectionHandler.RequestClass;
+import org.qortium.api.PublicApiRoutePolicy.WorkClass;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
 
@@ -32,31 +32,39 @@ public class PublicApiProtectionHandlerTests extends Common {
 	public void beforeTest() throws Exception {
 		Common.useDefaultSettings();
 		this.settings = Settings.getInstance();
+		FieldUtils.writeField(this.settings, "publicApiWhitelistEnabled", true, true);
+		FieldUtils.writeField(this.settings, "publicApiWhitelist", new String[] {"0.0.0.0/0", "::/0"}, true);
+		FieldUtils.writeField(this.settings, "publicApiPaths", new String[] {"POST /polls/public/vote"}, true);
 	}
 
 	@Test
 	public void testOnlyAnonymousPublicWriteWorkIsClassified() {
-		assertEquals(RequestClass.BUILDER,
-				PublicApiProtectionHandler.classify("POST", "/polls/public/vote"));
-		assertEquals(RequestClass.BUILDER,
-				PublicApiProtectionHandler.classify("POST", "/chat/public/build"));
-		assertEquals(RequestClass.BUILDER,
-				PublicApiProtectionHandler.classify("POST", "/transactions/convert"));
-		assertEquals(RequestClass.PROCESS,
-				PublicApiProtectionHandler.classify("POST", "/transactions/process"));
-		assertEquals(RequestClass.QDN,
-				PublicApiProtectionHandler.classify("POST", "/arbitrary/public/APP/name/base64"));
-		assertEquals(RequestClass.QDN,
-				PublicApiProtectionHandler.classify("GET", "/arbitrary/public/data/Hash58"));
+		String[] routes = {
+				"POST /polls/public/vote", "POST /chat/public/build", "POST /transactions/convert",
+				"POST /transactions/process", "POST /arbitrary/public/*", "GET /arbitrary/public/data/*",
+				"GET /polls/public/capabilities"
+		};
+		assertEquals(WorkClass.BUILDER,
+				PublicApiRoutePolicy.classify("POST", "/polls/public/vote", routes).workClass);
+		assertEquals(WorkClass.BUILDER,
+				PublicApiRoutePolicy.classify("POST", "/chat/public/build", routes).workClass);
+		assertEquals(WorkClass.BUILDER,
+				PublicApiRoutePolicy.classify("POST", "/transactions/convert", routes).workClass);
+		assertEquals(WorkClass.PROCESS,
+				PublicApiRoutePolicy.classify("POST", "/transactions/process", routes).workClass);
+		assertEquals(WorkClass.QDN,
+				PublicApiRoutePolicy.classify("POST", "/arbitrary/public/APP/name/base64", routes).workClass);
+		assertEquals(WorkClass.QDN,
+				PublicApiRoutePolicy.classify("GET", "/arbitrary/public/data/Hash58", routes).workClass);
 
-		assertEquals(RequestClass.NONE,
-				PublicApiProtectionHandler.classify("POST", "/polls/vote"));
-		assertEquals(RequestClass.NONE,
-				PublicApiProtectionHandler.classify("POST", "/transactions/sign"));
-		assertEquals(RequestClass.NONE,
-				PublicApiProtectionHandler.classify("GET", "/arbitrary/public/data/hash/extra"));
-		assertEquals(RequestClass.NONE,
-				PublicApiProtectionHandler.classify("GET", "/polls/public/capabilities"));
+		assertEquals(WorkClass.NONE,
+				PublicApiRoutePolicy.classify("POST", "/polls/vote", routes).workClass);
+		assertEquals(WorkClass.NONE,
+				PublicApiRoutePolicy.classify("POST", "/transactions/sign", routes).workClass);
+		assertEquals(WorkClass.QDN,
+				PublicApiRoutePolicy.classify("GET", "/arbitrary/public/data/hash/extra", routes).workClass);
+		assertEquals(WorkClass.NONE,
+				PublicApiRoutePolicy.classify("GET", "/polls/public/capabilities", routes).workClass);
 	}
 
 	@Test
@@ -64,10 +72,10 @@ public class PublicApiProtectionHandlerTests extends Common {
 		FieldUtils.writeField(this.settings, "publicApiWriteMaxBodySize", 1024L, true);
 		FieldUtils.writeField(this.settings, "publicQdnPublishMaxSize", 12_000L, true);
 
-		assertEquals(1024L, PublicApiProtectionHandler.bodyLimit(RequestClass.BUILDER, this.settings));
-		assertEquals(1024L, PublicApiProtectionHandler.bodyLimit(RequestClass.PROCESS, this.settings));
+		assertEquals(1024L, PublicApiProtectionHandler.bodyLimit(WorkClass.BUILDER, this.settings));
+		assertEquals(1024L, PublicApiProtectionHandler.bodyLimit(WorkClass.PROCESS, this.settings));
 		assertEquals(16_000L + 1024L * 1024L,
-				PublicApiProtectionHandler.bodyLimit(RequestClass.QDN, this.settings));
+				PublicApiProtectionHandler.bodyLimit(WorkClass.QDN, this.settings));
 	}
 
 	@Test

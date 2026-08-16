@@ -129,8 +129,10 @@ public class GatewayService {
 
 			// URL rewriting
 			RewriteHandler rewriteHandler = new RewriteHandler();
+			PublicApiProtectionHandler protectionHandler = new PublicApiProtectionHandler();
 
-			this.server.setHandler(rewriteHandler);
+			this.server.setHandler(protectionHandler);
+			protectionHandler.setHandler(rewriteHandler);
 
 			// Response compression: rendered QDN app bundles are often hundreds of
 			// KB of JS/CSS, and gateway clients are frequently slow/unreliable
