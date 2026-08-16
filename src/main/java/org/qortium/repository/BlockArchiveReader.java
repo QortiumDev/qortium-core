@@ -20,12 +20,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.qortium.transform.Transformer.INT_LENGTH;
 
 public class BlockArchiveReader {
 
     public static final int SUPPORTED_ARCHIVE_VERSION = 1;
+    private static final Pattern ARCHIVE_FILENAME_PATTERN = Pattern.compile("^(\\d+)-(\\d+)\\.dat$");
 
     private static BlockArchiveReader instance;
     // volatile + snapshot-to-local in every reader: these caches are read on network-serving threads while the
@@ -60,21 +63,39 @@ public class BlockArchiveReader {
             for (String file : files) {
                 Path filePath = Paths.get(file);
                 String filename = filePath.getFileName().toString();
-
-                // Parse the filename
-                if (filename == null || !filename.contains("-") || !filename.contains(".")) {
-                    // Not a usable file
+                Triple<Integer, Integer, Integer> archiveRange = parseArchiveFilename(filename);
+                if (archiveRange == null || !Files.isRegularFile(archivePath.resolve(filename)))
                     continue;
-                }
-                // Remove the extension and split into two parts
-                String[] parts = filename.substring(0, filename.lastIndexOf('.')).split("-");
-                Integer startHeight = Integer.parseInt(parts[0]);
-                Integer endHeight = Integer.parseInt(parts[1]);
-                Integer range = endHeight - startHeight;
-                map.put(filename, new Triple<>(startHeight, endHeight, range));
+
+                map.put(filename, archiveRange);
             }
         }
         this.fileListCache = Map.copyOf(map);
+    }
+
+    /**
+     * Parse the exact filename emitted by {@link BlockArchiveWriter}.
+     *
+     * Crash-temporary files, partial imports, directories and unrelated files must never enter the archive cache.
+     */
+    static Triple<Integer, Integer, Integer> parseArchiveFilename(String filename) {
+        if (filename == null)
+            return null;
+
+        Matcher matcher = ARCHIVE_FILENAME_PATTERN.matcher(filename);
+        if (!matcher.matches())
+            return null;
+
+        try {
+            int startHeight = Integer.parseInt(matcher.group(1));
+            int endHeight = Integer.parseInt(matcher.group(2));
+            if (endHeight < startHeight)
+                return null;
+
+            return new Triple<>(startHeight, endHeight, endHeight - startHeight);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     public Integer fetchSerializationVersionForHeight(int height) {

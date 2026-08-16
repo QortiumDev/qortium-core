@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(archive): ignore temporary and malformed archive files
+
+Restricts archive discovery to the exact numeric `start-end.dat` filename
+written by Core and to regular files. Crash-temporary imports, partial files,
+directories, malformed ranges, and overflowing heights are ignored instead of
+crashing archive lookup or entering its cache.
+
 ### 2026-08-15 - docs: start ultra-review repository and API correctness tranche
 
 Starts T8 with four bounded correctness repairs: ignore temporary or malformed
