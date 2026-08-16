@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(sync): bound GET_BLOCKS retry time
+
+Bounds an auto-degrading GET_BLOCKS batch to one shared deadline of at most two
+configured response windows, including time spent queueing the request. A dead
+peer can no longer multiply the full timeout across every halved batch size,
+and shutdown or interruption cancels before another attempt. Existing archive
+serving and the slow-sync fallback remain unchanged.
+
 ### 2026-08-15 - fix(qdn): isolate adaptive batching by peer
 
 Gives each data peer its own QDN AIMD window, coalesces multiple expired chunks

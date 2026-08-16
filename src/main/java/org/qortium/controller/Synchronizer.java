@@ -32,6 +32,8 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
@@ -2066,15 +2068,16 @@ public class Synchronizer extends Thread {
 		}
 	}
 
-    /** Single, un-degraded GET_BLOCKS attempt at exactly {@code numberRequested} blocks. Exact previous {@code fetchBlocks()} behavior, unchanged. */
-    private List<Block> fetchBlocksAttempt(Repository repository, Peer peer, byte[] parentSignature, int numberRequested) throws InterruptedException {
+    /** Single GET_BLOCKS attempt at exactly {@code numberRequested} blocks within its absolute deadline. */
+    private List<Block> fetchBlocksAttempt(Repository repository, Peer peer, byte[] parentSignature,
+                                           int numberRequested, long deadlineNanos) throws InterruptedException {
         LOGGER.trace("Building GetBlocksMessage with parentSignature: {}, numberRequested: {}", parentSignature, numberRequested);
         Message getBlocksMessage = new GetBlocksMessage(parentSignature, numberRequested);
 
         // Configurable via blocksBatchResponseTimeout (default matches the previous hard-coded
         // FETCH_BLOCKS_TIMEOUT, 10s) so slow-link operators can widen the window for a byte-bounded
         // batched response, typically alongside a reduced maxBlocksPerRequest.
-        Message message = peer.getResponseWithTimeout(getBlocksMessage, Settings.getInstance().getBlocksBatchResponseTimeout());
+        Message message = peer.getResponseWithDeadline(getBlocksMessage, deadlineNanos);
         if (message == null || message.getType() != MessageType.BLOCKS) {
             LOGGER.warn("Received a null BLOCKS payload from {}", peer);
             return null;
@@ -2089,7 +2092,7 @@ public class Synchronizer extends Thread {
     }
 
     /** Result of {@link #fetchBlocksWithAutoDegrade}: the fetched blocks (or null on terminal failure), plus the count to request next time. */
-    private static final class BlocksFetchResult {
+    static final class BlocksFetchResult {
         final List<Block> blocks;
         final int nextRequestCap;
 
@@ -2097,6 +2100,16 @@ public class Synchronizer extends Thread {
             this.blocks = blocks;
             this.nextRequestCap = nextRequestCap;
         }
+    }
+
+    @FunctionalInterface
+    interface BlocksAttempt {
+        List<Block> fetch(int numberRequested, long attemptDeadlineNanos) throws InterruptedException;
+    }
+
+    /** Total retry budget: at most two configured batch-response windows, instead of one per halving. */
+    static long blocksBatchRetryBudgetMillis(int responseTimeoutMillis) {
+        return Math.max(1L, responseTimeoutMillis) * 2L;
     }
 
     /**
@@ -2118,50 +2131,68 @@ public class Synchronizer extends Thread {
 
     /**
      * GET_BLOCKS with auto-degrade (Settings.blocksBatchAutoDegrade, default true): on a response timeout
-     * at the requested count, halves the count for THIS peer (floor 1) and retries immediately - within
-     * this one call, not a separate sync round - up to a bounded number of halvings (until count reaches
-     * 1, then one final attempt at 1; e.g. starting from 100 that's at most 7 timeouts total, in line with
-     * ~log2(100)+1). A genuinely dead peer therefore costs at most that many timeouts before the existing
-     * failure handling takes over exactly as before this change: fetchBlocksAttempt() returning null here
-     * causes applyNewBlocksUsingFastSync's caller to fall back to slow sync for this batch, WITHOUT
-     * touching failedSyncCount/MAX_CONSECUTIVE_FAILED_SYNC_ATTEMPTS - that accounting only ever applied to
-     * fetchBlock() (singular, slow sync), never to fetchBlocks(), so this preserves that pre-existing
-     * asymmetry unchanged. A successful response at a degraded count lets the caller's next (separate)
-     * request try double the count again, capped at maxBlocksPerRequest - slow recovery within the sync
-     * session, with no state persisted anywhere beyond this call's local variables.
+     * at the requested count, halves the count for this peer (floor 1) and retries immediately within the
+     * same call. Queueing and response waits share an absolute budget of two configured response windows,
+     * so a dead peer cannot multiply the timeout by every halving. Fast failures can still reach count 1,
+     * while shutdown or interruption prevents another attempt.
      *
-     * When blocksBatchAutoDegrade is false, this is exactly one fetchBlocksAttempt() call at the requested
-     * count with no retry and no cap change, i.e. the previous behavior unchanged.
+     * A terminal null result retains the existing slow-sync fallback and does not alter failedSyncCount;
+     * that accounting belongs to fetchBlock(), not this batched path. On success at a degraded count, the
+     * caller doubles the next request cap up to maxBlocksPerRequest. No adaptive state survives this sync
+     * session.
+     *
+     * When blocksBatchAutoDegrade is false, this performs one deadline-bounded attempt at the requested
+     * count with no retry or cap change.
      */
     private BlocksFetchResult fetchBlocksWithAutoDegrade(Repository repository, Peer peer, byte[] parentSignature,
                                                           int requestedCount, int maxBlocksPerRequest) throws InterruptedException {
-        if (!Settings.getInstance().isBlocksBatchAutoDegrade()) {
-            List<Block> blocks = this.fetchBlocksAttempt(repository, peer, parentSignature, requestedCount);
-            return new BlocksFetchResult(blocks, requestedCount);
-        }
+        Settings settings = Settings.getInstance();
+        int responseTimeoutMillis = settings.getBlocksBatchResponseTimeout();
+        boolean autoDegrade = settings.isBlocksBatchAutoDegrade();
+        long retryBudgetMillis = autoDegrade
+                ? blocksBatchRetryBudgetMillis(responseTimeoutMillis)
+                : responseTimeoutMillis;
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(retryBudgetMillis);
 
+        BlocksFetchResult result = fetchBlocksWithAutoDegrade(requestedCount, maxBlocksPerRequest,
+                autoDegrade, responseTimeoutMillis, deadlineNanos, System::nanoTime,
+                () -> Controller.isStopping() || Thread.currentThread().isInterrupted(),
+                (count, attemptDeadline) -> this.fetchBlocksAttempt(repository, peer, parentSignature,
+                        count, attemptDeadline));
+        if (result.blocks == null && autoDegrade)
+            LOGGER.debug("GET_BLOCKS retry budget exhausted or cancelled for {} after at most {}ms",
+                    peer, retryBudgetMillis);
+        return result;
+    }
+
+    static BlocksFetchResult fetchBlocksWithAutoDegrade(int requestedCount, int maxBlocksPerRequest,
+                                                         boolean autoDegrade, int responseTimeoutMillis,
+                                                         long deadlineNanos, LongSupplier nanoTime,
+                                                         BooleanSupplier stopping,
+                                                         BlocksAttempt attempt) throws InterruptedException {
         int attemptCount = Math.max(1, requestedCount);
         while (true) {
-            List<Block> blocks = this.fetchBlocksAttempt(repository, peer, parentSignature, attemptCount);
+            long now = nanoTime.getAsLong();
+            if (stopping.getAsBoolean() || now >= deadlineNanos)
+                return new BlocksFetchResult(null, attemptCount);
+
+            long perAttemptNanos = TimeUnit.MILLISECONDS.toNanos(Math.max(1, responseTimeoutMillis));
+            long attemptDeadline = Math.min(deadlineNanos, now + perAttemptNanos);
+            List<Block> blocks = attempt.fetch(attemptCount, attemptDeadline);
             if (blocks != null) {
-                int nextCap = nextBlocksCountAfterSuccess(attemptCount, maxBlocksPerRequest);
-                if (attemptCount != requestedCount) {
-                    LOGGER.debug("GET_BLOCKS succeeded from {} at degraded count {} (originally requested {}); next request will try {}",
-                            peer, attemptCount, requestedCount, nextCap);
-                }
+                int nextCap = autoDegrade
+                        ? nextBlocksCountAfterSuccess(attemptCount, maxBlocksPerRequest)
+                        : attemptCount;
                 return new BlocksFetchResult(blocks, nextCap);
             }
 
-            if (attemptCount <= 1) {
-                // Minimal request also timed out - terminal failure for this call. Preserve pre-existing
-                // fetchBlocks() semantics exactly: return null and let the caller fall back to slow sync,
-                // without touching failedSyncCount (that accounting belongs to fetchBlock(), not here).
+            if (!autoDegrade || attemptCount <= 1 || stopping.getAsBoolean()
+                    || nanoTime.getAsLong() >= deadlineNanos)
                 return new BlocksFetchResult(null, attemptCount);
-            }
 
             int next = nextBlocksCountAfterTimeout(attemptCount);
-            LOGGER.debug("GET_BLOCKS timeout requesting {} blocks from {}; auto-degrading to {} and retrying immediately",
-                    attemptCount, peer, next);
+            LOGGER.debug("GET_BLOCKS timeout at count {}; degrading to {} within shared deadline",
+                    attemptCount, next);
             attemptCount = next;
         }
     }
