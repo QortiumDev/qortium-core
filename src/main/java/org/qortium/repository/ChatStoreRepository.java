@@ -14,6 +14,12 @@ public interface ChatStoreRepository {
 
 	public boolean exists(byte[] signature) throws DataException;
 
+	/**
+	 * Returns whether a retained group-chat row is visible through normal message history.
+	 * Private key-management and rotation envelopes remain stored but are not user messages.
+	 */
+	public boolean isGroupMessageVisible(byte[] signature) throws DataException;
+
 	public ChatTransactionData fromSignature(byte[] signature) throws DataException;
 
 	public List<ChatTransactionData> fromSignatures(List<byte[]> signatures) throws DataException;

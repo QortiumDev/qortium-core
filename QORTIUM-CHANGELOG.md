@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(chat): filter live private control envelopes
+
+Makes group-chat websocket notifications consult the same retained envelope
+classification as history queries. Private key announcements, key requests,
+and rotation controls remain stored and propagated but are no longer emitted
+as user-visible live messages; lookup failure is handled fail-closed.
+
 ### 2026-08-15 - fix(chat): preserve stored transaction fees
 
 Stores and restores the signed CHAT transaction fee in the node-local chat

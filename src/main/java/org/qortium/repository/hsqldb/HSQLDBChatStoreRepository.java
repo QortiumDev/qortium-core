@@ -87,6 +87,19 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 	}
 
 	@Override
+	public boolean isGroupMessageVisible(byte[] signature) throws DataException {
+		String sql = "SELECT 1 FROM ChatMessages CM WHERE CM.signature = ? AND "
+				+ VISIBLE_PRIVATE_GROUP_ENVELOPE_FILTER;
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql,
+				signature, PrivateGroupChatEnvelope.Type.MESSAGE.name())) {
+			return resultSet != null;
+		} catch (SQLException e) {
+			throw new DataException("Unable to check group chat message visibility", e);
+		}
+	}
+
+	@Override
 	public ChatTransactionData fromSignature(byte[] signature) throws DataException {
 		String sql = "SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, "
 				+ "chat_reference, is_text, is_encrypted, data, signature "
