@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - security(windows): restrict developer-reference API exposure
+
+Changes the inherited Windows installer example to bind Core to IPv4 loopback,
+allow full API access only from the IPv4/IPv6 loopback whitelist, keep
+restricted API mode enabled, and disable remote API-key bypass. A profile test
+loads the tracked file through the real settings model and proves that remote
+requests remain denied even with the correct API key. The installer remains a
+developer reference rather than a supported release artifact.
+
 ### 2026-08-16 - docs: start Windows developer-reference API hardening
 
 Starts A-03 as the final separately reviewed Core 1.7.0 hardening tranche. The

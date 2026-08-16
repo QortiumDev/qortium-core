@@ -4,6 +4,14 @@
 > Qortal's Advanced Installer setup and need a future Qortium release-process
 > review before they should be treated as final release instructions.
 
+The bundled example settings are deliberately local-only: Core binds to
+`127.0.0.1`, allows full API access only from the IPv4/IPv6 loopback whitelist,
+keeps restricted API mode enabled, and does not let an API key bypass the
+remote-address policy. Changing the shared `bindAddress` also changes the node's
+inbound peer listener, so anyone adapting this developer reference for a real
+deployment must review both API and peer exposure explicitly rather than simply
+opening the bind address.
+
 ## Prerequisites
 
 * AdvancedInstaller v19.4 or better, and enterprise licence.
