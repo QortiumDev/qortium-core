@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: start copy-isolated local archive export
+
+Starts A-02 as a separately reviewed local-maintenance hardening tranche. Local
+archive creation will sanitize a copied repository instead of temporarily
+deleting minting, trade-bot, or learned-peer rows from the live database. It
+must preserve an existing completed archive on any failure and must not restore
+hosted bootstrap download, import, or repository-replacement behavior.
+
 ### 2026-08-16 - docs: complete normal reorganization atomicity
 
 Completes A-01 after focused and clean full-suite validation. Normal peer-fork

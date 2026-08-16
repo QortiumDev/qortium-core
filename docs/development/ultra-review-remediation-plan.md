@@ -99,7 +99,7 @@ the atomic adoption path; and `git diff --check` passed.
 
 ### A-02 — Local archive export copy isolation
 
-Status: unassigned; local maintenance hardening outside S-01.
+Status: in progress; separately approved before the Core 1.7.0 prerelease.
 
 `Bootstrap.create()` still prepares its backup by temporarily removing
 minting/trade-bot rows and replacing learned peers with initial peers in the live
@@ -207,13 +207,14 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. A-01 is complete in Core source and local
-validation but is not released or deployed. It changes only the transaction and
-post-commit callback boundary inside canonical peer-fork adoption; chain
-weights, peer selection, block validity, synchronization messages, and
-consensus rules are unchanged. A-02 copy-isolated local archive export is the
-next Core 1.7.0 hardening boundary, followed by A-03 Windows developer-reference
-API hardening. A-04 Home integration remains outside this Core-only boundary.
+A-02 copy-isolated local archive export is the only active implementation
+tranche. It may copy the live HSQLDB repository and archive under the blockchain
+lock, sanitize only that private copy, and atomically publish a completed local
+archive plus checksum. It must not mutate live minting, trade-bot, peer, block,
+or archive state; delete or replace an existing completed output before the new
+one is ready; or restore hosted acquisition/import/replacement behavior. A-03
+Windows developer-reference API hardening follows as a separate Core 1.7.0
+tranche. A-04 Home integration remains outside this Core-only boundary.
 
 A-01 was completed by `fix(sync): adopt peer forks atomically`, following the
 tracked start commit. The focused synchronization, block, and orphan matrix
