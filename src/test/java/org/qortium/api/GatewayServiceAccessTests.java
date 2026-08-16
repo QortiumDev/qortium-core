@@ -77,6 +77,9 @@ public class GatewayServiceAccessTests extends Common {
 			assertForbidden(server, "GET /wallet/balance HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertForbidden(server, "POST /render/authorize/APP/Boards/default HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
 			assertForbidden(server, "POST /arbitrary/APP/Boards/base64 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
+			// Gateway protection runs before Jersey authorization. An oversized route that is not public
+			// must still reach the access filter and return 403 rather than consume protection work/return 413.
+			assertForbidden(server, "POST /render/authorize/APP/Boards/default HTTP/1.1\r\nHost: localhost\r\nContent-Length: 17\r\n\r\n");
 		}
 	}
 
@@ -87,6 +90,7 @@ public class GatewayServiceAccessTests extends Common {
 			assertPayloadTooLarge(server, "POST /transactions/process HTTP/1.1\r\nHost: localhost\r\nContent-Length: 17\r\n\r\n");
 			assertPayloadTooLarge(server, "POST /arbitrary/public/APP/name/base64 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2000000\r\n\r\n");
 			assertAllowed(server, "POST /polls/public/vote HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
+			assertAllowed(server, "POST /arbitrary/public/APP/name/base64 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
 			assertAllowed(server, "GET /APP/name/path HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		}
 	}

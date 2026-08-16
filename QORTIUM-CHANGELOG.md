@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - test(api): prove gateway denial precedes work protection
+
+Adds an oversized non-public gateway write that must remain a 403 rather than
+being classified or charged by the outer work-protection handler, plus an
+in-limit public QDN write that reaches the Jersey resource. This locks the
+gateway's protection-before-routing but authorization-before-charging contract.
+
 ### 2026-08-15 - fix(network): close feature-schedule handshake cutover race
 
 Rechecks the locally required feature-trigger schedule after a peer is inserted
