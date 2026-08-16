@@ -31,7 +31,6 @@ import org.qortium.data.arbitrary.ArbitraryFileListResponseInfo;
 import org.qortium.data.arbitrary.ArbitraryRelayInfo;
 import org.qortium.data.network.PeerData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
-import org.qortium.network.Network;
 import org.qortium.network.NetworkData;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerAddress;
@@ -95,10 +94,65 @@ public class ArbitraryDataFileListManager {
 
  
 
-    private Boolean getIsDirectConnectable() {
-        // Transport-aware: a NAT'd node with no usable external IP is still directly connectable
-        // over I2P when it has a usable I2P data destination. canAcceptInboundData() folds both in.
-        return NetworkData.getInstance().canAcceptInboundData();
+    static String selectAdvertisedDataAddress(boolean recipientUsesI2P, String externalIpAddress,
+                                              boolean clearnetInbound, int qdnPort,
+                                              String i2pDataDestination) {
+        if (recipientUsesI2P)
+            return i2pDataDestination == null || i2pDataDestination.isBlank() ? null : i2pDataDestination;
+
+        if (!clearnetInbound || externalIpAddress == null || externalIpAddress.isBlank())
+            return null;
+
+        return externalIpAddress + ":" + qdnPort;
+    }
+
+    static String retainAddressForPeerTransport(String advertisedAddress, Peer peer) {
+        if (advertisedAddress == null || advertisedAddress.isBlank() || peer == null
+                || peer.getPeerData() == null || peer.getPeerData().getAddress() == null)
+            return null;
+
+        try {
+            PeerAddress address = PeerAddress.fromString(advertisedAddress);
+            return address.isI2P() == peer.getPeerData().getAddress().isI2P()
+                    ? advertisedAddress : null;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    static GetArbitraryDataFileListMessage buildTransportScopedFileListRequest(byte[] signature,
+            List<byte[]> hashes, long requestTime, int requestHops, String advertisedAddress,
+            Peer recipient, int messageId) {
+        GetArbitraryDataFileListMessage request = new GetArbitraryDataFileListMessage(signature, hashes,
+                requestTime, requestHops, retainAddressForPeerTransport(advertisedAddress, recipient));
+        request.setId(messageId);
+        return request;
+    }
+
+    static ArbitraryDataFileListMessage buildTransportScopedForwardedFileList(
+            ArbitraryDataFileListMessage source, Peer sender, Peer recipient, Integer requestHops) {
+        String sourceScopedAddress = retainAddressForPeerTransport(source.getPeerAddress(), sender);
+        boolean sourceDirect = Boolean.TRUE.equals(source.isDirectConnectable())
+                && sourceScopedAddress != null;
+        String recipientScopedAddress = retainAddressForPeerTransport(sourceScopedAddress, recipient);
+        boolean recipientDirect = sourceDirect && recipientScopedAddress != null;
+        boolean relayPossible = Boolean.TRUE.equals(source.isRelayPossible());
+        if (!recipientDirect && !relayPossible)
+            return null;
+
+        ArbitraryDataFileListMessage forwarded = new ArbitraryDataFileListMessage(source.getSignature(),
+                source.getHashes(), source.getRequestTime(), requestHops, recipientScopedAddress,
+                source.getNodeId(), relayPossible, recipientDirect);
+        forwarded.setId(source.getId());
+        return forwarded;
+    }
+
+    private String getAdvertisedDataAddress(Peer recipient) {
+        boolean recipientUsesI2P = recipient.getPeerData().getAddress().isI2P();
+        NetworkData networkData = NetworkData.getInstance();
+        return selectAdvertisedDataAddress(recipientUsesI2P, networkData.getOurExternalIpAddress(),
+                networkData.canAcceptInbound(), Settings.getInstance().getQDNListenPort(),
+                networkData.getI2PDataDestination());
     }
 
     public static ArbitraryDataFileListManager getInstance() {
@@ -421,24 +475,6 @@ public class ArbitraryDataFileListManager {
 
         LOGGER.trace(String.format("Sending data file list request for signature %s with %d hashes to %d peers...", signature58, hashCount, handshakedPeers.size()));
 
-        // Send our address as requestingPeer, to allow for potential direct connections with
-        // seeds/peers. Mirror the dial-back selection used when responding: only advertise the
-        // external IP when clearnet inbound is provable, else our I2P data destination, else
-        // omit the field (it is optional on the wire). The previous bare concatenation sent the
-        // literal "null:<port>" for NAT'd nodes, which receivers discard.
-        String requestingPeerExternalIp = Network.getInstance().getOurExternalIpAddress();
-        String requestingPeer;
-        if (requestingPeerExternalIp != null && !requestingPeerExternalIp.isBlank()
-                && NetworkData.getInstance().canAcceptInbound()) {
-            requestingPeer = requestingPeerExternalIp + ":" + Settings.getInstance().getQDNListenPort();
-        } else {
-            // Bare b32 (no port), or null when no usable destination exists
-            requestingPeer = NetworkData.getInstance().getI2PDataDestination();
-        }
-
-        // Build request
-        Message getArbitraryDataFileListMessage = new GetArbitraryDataFileListMessage(signature, missingHashes, now, 0, requestingPeer);
-
         // Save our request into requests map
         Triple<String, Peer, Long> requestEntry = new Triple<>(signature58, null, NTP.getTime());
 
@@ -450,10 +486,13 @@ public class ArbitraryDataFileListManager {
             // Put queue into map (keyed by message ID) so we can poll for a response
             // If putIfAbsent() doesn't return null, then this ID is already taken
         } while (arbitraryDataFileListRequests.put(id, requestEntry) != null);
-        getArbitraryDataFileListMessage.setId(id);
+        final int requestId = id;
 
-        // Broadcast request
-        NetworkData.getInstance().broadcast(peer -> getArbitraryDataFileListMessage);
+        // Build one message per immediate recipient so clearnet and I2P identities are never
+        // co-advertised across transports. The common ID still correlates replies to this request.
+        List<byte[]> finalMissingHashes = missingHashes;
+        NetworkData.getInstance().broadcast(peer -> buildTransportScopedFileListRequest(signature,
+                finalMissingHashes, now, 0, getAdvertisedDataAddress(peer), peer, requestId));
 
         // Poll to see if data has arrived
         final long singleWait = 100;
@@ -705,6 +744,15 @@ public class ArbitraryDataFileListManager {
                     Message message = peerMessage.getMessage();
 
                     ArbitraryDataFileListMessage arbitraryDataFileListMessage = (ArbitraryDataFileListMessage) message;
+                    String scopedHolderAddress = retainAddressForPeerTransport(
+                            arbitraryDataFileListMessage.getPeerAddress(), peer);
+                    boolean directConnectable = Boolean.TRUE.equals(arbitraryDataFileListMessage.isDirectConnectable())
+                            && scopedHolderAddress != null;
+                    boolean relayPossible = Boolean.TRUE.equals(arbitraryDataFileListMessage.isRelayPossible());
+                    if (!directConnectable && !relayPossible) {
+                        LOGGER.trace("Ignoring unusable direct-only file list from {}", peer);
+                        continue;
+                    }
 
                     // Process direct download responses (not relay forwarding)
                     if (!relayRequest) {
@@ -755,7 +803,7 @@ public class ArbitraryDataFileListManager {
                             // Treat null request hops as 100, so that they are able to be sorted (and put to the end of the list)
                             int requestHops = arbitraryDataFileListMessage.getRequestHops() != null ? arbitraryDataFileListMessage.getRequestHops() : 100;
 
-                            String peerWithFilesString = arbitraryDataFileListMessage.getPeerAddress();
+                            String peerWithFilesString = scopedHolderAddress;
                             // The advertised holder address may now be absent (a node with neither a usable
                             // external IP nor a usable I2P data destination advertises nothing). Parse it
                             // defensively so a missing/malformed address falls back to relay-via-sender
@@ -776,7 +824,7 @@ public class ArbitraryDataFileListManager {
 
                             // Only treat as direct-connectable if the holder both advertised that capability
                             // AND gave us a usable address to dial. Otherwise relay via the sender.
-                            if (arbitraryDataFileListMessage.isDirectConnectable() && peerWithFiles != null) {
+                            if (directConnectable && peerWithFiles != null) {
                                 responseInfo = new ArbitraryFileListResponseInfo(hash58, signature58,
                                         peerWithFiles, nodeId, now, arbitraryDataFileListMessage.getRequestTime(), requestHops, true);
                                 // The sender is a connected peer that can relay these chunks, so keep it
@@ -787,7 +835,7 @@ public class ArbitraryDataFileListManager {
                                 // direct-connectable response with isRelayPossible=false must never
                                 // be converted into relay chunk requests.
                                 if (peer != null && peer.getPeerData() != null
-                                        && Boolean.TRUE.equals(arbitraryDataFileListMessage.isRelayPossible()))
+                                        && relayPossible)
                                     responseInfo.setRelayFallbackPeerData(peer.getPeerData());
                                 LOGGER.debug("Adding QDN Direct Connect responseInfo to ArbDataFileManager peer: {} FileHash: {}", peerWithFilesString, hash58);
                             } else { // We have to relay the peers chunks because they cant Direct Connect
@@ -808,7 +856,7 @@ public class ArbitraryDataFileListManager {
                             this.notedUsableFileListResponse(signature58);
 
                         // Keep track of the source peer, for direct connections
-                        String advertisedHolderAddress = arbitraryDataFileListMessage.getPeerAddress();
+                        String advertisedHolderAddress = scopedHolderAddress;
                         if (advertisedHolderAddress != null && !advertisedHolderAddress.isBlank()) {
                             ArbitraryDataFileManager.getInstance().addDirectConnectionInfoIfUnique(
                                     new ArbitraryDirectConnectionInfo(signature, advertisedHolderAddress, arbitraryDataFileListMessage.getNodeId(), hashes, now));
@@ -824,25 +872,26 @@ public class ArbitraryDataFileListManager {
                             LOGGER.trace("Requesting Peer is: {}", requestingPeer);
                             Long requestTime = arbitraryDataFileListMessage.getRequestTime();
                             Integer requestHops = arbitraryDataFileListMessage.getRequestHops();
-                            Boolean isDirectConnectable = arbitraryDataFileListMessage.isDirectConnectable();
+                            ArbitraryDataFileListMessage forwardArbitraryDataFileListMessage =
+                                    buildTransportScopedForwardedFileList(arbitraryDataFileListMessage,
+                                            peer, requestingPeer,
+                                            requestHops == null ? null : requestHops + 1);
+                            if (forwardArbitraryDataFileListMessage == null) {
+                                LOGGER.trace("Dropping cross-transport direct-only file list for {}", requestingPeer);
+                                continue;
+                            }
+                            boolean forwardedDirectConnectable = Boolean.TRUE.equals(
+                                    forwardArbitraryDataFileListMessage.isDirectConnectable());
                             String nodeId = arbitraryDataFileListMessage.getNodeId();
                             // Add each hash to our local mapping so we know who to ask later
                             Long now = NTP.getTime();
                             for (byte[] hash : hashes) {
                                 String hash58 = Base58.encode(hash);
-                                ArbitraryRelayInfo relayInfo = new ArbitraryRelayInfo(hash58, signature58, peer, nodeId, now, requestTime, requestHops, isDirectConnectable);
+                                ArbitraryRelayInfo relayInfo = new ArbitraryRelayInfo(hash58, signature58,
+                                        peer, nodeId, now, requestTime, requestHops,
+                                        forwardedDirectConnectable);
                                 ArbitraryDataFileManager.getInstance().addToRelayMap(relayInfo);
                             }
-
-                            // Bump requestHops if it exists
-                            if (requestHops != null) {
-                                requestHops++;
-                            }
-
-                            ArbitraryDataFileListMessage forwardArbitraryDataFileListMessage = new ArbitraryDataFileListMessage(signature, hashes, requestTime, requestHops,
-                                    arbitraryDataFileListMessage.getPeerAddress(), arbitraryDataFileListMessage.getNodeId(), arbitraryDataFileListMessage.isRelayPossible(), arbitraryDataFileListMessage.isDirectConnectable());
-
-                            forwardArbitraryDataFileListMessage.setId(message.getId());
 
                             // Forward to requesting peer
                             LOGGER.trace("Forwarding file list with {} hashes to requesting peer: {}", hashes.size(), requestingPeer);
@@ -916,7 +965,8 @@ public class ArbitraryDataFileListManager {
 
                 List<byte[]> requestedHashes = getArbitraryDataFileListMessage.getHashes();
                 int hashCount = requestedHashes != null ? requestedHashes.size() : 0;
-                String requestingPeer = getArbitraryDataFileListMessage.getRequestingPeer();
+                String requestingPeer = retainAddressForPeerTransport(
+                        getArbitraryDataFileListMessage.getRequestingPeer(), peer);
 
                 if (requestingPeer != null) {
                     LOGGER.trace("Received a request to provide a list request with {} hashes from peer {} (requesting peer {}) for signature {} messageId {}", hashCount, peer, requestingPeer, signature58, message.getId());
@@ -1089,22 +1139,7 @@ public class ArbitraryDataFileListManager {
                         arbitraryDataFileListRequests.put(message.getId(), newEntry);
                     }
 
-                    // Advertise an address requesters can dial back to. Only advertise the external
-                    // IP when clearnet inbound is actually provable (port mapped, configured external
-                    // address, or a recent inbound handshake) - merely KNOWING our NAT'd public IP
-                    // from peers' HELLOs does not make it dialable, and advertising it sent every
-                    // fetcher to a dead address. Otherwise fall back to our I2P data destination,
-                    // which is dialable regardless of NAT. Never advertise the literal "null:port"
-                    // we used to emit.
-                    String externalIpAddress = Network.getInstance().getOurExternalIpAddress();
-                    String ourAddress;
-                    if (externalIpAddress != null && !externalIpAddress.isBlank()
-                            && NetworkData.getInstance().canAcceptInbound()) {
-                        ourAddress = externalIpAddress + ":" + Settings.getInstance().getQDNListenPort();
-                    } else {
-                        // Bare b32 (no port) — PeerAddress classifies it as I2P. May be null if no usable dest.
-                        ourAddress = NetworkData.getInstance().getI2PDataDestination();
-                    }
+                    String ourAddress = getAdvertisedDataAddress(peer);
                     LOGGER.trace("We Think our external address is: {}", ourAddress);
                     ArbitraryDataFileListMessage arbitraryDataFileListMessage;
 
@@ -1112,7 +1147,7 @@ public class ArbitraryDataFileListManager {
 
                     String nodeId = NetworkData.getInstance().getOurNodeId();
                     arbitraryDataFileListMessage = new ArbitraryDataFileListMessage(signature,
-                        hashes, NTP.getTime(), 0, ourAddress, nodeId, true, this.getIsDirectConnectable());
+                        hashes, NTP.getTime(), 0, ourAddress, nodeId, true, ourAddress != null);
 
                     arbitraryDataFileListMessage.setId(message.getId());
 
@@ -1166,13 +1201,18 @@ public class ArbitraryDataFileListManager {
                             // Using missingRequestedHashes would filter based on our incomplete knowledge (we may not have metadata).
                             // This ensures the origin node can provide the complete picture directly to the requester.
                             List<byte[]> relayHashes = originalRequestedHashes;
-                            Message relayGetArbitraryDataFileListMessage = new GetArbitraryDataFileListMessage(signature, relayHashes, requestTime, requestHops, requestingPeer);
-                            relayGetArbitraryDataFileListMessage.setId(message.getId());
-
                             LOGGER.debug("Rebroadcasting hash list request from peer {} for signature {} to our other peers... totalRequestTime: {}, requestHops: {}", peer, Base58.encode(signature), totalRequestTime, requestHops);
                             NetworkData.getInstance().broadcast(
-                                    broadcastPeer ->
-                                            broadcastPeer == peer || Objects.equals(broadcastPeer.getPeerData().getAddress().getHost(), peer.getPeerData().getAddress().getHost()) ? null : relayGetArbitraryDataFileListMessage
+                                    broadcastPeer -> {
+                                        if (broadcastPeer == peer || Objects.equals(
+                                                broadcastPeer.getPeerData().getAddress().getHost(),
+                                                peer.getPeerData().getAddress().getHost()))
+                                            return null;
+
+                                        return buildTransportScopedFileListRequest(signature, relayHashes,
+                                                requestTime, requestHops, requestingPeer, broadcastPeer,
+                                                message.getId());
+                                    }
                             );
                         } else {
                             LOGGER.trace("Request has reached the maximum number of allowed hops");

@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(qdn): scope file-list addresses to recipient transport
+
+Builds QDN file-list requests and responses separately for each immediate peer.
+Clearnet peers receive a direct address only when the data port is provably
+reachable; I2P peers receive only the live data-layer destination. Incoming and
+relayed addresses are parsed and retained only across the same transport,
+cross-transport direct-and-relay replies become relay-only, and unusable
+direct-only replies are dropped. Message IDs and wire formats remain unchanged.
+
 ### 2026-08-15 - fix(network): scope HELLO identities by layer and transport
 
 Builds and sanitizes HELLO routing capabilities from both the connection layer
