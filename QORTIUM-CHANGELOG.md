@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(network): keep minting identity traffic on chain layer
+
+Ignores legacy online-account and node reward-bundle messages received through
+the QDN data overlay. These identities remain available through the chain
+network where they are produced and validated, preventing a data connection
+from being used as a second cross-layer identity query path.
+
 ### 2026-08-15 - fix(qdn): scope file-list addresses to recipient transport
 
 Builds QDN file-list requests and responses separately for each immediate peer.

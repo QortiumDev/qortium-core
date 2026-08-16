@@ -123,6 +123,12 @@ public class OnlineAccountBundleManagerTests extends Common {
 				new GetOnlineAccountBundlesMessage(List.of(known)));
 		assertEquals(1, peer.sentMessages.size());
 		assertTrue(((OnlineAccountBundlesMessage) peer.sentMessages.get(0)).getBundles().isEmpty());
+
+		CapturingPeer dataPeer = new CapturingPeer(Peer.NETWORKDATA);
+		Controller.getInstance().onNetworkMessage(dataPeer,
+				new GetOnlineAccountBundlesMessage(Collections.emptyList()));
+		assertTrue("Reward bundle inventory must remain on the chain layer",
+				dataPeer.sentMessages.isEmpty());
 	}
 
 	@Test
@@ -391,7 +397,11 @@ public class OnlineAccountBundleManagerTests extends Common {
 		private final List<Message> sentMessages = new ArrayList<>();
 
 		private CapturingPeer() {
-			super(new PeerData(new PeerAddress("127.0.0.1:24892")), Peer.NETWORK);
+			this(Peer.NETWORK);
+		}
+
+		private CapturingPeer(int peerType) {
+			super(new PeerData(new PeerAddress("127.0.0.1:24892")), peerType);
 		}
 
 		@Override
