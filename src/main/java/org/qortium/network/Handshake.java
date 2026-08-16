@@ -502,6 +502,20 @@ public enum Handshake {
 		}
 	}
 
+	static boolean enforceCompletedPeerFeatureSchedule(Peer peer) {
+		int currentHeight = Controller.getInstance().getChainHeight();
+		int nextBlockHeight = currentHeight == Integer.MAX_VALUE ? Integer.MAX_VALUE : currentHeight + 1;
+		return enforceCompletedPeerFeatureSchedule(peer, nextBlockHeight);
+	}
+
+	static boolean enforceCompletedPeerFeatureSchedule(Peer peer, long nextBlockHeight) {
+		if (areChainCapabilitiesCompatible(peer.getPeersCapabilities(), nextBlockHeight))
+			return true;
+
+		peer.disconnect("incompatible feature-trigger schedule at handshake completion");
+		return false;
+	}
+
 	/** Maximum allowed difference between peer's reported timestamp and when they connected, in milliseconds. */
 	private static final long MAX_TIMESTAMP_DELTA = 30 * 1000L; // ms
 

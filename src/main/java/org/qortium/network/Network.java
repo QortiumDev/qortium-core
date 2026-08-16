@@ -2847,6 +2847,11 @@ public class Network {
             }
         }
 
+		// The local tip can cross the schedule boundary while this peer is completing challenge/PoW.
+		// Recheck only after insertion so it cannot miss both the cutover snapshot and completion path.
+		if (!Handshake.enforceCompletedPeerFeatureSchedule(peer))
+			return;
+
         // Make a note that we've successfully completed handshake (and when)
         peer.getPeerData().setLastConnected(NTP.getTime());
 

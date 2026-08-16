@@ -130,6 +130,22 @@ public class HandshakeCompatibilityTests extends Common {
 		assertTrue(dataPeer.disconnected);
 	}
 
+	@Test
+	public void testPeerAcceptedBeforeCutoverIsRejectedWhenHandshakeCompletesAtCutover() throws Exception {
+		FieldUtils.writeField(BlockChain.getInstance(), "featureTriggerScheduleEnforcementHeight", 100L, true);
+		TrackingPeer peer = peer(Peer.NETWORK, false);
+
+		assertTrue("HELLO remains compatible one block before enforcement",
+				Handshake.areChainCapabilitiesCompatible(peer.getPeersCapabilities(), 99L));
+		Network.getInstance().addConnectedPeer(peer);
+		Network.getInstance().addHandshakedPeer(peer);
+		assertTrue(Network.getInstance().getImmutableHandshakedPeers().contains(peer));
+		assertFalse("Completion after the boundary must recheck the now-required schedule",
+				Handshake.enforceCompletedPeerFeatureSchedule(peer, 100L));
+		assertTrue(peer.disconnected);
+		assertFalse(Network.getInstance().getImmutableHandshakedPeers().contains(peer));
+	}
+
 	private static TrackingPeer peer(int peerType, boolean matchingSchedule) throws Exception {
 		String address = peerType == Peer.NETWORK ? "198.51.100.10:24892" : "198.51.100.10:24894";
 		TrackingPeer peer = new TrackingPeer(new PeerData(PeerAddress.fromString(address)), peerType);
@@ -150,6 +166,7 @@ public class HandshakeCompatibilityTests extends Common {
 		@Override
 		public void disconnect(String reason) {
 			this.disconnected = true;
+			super.disconnect(reason);
 		}
 	}
 }

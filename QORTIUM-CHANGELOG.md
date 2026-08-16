@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(network): close feature-schedule handshake cutover race
+
+Rechecks the locally required feature-trigger schedule after a peer is inserted
+into the handshaked set. A peer that passed HELLO just before height 99,990 but
+was still completing challenge or proof-of-work when the boundary arrived can
+no longer miss both the HELLO check and the existing-session cutover sweep.
+
 ### 2026-08-15 - test(consensus): cover trigger registry configuration failures
 
 Loads the actual local-testnet schedule through Core's settings path and pins
