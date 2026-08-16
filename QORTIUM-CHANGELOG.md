@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(network): scope HELLO identities by layer and transport
+
+Builds and sanitizes HELLO routing capabilities from both the connection layer
+and its transport. Chain/IP peers receive only the direct QDN port, chain/I2P
+peers only the chain I2P destination, data/IP peers no routing identity, and
+data/I2P peers only the data I2P destination. All four retain the chain identity
+triple, while legacy or malicious cross-layer address capabilities are stripped
+without disconnecting the peer. Chain connections can no longer seed data-layer
+I2P addresses.
+
 ### 2026-08-15 - fix(minting): persist reward identity beside active settings
 
 Moves the local reward-node identity from a working-directory-dependent path to

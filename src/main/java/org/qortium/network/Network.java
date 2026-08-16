@@ -589,7 +589,7 @@ public class Network {
             // I2P-scoped capabilities: this re-advertise targets I2P peers only and its whole purpose is to
             // carry our chain I2P destination (now that the SAM session is up). The no-arg overload defaults
             // to clearnet scope and would omit the I2P destination, so request I2P scope explicitly.
-            Map<String, Object> capabilities = Handshake.buildHelloCapabilities(true);
+            Map<String, Object> capabilities = Handshake.buildHelloCapabilities(Peer.NETWORK, true);
             String senderPeerAddress = peer.getPeerData().getAddress().toString();
             return new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
         });
