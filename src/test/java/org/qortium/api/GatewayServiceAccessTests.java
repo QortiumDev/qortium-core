@@ -42,8 +42,13 @@ public class GatewayServiceAccessTests extends Common {
 				"GET /render/*",
 				"GET /apps/*",
 				"GET /names/*",
-				"GET /chat/*"
+				"GET /chat/*",
+				"POST /polls/public/vote",
+				"POST /transactions/process",
+				"POST /arbitrary/public/*"
 		}, true);
+		FieldUtils.writeField(this.settings, "publicApiWriteMaxBodySize", 16L, true);
+		FieldUtils.writeField(this.settings, "publicQdnPublishMaxSize", 16L, true);
 	}
 
 	@Test
@@ -75,12 +80,27 @@ public class GatewayServiceAccessTests extends Common {
 		}
 	}
 
+	@Test
+	public void testGatewayPublicWritesUseTheSameProtectionBoundary() throws Exception {
+		try (HandlerServer server = new HandlerServer()) {
+			assertPayloadTooLarge(server, "POST /polls/public/vote HTTP/1.1\r\nHost: localhost\r\nContent-Length: 17\r\n\r\n");
+			assertPayloadTooLarge(server, "POST /transactions/process HTTP/1.1\r\nHost: localhost\r\nContent-Length: 17\r\n\r\n");
+			assertPayloadTooLarge(server, "POST /arbitrary/public/APP/name/base64 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2000000\r\n\r\n");
+			assertAllowed(server, "POST /polls/public/vote HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
+			assertAllowed(server, "GET /APP/name/path HTTP/1.1\r\nHost: localhost\r\n\r\n");
+		}
+	}
+
 	private static void assertAllowed(HandlerServer server, String request) throws Exception {
 		assertTrue(server.request(request).startsWith("HTTP/1.1 204"));
 	}
 
 	private static void assertForbidden(HandlerServer server, String request) throws Exception {
 		assertTrue(server.request(request).startsWith("HTTP/1.1 403"));
+	}
+
+	private static void assertPayloadTooLarge(HandlerServer server, String request) throws Exception {
+		assertTrue(server.request(request).startsWith("HTTP/1.1 413"));
 	}
 
 	private static final class HandlerServer implements AutoCloseable {
@@ -96,8 +116,10 @@ public class GatewayServiceAccessTests extends Common {
 			ServletHolder apiServlet = new ServletHolder(new ServletContainer(config));
 			context.addServlet(apiServlet, "/*");
 
+			PublicApiProtectionHandler protection = new PublicApiProtectionHandler(() -> 0L);
+			protection.setHandler(context);
 			this.server.addConnector(this.connector);
-			this.server.setHandler(context);
+			this.server.setHandler(protection);
 			this.server.start();
 		}
 
@@ -186,6 +208,18 @@ public class GatewayServiceAccessTests extends Common {
 		@POST
 		@Path("arbitrary/{path:.*}")
 		public Response postArbitrary() {
+			return Response.noContent().build();
+		}
+
+		@POST
+		@Path("polls/public/vote")
+		public Response postPollVote() {
+			return Response.noContent().build();
+		}
+
+		@POST
+		@Path("transactions/process")
+		public Response postTransaction() {
 			return Response.noContent().build();
 		}
 	}

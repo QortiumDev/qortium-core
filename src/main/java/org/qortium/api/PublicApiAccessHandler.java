@@ -13,7 +13,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Locale;
 
 public class PublicApiAccessHandler extends Handler.Wrapper {
 
@@ -61,7 +60,7 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 			return false;
 
 		return matchesAny(remoteAddress, settings.getPublicApiWhitelist())
-				&& matchesPublicPath(method, path, settings.getPublicApiPaths());
+				&& PublicApiRoutePolicy.isAllowed(method, path, settings.getPublicApiPaths());
 	}
 
 	static boolean isTrustedRequest(String remoteAddress, String passedApiKey, String nodeApiKey, Settings settings) {
@@ -123,43 +122,6 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 		}
 
 		return false;
-	}
-
-	private static boolean matchesPublicPath(String method, String path, String[] allowedPaths) {
-		if (method == null || path == null || allowedPaths == null)
-			return false;
-
-		String requestMethod = method.trim().toUpperCase(Locale.ROOT);
-		for (String allowedPath : allowedPaths) {
-			String[] parts = parseAllowedPath(allowedPath);
-			if (parts == null)
-				continue;
-
-			if (parts[0].equals(requestMethod) && matchesAllowedPath(parts[1], path))
-				return true;
-		}
-
-		return false;
-	}
-
-	private static boolean matchesAllowedPath(String allowedPath, String requestPath) {
-		if (allowedPath.endsWith("/*")) {
-			String pathPrefix = allowedPath.substring(0, allowedPath.length() - 2);
-			return requestPath.equals(pathPrefix) || requestPath.startsWith(pathPrefix + "/");
-		}
-
-		return allowedPath.equals(requestPath);
-	}
-
-	private static String[] parseAllowedPath(String allowedPath) {
-		if (allowedPath == null)
-			return null;
-
-		String[] parts = allowedPath.trim().split("\\s+", 2);
-		if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank())
-			return null;
-
-		return new String[] {parts[0].toUpperCase(Locale.ROOT), parts[1]};
 	}
 
 }

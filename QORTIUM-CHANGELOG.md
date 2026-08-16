@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(api): protect public writes on every API listener
+
+Uses one raw-path policy for public authorization and work classification,
+preserving the existing exact and terminal-wildcard grammar without decoding
+or normalizing request paths. Every allowlisted non-GET route now receives a
+bounded work class, including future custom routes, and the Preview seed
+gateway listener now applies the same body, rate, and concurrency protection
+as the main API listener. The originally reported path-variant bypass remains
+blocked by access control; this change also closes the real alternate-port gap.
+
 ### 2026-08-15 - fix(network): enforce feature-trigger schedules at activation
 
 Advertises the versioned feature-trigger schedule commitment on both peer
