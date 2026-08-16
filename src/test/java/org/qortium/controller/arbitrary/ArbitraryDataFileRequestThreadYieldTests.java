@@ -6,34 +6,34 @@ import static org.junit.Assert.assertEquals;
 
 /**
  * Covers the pure effectiveBatchSize() decision behind chain-first QDN yielding
- * (Settings.qdnYieldDuringSync / qdnSyncYieldBatchSize): while the node is not caught up with the
- * chain, the per-peer chunk batch size is capped at qdnSyncYieldBatchSize; once caught up, or when
- * yielding is disabled, the normal (initial/max) batch size passes through unchanged.
+ * (Settings.qdnYieldDuringSync / qdnSyncYieldBatchSize): while genuine chain catch-up is active,
+ * the per-peer chunk batch size is capped at qdnSyncYieldBatchSize; otherwise, or when yielding is
+ * disabled, the normal peer window passes through unchanged.
  *
  * Also covers the pure arithmetic behind the feedback-based (AIMD) chunk-batching window
  * (Settings.qdnAdaptiveBatching): nextWindowAfterCleanInterval() (additive increase, capped at max) and
  * nextWindowAfterExpiry() (multiplicative decrease, floored at 1). The sync-yield cap above (effectiveBatchSize)
- * is applied AFTER the AIMD window, unchanged, so both sets of tests exercise independent, composable stages.
+ * is applied AFTER the peer-specific AIMD window, so both sets of tests exercise independent stages.
  */
 public class ArbitraryDataFileRequestThreadYieldTests {
 
 	@Test
-	public void testUpToDateUsesDesiredBatchSizeRegardlessOfYieldSetting() {
-		assertEquals(40, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 40, true, 1));
-		assertEquals(10, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 10, true, 1));
-		assertEquals(40, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 40, false, 1));
-	}
-
-	@Test
-	public void testNotUpToDateAndYieldingCapsAtSyncYieldBatchSize() {
-		assertEquals(1, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 40, true, 1));
-		assertEquals(1, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 10, true, 1));
-	}
-
-	@Test
-	public void testNotUpToDateButYieldDisabledUsesDesiredBatchSize() {
+	public void testNoCatchUpUsesDesiredBatchSizeRegardlessOfYieldSetting() {
+		assertEquals(40, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 40, true, 1));
+		assertEquals(10, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 10, true, 1));
 		assertEquals(40, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 40, false, 1));
-		assertEquals(10, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 10, false, 1));
+	}
+
+	@Test
+	public void testCatchUpAndYieldingCapsAtSyncYieldBatchSize() {
+		assertEquals(1, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 40, true, 1));
+		assertEquals(1, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 10, true, 1));
+	}
+
+	@Test
+	public void testCatchUpButYieldDisabledUsesDesiredBatchSize() {
+		assertEquals(40, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 40, false, 1));
+		assertEquals(10, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 10, false, 1));
 	}
 
 	@Test
@@ -41,12 +41,12 @@ public class ArbitraryDataFileRequestThreadYieldTests {
 		// If the configured yield batch size is larger than what was already desired (e.g. a small
 		// initial ramp-up batch), the smaller desired size still wins - yielding must never increase
 		// the effective batch size.
-		assertEquals(5, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 5, true, 20));
+		assertEquals(5, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 5, true, 20));
 	}
 
 	@Test
 	public void testYieldBatchSizeEqualToDesiredIsUnaffected() {
-		assertEquals(1, ArbitraryDataFileRequestThread.effectiveBatchSize(false, 1, true, 1));
+		assertEquals(1, ArbitraryDataFileRequestThread.effectiveBatchSize(true, 1, true, 1));
 	}
 
 	@Test

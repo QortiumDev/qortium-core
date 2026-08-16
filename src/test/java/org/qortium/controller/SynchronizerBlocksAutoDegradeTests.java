@@ -3,7 +3,11 @@ package org.qortium.controller;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -76,5 +80,72 @@ public class SynchronizerBlocksAutoDegradeTests {
 			count = Synchronizer.nextBlocksCountAfterSuccess(count, max);
 			assertEquals(expected, count);
 		}
+	}
+
+	@Test
+	public void testDeadPeerCannotConsumeMoreThanSharedRetryBudget() throws Exception {
+		int timeoutMillis = 10_000;
+		long budgetMillis = Synchronizer.blocksBatchRetryBudgetMillis(timeoutMillis);
+		AtomicLong now = new AtomicLong(0L);
+		List<Integer> attempts = new ArrayList<>();
+
+		Synchronizer.BlocksFetchResult result = Synchronizer.fetchBlocksWithAutoDegrade(
+				100, 100, true, timeoutMillis, TimeUnit.MILLISECONDS.toNanos(budgetMillis),
+				now::get, () -> false, (count, attemptDeadline) -> {
+					attempts.add(count);
+					now.set(attemptDeadline);
+					return null;
+				});
+
+		assertEquals(java.util.Arrays.asList(100, 50), attempts);
+		assertEquals(budgetMillis, TimeUnit.NANOSECONDS.toMillis(now.get()));
+		assertEquals(null, result.blocks);
+	}
+
+	@Test
+	public void testFastFailuresCanDegradeButRemainAttemptBounded() throws Exception {
+		AtomicLong now = new AtomicLong(0L);
+		List<Integer> attempts = new ArrayList<>();
+		long deadline = TimeUnit.SECONDS.toNanos(20);
+
+		Synchronizer.fetchBlocksWithAutoDegrade(100, 100, true, 10_000, deadline,
+				now::get, () -> false, (count, attemptDeadline) -> {
+					attempts.add(count);
+					return null;
+				});
+
+		assertEquals(java.util.Arrays.asList(100, 50, 25, 12, 6, 3, 1), attempts);
+	}
+
+	@Test
+	public void testStoppingCancelsBeforeAnotherAttempt() throws Exception {
+		AtomicLong now = new AtomicLong(0L);
+		AtomicBoolean stopping = new AtomicBoolean(false);
+		List<Integer> attempts = new ArrayList<>();
+
+		Synchronizer.fetchBlocksWithAutoDegrade(100, 100, true, 10_000,
+				TimeUnit.SECONDS.toNanos(20), now::get, stopping::get,
+				(count, attemptDeadline) -> {
+					attempts.add(count);
+					stopping.set(true);
+					return null;
+				});
+
+		assertEquals(Collections.singletonList(100), attempts);
+	}
+
+	@Test
+	public void testSuccessWithinBudgetRecoversNextCap() throws Exception {
+		AtomicLong now = new AtomicLong(0L);
+		Synchronizer.BlocksFetchResult result = Synchronizer.fetchBlocksWithAutoDegrade(
+				100, 100, true, 10_000, TimeUnit.SECONDS.toNanos(20), now::get, () -> false,
+				(count, attemptDeadline) -> {
+					if (count == 100)
+						return null;
+					return Collections.emptyList();
+				});
+
+		assertEquals(100, result.nextRequestCap);
+		assertTrue(result.blocks.isEmpty());
 	}
 }

@@ -34,6 +34,45 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: complete ultra-review adaptive networking
+
+Records T7 complete in Core source, focused tests, and the local packaged
+artifact. QDN adaptation is isolated and coalesced by serving peer, QDN yields
+only during genuine chain catch-up, GET_BLOCKS retries share a fixed deadline,
+and ping tasks cannot overlap per peer. The combined suite passed 74/74 and the
+clean package passed 3,092 tests with 67 skips. This is not a release,
+deployment, or live mixed-speed network validation.
+
+### 2026-08-15 - fix(network): serialize peer ping tasks
+
+Allows only one ping task at a time for each peer and releases that guard after
+success, timeout, disconnect, or interruption. A slow peer can no longer create
+overlapping tasks that race the consecutive-miss counter or overwrite newer
+round-trip state when the configured ping timeout exceeds the ping interval.
+
+### 2026-08-15 - fix(sync): bound GET_BLOCKS retry time
+
+Bounds an auto-degrading GET_BLOCKS batch to one shared deadline of at most two
+configured response windows, including time spent queueing the request. A dead
+peer can no longer multiply the full timeout across every halved batch size,
+and shutdown or interruption cancels before another attempt. Existing archive
+serving and the slow-sync fallback remain unchanged.
+
+### 2026-08-15 - fix(qdn): isolate adaptive batching by peer
+
+Gives each data peer its own QDN AIMD window, coalesces multiple expired chunks
+from one peer into one loss per interval, and attributes successful delivery to
+the serving peer. QDN now yields only for active synchronization or a vetted
+fresh higher tip, so a synchronized node is no longer throttled merely because
+it has fewer peers than the minting quorum.
+
+### 2026-08-15 - docs: start ultra-review adaptive networking tranche
+
+Starts T7 with four bounded networking repairs: isolate and coalesce QDN AIMD
+feedback by peer, throttle QDN only during genuine chain catch-up, cap the total
+GET_BLOCKS retry time, and permit only one ping task per peer. This boundary does
+not change network encodings, chain validation, archive serving, or consensus.
+
 ### 2026-08-15 - docs: complete ultra-review transport privacy
 
 Records T6 complete in Core source and local artifact validation. QDN file-list

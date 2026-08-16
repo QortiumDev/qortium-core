@@ -168,6 +168,8 @@ public class Peer {
      * When last PING message was sent, or null if pings not started yet.
      */
     private Long lastPingSent = null;
+	/** Prevent overlapping ping tasks when a configured timeout exceeds the ping interval. */
+	private final AtomicBoolean pingTaskInFlight = new AtomicBoolean(false);
 
     /**
      * Count of CONSECUTIVE missed pings (PONG not received within {@code peerPingTimeoutMillis}).
@@ -1388,6 +1390,50 @@ public class Peer {
         }
     }
 
+    /**
+     * Send a request and await its response within one absolute deadline shared by queueing and waiting.
+     * Unlike {@link #getResponseWithTimeout(Message, int)}, time spent queueing the request is deducted
+     * from the response wait. This is used by retry loops that must honor a total wall-clock budget.
+     */
+    public Message getResponseWithDeadline(Message message, long deadlineNanos) throws InterruptedException {
+        BlockingQueue<Message> blockingQueue = new ArrayBlockingQueue<>(1);
+
+        Random random = new Random();
+        int id;
+        do {
+            id = random.nextInt(Integer.MAX_VALUE - 1) + 1;
+        } while (this.replyQueues.putIfAbsent(id, blockingQueue) != null);
+        message.setId(id);
+
+        try {
+            int sendTimeout = remainingTimeoutMillis(deadlineNanos, System.nanoTime());
+            if (sendTimeout <= 0 || !this.sendMessageWithTimeout(message, sendTimeout))
+                return null;
+
+            int responseTimeout = remainingTimeoutMillis(deadlineNanos, System.nanoTime());
+            if (responseTimeout <= 0)
+                return null;
+
+            return blockingQueue.poll(responseTimeout, TimeUnit.MILLISECONDS);
+        } catch (IOException e) {
+            LOGGER.debug("Socket closed while sending deadline-bounded request to peer {}: {}", this, e.getMessage());
+            return null;
+        } finally {
+            this.replyQueues.remove(id);
+        }
+    }
+
+    /* package */ static int remainingTimeoutMillis(long deadlineNanos, long nowNanos) {
+        long remainingNanos = deadlineNanos - nowNanos;
+        if (remainingNanos <= 0)
+            return 0;
+
+        long remainingMillis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
+        if (remainingMillis == 0)
+            remainingMillis = 1;
+        return (int) Math.min(Integer.MAX_VALUE, remainingMillis);
+    }
+
 
     public void markMeaningfulQdnUse() {
         Long now = NTP.getTime();
@@ -1456,11 +1502,25 @@ public class Peer {
             return null; // Not yet
         }
 
+		// A slow or saturated peer can outlive the ping interval. Let the existing task finish before
+		// another one mutates the consecutive-miss counter or last-ping state.
+		if (!this.pingTaskInFlight.compareAndSet(false, true))
+			return null;
+
         // Not strictly true, but prevents this peer from being immediately chosen again
         this.lastPingSent = now;
 
         return new PingTask(this, now);
     }
+
+	/** Called by PingTask in a finally block after every success, miss, disconnect, or interruption. */
+	public void completePingTask() {
+		this.pingTaskInFlight.set(false);
+	}
+
+	/* package */ boolean isPingTaskInFlight() {
+		return this.pingTaskInFlight.get();
+	}
 
     public void disconnect(String reason) {
         if (!isStopping) {

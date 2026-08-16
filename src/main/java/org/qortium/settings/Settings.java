@@ -411,10 +411,10 @@ public class Settings {
 	 * count for that peer (floor 1) and retries immediately, within the current sync session, instead of
 	 * giving up the whole round on one timeout. A successful response at a degraded count lets the next
 	 * request try double the count again (capped at {@code maxBlocksPerRequest}). This state is scoped to
-	 * a single sync attempt only - nothing persists across sessions or is stored on Peer/Settings. Only
-	 * when the minimal (count 1) request also times out does the existing failure handling apply, exactly
-	 * as before this change. Defaults to true; set false to restore the previous fixed-count, single-
-	 * attempt-per-request behavior.
+	 * one synchronization attempt and is not persisted. All retries share at most two configured response
+	 * windows, including request queueing time. Shutdown or interruption cancels before another attempt.
+	 * A terminal failure uses the normal slow-sync fallback and leaves existing peer-failure accounting
+	 * unchanged. Defaults to true; set false to restore fixed-count, single-attempt behavior.
 	 */
 	private boolean blocksBatchAutoDegrade = true;
 

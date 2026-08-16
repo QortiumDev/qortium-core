@@ -934,9 +934,10 @@ public class ArbitraryDataFileManager extends Thread {
     /**
      * Clears in-flight and tried state when we successfully receive the chunk.
      */
-    public void clearChunkReceived(String hash58, String signature58) {
-        inFlightRequestsByHash.remove(hash58);
+    public String clearChunkReceived(String hash58, String signature58) {
+        InFlightRequestInfo info = inFlightRequestsByHash.remove(hash58);
         triedPeersByChunk.remove(signature58 + "|" + hash58);
+        return info == null ? null : info.peerAddress;
     }
 
     /**
@@ -970,19 +971,20 @@ public class ArbitraryDataFileManager extends Thread {
         triedPeersByChunk.keySet().removeIf(k -> k != null && k.startsWith(prefix));
     }
 
-    private void clearTimedOutChunkRequest(String hash58) {
+    private String clearTimedOutChunkRequest(String hash58) {
         InFlightRequestInfo inFlightRequestInfo = inFlightRequestsByHash.remove(hash58);
         if (inFlightRequestInfo == null)
-            return;
+            return null;
 
         String key = inFlightRequestInfo.signature58 + "|" + hash58;
         Set<String> triedPeers = triedPeersByChunk.get(key);
         if (triedPeers == null)
-            return;
+            return inFlightRequestInfo.peerAddress;
 
         triedPeers.remove(inFlightRequestInfo.peerAddress);
         if (triedPeers.isEmpty())
             triedPeersByChunk.remove(key);
+        return inFlightRequestInfo.peerAddress;
     }
 
 
@@ -1010,17 +1012,18 @@ public class ArbitraryDataFileManager extends Thread {
         }
         final long requestMinimumTimestamp = now - ArbitraryDataManager.getArbitraryRequestTimeout();
         // Always remove after timeout so chunk becomes re-requestable; don't block on queue state (avoids stuck IDLE)
+        Set<String> peersWithExpiredRequests = new HashSet<>();
         arbitraryDataFileRequests.entrySet().removeIf(entry -> {
             Long value = entry.getValue();
             if (value == null || value < requestMinimumTimestamp) {
-                clearTimedOutChunkRequest(entry.getKey());
-                // AIMD feedback: this hash's qdnRequestTimeoutMillis bookkeeping just expired - drives the
-                // multiplicative decrease of the adaptive chunk-batching window.
-                ArbitraryDataFileRequestThread.getInstance().onChunkRequestExpired(entry.getKey());
+                String peerAddress = clearTimedOutChunkRequest(entry.getKey());
+                if (peerAddress != null)
+                    peersWithExpiredRequests.add(peerAddress);
                 return true;
             }
             return false;
         });
+        ArbitraryDataFileRequestThread.getInstance().onChunkRequestsExpired(peersWithExpiredRequests);
 
         // Clean up validation guard map with longer timeout (3 minutes to handle slow networks)
         // This allows validation of chunks that arrive after the main map has been cleaned up
@@ -1348,8 +1351,8 @@ public class ArbitraryDataFileManager extends Thread {
             removeGuardTracking(hash58);
             // Clear in-flight/tried state and notify request thread to remove chunk from batch pending (enables retry on timeout)
             String signature58 = Base58.encode(signature);
-            clearChunkReceived(hash58, signature58);
-            ArbitraryDataFileRequestThread.getInstance().onChunkReceived(signature58, hash58);
+            String peerAddress = clearChunkReceived(hash58, signature58);
+            ArbitraryDataFileRequestThread.getInstance().onChunkReceived(signature58, hash58, peerAddress);
         } catch (DataException de) {
             LOGGER.error("FAILED to write hash chunk to disk!");
             // Clear fileContent even on save failure to free memory

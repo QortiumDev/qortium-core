@@ -30,40 +30,43 @@ public class PingTask implements Task {
 
     @Override
     public void perform() throws InterruptedException {
-        LOGGER.trace("[{}] Sending PING to peer {}", peer.getPeerConnectionId(), peer);
+		try {
+			LOGGER.trace("[{}] Sending PING to peer {}", peer.getPeerConnectionId(), peer);
 
-        PingMessage pingMessage = new PingMessage();
-        // Use a short timeout by default - if peer doesn't respond to ping quickly, disconnect.
-        // Configurable via peerPingTimeoutMillis (default 4s) so slow-link operators can widen this
-        // window without weakening dead-peer detection for everyone else.
-        Message message = peer.getResponseWithTimeout(pingMessage, Settings.getInstance().getPeerPingTimeoutMillis());
+			PingMessage pingMessage = new PingMessage();
+			// Use a short timeout by default - if peer doesn't respond to ping quickly, disconnect.
+			// Configurable via peerPingTimeoutMillis (default 4s) so slow-link operators can widen this
+			// window without weakening dead-peer detection for everyone else.
+			Message message = peer.getResponseWithTimeout(pingMessage, Settings.getInstance().getPeerPingTimeoutMillis());
 
-        if (message == null || message.getType() != MessageType.PING) {
-            // Missed pings only disconnect after N CONSECUTIVE misses ("three strikes", default 3):
-            // one late PONG on a saturated link means slow, not dead. Genuinely dead TCP connections
-            // are already torn down independently by socket errors, and a truly unresponsive (zombie)
-            // peer is still removed within roughly N ping intervals (~40s each) - it just isn't
-            // disconnected on the very first missed reply. Set peerPingFailureThreshold=1 to restore
-            // the previous instant-disconnect-on-first-miss behavior.
-            int threshold = Settings.getInstance().getPeerPingFailureThreshold();
-            int misses = peer.recordMissedPing();
+			if (message == null || message.getType() != MessageType.PING) {
+				// Missed pings only disconnect after N CONSECUTIVE misses ("three strikes", default 3):
+				// one late PONG on a saturated link means slow, not dead. Genuinely dead TCP connections
+				// are already torn down independently by socket errors, and a truly unresponsive (zombie)
+				// peer is removed after N sequential attempts. Set peerPingFailureThreshold=1 to restore
+				// the previous instant-disconnect-on-first-miss behavior.
+				int threshold = Settings.getInstance().getPeerPingFailureThreshold();
+				int misses = peer.recordMissedPing();
 
-            if (shouldDisconnectAfterMiss(misses, threshold)) {
-                LOGGER.trace("[{}] Didn't receive reply from {} for PING ID {} ({}/{} consecutive misses)",
-                        peer.getPeerConnectionId(), peer, pingMessage.getId(), misses, threshold);
-                peer.disconnect("no ping received");
-            } else {
-                LOGGER.debug("[{}] Ping missed for peer {} ({}/{}), will retry on next ping cycle",
-                        peer.getPeerConnectionId(), peer, misses, threshold);
-            }
-            return;
-        }
+				if (shouldDisconnectAfterMiss(misses, threshold)) {
+					LOGGER.trace("[{}] Didn't receive reply from {} for PING ID {} ({}/{} consecutive misses)",
+							peer.getPeerConnectionId(), peer, pingMessage.getId(), misses, threshold);
+					peer.disconnect("no ping received");
+				} else {
+					LOGGER.debug("[{}] Ping missed for peer {} ({}/{}), will retry on next ping cycle",
+							peer.getPeerConnectionId(), peer, misses, threshold);
+				}
+				return;
+			}
 
-        peer.resetMissedPings();
+			peer.resetMissedPings();
 
-        long rtt = NTP.getTime() - now;
-        LOGGER.trace("[{}] Received PONG from peer {} (RTT: {}ms)", peer.getPeerConnectionId(), peer, rtt);
-        peer.setLastPing(rtt);
+			long rtt = NTP.getTime() - now;
+			LOGGER.trace("[{}] Received PONG from peer {} (RTT: {}ms)", peer.getPeerConnectionId(), peer, rtt);
+			peer.setLastPing(rtt);
+		} finally {
+			peer.completePingTask();
+		}
     }
 
     /**
