@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete ultra-review TLS keystore permissions
+
+Completes T10 and the final finding from the original ultra review. New and
+replacement API TLS keystores are owner-only before any private-key bytes are
+written, existing broad permissions are repaired without changing contents,
+and unsafe or unsupported filesystems fail closed. Focused and clean full-suite
+validation plus packaged-JAR inspection passed. This records source and local
+artifact completion only, not a release or deployment; the separately discovered
+adjacent hardening backlog remains independently scoped.
+
 ### 2026-08-16 - test(api): prove keystore is restricted before writing
 
 Adds a write-time assertion that the unique sibling temporary file already has

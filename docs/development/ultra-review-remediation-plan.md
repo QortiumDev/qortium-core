@@ -46,7 +46,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | T7 | Repair adaptive networking: per-peer/coalesced AIMD loss, a QDN-specific catch-up signal, a bounded GET_BLOCKS budget, and one in-flight ping per peer. | Complete | T2 recovery-state semantics for the catch-up signal | Three bounded implementation commits following the tracked start; focused networking and archive non-regression tests passed 74/74; clean serialized full suite passed 3,092 with 67 skips; packaged JAR inspection, `git diff --check`, and integrated diff review passed. Not released or deployed |
 | T8 | Repository and API correctness: archive temp filtering, chat fee persistence, websocket envelope filtering, and malformed PEERS rejection. | Complete | None | Four repair commits plus a websocket lookup-gating follow-up after the tracked start; focused tests passed 80/80; clean serialized full suite passed 3,098 with 67 skips; packaged JAR, `git diff --check`, and integrated review passed. Not released or deployed |
 | T9 | Configuration and documentation hygiene: strict trigger registry with activation-aware schedule compatibility, testnet parity, shared public-write classification, and missing changelog entries. | Complete | Activation-aware schedule capability approved | Ten bounded implementation, test, and documentation commits following the tracked start; focused T9 tests passed 81/81 and the post-cutover capacity regression passed 9/9; clean serialized full suite passed 3,108 with 67 skips; packaged JAR inspection, `git diff --check`, and three independent review lanes passed. Not released or deployed |
-| T10 | Restrict persistent API TLS keystore permissions to the owning account. | In progress | None | Creation and existing-file permission tests across supported filesystems |
+| T10 | Restrict persistent API TLS keystore permissions to the owning account. | Complete | None | Owner-only atomic persistence plus existing-file repair; focused tests passed 86/86; clean serialized full suite passed 3,116 with 67 skips; packaged JAR and `git diff --check` passed. Not released or deployed |
 
 ## Finding Ledger
 
@@ -66,7 +66,7 @@ runs must never overlap in the same checkout because they share `target/` and
 | S-02 | Public-write protection classifies several endpoints by exact path. The reported anonymous bypass is false for shipped profiles because the preceding access handler exact-matches the same path; shared classification remains necessary defense-in-depth. | Hardening | T9 | Complete | Main and gateway listeners share exact raw-path and terminal-wildcard authorization/work classification. Actual handler-chain tests cover path variants, canonical builder/process/QDN writes, future allowlisted writes, and prove an oversized unauthorized gateway request remains 403 rather than consuming protection |
 | S-03 | NAT/QDN request and response paths can disclose an I2P data destination to a clearnet peer, correlating IP and I2P identities. | High privacy | T6 | Complete | Requests and responses are built per immediate recipient. IP addresses require proven clearnet reachability, including configured-address startup; live data-I2P destinations go only to I2P peers. Ingress and relays strip mismatches, cross-transport relay-capable replies become relay-only, and unusable direct-only replies are dropped without changing message IDs or encodings |
 | S-04 | Data-layer I2P HELLO messages expose the separate chain-layer I2P destination because capability construction knows transport but not network layer. | High privacy | T6 | Complete | Initial and post-handshake HELLO tests cover chain/IP, chain/I2P, data/IP, and data/I2P. Each retains only its permitted routing identity plus the chain identity triple; wrong-layer capabilities are sanitized without disconnecting solely for those extras, and chain peers no longer seed data-I2P addresses |
-| S-05 | The persistent API TLS PKCS12 keystore is written with ambient umask permissions rather than owner-only permissions. The inspected managed runtime file was mode `0660`. | Medium | T10 | In progress | Owner-only atomic persistence and existing-file repair are the active boundary |
+| S-05 | The persistent API TLS PKCS12 keystore is written with ambient umask permissions rather than owner-only permissions. The inspected managed runtime file was mode `0660`. | Medium | T10 | Complete | New PKCS12 files are written only after an owner-only sibling temporary file is created and verified, then atomically installed and rechecked. Existing `0660` files are repaired without content changes before all four TLS services load them; unsafe paths and unsupported permission models fail closed |
 | R-01 | Crash-left `.<start>-<end>.dat.tmp` files cause `BlockArchiveReader` filename parsing to throw and break archive reads. | High correctness | T8 | Complete | Archive discovery accepts only regular files named by the exact numeric `start-end.dat` contract; crash-temporary, extra-extension, malformed, reversed, and overflowing names are ignored without parsing exceptions |
 | R-02 | Chat-store reconstruction replaces the signed transaction fee with zero, so a stored nonzero-fee CHAT cannot be faithfully re-served. | Medium correctness | T8 | Complete | Fresh and existing current-schema repositories carry a non-null fee column; the idempotent migration preserves existing rows at zero, while signature, batch, group, direct, and latest-direct reconstruction retain exact nonzero fees |
 | R-03 | Group-chat history filters private control envelopes, but websocket live push forwards them as ordinary group messages. | Medium privacy/API | T8 | Complete | Live group notification uses the same stored MESSAGE-or-unclassified rule as history after a cheap subscription match; key requests are hidden while normal private messages remain visible, and lookup failure is fail-closed |
@@ -201,11 +201,26 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-T10 TLS keystore permission hardening is active. Its boundary is limited to
-owner-only persistence of the existing PKCS12 file, safe repair of an existing
-broadly readable file before use, unsafe-path rejection, and focused filesystem
-tests. It may not change certificate contents, keystore passwords or format,
-TLS protocols/ciphers, API listeners, settings, or service routing.
+No implementation tranche is active. T10 and every finding in the original
+ultra review are complete in Core source, tests, and the local packaged artifact,
+but are not thereby released or deployed. The separately discovered A-01
+through A-04 hardening items retain their documented independent boundaries.
+
+T10 was completed by `security(api): restrict TLS keystore permissions` and
+`test(api): prove keystore is restricted before writing`, following the tracked
+start commit. The focused six-class API/TLS matrix passed 86/86; the clean
+serialized full suite passed 3,116 tests with 67 skips and no failures or errors;
+the packaged JAR contains the owner-only writer and the API, gateway, domain-map,
+and development-proxy TLS consumers; `git diff --check` passed.
+
+The PKCS12 writer creates and verifies a unique owner-only sibling temporary
+file before writing any private-key bytes, forces the completed file, requires
+an atomic same-filesystem replacement, and verifies the installed file. Existing
+broad permissions are narrowed before read without changing contents. POSIX
+filesystems require exact mode `0600`; owner-only ACL filesystems are supported;
+symlinks, non-regular targets, unsupported permission models, and permission or
+atomicity failures stop TLS startup. T10 changed no certificate, password,
+keystore format, TLS protocol/cipher policy, API listener, setting, or route.
 
 T9 is complete in Core source, tests, and the local packaged artifact but is not
 released or deployed.
