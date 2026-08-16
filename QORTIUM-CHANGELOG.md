@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete normal reorganization atomicity
+
+Completes A-01 after focused and clean full-suite validation. Normal peer-fork
+adoption now leaves either the exact original chain or the complete validated
+replacement chain in durable storage, including when a later block, block
+processing, or the final commit fails. This is source and local-artifact
+completion only; no release or deployment is claimed.
+
 ### 2026-08-16 - fix(sync): adopt peer forks atomically
 
 Stages every local orphan and every fully validated replacement block in one

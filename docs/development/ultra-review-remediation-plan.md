@@ -79,7 +79,7 @@ runs must never overlap in the same checkout because they share `target/` and
 
 ### A-01 — Normal fork-reorganization failure atomicity
 
-Status: in progress; separately approved before the Core 1.7.0 prerelease.
+Status: complete in Core source and local validation; not released or deployed.
 
 During the T3 review, `syncToPeerChain()` was found to commit each local orphan
 before it state-validates and commits the fetched alternative blocks
@@ -88,8 +88,14 @@ or processing failure can therefore leave the repository at the common block or
 on a partially adopted chain. Existing block-processing callbacks,
 notifications, caches, and separate-repository writes mean a savepoint wrapper
 alone is not proof of atomicity. T3 does not change or claim to repair the
-canonical synchronization path; this item needs its own failure-atomic adoption
-design and transactional regression tests.
+canonical synchronization path. A-01 now stages all local orphans and fully
+validated replacement blocks under one outer repository transaction, commits
+once, and emits callbacks only afterward. Invalid later blocks, exceptions
+after partial processing, and final-commit failure restore the exact original
+tip, balances, and minted counts without callbacks. Focused synchronization,
+block, and orphan tests passed 35/35; the clean serialized full suite passed
+3,120 tests with 67 skips and no failures or errors; the packaged JAR contains
+the atomic adoption path; and `git diff --check` passed.
 
 ### A-02 — Local archive export copy isolation
 
@@ -201,14 +207,20 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-A-01 normal fork-reorganization failure atomicity is the only active
-implementation tranche. It may change the transaction and post-commit callback
-boundary inside the canonical `syncToPeerChain()` adoption path, but it must not
-change chain weights, peer selection, block validity, synchronization message
-formats, or consensus rules. A failed, interrupted, or invalid replacement must
-restore the exact original repository state without emitting orphan/new-block
-callbacks. A-02 and A-03 follow as separate Core 1.7.0 hardening tranches; A-04
-Home integration remains outside this Core-only boundary.
+No implementation tranche is active. A-01 is complete in Core source and local
+validation but is not released or deployed. It changes only the transaction and
+post-commit callback boundary inside canonical peer-fork adoption; chain
+weights, peer selection, block validity, synchronization messages, and
+consensus rules are unchanged. A-02 copy-isolated local archive export is the
+next Core 1.7.0 hardening boundary, followed by A-03 Windows developer-reference
+API hardening. A-04 Home integration remains outside this Core-only boundary.
+
+A-01 was completed by `fix(sync): adopt peer forks atomically`, following the
+tracked start commit. The focused synchronization, block, and orphan matrix
+passed 35/35; the clean serialized full suite passed 3,120 tests with 67 skips
+and no failures or errors; the packaged JAR contains the atomic adoption path;
+and `git diff --check` passed. These results do not claim a release, deployment,
+or live multi-node fork exercise.
 
 T10 and every finding in the original ultra review are complete in Core source,
 tests, and the local packaged artifact, but are not thereby released or
