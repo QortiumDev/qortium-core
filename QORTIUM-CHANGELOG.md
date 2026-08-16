@@ -34,6 +34,34 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete copy-isolated local archive export
+
+Completes A-02 after focused and clean full-suite validation. Local archive
+creation now sanitizes a separately opened repository snapshot, leaves the live
+repository and block archive unchanged, and restores any previous completed
+archive and checksum if publication fails partway through. The packaged Core
+contains the retained local exporter but neither retired hosted importer. This
+is source and local-artifact completion only; no release or deployment is
+claimed.
+
+### 2026-08-16 - fix(bootstrap): isolate local archive export from live state
+
+Creates local repository archives from a separately opened HSQLDB snapshot, so
+minting credentials, trade-bot state, and learned peers are stripped only from
+the copy. The live tip, block archive, credentials, trade state, and peer set
+remain unchanged. Compression and checksum generation finish in a unique
+same-filesystem staging directory before publication; a failure between archive
+and checksum replacement restores any prior completed output. Hosted download,
+import, and repository-replacement paths remain retired.
+
+### 2026-08-16 - docs: start copy-isolated local archive export
+
+Starts A-02 as a separately reviewed local-maintenance hardening tranche. Local
+archive creation will sanitize a copied repository instead of temporarily
+deleting minting, trade-bot, or learned-peer rows from the live database. It
+must preserve an existing completed archive on any failure and must not restore
+hosted bootstrap download, import, or repository-replacement behavior.
+
 ### 2026-08-16 - docs: complete normal reorganization atomicity
 
 Completes A-01 after focused and clean full-suite validation. Normal peer-fork

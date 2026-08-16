@@ -10,23 +10,27 @@ import org.qortium.data.account.MintingAccountData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.crosschain.TradeBotData;
 import org.qortium.network.Network;
+import org.qortium.repository.hsqldb.HSQLDBRepositoryFactory;
 import org.qortium.settings.Settings;
+import org.qortium.utils.Base58;
 import org.qortium.utils.NTP;
 import org.qortium.utils.SevenZ;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 
 public class Bootstrap {
 
-    private Repository repository;
+    private final Repository repository;
 
     private static final Logger LOGGER = LogManager.getLogger(Bootstrap.class);
 
@@ -198,116 +202,201 @@ public class Bootstrap {
             throw new DataException("Repository instance required in order to create a boostrap");
         }
 
-        LOGGER.info("Acquiring blockchain lock...");
-        ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
-        blockchainLock.lockInterruptibly();
-
-        Path inputPath = null;
-        Path outputPath = null;
-        Path operationTempDirectory = null;
-        boolean localDataExported = false;
+        Path operationTempDirectory = this.createTempDirectory();
+        String identifier = operationTempDirectory.getFileName().toString();
+        String backupName = "bootstrap-export-" + identifier;
+        Path backupDirectory = Paths.get(Settings.getInstance().getRepositoryPath(), backupName).toAbsolutePath();
+        Path snapshotDirectory = operationTempDirectory.resolve("bootstrap");
 
         try {
+            BlockData expectedTip = this.createRepositorySnapshot(backupName, backupDirectory);
+            this.sanitizeAndValidateSnapshot(backupDirectory, expectedTip);
 
-            LOGGER.info("Exporting local data...");
-            repository.exportNodeLocalData();
-            localDataExported = true;
+            LOGGER.info("Moving isolated repository snapshot into export staging...");
+            Files.move(backupDirectory, snapshotDirectory, ATOMIC_MOVE);
 
-            LOGGER.info("Deleting trade bot states...");
-            List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
-            for (TradeBotData tradeBotData : allTradeBotData) {
-                repository.getCrossChainRepository().delete(tradeBotData.getTradePrivateKey());
-            }
+            Path compressedOutputPath = this.getBootstrapOutputPath().toAbsolutePath();
+            Path checksumPath = Paths.get(compressedOutputPath + ".sha256");
+            Path stagedArchive = operationTempDirectory.resolve(this.getFilename() + ".new");
+            Path stagedChecksum = operationTempDirectory.resolve(this.getFilename() + ".sha256.new");
 
-            LOGGER.info("Deleting minting accounts...");
-            List<MintingAccountData> mintingAccounts = repository.getAccountRepository().getMintingAccounts();
-            for (MintingAccountData mintingAccount : mintingAccounts) {
-                repository.getAccountRepository().delete(mintingAccount.getPrivateKey());
-            }
-
-            repository.saveChanges();
-
-            LOGGER.info("Deleting peers list...");
-            repository.getNetworkRepository().deleteAllPeers();
-            repository.saveChanges();
-
-            LOGGER.info("Adding initial peers...");
-            Network.installInitialPeers(repository);
-
-            LOGGER.info("Creating bootstrap...");
-            // Timeout if the database isn't ready for backing up after 10 seconds
-            long timeout = 10 * 1000L;
-            repository.backup(false, "bootstrap", timeout);
-
-            LOGGER.info("Moving files to output directory...");
-            inputPath = Paths.get(Settings.getInstance().getRepositoryPath(), "bootstrap");
-            operationTempDirectory = this.createTempDirectory();
-            outputPath = operationTempDirectory.resolve("bootstrap");
-
-
-            // Move the db backup to a "bootstrap" folder in the root directory
-            Files.move(inputPath, outputPath, REPLACE_EXISTING);
-
-            // If in archive mode, copy the archive folder to inside the bootstrap folder
-            if (!Settings.getInstance().isTopOnly() && Settings.getInstance().isArchiveEnabled()) {
-                FileUtils.copyDirectory(
-                        Paths.get(Settings.getInstance().getRepositoryPath(), "archive").toFile(),
-                        Paths.get(outputPath.toString(), "archive").toFile()
-                );
-            }
-
-            LOGGER.info("Preparing output path...");
-            Path compressedOutputPath = this.getBootstrapOutputPath();
-            try {
-                Files.delete(compressedOutputPath);
-            } catch (NoSuchFileException e) {
-                // Doesn't exist, so no need to delete
-            }
-
-            LOGGER.info("Compressing...");
-            SevenZ.compress(compressedOutputPath.toString(), outputPath.toFile());
+            LOGGER.info("Compressing isolated repository snapshot...");
+            this.compress(stagedArchive, snapshotDirectory);
 
             LOGGER.info("Generating checksum file...");
-            String checksum = Crypto.digestHexString(compressedOutputPath.toFile(), 1024*1024);
+            String checksum = Crypto.digestHexString(stagedArchive.toFile(), 1024 * 1024);
             LOGGER.info("checksum: {}", checksum);
-            Path checksumPath = Paths.get(String.format("%s.sha256", compressedOutputPath.toString()));
-            LOGGER.info("Writing checksum to path: {}", checksumPath);
-            Files.writeString(checksumPath, checksum, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.writeString(stagedChecksum, checksum, StandardOpenOption.CREATE_NEW);
 
-            // Return the path to the compressed bootstrap file
-            LOGGER.info("Bootstrap creation complete. Output file: {}", compressedOutputPath.toAbsolutePath().toString());
-            return compressedOutputPath.toAbsolutePath().toString();
+            this.publishOutputAtomically(stagedArchive, stagedChecksum, compressedOutputPath, checksumPath,
+                    operationTempDirectory);
 
-        }
-        catch (TimeoutException e) {
+            LOGGER.info("Bootstrap creation complete. Output file: {}", compressedOutputPath);
+            return compressedOutputPath.toString();
+        } catch (TimeoutException e) {
             throw new DataException(String.format("Unable to create bootstrap due to timeout: %s", e.getMessage()));
-        }
-        finally {
-            try {
-                if (localDataExported)
-                    this.restoreNodeLocalData();
-            } finally {
-                LOGGER.info("Unlocking blockchain...");
-                blockchainLock.unlock();
-
-                if (operationTempDirectory != null) {
-                    LOGGER.info("Cleaning up local archive export directory {}", operationTempDirectory);
-                    try {
-                        FileUtils.deleteDirectory(operationTempDirectory.toFile());
-                    } catch (IOException e) {
-                        LOGGER.warn("Unable to delete local archive export directory {}", operationTempDirectory, e);
-                    }
-                }
-            }
+        } finally {
+            this.cleanupDirectory(backupDirectory, "isolated repository backup");
+            this.cleanupDirectory(operationTempDirectory, "local archive export directory");
         }
     }
 
-    /** Restore node-local credentials after preparing the distributable repository backup. */
-    protected void restoreNodeLocalData() throws DataException, IOException {
-        LOGGER.info("Re-importing local data...");
-        repository.importDataFromFile("TradeBotStates.json");
-        repository.importDataFromFile("MintingAccounts.json");
-        repository.saveChanges();
+    private BlockData createRepositorySnapshot(String backupName, Path backupDirectory)
+            throws DataException, InterruptedException, IOException, TimeoutException {
+        LOGGER.info("Acquiring blockchain lock for repository snapshot...");
+        ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+        blockchainLock.lockInterruptibly();
+        try {
+            BlockData liveTip = repository.getBlockRepository().getLastBlock();
+            if (liveTip == null)
+                throw new DataException("Live repository has no chain tip to export");
+
+            repository.backup(false, backupName, 10 * 1000L);
+
+            if (!Settings.getInstance().isTopOnly() && Settings.getInstance().isArchiveEnabled()) {
+                LOGGER.info("Copying block archive into isolated repository snapshot...");
+                FileUtils.copyDirectory(
+                        Paths.get(Settings.getInstance().getRepositoryPath(), "archive").toFile(),
+                        backupDirectory.resolve("archive").toFile());
+            }
+
+            return new BlockData(liveTip);
+        } finally {
+            LOGGER.info("Releasing blockchain lock after repository snapshot...");
+            blockchainLock.unlock();
+        }
+    }
+
+    private void sanitizeAndValidateSnapshot(Path backupDirectory, BlockData expectedTip) throws DataException {
+        String connectionUrl = "jdbc:hsqldb:file:" + backupDirectory.resolve("blockchain").toAbsolutePath()
+                + ";create=false;hsqldb.full_log_replay=true";
+        HSQLDBRepositoryFactory snapshotFactory = new HSQLDBRepositoryFactory(connectionUrl);
+        try {
+            if (snapshotFactory.wasPristineAtOpen())
+                throw new DataException("Isolated repository snapshot unexpectedly opened as pristine");
+
+            try (Repository snapshotRepository = snapshotFactory.getRepository()) {
+                this.sanitizeSnapshot(snapshotRepository);
+                snapshotRepository.checkConsistency();
+
+                BlockData snapshotTip = snapshotRepository.getBlockRepository().getLastBlock();
+                if (snapshotTip == null || snapshotTip.getHeight().intValue() != expectedTip.getHeight().intValue()
+                        || !Arrays.equals(snapshotTip.getSignature(), expectedTip.getSignature()))
+                    throw new DataException(String.format(
+                            "Isolated repository snapshot tip does not match the live repository "
+                                    + "(expected height %d sig %s, actual %s)",
+                            expectedTip.getHeight(), Base58.encode(expectedTip.getSignature()),
+                            snapshotTip == null ? "missing" : String.format("height %d sig %s",
+                                    snapshotTip.getHeight(), Base58.encode(snapshotTip.getSignature()))));
+
+                snapshotRepository.discardChanges();
+            }
+        } finally {
+            snapshotFactory.close();
+        }
+    }
+
+    /** Remove node-local rows from the isolated copy only. */
+    protected void sanitizeSnapshot(Repository snapshotRepository) throws DataException {
+        for (TradeBotData tradeBotData : snapshotRepository.getCrossChainRepository().getAllTradeBotData())
+            snapshotRepository.getCrossChainRepository().delete(tradeBotData.getTradePrivateKey());
+
+        for (MintingAccountData mintingAccount : snapshotRepository.getAccountRepository().getMintingAccounts())
+            snapshotRepository.getAccountRepository().delete(mintingAccount.getPrivateKey());
+
+        snapshotRepository.getNetworkRepository().deleteAllPeers();
+        Network.installInitialPeers(snapshotRepository);
+        snapshotRepository.saveChanges();
+    }
+
+    protected void compress(Path stagedArchive, Path snapshotDirectory) throws IOException {
+        SevenZ.compress(stagedArchive.toString(), snapshotDirectory.toFile());
+    }
+
+    protected void afterArchivePublished() throws IOException {
+        // Failure-injection seam for atomic publication tests.
+    }
+
+    private void publishOutputAtomically(Path stagedArchive, Path stagedChecksum, Path outputArchive,
+            Path outputChecksum, Path operationTempDirectory) throws IOException {
+        this.requireSafeOutputTarget(outputArchive);
+        this.requireSafeOutputTarget(outputChecksum);
+
+        Path previousArchive = operationTempDirectory.resolve("previous-archive");
+        Path previousChecksum = operationTempDirectory.resolve("previous-checksum");
+        boolean hadArchive = this.preserveExistingOutput(outputArchive, previousArchive);
+        boolean hadChecksum = this.preserveExistingOutput(outputChecksum, previousChecksum);
+        boolean archivePublished = false;
+        boolean checksumPublished = false;
+
+        try {
+            Files.move(stagedArchive, outputArchive, ATOMIC_MOVE, REPLACE_EXISTING);
+            archivePublished = true;
+            this.afterArchivePublished();
+            Files.move(stagedChecksum, outputChecksum, ATOMIC_MOVE, REPLACE_EXISTING);
+            checksumPublished = true;
+        } catch (IOException | RuntimeException publishFailure) {
+            IOException restoreFailure = null;
+            try {
+                if (archivePublished)
+                    this.restorePreviousOutput(outputArchive, previousArchive, hadArchive);
+            } catch (IOException e) {
+                restoreFailure = e;
+            }
+
+            try {
+                if (checksumPublished)
+                    this.restorePreviousOutput(outputChecksum, previousChecksum, hadChecksum);
+            } catch (IOException e) {
+                if (restoreFailure == null)
+                    restoreFailure = e;
+                else
+                    restoreFailure.addSuppressed(e);
+            }
+
+            if (restoreFailure != null) {
+                restoreFailure.addSuppressed(publishFailure);
+                throw restoreFailure;
+            }
+            throw publishFailure;
+        }
+    }
+
+    private void requireSafeOutputTarget(Path outputPath) throws IOException {
+        if (Files.exists(outputPath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(outputPath, LinkOption.NOFOLLOW_LINKS))
+            throw new IOException("Refusing to replace unsafe local archive output path: " + outputPath);
+    }
+
+    private boolean preserveExistingOutput(Path outputPath, Path backupPath) throws IOException {
+        if (!Files.exists(outputPath, LinkOption.NOFOLLOW_LINKS))
+            return false;
+
+        try {
+            Files.createLink(backupPath, outputPath);
+        } catch (UnsupportedOperationException | IOException e) {
+            Files.copy(outputPath, backupPath);
+        }
+        return true;
+    }
+
+    private void restorePreviousOutput(Path outputPath, Path backupPath, boolean hadPrevious) throws IOException {
+        if (hadPrevious)
+            Files.move(backupPath, outputPath, ATOMIC_MOVE, REPLACE_EXISTING);
+        else
+            Files.deleteIfExists(outputPath);
+    }
+
+    private void cleanupDirectory(Path directory, String description) {
+        if (directory == null || !Files.exists(directory, LinkOption.NOFOLLOW_LINKS))
+            return;
+
+        LOGGER.info("Cleaning up {} {}", description, directory);
+        try {
+            FileUtils.deleteDirectory(directory.toFile());
+        } catch (IOException e) {
+            LOGGER.warn("Unable to delete {} {}", description, directory, e);
+        }
     }
 
     private String getFilename() {

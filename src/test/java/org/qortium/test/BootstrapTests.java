@@ -10,6 +10,9 @@ import org.qortium.controller.Controller;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.account.MintingAccountData;
 import org.qortium.data.block.BlockData;
+import org.qortium.data.crosschain.TradeBotData;
+import org.qortium.data.network.PeerData;
+import org.qortium.network.PeerAddress;
 import org.qortium.repository.*;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.AtUtils;
@@ -23,7 +26,9 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
@@ -75,9 +80,31 @@ public class BootstrapTests extends Common {
             PrivateKeyAccount mintingAccount = Common.getTestAccount(repository, "alice-reward-share");
             MintingAccountData mintingAccountData = new MintingAccountData(mintingAccount.getPrivateKey(), mintingAccount.getPublicKey());
             repository.getAccountRepository().save(mintingAccountData);
+
+			TradeBotData tradeBotData = createTradeBotData(repository);
+			repository.getCrossChainRepository().save(tradeBotData);
+			PeerAddress learnedPeer = PeerAddress.fromString("203.0.113.50:24892");
+			repository.getNetworkRepository().save(new PeerData(learnedPeer, NTP.getTime(), "test"));
             repository.saveChanges();
 
-            Bootstrap bootstrap = new Bootstrap(repository);
+			AtomicBoolean inspectedSnapshot = new AtomicBoolean();
+			Bootstrap bootstrap = new Bootstrap(repository) {
+				@Override
+				protected void sanitizeSnapshot(Repository snapshotRepository) throws DataException {
+					super.sanitizeSnapshot(snapshotRepository);
+					assertTrue(snapshotRepository.getAccountRepository().getMintingAccounts().isEmpty());
+					assertTrue(snapshotRepository.getCrossChainRepository().getAllTradeBotData().isEmpty());
+					assertFalse(snapshotRepository.getNetworkRepository().getAllPeers().stream()
+							.anyMatch(peer -> peer.getAddress().equals(learnedPeer)));
+
+					// The sanitizer is operating on a separate HSQLDB repository, not the live one.
+					assertMintingAccountPresent(repository, mintingAccount);
+					assertNotNull(repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey()));
+					assertTrue(repository.getNetworkRepository().getAllPeers().stream()
+							.anyMatch(peer -> peer.getAddress().equals(learnedPeer)));
+					inspectedSnapshot.set(true);
+				}
+			};
             Path bootstrapPath = bootstrap.getBootstrapOutputPath();
 			Path tempRoot = Paths.get(Settings.getInstance().getRepositoryPath()).toAbsolutePath().getParent().resolve("tmp");
 			Files.createDirectories(tempRoot);
@@ -101,6 +128,10 @@ public class BootstrapTests extends Common {
                 assertEquals(bootstrapPath.toAbsolutePath().toString(), bootstrap.create());
 				assertTrue("Local archive creation must not delete unrelated sibling temp files", Files.exists(unrelatedTempFile));
 				assertEquals("Local archive creation must remove its operation directory", initialTempEntryCount, countEntries(tempRoot));
+				assertFalse("Local archive creation must remove its isolated database backup",
+						hasExportBackupDirectory());
+				assertFalse("Copy-isolated export must not write node-local credential exports",
+						Files.exists(Paths.get(Settings.getInstance().getExportPath())));
 
                 // Ensure the compressed bootstrap exists
                 assertTrue(Files.exists(bootstrapPath));
@@ -122,27 +153,43 @@ public class BootstrapTests extends Common {
                 assertArrayEquals(originalBlock1000.getSignature(), block1000.getSignature());
                 assertArrayEquals(originalArchiveContents, Files.readAllBytes(archivePath));
                 assertArrayEquals(originalArchivedBlock10.getSignature(), archivedBlock10.getSignature());
-                assertMintingAccountRestored(repository, mintingAccount);
+				assertTrue("The copied repository must be sanitized and inspected", inspectedSnapshot.get());
+                assertMintingAccountPresent(repository, mintingAccount);
+				assertNotNull(repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey()));
+				assertTrue(repository.getNetworkRepository().getAllPeers().stream()
+						.anyMatch(peer -> peer.getAddress().equals(learnedPeer)));
 
-				Bootstrap failingAfterRestore = new Bootstrap(repository) {
+				byte[] completedArchive = Files.readAllBytes(bootstrapPath);
+				byte[] completedChecksum = Files.readAllBytes(checksumPath);
+				Bootstrap failingDuringPublish = new Bootstrap(repository) {
 					@Override
-					protected void restoreNodeLocalData() throws DataException, IOException {
-						super.restoreNodeLocalData();
-						throw new DataException("injected restoration failure");
+					protected void afterArchivePublished() throws IOException {
+						throw new IOException("injected checksum publication failure");
 					}
 				};
 
 				try {
-					failingAfterRestore.create();
-					fail("Expected injected restoration failure");
-				} catch (DataException e) {
-					assertTrue(e.getMessage().contains("injected restoration failure"));
+					failingDuringPublish.create();
+					fail("Expected injected checksum publication failure");
+				} catch (IOException e) {
+					assertTrue(e.getMessage().contains("injected checksum publication failure"));
 				}
 
-				assertFalse("Restoration failure must not leak the blockchain lock",
+				assertArrayEquals("A failed replacement must preserve the completed archive",
+						completedArchive, Files.readAllBytes(bootstrapPath));
+				assertArrayEquals("A failed replacement must preserve the matching checksum",
+						completedChecksum, Files.readAllBytes(checksumPath));
+				assertFalse("Publication failure must not leak the blockchain lock",
 						Controller.getInstance().getBlockchainLock().isHeldByCurrentThread());
-				assertEquals("Restoration failure must remove its operation directory", initialTempEntryCount, countEntries(tempRoot));
-				assertMintingAccountRestored(repository, mintingAccount);
+				assertEquals("Publication failure must remove its operation directory", initialTempEntryCount, countEntries(tempRoot));
+				assertFalse("Publication failure must remove its isolated database backup",
+						hasExportBackupDirectory());
+				assertFalse("Publication failure must not write node-local credential exports",
+						Files.exists(Paths.get(Settings.getInstance().getExportPath())));
+				assertMintingAccountPresent(repository, mintingAccount);
+				assertNotNull(repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey()));
+				assertTrue(repository.getNetworkRepository().getAllPeers().stream()
+						.anyMatch(peer -> peer.getAddress().equals(learnedPeer)));
 			} finally {
 				Files.deleteIfExists(unrelatedTempFile);
 			}
@@ -155,10 +202,39 @@ public class BootstrapTests extends Common {
 		}
 	}
 
-	private static void assertMintingAccountRestored(Repository repository, PrivateKeyAccount mintingAccount) throws DataException {
+	private static boolean hasExportBackupDirectory() throws IOException {
+		Path repositoryPath = Paths.get(Settings.getInstance().getRepositoryPath()).toAbsolutePath();
+		try (var entries = Files.list(repositoryPath)) {
+			return entries.anyMatch(path -> path.getFileName().toString().startsWith("bootstrap-export-"));
+		}
+	}
+
+	private static void assertMintingAccountPresent(Repository repository, PrivateKeyAccount mintingAccount) throws DataException {
 		MintingAccountData restoredMintingAccount = repository.getAccountRepository().getMintingAccount(mintingAccount.getPrivateKey());
 		assertNotNull(restoredMintingAccount);
 		assertArrayEquals(mintingAccount.getPublicKey(), restoredMintingAccount.getPublicKey());
+	}
+
+	private static TradeBotData createTradeBotData(Repository repository) throws DataException {
+		byte[] tradePrivateKey = new byte[32];
+		byte[] tradeLocalPublicKey = new byte[32];
+		byte[] tradeLocalPublicKeyHash = new byte[20];
+		byte[] tradeForeignPublicKey = new byte[33];
+		byte[] tradeForeignPublicKeyHash = new byte[20];
+		byte[] receivingAccountInfo = new byte[20];
+		Arrays.fill(tradePrivateKey, (byte) 1);
+		Arrays.fill(tradeLocalPublicKey, (byte) 2);
+		Arrays.fill(tradeLocalPublicKeyHash, (byte) 3);
+		Arrays.fill(tradeForeignPublicKey, (byte) 4);
+		Arrays.fill(tradeForeignPublicKeyHash, (byte) 5);
+		Arrays.fill(receivingAccountInfo, (byte) 6);
+
+		return new TradeBotData(tradePrivateKey, "test", "ACTIVE", 1,
+				Common.getTestAccount(repository, "alice").getAddress(), null,
+				NTP.getTime(), 0L, 1L, tradeLocalPublicKey, tradeLocalPublicKeyHash,
+				Crypto.toAddress(tradeLocalPublicKey), null, null, "LITECOIN",
+				tradeForeignPublicKey, tradeForeignPublicKeyHash, 1L, null,
+				null, null, receivingAccountInfo);
 	}
 
 
