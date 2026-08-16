@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: start ultra-review repository and API correctness tranche
+
+Starts T8 with four bounded correctness repairs: ignore temporary or malformed
+archive filenames, preserve the signed CHAT fee through chat-store persistence,
+apply the history visibility rule to live group-chat websocket delivery, and
+reject an empty PEERS message before indexing it. This boundary does not change
+archive contents, network encodings, transaction rules, or consensus.
+
 ### 2026-08-15 - docs: complete ultra-review adaptive networking
 
 Records T7 complete in Core source, focused tests, and the local packaged
