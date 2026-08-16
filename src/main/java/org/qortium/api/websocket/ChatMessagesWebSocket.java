@@ -11,6 +11,7 @@ import org.qortium.data.transaction.ChatTransactionData;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
+import org.qortium.repository.ChatStoreRepository;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -129,15 +130,32 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 	}
 
 	private void onNotify(Session session, ChatTransactionData chatTransactionData, int txGroupId) {
-		if (chatTransactionData == null)
-			// There has been a group-membership change, but we're not interested
+		if (!matchesGroupNotification(chatTransactionData, txGroupId))
 			return;
 
-		// We only want public messages with our txGroupId, including groupless general chat.
-		if (chatTransactionData.getRecipient() != null || chatTransactionData.getTxGroupId() != txGroupId)
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			if (!isVisibleGroupNotification(repository.getChatStoreRepository(), chatTransactionData, txGroupId))
+				return;
+		} catch (DataException e) {
+			// Fail closed: history visibility could not be established for this live notification.
 			return;
+		}
 
 		sendChat(session, chatTransactionData);
+	}
+
+	static boolean isVisibleGroupNotification(ChatStoreRepository chatStoreRepository,
+			ChatTransactionData chatTransactionData, int txGroupId) throws DataException {
+		if (!matchesGroupNotification(chatTransactionData, txGroupId))
+			return false;
+
+		return chatStoreRepository.isGroupMessageVisible(chatTransactionData.getSignature());
+	}
+
+	private static boolean matchesGroupNotification(ChatTransactionData chatTransactionData, int txGroupId) {
+		return chatTransactionData != null
+				&& chatTransactionData.getRecipient() == null
+				&& chatTransactionData.getTxGroupId() == txGroupId;
 	}
 
 	private void onNotify(Session session, ChatTransactionData chatTransactionData, List<String> involvingAddresses) {

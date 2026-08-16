@@ -34,6 +34,60 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: complete ultra-review repository and API correctness
+
+Records T8 complete in Core source, tests, and the local packaged artifact.
+Archive discovery is crash-file-safe, retained CHAT fees round-trip exactly,
+live private-group controls match history visibility, and malformed empty PEERS
+messages fail at decode. The focused suite passed 80/80 and the clean package
+passed 3,098 tests with 67 skips. This is not a release or deployment and does
+not change consensus or network encodings.
+
+### 2026-08-15 - fix(chat): gate websocket visibility lookups
+
+Applies the cheap recipient and group match before opening a repository to
+classify a live websocket notification. Each group subscriber therefore
+consults persisted envelope visibility only for a message that could actually
+belong to that subscription.
+
+### 2026-08-15 - fix(network): reject empty PEERS messages
+
+Rejects zero or negative PEERS entry counts at the message boundary because the
+first entry is the protocol's mandatory sender-listen address. A defensive
+chain handler guard disconnects malformed legacy or internally constructed
+messages once rather than indexing an empty list and repeatedly logging an
+exception.
+
+### 2026-08-15 - fix(chat): filter live private control envelopes
+
+Makes group-chat websocket notifications consult the same retained envelope
+classification as history queries. Private key announcements, key requests,
+and rotation controls remain stored and propagated but are no longer emitted
+as user-visible live messages; lookup failure is handled fail-closed.
+
+### 2026-08-15 - fix(chat): preserve stored transaction fees
+
+Stores and restores the signed CHAT transaction fee in the node-local chat
+index instead of reconstructing every retained message with a zero fee. The
+idempotent current-schema migration gives existing retained rows a zero default
+and preserves nonzero fees for every raw chat lookup without changing chain
+consensus or the transaction format.
+
+### 2026-08-15 - fix(archive): ignore temporary and malformed archive files
+
+Restricts archive discovery to the exact numeric `start-end.dat` filename
+written by Core and to regular files. Crash-temporary imports, partial files,
+directories, malformed ranges, and overflowing heights are ignored instead of
+crashing archive lookup or entering its cache.
+
+### 2026-08-15 - docs: start ultra-review repository and API correctness tranche
+
+Starts T8 with four bounded correctness repairs: ignore temporary or malformed
+archive filenames, preserve the signed CHAT fee through chat-store persistence,
+apply the history visibility rule to live group-chat websocket delivery, and
+reject an empty PEERS message before indexing it. This boundary does not change
+archive contents, network encodings, transaction rules, or consensus.
+
 ### 2026-08-15 - docs: complete ultra-review adaptive networking
 
 Records T7 complete in Core source, focused tests, and the local packaged

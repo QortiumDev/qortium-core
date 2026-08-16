@@ -2691,6 +2691,10 @@ public class Network {
         PeersMessage peersMessage = (PeersMessage) message;
 
         List<PeerAddress> peerAddresses = peersMessage.getPeerAddresses();
+		if (peerAddresses == null || peerAddresses.isEmpty()) {
+			peer.disconnect("malformed peers message");
+			return;
+		}
 
         PeerExchangeRecorder.getInstance().record("chain", peer, peersMessage.getPeerAddresses());
 

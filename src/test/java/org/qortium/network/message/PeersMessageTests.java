@@ -8,6 +8,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class PeersMessageTests extends Common {
@@ -26,5 +27,19 @@ public class PeersMessageTests extends Common {
 		assertEquals(PeerAddress.Kind.I2P, decodedAddress.getKind());
 		assertTrue(decodedAddress.equals(original));
 		assertEquals(B32 + ":0", decodedAddress.toString());
+	}
+
+	@Test
+	public void testRejectsEmptyPeerList() {
+		MessageException exception = assertThrows(MessageException.class,
+				() -> PeersMessage.fromByteBuffer(1, ByteBuffer.wrap(new byte[] {0, 0, 0, 0})));
+
+		assertTrue(exception.getMessage().contains("mandatory listen address"));
+	}
+
+	@Test
+	public void testRejectsNegativePeerCount() {
+		assertThrows(MessageException.class,
+				() -> PeersMessage.fromByteBuffer(1, ByteBuffer.wrap(new byte[] {-1, -1, -1, -1})));
 	}
 }
