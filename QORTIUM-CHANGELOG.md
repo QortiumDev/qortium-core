@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(qdn): preserve configured direct reachability
+
+Uses the configured external IP for transport-scoped QDN advertisements before
+peer observations populate the data network's runtime address. Production relay
+tests also pin that cross-transport replies discard their direct route and that
+direct-only replies with no usable route are dropped.
+
 ### 2026-08-15 - fix(network): keep minting identity traffic on chain layer
 
 Ignores legacy online-account and node reward-bundle messages received through

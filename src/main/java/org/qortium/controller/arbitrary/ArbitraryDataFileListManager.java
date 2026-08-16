@@ -147,10 +147,13 @@ public class ArbitraryDataFileListManager {
         return forwarded;
     }
 
-    private String getAdvertisedDataAddress(Peer recipient) {
+    String getAdvertisedDataAddress(Peer recipient) {
         boolean recipientUsesI2P = recipient.getPeerData().getAddress().isI2P();
         NetworkData networkData = NetworkData.getInstance();
-        return selectAdvertisedDataAddress(recipientUsesI2P, networkData.getOurExternalIpAddress(),
+        String externalIpAddress = networkData.getOurExternalIpAddress();
+        if (externalIpAddress == null || externalIpAddress.isBlank())
+            externalIpAddress = Settings.getInstance().getOurExternalIpAddress();
+        return selectAdvertisedDataAddress(recipientUsesI2P, externalIpAddress,
                 networkData.canAcceptInbound(), Settings.getInstance().getQDNListenPort(),
                 networkData.getI2PDataDestination());
     }
@@ -880,8 +883,8 @@ public class ArbitraryDataFileListManager {
                                 LOGGER.trace("Dropping cross-transport direct-only file list for {}", requestingPeer);
                                 continue;
                             }
-                            boolean forwardedDirectConnectable = Boolean.TRUE.equals(
-                                    forwardArbitraryDataFileListMessage.isDirectConnectable());
+                            boolean forwardedDirectConnectable = directConnectable
+                                    && retainAddressForPeerTransport(scopedHolderAddress, requestingPeer) != null;
                             String nodeId = arbitraryDataFileListMessage.getNodeId();
                             // Add each hash to our local mapping so we know who to ask later
                             Long now = NTP.getTime();
@@ -1197,9 +1200,8 @@ public class ArbitraryDataFileListManager {
                         if (requestHops < SEARCH_DEPTH_MAX_HOPS) { // 6 Hops
                             // Relay request hasn't reached the maximum number of hops yet, so can be rebroadcast
 
-                            // When relaying, always forward the original request unchanged to preserve the requester's intent.
-                            // Using missingRequestedHashes would filter based on our incomplete knowledge (we may not have metadata).
-                            // This ensures the origin node can provide the complete picture directly to the requester.
+							// Preserve the original hashes and timing so we do not filter from incomplete local metadata.
+							// The transport-scoped builder below strips any cross-transport requester address.
                             List<byte[]> relayHashes = originalRequestedHashes;
                             LOGGER.debug("Rebroadcasting hash list request from peer {} for signature {} to our other peers... totalRequestTime: {}, requestHops: {}", peer, Base58.encode(signature), totalRequestTime, requestHops);
                             NetworkData.getInstance().broadcast(

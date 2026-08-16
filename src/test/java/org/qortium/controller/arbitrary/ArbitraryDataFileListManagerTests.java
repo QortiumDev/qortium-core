@@ -82,6 +82,21 @@ public class ArbitraryDataFileListManagerTests extends Common {
     }
 
     @Test
+    public void testConfiguredExternalIpIsAvailableBeforePeerObservations() throws Exception {
+        FieldUtils.writeField(Settings.getInstance(), "ourExternalIpAddress", "198.51.100.44", true);
+        FieldUtils.writeField(org.qortium.network.NetworkData.getInstance(), "ourExternalIpAddress", null, true);
+        Object reachability = FieldUtils.readField(org.qortium.network.NetworkData.getInstance(),
+                "inboundReachability", true);
+        FieldUtils.writeField(reachability, "listenSocketAvailable", true, true);
+        try {
+            assertEquals("198.51.100.44:14894", this.fileListManager.getAdvertisedDataAddress(
+                    new CapturingPeer("198.51.100.20:14894")));
+        } finally {
+            FieldUtils.writeField(reachability, "listenSocketAvailable", false, true);
+        }
+    }
+
+    @Test
     public void testRequestAndResponseForwardingScrubCrossTransportAddresses() throws Exception {
         CapturingPeer ipPeer = new CapturingPeer("198.51.100.20:24894");
         CapturingPeer i2pPeer = new CapturingPeer(I2P_ADDRESS);
@@ -200,6 +215,44 @@ public class ArbitraryDataFileListManagerTests extends Common {
 
         assertEquals(1, requester.sentMessages.size());
         assertEquals(1, localResponseCount());
+
+		// Exercise the production response-forwarding path across transports. A relay-capable IP
+		// holder forwarded to an I2P requester must lose the IP address and direct flag while retaining
+		// its request identity, hashes, hop count, and relay path.
+		clearRelayState();
+		int crossTransportRequestId = 41005;
+		CapturingPeer i2pRequester = new CapturingPeer(I2P_ADDRESS);
+		this.fileListManager.arbitraryDataFileListRequests.put(crossTransportRequestId,
+				new Triple<>(signature58, i2pRequester, now));
+		ArbitraryDataFileListMessage crossTransportOutgoing = new ArbitraryDataFileListMessage(
+				signature, hashes, now, 1, "127.0.0.1:9101", "holder-1", true, true);
+		crossTransportOutgoing.setId(crossTransportRequestId);
+		this.fileListManager.processNetworkArbitraryDataFileListMessages(
+				List.of(new PeerMessage(firstHolder, parseFileList(crossTransportOutgoing))));
+
+		assertEquals(1, i2pRequester.sentMessages.size());
+		ArbitraryDataFileListMessage crossTransportForward =
+				parseFileList(i2pRequester.sentMessages.get(0));
+		assertEquals(crossTransportRequestId, crossTransportForward.getId());
+		assertArrayEquals(signature, crossTransportForward.getSignature());
+		assertArrayEquals(advertisedHash, crossTransportForward.getHashes().get(0));
+		assertEquals(Integer.valueOf(2), crossTransportForward.getRequestHops());
+		assertNull(crossTransportForward.getPeerAddress());
+		assertFalse(crossTransportForward.isDirectConnectable());
+		assertTrue(crossTransportForward.isRelayPossible());
+
+		// A cross-transport direct-only response has no usable route and must not be forwarded.
+		clearRelayState();
+		i2pRequester.sentMessages.clear();
+		int crossTransportDirectOnlyId = 41006;
+		this.fileListManager.arbitraryDataFileListRequests.put(crossTransportDirectOnlyId,
+				new Triple<>(signature58, i2pRequester, now));
+		ArbitraryDataFileListMessage crossTransportDirectOnly = new ArbitraryDataFileListMessage(
+				signature, hashes, now, 1, "127.0.0.1:9101", "holder-1", false, true);
+		crossTransportDirectOnly.setId(crossTransportDirectOnlyId);
+		this.fileListManager.processNetworkArbitraryDataFileListMessages(
+				List.of(new PeerMessage(firstHolder, parseFileList(crossTransportDirectOnly))));
+		assertTrue(i2pRequester.sentMessages.isEmpty());
     }
 
     @Test
