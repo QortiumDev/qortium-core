@@ -30,12 +30,12 @@ import org.qortium.utils.SslUtils;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpServletRequest;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.Security;
 import java.util.LinkedHashSet;
@@ -166,21 +166,26 @@ public class ApiService {
 
 			if (keystorePathname != null && keystorePassword != null) {
 				keystorePassword = Settings.ensureGeneratedSslKeystorePassword();
+				Path keystorePath = Path.of(keystorePathname);
 
-				if (!Files.isReadable(Path.of(keystorePathname))) {
+				if (!Files.exists(keystorePath, LinkOption.NOFOLLOW_LINKS)) {
 					SslUtils.generateSsl();
 				} else {
+					SslUtils.ensureKeystorePermissions(keystorePath);
+					if (!Files.isReadable(keystorePath))
+						throw new IOException("TLS keystore is not readable after owner-only permission repair: " + keystorePath);
+
 					// Validate keystore is loadable (not corrupt/truncated). Use default PKCS12 provider
 					// so validation matches Jetty's load and works on Oracle Java SE (BC can fail JCE auth).
 					try {
 						KeyStore keyStore = KeyStore.getInstance("PKCS12");
-						try (InputStream in = Files.newInputStream(Path.of(keystorePathname))) {
+						try (InputStream in = Files.newInputStream(keystorePath)) {
 							keyStore.load(in, keystorePassword.toCharArray());
 						}
 					} catch (Exception e) {
 						LOGGER.warn("Keystore invalid or corrupt ({}), regenerating: {}", keystorePathname, e.getMessage());
 						try {
-							Files.delete(Path.of(keystorePathname));
+							Files.delete(keystorePath);
 						} catch (Exception e2) {
 							LOGGER.warn("Could not delete corrupt keystore: {}", e2.getMessage());
 						}

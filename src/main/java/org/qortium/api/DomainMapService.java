@@ -24,7 +24,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 
@@ -65,9 +64,11 @@ public class DomainMapService {
 
 			if (keystorePathname != null && keystorePassword != null) {
 				keystorePassword = Settings.ensureGeneratedSslKeystorePassword();
+				Path keystorePath = Path.of(keystorePathname);
 
 				// SSL version
-				if (!Files.isReadable(Path.of(keystorePathname)))
+				SslUtils.ensureKeystorePermissions(keystorePath);
+				if (!Files.isReadable(keystorePath))
 					throw new RuntimeException("Failed to start SSL API due to broken keystore");
 
 				// BouncyCastle-specific SSLContext build
@@ -76,7 +77,7 @@ public class DomainMapService {
 
 				KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType(), "BC");
 
-				try (InputStream keystoreStream = Files.newInputStream(Paths.get(keystorePathname))) {
+				try (InputStream keystoreStream = Files.newInputStream(keystorePath)) {
 					keyStore.load(keystoreStream, keystorePassword.toCharArray());
 				}
 

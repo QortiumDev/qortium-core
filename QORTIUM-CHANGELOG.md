@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - security(api): restrict TLS keystore permissions
+
+Persists the shared API TLS PKCS12 keystore through an owner-only temporary
+file and atomic same-filesystem replacement, then verifies the installed file
+before use. Existing broadly readable keystores are repaired without changing
+their contents; API, gateway, domain-map, and development-proxy TLS startup now
+fail closed for symlinks, non-regular files, unsupported permission models, or
+permissions that cannot be restricted. POSIX mode `0600` and owner-only ACL
+filesystems are supported; certificate, password, format, and TLS policy remain
+unchanged.
+
 ### 2026-08-16 - docs: start ultra-review TLS keystore permissions tranche
 
 Starts T10 as a narrow filesystem-security tranche: persist the existing API
