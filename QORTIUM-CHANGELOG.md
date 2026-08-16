@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: complete ultra-review adaptive networking
+
+Records T7 complete in Core source, focused tests, and the local packaged
+artifact. QDN adaptation is isolated and coalesced by serving peer, QDN yields
+only during genuine chain catch-up, GET_BLOCKS retries share a fixed deadline,
+and ping tasks cannot overlap per peer. The combined suite passed 74/74 and the
+clean package passed 3,092 tests with 67 skips. This is not a release,
+deployment, or live mixed-speed network validation.
+
 ### 2026-08-15 - fix(network): serialize peer ping tasks
 
 Allows only one ping task at a time for each peer and releases that guard after
