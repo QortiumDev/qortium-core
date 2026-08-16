@@ -61,6 +61,8 @@ public class PeersMessage extends Message {
 	public static Message fromByteBuffer(int id, ByteBuffer byteBuffer) throws MessageException {
 		// Read entry count
 		int count = byteBuffer.getInt();
+		if (count <= 0)
+			throw new MessageException("Received PEERS message without mandatory listen address");
 
 		List<PeerAddress> peerAddresses = new ArrayList<>();
 

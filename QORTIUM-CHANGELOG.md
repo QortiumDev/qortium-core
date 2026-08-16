@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(network): reject empty PEERS messages
+
+Rejects zero or negative PEERS entry counts at the message boundary because the
+first entry is the protocol's mandatory sender-listen address. A defensive
+chain handler guard disconnects malformed legacy or internally constructed
+messages once rather than indexing an empty list and repeatedly logging an
+exception.
+
 ### 2026-08-15 - fix(chat): filter live private control envelopes
 
 Makes group-chat websocket notifications consult the same retained envelope
