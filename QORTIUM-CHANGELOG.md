@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete ultra-review configuration and API hygiene
+
+Completes T9 with a strict 17-name trigger registry, a canonical versioned
+effective-schedule commitment enforced at Preview height 99,990, an explicit
+local-testnet rehearsal schedule, and shared public-write work classification
+on both API listeners. Focused and full serialized validation plus packaged-JAR
+inspection passed. This is source and local-artifact completion only: all
+Preview producers and peers still need a coordinated compatible release before
+the capture boundary.
+
 ### 2026-08-16 - test(network): make capacity peers handshake-compatible
 
 Gives the data-capacity test peers the real chain and feature-schedule
