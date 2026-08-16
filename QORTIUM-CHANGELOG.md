@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - fix(bootstrap): isolate local archive export from live state
+
+Creates local repository archives from a separately opened HSQLDB snapshot, so
+minting credentials, trade-bot state, and learned peers are stripped only from
+the copy. The live tip, block archive, credentials, trade state, and peer set
+remain unchanged. Compression and checksum generation finish in a unique
+same-filesystem staging directory before publication; a failure between archive
+and checksum replacement restores any prior completed output. Hosted download,
+import, and repository-replacement paths remain retired.
+
 ### 2026-08-16 - docs: start copy-isolated local archive export
 
 Starts A-02 as a separately reviewed local-maintenance hardening tranche. Local
