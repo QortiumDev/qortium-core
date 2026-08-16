@@ -98,6 +98,16 @@ local runtime files:
 
 The next `./testnet/start.sh` run will create a fresh local chain.
 
+The tracked local-testnet chain template explicitly enables every registered
+feature that is already active on Previewnet from height `0`. Node reward
+bundles remain the one short transition rehearsal: capture/version-2 blocks
+start at height `97` and the first bundle payout is height `100`.
+
+`start.sh` deliberately preserves an existing `testchain-local.json`, so an
+older local testnet does not adopt this schedule merely because the source tree
+was updated. Run `./testnet/reset.sh` before using the current schedule; this
+deletes the disposable local chain and creates a fresh genesis on next start.
+
 ## Template Settings
 
 `settings-test.json` is intentionally local by default:

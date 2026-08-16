@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs(testnet): explain feature-trigger rehearsal schedule
+
+Documents that the disposable local testnet starts already-active Previewnet
+features at genesis and rehearses reward-bundle capture at height 97 with its
+first payout at 100. Because the launcher intentionally preserves its generated
+local chain configuration, an existing testnet must be explicitly reset before
+it adopts the tracked schedule.
+
 ### 2026-08-15 - fix(api): protect public writes on every API listener
 
 Uses one raw-path policy for public authorization and work classification,
