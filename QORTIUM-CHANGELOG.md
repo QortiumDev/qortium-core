@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: start normal reorganization atomicity hardening
+
+Starts A-01 as a separately reviewed synchronization-safety tranche. Peer fork
+blocks will still be fetched, compared, and validated under the existing rules,
+but orphaning the current branch and adopting its replacement must become one
+durable repository transition. A failed, interrupted, or invalid adoption must
+leave the original tip and state intact and must not emit callbacks for changes
+that never committed.
+
 ### 2026-08-16 - docs: complete ultra-review TLS keystore permissions
 
 Completes T10 and the final finding from the original ultra review. New and

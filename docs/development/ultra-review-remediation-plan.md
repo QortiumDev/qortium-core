@@ -79,7 +79,7 @@ runs must never overlap in the same checkout because they share `target/` and
 
 ### A-01 — Normal fork-reorganization failure atomicity
 
-Status: unassigned; requires a separately approved design tranche.
+Status: in progress; separately approved before the Core 1.7.0 prerelease.
 
 During the T3 review, `syncToPeerChain()` was found to commit each local orphan
 before it state-validates and commits the fetched alternative blocks
@@ -201,10 +201,18 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. T10 and every finding in the original
-ultra review are complete in Core source, tests, and the local packaged artifact,
-but are not thereby released or deployed. The separately discovered A-01
-through A-04 hardening items retain their documented independent boundaries.
+A-01 normal fork-reorganization failure atomicity is the only active
+implementation tranche. It may change the transaction and post-commit callback
+boundary inside the canonical `syncToPeerChain()` adoption path, but it must not
+change chain weights, peer selection, block validity, synchronization message
+formats, or consensus rules. A failed, interrupted, or invalid replacement must
+restore the exact original repository state without emitting orphan/new-block
+callbacks. A-02 and A-03 follow as separate Core 1.7.0 hardening tranches; A-04
+Home integration remains outside this Core-only boundary.
+
+T10 and every finding in the original ultra review are complete in Core source,
+tests, and the local packaged artifact, but are not thereby released or
+deployed.
 
 T10 was completed by `security(api): restrict TLS keystore permissions` and
 `test(api): prove keystore is restricted before writing`, following the tracked
