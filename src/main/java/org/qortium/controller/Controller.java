@@ -2718,6 +2718,24 @@ public class Controller extends Thread {
 		return this.isUpToDate(minLatestBlockTimestamp);
 	}
 
+	/**
+	 * Whether bulk QDN fetching should yield bandwidth to chain catch-up. Unlike {@link #isUpToDate()},
+	 * this does not require the minting peer quorum: a healthy node with one equal-height peer is not
+	 * "catching up". We yield only while synchronization is actively applying/fetching a chain or when
+	 * a vetted recent peer advertises a strictly higher tip.
+	 */
+	public boolean isQdnChainCatchUpActive() {
+		if (Settings.getInstance().isLite())
+			return false;
+
+		return isQdnChainCatchUpActive(Synchronizer.getInstance().isSynchronizing(),
+				hasFreshHigherPeer(getChainTip()));
+	}
+
+	/* package */ static boolean isQdnChainCatchUpActive(boolean synchronizing, boolean hasFreshHigherPeer) {
+		return synchronizing || hasFreshHigherPeer;
+	}
+
 	public boolean isStaleChainCatchUpActive() {
 		// Snapshot the chain tip once so the staleness check and the peer-height check below
 		// compare against the same height (a concurrent block commit could otherwise shift it).

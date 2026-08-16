@@ -2,8 +2,10 @@ package org.qortium.controller.arbitrary;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +17,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.function.Function;
 
@@ -56,19 +57,59 @@ public class ArbitraryDataFileRequestThread {
 
     // --- Feedback-based (AIMD) chunk batching window (Settings.qdnAdaptiveBatching) ---
     //
-    // When qdnAdaptiveBatching is enabled (the default), the per-peer chunk batch size is no longer a
-    // fixed time-based ramp. Instead a single global window reacts to actual delivery: it starts at
-    // qdnInitialChunkBatchSize, grows by 1 each batch interval that saw at least one arrival and no
-    // expiry, and halves the instant a tracked chunk request expires. -1 means "not yet initialized";
-    // initialized lazily on first use from qdnInitialChunkBatchSize since Settings isn't available at
-    // class-load time in a test context.
-    private static final AtomicInteger adaptiveWindow = new AtomicInteger(-1);
-    // Set by onChunkReceived(); consumed (and reset) once per batch interval tick to decide additive increase.
-    private static final AtomicBoolean chunkArrivedThisInterval = new AtomicBoolean(false);
-    // Set by onChunkRequestExpired(); consumed (and reset) once per batch interval tick to suppress the
-    // additive increase for an interval that also saw an expiry (the multiplicative decrease itself is
-    // already applied immediately at expiry time, not deferred to the tick).
-    private static final AtomicBoolean requestExpiredThisInterval = new AtomicBoolean(false);
+    // When qdnAdaptiveBatching is enabled (the default), each immediate data peer owns an independent
+    // feedback window. A clean interval grows only that peer's window and a cleanup pass applies at most
+    // one multiplicative decrease per peer, regardless of how many of its chunk requests expired together.
+    // This prevents one stalled peer (or one large expired batch) from collapsing every transfer.
+    private static final ConcurrentHashMap<String, AdaptivePeerWindow> adaptiveWindows = new ConcurrentHashMap<>();
+    private static final long ADAPTIVE_WINDOW_IDLE_TTL_MS = 10 * 60 * 1000L;
+
+    private static final class AdaptivePeerWindow {
+        private int window;
+        private boolean chunkArrivedThisInterval;
+        private boolean requestExpiredThisInterval;
+        private long lastTouched;
+
+        private AdaptivePeerWindow(int initialWindow) {
+            this.window = initialWindow;
+            this.lastTouched = System.currentTimeMillis();
+        }
+
+        private synchronized int current(int max) {
+            this.window = clamp(this.window, 1, max);
+            this.lastTouched = System.currentTimeMillis();
+            return this.window;
+        }
+
+        private synchronized void recordArrival() {
+            this.chunkArrivedThisInterval = true;
+            this.lastTouched = System.currentTimeMillis();
+        }
+
+        private synchronized int recordExpiry(int max) {
+            if (this.requestExpiredThisInterval) {
+                this.lastTouched = System.currentTimeMillis();
+                return this.window;
+            }
+            this.requestExpiredThisInterval = true;
+            this.window = clamp(nextWindowAfterExpiry(this.window), 1, max);
+            this.lastTouched = System.currentTimeMillis();
+            return this.window;
+        }
+
+        private synchronized int finishInterval(int max) {
+            if (!this.requestExpiredThisInterval && this.chunkArrivedThisInterval)
+                this.window = clamp(nextWindowAfterCleanInterval(this.window, max), 1, max);
+            this.requestExpiredThisInterval = false;
+            this.chunkArrivedThisInterval = false;
+            this.lastTouched = System.currentTimeMillis();
+            return this.window;
+        }
+
+        private synchronized boolean isIdle(long now) {
+            return now - this.lastTouched > ADAPTIVE_WINDOW_IDLE_TTL_MS;
+        }
+    }
 
     /** Pure arithmetic: additive increase after a clean batch interval (arrival, no expiry). Capped at max. */
     static int nextWindowAfterCleanInterval(int current, int max) {
@@ -84,21 +125,11 @@ public class ArbitraryDataFileRequestThread {
         return Math.min(Math.max(value, min), max);
     }
 
-    /** Current AIMD window, clamped to [1, qdnMaxChunkBatchSize], lazily initialized to qdnInitialChunkBatchSize. */
-    private static int currentAdaptiveWindow() {
+    /** Current AIMD window for one peer, lazily initialized and clamped to current settings. */
+    private static int currentAdaptiveWindow(String peerAddress) {
         int max = Math.max(1, maxBatchSize());
-        int window = adaptiveWindow.get();
-        if (window < 0) {
-            int initial = clamp(initialBatchSize(), 1, max);
-            adaptiveWindow.compareAndSet(-1, initial);
-            window = adaptiveWindow.get();
-        }
-        // Defensive re-clamp in case Settings changed (e.g. tests) or the window drifted outside range.
-        int clamped = clamp(window, 1, max);
-        if (clamped != window) {
-            adaptiveWindow.compareAndSet(window, clamped);
-        }
-        return clamped;
+        int initial = clamp(initialBatchSize(), 1, max);
+        return adaptiveWindows.computeIfAbsent(peerAddress, key -> new AdaptivePeerWindow(initial)).current(max);
     }
 
     /**
@@ -106,28 +137,31 @@ public class ArbitraryDataFileRequestThread {
      * requested chunk successfully arrives. Only records that an arrival happened this interval; the
      * actual additive increase is applied once per batch interval by updateAdaptiveWindowForInterval().
      */
-    private static void recordChunkArrivedForAdaptiveWindow() {
-        chunkArrivedThisInterval.set(true);
+    private static void recordChunkArrivedForAdaptiveWindow(String peerAddress) {
+        if (peerAddress == null || peerAddress.isBlank())
+            return;
+        int max = Math.max(1, maxBatchSize());
+        int initial = clamp(initialBatchSize(), 1, max);
+        adaptiveWindows.computeIfAbsent(peerAddress, key -> new AdaptivePeerWindow(initial)).recordArrival();
     }
 
     /**
-     * Called from ArbitraryDataFileManager.cleanupRequestCache (via onChunkRequestExpired) whenever a
-     * tracked chunk request's qdnRequestTimeoutMillis bookkeeping entry expires. Applies the
-     * multiplicative decrease immediately (not deferred to the next batch interval tick) and marks the
-     * current interval as having seen an expiry, so the interval tick does not also apply an additive
-     * increase on top.
+     * Called from ArbitraryDataFileManager cleanup when one peer has one or more tracked chunk requests
+     * expire. Applies at most one multiplicative decrease for that peer in the current interval and marks
+     * the interval so its tick cannot also apply an additive increase.
      */
-    private static void recordChunkExpiredForAdaptiveWindow() {
-        requestExpiredThisInterval.set(true);
-        if (!Settings.getInstance().isQdnAdaptiveBatching())
+    private static void recordChunkExpiredForAdaptiveWindow(String peerAddress) {
+        if (peerAddress == null || peerAddress.isBlank() || !Settings.getInstance().isQdnAdaptiveBatching())
             return;
-
         int max = Math.max(1, maxBatchSize());
-        int previous = currentAdaptiveWindow();
-        int next = clamp(nextWindowAfterExpiry(previous), 1, max);
-        if (adaptiveWindow.compareAndSet(previous, next) && next != previous) {
-            LOGGER.debug("QDN adaptive batch window {} -> {} (trigger: chunk request expired)", previous, next);
-        }
+        int initial = clamp(initialBatchSize(), 1, max);
+        AdaptivePeerWindow state = adaptiveWindows.computeIfAbsent(peerAddress,
+                key -> new AdaptivePeerWindow(initial));
+        int previous = state.current(max);
+        int next = state.recordExpiry(max);
+        if (next != previous)
+            LOGGER.debug("QDN adaptive batch window for {} {} -> {} (trigger: coalesced request expiry)",
+                    peerAddress, previous, next);
     }
 
     /**
@@ -136,18 +170,21 @@ public class ArbitraryDataFileRequestThread {
      * expiry time, so nothing further is applied here - just reset the flags. Otherwise, if at least one
      * requested chunk arrived, apply the additive increase.
      */
-    private static void updateAdaptiveWindowForInterval() {
-        boolean expired = requestExpiredThisInterval.getAndSet(false);
-        boolean arrived = chunkArrivedThisInterval.getAndSet(false);
-
-        if (expired || !arrived)
-            return;
-
+    private static void updateAdaptiveWindowsForInterval() {
         int max = Math.max(1, maxBatchSize());
-        int previous = currentAdaptiveWindow();
-        int next = clamp(nextWindowAfterCleanInterval(previous, max), 1, max);
-        if (adaptiveWindow.compareAndSet(previous, next) && next != previous) {
-            LOGGER.debug("QDN adaptive batch window {} -> {} (trigger: clean batch interval)", previous, next);
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, AdaptivePeerWindow> entry : adaptiveWindows.entrySet()) {
+            AdaptivePeerWindow state = entry.getValue();
+            if (state.isIdle(now)) {
+                adaptiveWindows.remove(entry.getKey(), state);
+                continue;
+            }
+            int previous = state.current(max);
+            int next = state.finishInterval(max);
+            if (next != previous) {
+                LOGGER.debug("QDN adaptive batch window for {} {} -> {} (trigger: clean interval)",
+                        entry.getKey(), previous, next);
+            }
         }
     }
 
@@ -159,7 +196,8 @@ public class ArbitraryDataFileRequestThread {
      */
     private static int desiredBatchSize(long elapsedMs) {
         if (Settings.getInstance().isQdnAdaptiveBatching())
-            return currentAdaptiveWindow();
+            // The peer-specific window is applied after load balancing assigns chunks to peers.
+            return maxBatchSize();
 
         return (elapsedMs >= BATCH_RAMP_UP_MS) ? maxBatchSize() : initialBatchSize();
     }
@@ -171,23 +209,22 @@ public class ArbitraryDataFileRequestThread {
      * user browsing QDN content while their node is still syncing still sees slow progress. Pure/static
      * so it's directly unit-testable.
      */
-    static int effectiveBatchSize(boolean upToDate, int desiredBatchSize, boolean yieldDuringSync, int syncYieldBatchSize) {
-        if (upToDate || !yieldDuringSync)
+    static int effectiveBatchSize(boolean catchUpActive, int desiredBatchSize, boolean yieldDuringSync, int syncYieldBatchSize) {
+        if (!catchUpActive || !yieldDuringSync)
             return desiredBatchSize;
 
         return Math.min(desiredBatchSize, syncYieldBatchSize);
     }
 
     /**
-     * Live-wired overload of {@link #effectiveBatchSize(boolean, int, boolean, int)}: uses
-     * Controller.isUpToDate() as the authoritative "caught up" signal - the same check other
-     * components (e.g. TransactionImporter, OnlineAccountsManager) use to gate sync-sensitive
-     * behavior - together with current Settings.
+     * Live-wired overload of {@link #effectiveBatchSize(boolean, int, boolean, int)}. The QDN-specific
+     * catch-up signal ignores minting quorum: one fresh equal-height peer does not throttle QDN, while
+     * an active synchronizer or one vetted fresh higher peer does.
      */
     private static int effectiveBatchSize(int desiredBatchSize) {
         Settings settings = Settings.getInstance();
-        boolean upToDate = Controller.getInstance().isUpToDate();
-        return effectiveBatchSize(upToDate, desiredBatchSize, settings.isQdnYieldDuringSync(), settings.getQdnSyncYieldBatchSize());
+        boolean catchUpActive = Controller.getInstance().isQdnChainCatchUpActive();
+        return effectiveBatchSize(catchUpActive, desiredBatchSize, settings.isQdnYieldDuringSync(), settings.getQdnSyncYieldBatchSize());
     }
     private static final long BATCH_INTERVAL_MS = 2000L;  // Interval between batches
     private static final long STALE_BATCH_TIMEOUT_MS = 300000L; // 5 minutes - remove batches that haven't completed
@@ -277,14 +314,19 @@ public class ArbitraryDataFileRequestThread {
      * Called when a chunk is successfully received and saved. Removes the chunk from the batch's
      * pending set so it is no longer retried. Called from ArbitraryDataFileManager.receivedArbitraryDataFile.
      */
-    public void onChunkReceived(String signature58, String hash58) {
+    public void onChunkReceived(String signature58, String hash58, String peerAddress) {
         SignatureBatch batch = signatureBatches.get(signature58);
         if (batch != null) {
             batch.pendingChunks.remove(hash58);
         }
         // AIMD feedback: a requested chunk arrived. Recorded for the next batch interval tick, which
         // applies the additive increase only if no request also expired during the same interval.
-        recordChunkArrivedForAdaptiveWindow();
+        recordChunkArrivedForAdaptiveWindow(peerAddress);
+    }
+
+    /** Compatibility overload for callers without peer attribution; it updates batch state but not AIMD. */
+    public void onChunkReceived(String signature58, String hash58) {
+        onChunkReceived(signature58, hash58, null);
     }
 
     /**
@@ -292,8 +334,24 @@ public class ArbitraryDataFileRequestThread {
      * qdnRequestTimeoutMillis bookkeeping entry expires (the request timed out and is being made
      * re-requestable). Drives the AIMD multiplicative decrease immediately.
      */
-    public void onChunkRequestExpired(String hash58) {
-        recordChunkExpiredForAdaptiveWindow();
+    public void onChunkRequestsExpired(Collection<String> peerAddresses) {
+        if (peerAddresses == null || peerAddresses.isEmpty())
+            return;
+        // Distinct here is the coalescing boundary for one cleanup/loss event.
+        for (String peerAddress : new HashSet<>(peerAddresses))
+            recordChunkExpiredForAdaptiveWindow(peerAddress);
+    }
+
+    static void resetAdaptiveWindowsForTesting() {
+        adaptiveWindows.clear();
+    }
+
+    static int adaptiveWindowForTesting(String peerAddress) {
+        return currentAdaptiveWindow(peerAddress);
+    }
+
+    static void finishAdaptiveIntervalForTesting() {
+        updateAdaptiveWindowsForInterval();
     }
 
     public void processFileHashes(Long now, List<ArbitraryFileListResponseInfo> responseInfos, ArbitraryDataFileManager arbitraryDataFileManager) throws InterruptedException, MessageException {
@@ -712,7 +770,7 @@ public class ArbitraryDataFileRequestThread {
                 if (isNewBatch && batch.initialBatchSent.compareAndSet(false, true)) {
                     if (!batch.pendingChunks.isEmpty()) {
                         LOGGER.trace("Sending initial batch for signature {} with {} chunks", signature58, batch.pendingChunks.size());
-                        sendBatchForSignature(batch, effectiveBatchSize(desiredBatchSize(0L)), arbitraryDataFileManager, true, null);
+                        sendBatchForSignature(batch, desiredBatchSize(0L), arbitraryDataFileManager, true, null);
                     } else {
                         // If no chunks yet, reset the flag so it can be sent later
                         batch.initialBatchSent.set(false);
@@ -850,7 +908,7 @@ public class ArbitraryDataFileRequestThread {
             // This scheduled run IS the "batch interval" tick for the AIMD feedback window: evaluate once
             // per run (every BATCH_INTERVAL_MS), not once per signature batch below.
             if (Settings.getInstance().isQdnAdaptiveBatching()) {
-                updateAdaptiveWindowForInterval();
+                updateAdaptiveWindowsForInterval();
             }
 
             // One snapshot per run so sendBatchForSignature does not take N snapshots (one per batch)
@@ -896,7 +954,6 @@ public class ArbitraryDataFileRequestThread {
                 } else {
                     // Send incremental batch (normal operation). Use smaller batch until ramp-up period has passed.
                     int batchLimit = desiredBatchSize(elapsed);
-                    batchLimit = effectiveBatchSize(batchLimit);
                     LOGGER.trace("Sending incremental batch for signature {}: limit {} chunks (elapsed {}s)",
                             batch.signature58, batchLimit, elapsed / 1000);
                     ArbitraryDataFileManager dataFileManager = ArbitraryDataFileManager.getInstance();
@@ -1237,10 +1294,6 @@ public class ArbitraryDataFileRequestThread {
 
      
 
-        // Always use MAX_BATCH_SIZE - let per-peer capacity checks throttle individual peers
-        // The capacity-proportional load balancing and RTT-aware queue checks provide sufficient protection
-        int maxChunks = requestedMaxChunks;
-
         // isInitialBatch is passed as parameter to correctly identify initial vs incremental batches
         // (The flag batch.initialBatchSent is already set to true before calling this method for initial batches)
 
@@ -1303,6 +1356,7 @@ public class ArbitraryDataFileRequestThread {
         }
 
         int totalSent = 0;
+        boolean catchUpActive = Controller.getInstance().isQdnChainCatchUpActive();
         
         // Maximum time we want to queue for each peer (in milliseconds)
         // Prevents overwhelming slow peers with too many pending chunks
@@ -1312,6 +1366,12 @@ public class ArbitraryDataFileRequestThread {
         // Send up to maxChunks to EACH peer from their assigned list
         for (Map.Entry<Peer, List<PendingChunk>> peerEntry : chunksByPeer.entrySet()) {
             Peer peer = peerEntry.getKey();
+            String peerAddress = peer.getPeerData().getAddress().toString();
+            int desiredChunksForPeer = Settings.getInstance().isQdnAdaptiveBatching()
+                    ? currentAdaptiveWindow(peerAddress)
+                    : requestedMaxChunks;
+            int maxChunksForPolicy = effectiveBatchSize(catchUpActive, desiredChunksForPeer,
+                    Settings.getInstance().isQdnYieldDuringSync(), Settings.getInstance().getQdnSyncYieldBatchSize());
             
             // Get RTT for time-based load calculation
             // RTT represents round-trip time per chunk in milliseconds
@@ -1358,7 +1418,8 @@ public class ArbitraryDataFileRequestThread {
 
             // Take minimum of: requested batch size, time-based limit, physical space
             // Minimum of 1 chunk ensures even slow peers can make progress without blocking downloads
-            int maxChunksForThisPeer = Math.max(1, Math.min(Math.min(maxChunks, maxSafeChunks), availableQueueSpace));
+            int maxChunksForThisPeer = Math.max(1,
+                    Math.min(Math.min(maxChunksForPolicy, maxSafeChunks), availableQueueSpace));
             
             LOGGER.trace("REQUESTER QUEUE STATUS: peer={}, PeerSendMgr={}, Peer.sendQueue={}/{}, queue={}, RTT={}ms, drainTime={}s, sendingChunks={}", 
                 peer, sendManagerQueueSize, peerSendQueueSize, peerSendQueueCapacity, 

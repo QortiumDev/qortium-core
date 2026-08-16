@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(qdn): isolate adaptive batching by peer
+
+Gives each data peer its own QDN AIMD window, coalesces multiple expired chunks
+from one peer into one loss per interval, and attributes successful delivery to
+the serving peer. QDN now yields only for active synchronization or a vetted
+fresh higher tip, so a synchronized node is no longer throttled merely because
+it has fewer peers than the minting quorum.
+
 ### 2026-08-15 - docs: start ultra-review adaptive networking tranche
 
 Starts T7 with four bounded networking repairs: isolate and coalesce QDN AIMD
