@@ -1,7 +1,13 @@
 {
+  "bindAddress": "127.0.0.1",
   "apiDocumentationEnabled": true,
-  "apiWhitelistEnabled": false,
-  "apiRestricted": false,
+  "apiWhitelistEnabled": true,
+  "apiWhitelist": [
+    "127.0.0.1",
+    "::1"
+  ],
+  "apiRestricted": true,
+  "apiKeyRemoteAccessEnabled": false,
   "allowConnectionsWithOlderPeerVersions": false
 }
 

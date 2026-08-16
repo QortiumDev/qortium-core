@@ -114,12 +114,17 @@ importer class; and `git diff --check` passed.
 
 ### A-03 — Windows developer-reference API exposure
 
-Status: unassigned; release hardening outside T5.
+Status: complete in source and local validation; not released or deployed.
 
-`WindowsInstaller/Install Files/AppData/settings.json` explicitly disables both
-API restriction and whitelist enforcement. T5 leaves that developer-reference
-profile generic and unseeded, but its API exposure policy requires a dedicated
-review before any Windows distribution is treated as release-ready.
+`WindowsInstaller/Install Files/AppData/settings.json` now binds Core to IPv4
+loopback, enables the IPv4/IPv6 loopback whitelist, keeps restricted API mode
+enabled, and disables remote API-key bypass. The profile remains generic,
+unseeded, and explicitly documented as a developer reference rather than a
+supported Windows release artifact. Profile and effective-access tests passed
+as part of a 78/78 focused API/settings matrix; the clean serialized full suite
+passed 3,122 tests with 67 skips and no failures or errors; the packaged JAR
+contains the settings and public-access implementation; and `git diff --check`
+passed.
 
 ### A-04 — Reward-node identity installation persistence
 
@@ -210,10 +215,20 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. A-02 is complete in source and local
-validation but is not released or deployed. A-03 Windows developer-reference
-API hardening is the next Core 1.7.0 tranche. A-04 Home integration remains
-outside this Core-only boundary.
+No implementation tranche is active. A-01, A-02, and A-03 are complete in Core
+source and local validation but are not released or deployed. The next Core
+boundary is release integration: update the Core 1.7.0 release candidate on top
+of these repairs, validate the exact packaged tree, and prepare the Core-only
+prerelease. It must not enter Home or Chat scope. A-04 Home integration remains
+outside this session.
+
+A-03 was completed by `security(windows): restrict developer-reference API
+exposure`, following the tracked start commit. The focused API/settings matrix
+passed 78/78; the clean serialized full suite passed 3,122 tests with 67 skips
+and no failures or errors; the packaged JAR contains the settings and public
+access implementation; and `git diff --check` passed. The inherited installer
+remains a developer reference, and these results do not claim a release or
+deployment.
 
 A-02 was completed by `fix(bootstrap): isolate local archive export from live
 state`, following the tracked start commit. The focused bootstrap,

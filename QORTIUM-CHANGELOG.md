@@ -34,6 +34,32 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete Windows developer-reference API hardening
+
+Completes A-03 after focused and clean full-suite validation. The inherited
+Windows example now stays loopback-bound and restricted, and remote requests
+remain denied even when they supply the correct API key. The profile remains
+generic and unseeded, and the installer remains a developer reference rather
+than a supported release artifact. This is source and local-artifact completion
+only; no release or deployment is claimed.
+
+### 2026-08-16 - security(windows): restrict developer-reference API exposure
+
+Changes the inherited Windows installer example to bind Core to IPv4 loopback,
+allow full API access only from the IPv4/IPv6 loopback whitelist, keep
+restricted API mode enabled, and disable remote API-key bypass. A profile test
+loads the tracked file through the real settings model and proves that remote
+requests remain denied even with the correct API key. The installer remains a
+developer reference rather than a supported release artifact.
+
+### 2026-08-16 - docs: start Windows developer-reference API hardening
+
+Starts A-03 as the final separately reviewed Core 1.7.0 hardening tranche. The
+inherited Windows installer remains a developer reference, but its example
+settings will bind the API to loopback, require the loopback whitelist, enable
+restricted API mode, and reject remote API-key bypass. Generic, Preview, Home,
+and Chat behavior remain outside this change.
+
 ### 2026-08-16 - docs: complete copy-isolated local archive export
 
 Completes A-02 after focused and clean full-suite validation. Local archive
