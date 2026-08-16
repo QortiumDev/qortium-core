@@ -168,6 +168,8 @@ public class Peer {
      * When last PING message was sent, or null if pings not started yet.
      */
     private Long lastPingSent = null;
+	/** Prevent overlapping ping tasks when a configured timeout exceeds the ping interval. */
+	private final AtomicBoolean pingTaskInFlight = new AtomicBoolean(false);
 
     /**
      * Count of CONSECUTIVE missed pings (PONG not received within {@code peerPingTimeoutMillis}).
@@ -1500,11 +1502,25 @@ public class Peer {
             return null; // Not yet
         }
 
+		// A slow or saturated peer can outlive the ping interval. Let the existing task finish before
+		// another one mutates the consecutive-miss counter or last-ping state.
+		if (!this.pingTaskInFlight.compareAndSet(false, true))
+			return null;
+
         // Not strictly true, but prevents this peer from being immediately chosen again
         this.lastPingSent = now;
 
         return new PingTask(this, now);
     }
+
+	/** Called by PingTask in a finally block after every success, miss, disconnect, or interruption. */
+	public void completePingTask() {
+		this.pingTaskInFlight.set(false);
+	}
+
+	/* package */ boolean isPingTaskInFlight() {
+		return this.pingTaskInFlight.get();
+	}
 
     public void disconnect(String reason) {
         if (!isStopping) {

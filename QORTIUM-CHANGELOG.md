@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(network): serialize peer ping tasks
+
+Allows only one ping task at a time for each peer and releases that guard after
+success, timeout, disconnect, or interruption. A slow peer can no longer create
+overlapping tasks that race the consecutive-miss counter or overwrite newer
+round-trip state when the configured ping timeout exceeds the ping interval.
+
 ### 2026-08-15 - fix(sync): bound GET_BLOCKS retry time
 
 Bounds an auto-degrading GET_BLOCKS batch to one shared deadline of at most two
