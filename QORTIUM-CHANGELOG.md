@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - test(network): cover trigger schedule HELLO wire
+
+Round-trips each chain/data and IP/I2P HELLO through the production message
+codec and asserts that the schedule version remains numeric and the commitment
+remains exact. This closes the gap between map-construction tests and the actual
+capabilities peers compare at activation.
+
 ### 2026-08-15 - test(api): prove gateway denial precedes work protection
 
 Adds an oversized non-public gateway write that must remain a 403 rather than
