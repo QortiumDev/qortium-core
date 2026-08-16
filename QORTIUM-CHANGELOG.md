@@ -34,6 +34,43 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: complete ultra-review TLS keystore permissions
+
+Completes T10 and the final finding from the original ultra review. New and
+replacement API TLS keystores are owner-only before any private-key bytes are
+written, existing broad permissions are repaired without changing contents,
+and unsafe or unsupported filesystems fail closed. Focused and clean full-suite
+validation plus packaged-JAR inspection passed. This records source and local
+artifact completion only, not a release or deployment; the separately discovered
+adjacent hardening backlog remains independently scoped.
+
+### 2026-08-16 - test(api): prove keystore is restricted before writing
+
+Adds a write-time assertion that the unique sibling temporary file already has
+owner-only permissions and contains zero bytes before the PKCS12 writer receives
+it. The existing-file migration test also proves its deliberate `0660` fixture
+before repair, closing false positives that checked only the final installed
+file.
+
+### 2026-08-16 - security(api): restrict TLS keystore permissions
+
+Persists the shared API TLS PKCS12 keystore through an owner-only temporary
+file and atomic same-filesystem replacement, then verifies the installed file
+before use. Existing broadly readable keystores are repaired without changing
+their contents; API, gateway, domain-map, and development-proxy TLS startup now
+fail closed for symlinks, non-regular files, unsupported permission models, or
+permissions that cannot be restricted. POSIX mode `0600` and owner-only ACL
+filesystems are supported; certificate, password, format, and TLS policy remain
+unchanged.
+
+### 2026-08-16 - docs: start ultra-review TLS keystore permissions tranche
+
+Starts T10 as a narrow filesystem-security tranche: persist the existing API
+TLS PKCS12 keystore owner-only, repair a broadly readable existing keystore
+before use, reject unsafe file targets, and add creation and migration tests.
+Certificate contents, passwords, TLS policy, API listeners, and service routing
+remain outside this change.
+
 ### 2026-08-16 - docs: complete ultra-review configuration and API hygiene
 
 Completes T9 with a strict 17-name trigger registry, a canonical versioned

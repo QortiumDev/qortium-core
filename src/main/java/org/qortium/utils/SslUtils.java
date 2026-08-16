@@ -117,6 +117,10 @@ public class SslUtils {
         sslContextFactory.setUseCipherSuitesOrder(true);
     }
 
+    public static void ensureKeystorePermissions(Path keystorePath) throws IOException {
+        TlsKeystoreFile.ensureOwnerOnly(keystorePath);
+    }
+
     private static void createServerCertificate(KeyPair caKeyPair) throws Exception {
         // Generate server key pair
         KeyPairGenerator kpGen = KeyPairGenerator.getInstance("RSA", "BC");
@@ -311,9 +315,13 @@ public class SslUtils {
         keyStore.setKeyEntry("server", serverKey, Settings.getInstance().getSslKeystorePassword().toCharArray(), new java.security.cert.Certificate[]{serverCert, caCert});
 
         // Save keystore (encryption performed by default provider; no BC authentication required).
-        try (FileOutputStream fos = new FileOutputStream(Settings.getInstance().getSslKeystorePathname())) {
-            keyStore.store(fos, Settings.getInstance().getSslKeystorePassword().toCharArray());
-        }
+        char[] keystorePassword = Settings.getInstance().getSslKeystorePassword().toCharArray();
+        storeKeystore(Path.of(Settings.getInstance().getSslKeystorePathname()), keyStore, keystorePassword);
+    }
+
+    static void storeKeystore(Path keystorePath, KeyStore keyStore, char[] keystorePassword) throws Exception {
+        TlsKeystoreFile.writeAtomically(keystorePath,
+                outputStream -> keyStore.store(outputStream, keystorePassword));
     }
 
     private static void cleanupFiles() {
