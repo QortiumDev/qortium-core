@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - fix(sync): adopt peer forks atomically
+
+Stages every local orphan and every fully validated replacement block in one
+repository transaction, then commits the completed fork exactly once. Invalid
+later blocks, processing failures, and commit failures restore the exact prior
+tip and account state without emitting orphan or new-block callbacks; successful
+callbacks run only after the replacement tip is durable. Fork discovery, chain
+weighting, block validity, and peer selection rules are unchanged.
+
 ### 2026-08-16 - docs: start normal reorganization atomicity hardening
 
 Starts A-01 as a separately reviewed synchronization-safety tranche. Peer fork
