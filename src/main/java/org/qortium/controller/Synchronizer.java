@@ -112,6 +112,24 @@ public class Synchronizer extends Thread {
 		OK, NOTHING_TO_DO, GENESIS_ONLY, NO_COMMON_BLOCK, TOO_DIVERGENT, NO_REPLY, INFERIOR_CHAIN, INVALID_DATA, NO_BLOCKCHAIN_LOCK, REPOSITORY_ISSUE, SHUTTING_DOWN, CHAIN_TIP_TOO_OLD
     }
 
+	interface ReorganizationCallbacks {
+		void onOrphanedBlock(BlockData latestBlockData);
+
+		void onNewBlock(BlockData latestBlockData);
+	}
+
+	private static final ReorganizationCallbacks CONTROLLER_REORGANIZATION_CALLBACKS = new ReorganizationCallbacks() {
+		@Override
+		public void onOrphanedBlock(BlockData latestBlockData) {
+			Controller.getInstance().onOrphanedBlock(latestBlockData);
+		}
+
+		@Override
+		public void onNewBlock(BlockData latestBlockData) {
+			Controller.getInstance().onNewBlock(latestBlockData);
+		}
+	};
+
 	public static class NewChainTipEvent implements Event {
 		private final BlockData priorChainTip;
 		private final BlockData newChainTip;
@@ -577,6 +595,9 @@ public class Synchronizer extends Thread {
 	}
 
 	private static Integer getPeerTargetHeight(Peer peer) {
+		if (peer == null)
+			return null;
+
 		BlockSummaryData chainTipData = peer.getChainTipData();
 		return chainTipData != null ? chainTipData.getHeight() : null;
 	}
@@ -1707,71 +1728,150 @@ public class Synchronizer extends Thread {
 			++height;
 		}
 
-		// Unwind to common block (unless common block is our latest block)
-		int ourHeight = ourInitialHeight;
-		LOGGER.debug(String.format("Orphaning blocks back to common block height %d, sig %.8s. Our height: %d", commonBlockHeight, commonBlockSig58, ourHeight));
-		int reorgSize = ourHeight - commonBlockHeight;
+		return this.adoptPeerForkAtomically(repository, commonBlockData, ourInitialHeight, peer,
+				peerBlocks, CONTROLLER_REORGANIZATION_CALLBACKS);
+	}
 
-		BlockData orphanBlockData = repository.getBlockRepository().fromHeight(ourInitialHeight);
-		while (ourHeight > commonBlockHeight) {
-			if (Controller.isStopping())
-				return SynchronizationResult.SHUTTING_DOWN;
+	/**
+	 * Atomically replaces our branch above {@code commonBlockData} with the already-fetched peer blocks.
+	 * No repository commit or controller callback occurs until every replacement block has validated and
+	 * processed against the staged post-orphan state.
+	 */
+	SynchronizationResult adoptPeerForkAtomically(Repository repository, BlockData commonBlockData, int ourInitialHeight,
+			Peer peer, List<Block> peerBlocks, ReorganizationCallbacks callbacks) throws DataException {
+		final int commonBlockHeight = commonBlockData.getHeight();
+		final BlockData originalTip = repository.getBlockRepository().getLastBlock();
+		if (originalTip == null || originalTip.getHeight() != ourInitialHeight)
+			throw new DataException("Repository tip changed before atomic peer-fork adoption");
 
-			Block block = new Block(repository, orphanBlockData);
-			block.orphan();
+		BlockData storedCommonBlock = repository.getBlockRepository().fromHeight(commonBlockHeight);
+		if (storedCommonBlock == null || !Arrays.equals(storedCommonBlock.getSignature(), commonBlockData.getSignature()))
+			throw new DataException("Repository common block changed before atomic peer-fork adoption");
 
-			LOGGER.trace(String.format("Orphaned block height %d, sig %.8s", ourHeight, Base58.encode(orphanBlockData.getSignature())));
+		List<BlockData> orphanedTipStates = new ArrayList<>();
+		List<BlockData> adoptedBlockData = new ArrayList<>();
+		int reorgSize = ourInitialHeight - commonBlockHeight;
+
+		repository.setSavepoint();
+		try {
+			int ourHeight = ourInitialHeight;
+			BlockData orphanBlockData = repository.getBlockRepository().fromHeight(ourHeight);
+			while (ourHeight > commonBlockHeight) {
+				if (Controller.isStopping()) {
+					this.rollbackForkAdoption(repository, originalTip);
+					return SynchronizationResult.SHUTTING_DOWN;
+				}
+
+				if (orphanBlockData == null)
+					throw new DataException(String.format("Missing local block at height %d during atomic peer-fork adoption", ourHeight));
+
+				new Block(repository, orphanBlockData).orphan();
+				LOGGER.trace("Staged orphan of block height {}, sig {}", ourHeight,
+						Base58.encode(orphanBlockData.getSignature()));
+
+				--ourHeight;
+				BlockData stagedTip = repository.getBlockRepository().fromHeight(ourHeight);
+				if (stagedTip == null)
+					throw new DataException(String.format("Missing staged local tip at height %d during atomic peer-fork adoption", ourHeight));
+
+				orphanedTipStates.add(new BlockData(stagedTip));
+				orphanBlockData = stagedTip;
+			}
+
+			LOGGER.debug("Staged orphan to common block height {}, sig {} - validating replacement from peer {}",
+					commonBlockHeight, Base58.encode(commonBlockData.getSignature()), peer);
+
+			for (Block newBlock : peerBlocks) {
+				if (Controller.isStopping()) {
+					this.rollbackForkAdoption(repository, originalTip);
+					return SynchronizationResult.SHUTTING_DOWN;
+				}
+
+				newBlock.preProcess();
+				ValidationResult blockResult = newBlock.isValid();
+				if (blockResult != ValidationResult.OK) {
+					LOGGER.info("Peer {} sent invalid replacement block sig {}: {}", peer,
+							Base58.encode(newBlock.getSignature()), blockResult.name());
+					this.addInvalidBlockSignature(newBlock.getSignature());
+					this.timeInvalidBlockLastReceived = NTP.getTime();
+					this.rollbackForkAdoption(repository, originalTip);
+					return SynchronizationResult.INVALID_DATA;
+				}
+
+				for (Transaction transaction : newBlock.getTransactions())
+					repository.getTransactionRepository().save(transaction.getTransactionData());
+
+				newBlock.process();
+				adoptedBlockData.add(new BlockData(newBlock.getBlockData()));
+				LOGGER.trace("Staged replacement block height {}, sig {}", newBlock.getBlockData().getHeight(),
+						Base58.encode(newBlock.getBlockData().getSignature()));
+			}
+
+			BlockData stagedTip = repository.getBlockRepository().getLastBlock();
+			byte[] expectedTipSignature = peerBlocks.isEmpty()
+					? commonBlockData.getSignature()
+					: peerBlocks.get(peerBlocks.size() - 1).getBlockData().getSignature();
+			if (stagedTip == null || !Arrays.equals(stagedTip.getSignature(), expectedTipSignature))
+				throw new DataException("Atomic peer-fork adoption produced an unexpected staged tip");
 
 			repository.saveChanges();
-
-			--ourHeight;
-			orphanBlockData = repository.getBlockRepository().fromHeight(ourHeight);
-
-			repository.discardChanges(); // clear transaction status to prevent deadlocks
-			Controller.getInstance().onOrphanedBlock(orphanBlockData);
+		} catch (DataException | RuntimeException e) {
+			this.rollbackForkAdoptionAfterFailure(repository, originalTip, e);
+			throw e;
 		}
 
-		LOGGER.debug(String.format("Orphaned blocks back to height %d, sig %.8s - applying new blocks from peer %s", commonBlockHeight, commonBlockSig58, peer));
-
-		for (Block newBlock : peerBlocks) {
-			if (Controller.isStopping())
-				return SynchronizationResult.SHUTTING_DOWN;
-
-			newBlock.preProcess();
-
-			ValidationResult blockResult = newBlock.isValid();
-			if (blockResult != ValidationResult.OK) {
-				LOGGER.info(String.format("Peer %s sent invalid block for height %d, sig %.8s: %s", peer,
-						newBlock.getBlockData().getHeight(), Base58.encode(newBlock.getSignature()), blockResult.name()));
-				this.addInvalidBlockSignature(newBlock.getSignature());
-				this.timeInvalidBlockLastReceived = NTP.getTime();
-				return SynchronizationResult.INVALID_DATA;
-			}
-
-			// Block is valid
-			this.timeValidBlockLastReceived = NTP.getTime();
-
-			// Save transactions attached to this block
-			for (Transaction transaction : newBlock.getTransactions()) {
-				TransactionData transactionData = transaction.getTransactionData();
-				repository.getTransactionRepository().save(transactionData);
-			}
-
-			newBlock.process();
-
-			LOGGER.trace(String.format("Processed block height %d, sig %.8s", newBlock.getBlockData().getHeight(), Base58.encode(newBlock.getBlockData().getSignature())));
-
-			repository.saveChanges();
-
-			synchronized (this.syncLock) {
-				updateSyncProgressLocked(newBlock.getBlockData().getHeight(), getPeerTargetHeight(peer));
-			}
-
-			Controller.getInstance().onNewBlock(newBlock.getBlockData());
-		}
-
+		this.timeValidBlockLastReceived = NTP.getTime();
 		this.lastReorgSize = reorgSize;
+
+		for (BlockData orphanedTipState : orphanedTipStates)
+			callbacks.onOrphanedBlock(orphanedTipState);
+
+		for (BlockData adoptedBlock : adoptedBlockData) {
+			synchronized (this.syncLock) {
+				updateSyncProgressLocked(adoptedBlock.getHeight(), getPeerTargetHeight(peer));
+			}
+			callbacks.onNewBlock(adoptedBlock);
+		}
+
 		return SynchronizationResult.OK;
+	}
+
+	private void rollbackForkAdoptionAfterFailure(Repository repository, BlockData originalTip, Throwable failure)
+			throws DataException {
+		try {
+			this.rollbackForkAdoption(repository, originalTip);
+		} catch (DataException rollbackFailure) {
+			rollbackFailure.addSuppressed(failure);
+			throw rollbackFailure;
+		}
+	}
+
+	private void rollbackForkAdoption(Repository repository, BlockData originalTip) throws DataException {
+		DataException savepointFailure = null;
+		try {
+			repository.rollbackToSavepoint();
+		} catch (DataException e) {
+			savepointFailure = e;
+		}
+
+		try {
+			repository.discardChanges();
+		} catch (DataException discardFailure) {
+			if (savepointFailure != null)
+				discardFailure.addSuppressed(savepointFailure);
+			throw new DataException("Unable to roll back failed atomic peer-fork adoption", discardFailure);
+		}
+
+		BlockData restoredTip = repository.getBlockRepository().getLastBlock();
+		if (restoredTip == null || !Arrays.equals(restoredTip.getSignature(), originalTip.getSignature())) {
+			DataException mismatch = new DataException("Failed atomic peer-fork adoption did not restore the original tip");
+			if (savepointFailure != null)
+				mismatch.addSuppressed(savepointFailure);
+			throw mismatch;
+		}
+
+		if (savepointFailure != null)
+			LOGGER.debug("Outer savepoint rollback failed, but full transaction rollback restored the original peer-fork tip", savepointFailure);
 	}
 
     private SynchronizationResult applyNewBlocks(Repository repository, BlockData commonBlockData, int ourInitialHeight,
