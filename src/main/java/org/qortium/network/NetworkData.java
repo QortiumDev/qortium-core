@@ -2649,9 +2649,8 @@ public class NetworkData {
         switch (message.getType()) {
 
             case HELLO:
-                // A HELLO after completion is a capability refresh (the peer's slow I2P session just came
-                // up and it is now advertising its I2P_QDN destination). Merge it instead of treating it as
-                // a protocol error; only disconnect if its chain identity is incompatible.
+				// A HELLO after completion is a capability refresh. Apply the same layer/transport sanitizer
+				// as the initial HELLO and disconnect only if its chain identity is incompatible.
                 if (!Handshake.applyPostHandshakeHello(peer, (HelloMessage) message))
                     peer.disconnect("incompatible post-handshake HELLO");
                 return;

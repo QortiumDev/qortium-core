@@ -30,8 +30,8 @@ public class HelloMessageTests {
 
 	/**
 	 * The wire format must still be able to <em>decode</em> a legacy {@code I2P_QDN} capability so this node
-	 * stays graceful toward older peers that still advertise one. We no longer ever <em>emit</em> {@code I2P_QDN}
-	 * ourselves (asserted in {@code HandshakeTests}), but decoding a legacy peer's HELLO must keep working.
+	 * stays graceful toward older chain peers that still advertise one. New nodes emit {@code I2P_QDN} only on
+	 * data-layer I2P connections, but decoding a legacy chain peer's HELLO must keep working before sanitization.
 	 */
 	@Test
 	public void testLegacyI2PQdnCapabilityStillDecodes() throws MessageException {

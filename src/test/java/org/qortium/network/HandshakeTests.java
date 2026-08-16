@@ -12,6 +12,7 @@ import org.qortium.network.message.HelloMessage;
 import org.qortium.network.message.Message;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
+import org.qortium.utils.NTP;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -184,6 +185,34 @@ public class HandshakeTests {
 				assertEquals(peerType == Peer.NETWORK && i2p, capabilities.containsKey(Handshake.I2P_CAPABILITY));
 				assertEquals(peerType == Peer.NETWORKDATA && i2p,
 						capabilities.containsKey(Handshake.I2P_QDN_CAPABILITY));
+			}
+		}
+	}
+
+	@Test
+	public void testInitialHelloStripsWrongLayerAndTransportCapabilities() {
+		String chainB32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
+		String dataB32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
+		for (int peerType : new int[] { Peer.NETWORK, Peer.NETWORKDATA }) {
+			for (String address : new String[] { "198.51.100.10:24892", dataB32 }) {
+				Peer peer = new Peer(new PeerData(PeerAddress.fromString(address)), peerType);
+				Map<String, Object> capabilities = new HashMap<>(
+						Handshake.buildHelloCapabilities(peerType, address.endsWith(".i2p")));
+				capabilities.put("QDN", 24894);
+				capabilities.put(Handshake.I2P_CAPABILITY, chainB32);
+				capabilities.put(Handshake.I2P_QDN_CAPABILITY, dataB32);
+
+				Handshake next = Handshake.HELLO.onMessage(peer, new HelloMessage(NTP.getTime(),
+						"qortium-1.0.0", address, capabilities, peerType));
+				assertSame(Handshake.CHALLENGE, next);
+
+				boolean i2p = address.endsWith(".i2p");
+				assertEquals(peerType == Peer.NETWORK && !i2p,
+						peer.getPeerCapability("QDN") != null);
+				assertEquals(peerType == Peer.NETWORK && i2p,
+						peer.getPeerCapability(Handshake.I2P_CAPABILITY) != null);
+				assertEquals(peerType == Peer.NETWORKDATA && i2p,
+						peer.getPeerCapability(Handshake.I2P_QDN_CAPABILITY) != null);
 			}
 		}
 	}

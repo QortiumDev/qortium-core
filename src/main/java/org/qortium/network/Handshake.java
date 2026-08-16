@@ -636,8 +636,8 @@ public enum Handshake {
 				: 0;
 		capabilities.put(ARCHIVE_HEIGHT_CAPABILITY, archiveHeight);
 
-		// We accept a post-handshake HELLO as a capability refresh, so peers may re-advertise their I2P
-		// destination to us once their slow SAM session comes up. Unknown to older peers, who ignore it.
+		// We accept a post-handshake HELLO as a capability refresh so a chain peer can re-advertise its
+		// I2P destination after a slow SAM session comes up. Unknown to older peers, who ignore it.
 		capabilities.put(POST_HANDSHAKE_HELLO_CAPABILITY, true);
 		capabilities.put(HANDSHAKE_POW_V2_CAPABILITY, true);
 
@@ -672,8 +672,9 @@ public enum Handshake {
 
 	/**
 	 * Apply a HELLO that arrives <em>after</em> the handshake has already completed. Peers re-send HELLO
-	 * once their (slow) I2P SAM session comes up so we learn the {@code I2P}/{@code I2P_QDN} destination
-	 * that their first HELLO could not carry. This is purely a capability refresh: we do NOT re-run the
+	 * once their (slow) chain-layer I2P SAM session comes up so we learn the {@code I2P} destination that
+	 * their first HELLO could not carry. Data-layer I2P identities are carried by the data connection's
+	 * initial HELLO. This is purely a capability refresh: we do NOT re-run the
 	 * handshake state machine, change handshake state, or send anything back (the original handshake
 	 * already authenticated the peer and any reply would risk a HELLO ping-pong). The peer's chain
 	 * identity is re-checked so a post-handshake HELLO cannot flip us onto an incompatible chain, then the

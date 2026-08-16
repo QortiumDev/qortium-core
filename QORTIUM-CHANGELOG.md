@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - test(network): close T6 privacy acceptance matrix
+
+Exercises reward-identity migration through the production manager, initial
+HELLO sanitization for all layer and transport combinations, and all four
+chain-only online-identity message routes. Clarifies the compatibility comments
+for data-layer I2P HELLO capabilities and chain-layer refreshes.
+
 ### 2026-08-15 - fix(qdn): preserve configured direct reachability
 
 Uses the configured external IP for transport-scoped QDN advertisements before

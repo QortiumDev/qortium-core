@@ -191,7 +191,9 @@ public class RewardNodeIdentityTests {
 		RewardNodeIdentity authoritativeIdentity = RewardNodeIdentity.loadOrCreate(this.identityPath);
 		Path legacyIdentityPath = this.testRoot.resolve("replaceable-install")
 				.resolve("reward-node").resolve("identity.key");
-		RewardNodeIdentity.loadOrCreate(legacyIdentityPath);
+		RewardNodeIdentity legacyIdentity = RewardNodeIdentity.loadOrCreate(legacyIdentityPath);
+		assertFalse("Fixture identities must differ so target precedence is meaningful",
+				Arrays.equals(authoritativeIdentity.getPublicKey(), legacyIdentity.getPublicKey()));
 
 		RewardNodeIdentity reloadedIdentity = RewardNodeIdentity.loadOrCreate(this.identityPath, legacyIdentityPath);
 

@@ -681,19 +681,22 @@ public class OnlineAccountsManager {
     }
 
     private boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp) {
+        return computeOurAccountsForTimestamp(onlineAccountsTimestamp, getRewardNodeIdentityPath(),
+                getLegacyRewardNodeIdentityPath());
+    }
+
+    /** Package-visible migration seam used by production and identity-path integration tests. */
+    boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp, Path identityPath,
+                                           Path legacyIdentityPath) {
         boolean legacyAccountsAvailable = computeOurLegacyAccountsForTimestamp(onlineAccountsTimestamp);
         if (onlineAccountsTimestamp != null)
-            computeOurBundleForTimestamp(onlineAccountsTimestamp, getRewardNodeIdentityPath(),
-                    getLegacyRewardNodeIdentityPath());
+            computeOurBundleForTimestamp(onlineAccountsTimestamp, identityPath, legacyIdentityPath);
         return legacyAccountsAvailable;
     }
 
     /** Package-visible overload exercises the production path without changing process-wide settings. */
     boolean computeOurAccountsForTimestamp(Long onlineAccountsTimestamp, Path identityPath) {
-        boolean legacyAccountsAvailable = computeOurLegacyAccountsForTimestamp(onlineAccountsTimestamp);
-        if (onlineAccountsTimestamp != null)
-            computeOurBundleForTimestamp(onlineAccountsTimestamp, identityPath, null);
-        return legacyAccountsAvailable;
+        return computeOurAccountsForTimestamp(onlineAccountsTimestamp, identityPath, null);
     }
 
     private boolean computeOurLegacyAccountsForTimestamp(Long onlineAccountsTimestamp) {
