@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: start ultra-review TLS keystore permissions tranche
+
+Starts T10 as a narrow filesystem-security tranche: persist the existing API
+TLS PKCS12 keystore owner-only, repair a broadly readable existing keystore
+before use, reject unsafe file targets, and add creation and migration tests.
+Certificate contents, passwords, TLS policy, API listeners, and service routing
+remain outside this change.
+
 ### 2026-08-16 - docs: complete ultra-review configuration and API hygiene
 
 Completes T9 with a strict 17-name trigger registry, a canonical versioned
