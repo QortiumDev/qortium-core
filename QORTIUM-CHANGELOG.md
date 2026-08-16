@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - chore(release): prepare Core 1.7.0
+
+Marks the version for the first Core-only Preview release after the node
+reward-bundle consensus work and the completed ultra-review remediation and
+release-hardening tranches. Core 1.7.0 includes atomic normal fork adoption,
+copy-isolated local archive export, safer synchronization and recovery, retired
+destructive hosted bootstrap and peer-claim orphan paths, coherent Preview and
+Docker configuration, transport-scoped identities and QDN return addresses,
+adaptive networking, repository/API correctness fixes, activation-aware
+feature schedule agreement, protected public writes on every listener,
+owner-only TLS keystores, and loopback-restricted Windows developer-reference
+settings. All Preview block producers and peers must run the compatible Core
+release before local next-block height 99,990, when the reward-bundle capture
+format and schedule agreement take effect. Home and Chat releases remain
+separate work and are not part of this Core candidate.
+
 ### 2026-08-16 - docs: complete Windows developer-reference API hardening
 
 Completes A-03 after focused and clean full-suite validation. The inherited
