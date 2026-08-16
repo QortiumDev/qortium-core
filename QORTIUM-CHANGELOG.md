@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: start ultra-review adaptive networking tranche
+
+Starts T7 with four bounded networking repairs: isolate and coalesce QDN AIMD
+feedback by peer, throttle QDN only during genuine chain catch-up, cap the total
+GET_BLOCKS retry time, and permit only one ping task per peer. This boundary does
+not change network encodings, chain validation, archive serving, or consensus.
+
 ### 2026-08-15 - docs: complete ultra-review transport privacy
 
 Records T6 complete in Core source and local artifact validation. QDN file-list
