@@ -120,6 +120,7 @@ public class RepositoryTests extends Common {
 			try (ResultSet resultSet = connection.getMetaData().getColumns(null, "PUBLIC", "CHATMESSAGES", "PRIVATE_GROUP_ENVELOPE_TYPE")) {
 				assertTrue(resultSet.next());
 			}
+			assertColumnExists(connection, "CHATMESSAGES", "FEE");
 
 			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATES", null)) {
 				assertTrue(resultSet.next());
@@ -143,6 +144,52 @@ public class RepositoryTests extends Common {
 
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
+	public void testCurrentSchemaAddsChatMessageFeeWithoutLosingRows() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:chat-message-fee-current-schema-" + System.nanoTime();
+		byte[] signature = new byte[64];
+		signature[0] = 42;
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+			assertTrue(HSQLDBDatabaseUpdates.updateDatabase(connection));
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("ALTER TABLE PUBLIC.CHATMESSAGES DROP COLUMN FEE");
+			}
+
+			try (PreparedStatement statement = connection.prepareStatement(
+					"INSERT INTO PUBLIC.CHATMESSAGES "
+							+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+							+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type) "
+							+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+				statement.setBytes(1, signature);
+				statement.setLong(2, 123456789L);
+				statement.setInt(3, 0);
+				statement.setBytes(4, new byte[32]);
+				statement.setString(5, "QWfYdC4N8mV4PmxRtbG5gH8XqLr2fP3mZt");
+				statement.setInt(6, 7);
+				statement.setNull(7, java.sql.Types.VARCHAR);
+				statement.setNull(8, java.sql.Types.VARBINARY);
+				statement.setBoolean(9, true);
+				statement.setBoolean(10, false);
+				statement.setBytes(11, new byte[] {1, 2, 3});
+				statement.setNull(12, java.sql.Types.VARCHAR);
+				statement.executeUpdate();
+			}
+			connection.commit();
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertColumnExists(connection, "CHATMESSAGES", "FEE");
+
+			try (Statement statement = connection.createStatement();
+					ResultSet resultSet = statement.executeQuery("SELECT fee FROM PUBLIC.CHATMESSAGES")) {
+				assertTrue(resultSet.next());
+				assertEquals(0L, resultSet.getLong(1));
 			}
 		}
 	}

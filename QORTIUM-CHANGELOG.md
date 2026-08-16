@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(chat): preserve stored transaction fees
+
+Stores and restores the signed CHAT transaction fee in the node-local chat
+index instead of reconstructing every retained message with a zero fee. The
+idempotent current-schema migration gives existing retained rows a zero default
+and preserves nonzero fees for every raw chat lookup without changing chain
+consensus or the transaction format.
+
 ### 2026-08-15 - fix(archive): ignore temporary and malformed archive files
 
 Restricts archive discovery to the exact numeric `start-end.dat` filename

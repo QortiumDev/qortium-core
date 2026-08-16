@@ -46,7 +46,7 @@ public class ChatStoreRepositoryTests extends Common {
 			byte[] chatReference = signature(2);
 
 			ChatTransactionData chatData = chat(repository, alice, Group.NO_GROUP, bob.getAddress(),
-					signature, payload, false, true, now(), chatReference);
+					signature, payload, false, true, now(), chatReference, 123_456_789L);
 
 			repository.getChatStoreRepository().save(chatData);
 			repository.saveChanges();
@@ -61,6 +61,12 @@ public class ChatStoreRepositoryTests extends Common {
 			assertEquals(bob.getAddress(), stored.getRecipient());
 			assertFalse(stored.getIsText());
 			assertTrue(stored.getIsEncrypted());
+			assertEquals(123_456_789L, stored.getFee().longValue());
+
+			List<ChatTransactionData> storedBatch = repository.getChatStoreRepository()
+					.fromSignatures(Arrays.asList(signature));
+			assertEquals(1, storedBatch.size());
+			assertEquals(123_456_789L, storedBatch.get(0).getFee().longValue());
 		}
 	}
 
@@ -158,7 +164,7 @@ public class ChatStoreRepositoryTests extends Common {
 			ChatTransactionData olderBobChatData = chat(repository, alice, Group.NO_GROUP, bob.getAddress(),
 					signature(40), bytes("older bob"), true, false, now(), null);
 			ChatTransactionData newerBobChatData = chat(repository, bob, Group.NO_GROUP, alice.getAddress(),
-					signature(41), bytes("newer bob"), true, false, now() + 1, signature(42));
+					signature(41), bytes("newer bob"), true, false, now() + 1, signature(42), 41L);
 			ChatTransactionData chloeChatData = chat(repository, alice, Group.NO_GROUP, chloe.getAddress(),
 					signature(43), bytes("chloe"), true, false, now() + 2, null);
 
@@ -174,6 +180,7 @@ public class ChatStoreRepositoryTests extends Common {
 			assertEquals(1, messages.size());
 			assertArrayEquals(newerBobChatData.getSignature(), messages.get(0).getSignature());
 			assertArrayEquals(signature(42), messages.get(0).getChatReference());
+			assertEquals(41L, messages.get(0).getFee().longValue());
 
 			List<ChatTransactionData> referencedMessages = repository.getChatStoreRepository().getDirectMessagesMatchingCriteria(
 					null, null, null, true, Arrays.asList(alice.getAddress(), bob.getAddress()),
@@ -233,9 +240,9 @@ public class ChatStoreRepositoryTests extends Common {
 			ChatTransactionData olderBobChatData = chat(repository, alice, Group.NO_GROUP, bob.getAddress(),
 					signature(44), bytes("older bob"), true, false, now(), null);
 			ChatTransactionData newerBobChatData = chat(repository, bob, Group.NO_GROUP, alice.getAddress(),
-					signature(45), bytes("newer bob"), true, false, now() + 1, null);
+					signature(45), bytes("newer bob"), true, false, now() + 1, null, 45L);
 			ChatTransactionData chloeChatData = chat(repository, chloe, Group.NO_GROUP, alice.getAddress(),
-					signature(46), bytes("chloe"), true, false, now() + 2, null);
+					signature(46), bytes("chloe"), true, false, now() + 2, null, 46L);
 
 			repository.getChatStoreRepository().save(olderBobChatData);
 			repository.getChatStoreRepository().save(newerBobChatData);
@@ -248,6 +255,8 @@ public class ChatStoreRepositoryTests extends Common {
 			assertEquals(2, latestDirectMessages.size());
 			assertArrayEquals(chloeChatData.getSignature(), latestDirectMessages.get(0).getSignature());
 			assertArrayEquals(newerBobChatData.getSignature(), latestDirectMessages.get(1).getSignature());
+			assertEquals(46L, latestDirectMessages.get(0).getFee().longValue());
+			assertEquals(45L, latestDirectMessages.get(1).getFee().longValue());
 		}
 	}
 
@@ -289,7 +298,7 @@ public class ChatStoreRepositoryTests extends Common {
 			ChatTransactionData olderGroupData = chat(repository, alice, groupId, null,
 					signature(12), bytes("older group"), true, false, timestamp, null);
 			ChatTransactionData newerGroupData = chat(repository, alice, groupId, null,
-					signature(13), bytes("newer group"), true, false, timestamp + 1, null);
+					signature(13), bytes("newer group"), true, false, timestamp + 1, null, 13L);
 			ChatTransactionData directGroupData = chat(repository, alice, groupId, bob.getAddress(),
 					signature(14), bytes("direct group"), true, false, timestamp + 2, null);
 			ChatTransactionData otherGroupData = chat(repository, alice, groupId + 1, null,
@@ -306,6 +315,8 @@ public class ChatStoreRepositoryTests extends Common {
 			assertEquals(2, groupMessages.size());
 			assertArrayEquals(newerGroupData.getSignature(), groupMessages.get(0).getSignature());
 			assertArrayEquals(olderGroupData.getSignature(), groupMessages.get(1).getSignature());
+			assertEquals(13L, groupMessages.get(0).getFee().longValue());
+			assertEquals(0L, groupMessages.get(1).getFee().longValue());
 			assertNull(groupMessages.get(0).getRecipient());
 			assertNull(groupMessages.get(1).getRecipient());
 		}
@@ -428,11 +439,18 @@ public class ChatStoreRepositoryTests extends Common {
 
 	private static ChatTransactionData chat(Repository repository, TestAccount sender, int groupId, String recipient,
 			byte[] signature, byte[] data, boolean isText, boolean isEncrypted, long timestamp, byte[] chatReference) {
+		return chat(repository, sender, groupId, recipient, signature, data, isText, isEncrypted, timestamp,
+				chatReference, 0L);
+	}
+
+	private static ChatTransactionData chat(Repository repository, TestAccount sender, int groupId, String recipient,
+			byte[] signature, byte[] data, boolean isText, boolean isEncrypted, long timestamp, byte[] chatReference,
+			long fee) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
 				groupId,
 				sender.getPublicKey(),
-				0L,
+				fee,
 				0,
 				signature);
 

@@ -37,6 +37,7 @@ public class HSQLDBDatabaseUpdates {
 			// existing node picks them up on restart without a repository reset.
 			ensureLocalTables(connection);
 			ensureArbitraryTransactionCreatedWhen(connection);
+			ensureChatMessageFee(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -61,6 +62,7 @@ public class HSQLDBDatabaseUpdates {
 			upgradeFromVersion4(connection);
 			ensureLocalTables(connection);
 			ensureArbitraryTransactionCreatedWhen(connection);
+			ensureChatMessageFee(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -299,6 +301,16 @@ public class HSQLDBDatabaseUpdates {
 		}
 
 		connection.commit();
+	}
+
+	private static void ensureChatMessageFee(Connection connection) throws SQLException {
+		if (!tableExists(connection, "CHATMESSAGES") || columnExists(connection, "CHATMESSAGES", "FEE"))
+			return;
+
+		LOGGER.info("Adding signed transaction fees to the local chat message store - please wait...");
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("ALTER TABLE PUBLIC.CHATMESSAGES ADD FEE PUBLIC.ASSETAMOUNT DEFAULT 0 NOT NULL");
+		}
 	}
 
 	private static boolean tableExists(Connection connection, String tableName) throws SQLException {

@@ -52,9 +52,9 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 			sender = Crypto.toAddress(chatTransactionData.getSenderPublicKey());
 
 		String sql = "INSERT INTO ChatMessages "
-				+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+				+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, "
 				+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type) "
-				+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+				+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 		String privateGroupEnvelopeType = classifyPrivateGroupEnvelope(chatTransactionData);
 
 		try {
@@ -65,6 +65,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 					chatTransactionData.getSenderPublicKey(),
 					sender,
 					chatTransactionData.getNonce(),
+					chatTransactionData.getFee(),
 					chatTransactionData.getRecipient(),
 					chatTransactionData.getChatReference(),
 					chatTransactionData.getIsText(),
@@ -87,7 +88,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 	@Override
 	public ChatTransactionData fromSignature(byte[] signature) throws DataException {
-		String sql = "SELECT created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+		String sql = "SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, "
 				+ "chat_reference, is_text, is_encrypted, data, signature "
 				+ "FROM ChatMessages WHERE signature = ?";
 
@@ -108,7 +109,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 			return chatTransactionData;
 
 		StringBuilder sql = new StringBuilder(1024);
-		sql.append("SELECT created_when, tx_group_id, sender_public_key, sender, nonce, recipient, ");
+		sql.append("SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, ");
 		sql.append("chat_reference, is_text, is_encrypted, data, signature ");
 		sql.append("FROM ChatMessages WHERE signature IN (");
 		sql.append(String.join(", ", java.util.Collections.nCopies(signatures.size(), "?")));
@@ -149,7 +150,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 	@Override
 	public List<ChatTransactionData> getGroupMessages(int txGroupId) throws DataException {
-		String sql = "SELECT created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+		String sql = "SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, "
 				+ "chat_reference, is_text, is_encrypted, data, signature "
 				+ "FROM ChatMessages WHERE tx_group_id = ? AND recipient IS NULL "
 				+ "ORDER BY created_when DESC, signature DESC";
@@ -250,7 +251,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				hasChatReference, involving, senderAddress);
 
 		StringBuilder sql = new StringBuilder(1024);
-		sql.append("SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, ");
+		sql.append("SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, CM.fee, ");
 		sql.append("CM.recipient, CM.chat_reference, CM.is_text, CM.is_encrypted, CM.data, CM.signature ");
 		sql.append("FROM ChatMessages CM ");
 		sql.append(criteria.sql);
@@ -312,7 +313,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 		String directSql = "SELECT LatestMessages.created_when, LatestMessages.tx_group_id, "
 				+ "LatestMessages.sender_public_key, LatestMessages.sender, LatestMessages.nonce, "
-				+ "LatestMessages.recipient, LatestMessages.chat_reference, LatestMessages.is_text, "
+				+ "LatestMessages.fee, LatestMessages.recipient, LatestMessages.chat_reference, LatestMessages.is_text, "
 				+ "LatestMessages.is_encrypted, LatestMessages.data, LatestMessages.signature "
 				+ "FROM ("
 					+ "SELECT recipient FROM ChatMessages "
@@ -322,7 +323,7 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 					+ "WHERE recipient = ? AND created_when >= ?"
 				+ ") AS OtherParties (other_address) "
 				+ "CROSS JOIN LATERAL("
-					+ "SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, "
+					+ "SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, CM.fee, "
 					+ "CM.recipient, CM.chat_reference, CM.is_text, CM.is_encrypted, CM.data, CM.signature "
 					+ "FROM ChatMessages CM "
 					+ "WHERE ((CM.sender = other_address AND CM.recipient = ?) "
@@ -716,14 +717,15 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		byte[] senderPublicKey = resultSet.getBytes(3);
 		String sender = resultSet.getString(4);
 		int nonce = resultSet.getInt(5);
-		String recipient = resultSet.getString(6);
-		byte[] chatReference = resultSet.getBytes(7);
-		boolean isText = resultSet.getBoolean(8);
-		boolean isEncrypted = resultSet.getBoolean(9);
-		byte[] data = resultSet.getBytes(10);
-		byte[] signature = resultSet.getBytes(11);
+		long fee = resultSet.getLong(6);
+		String recipient = resultSet.getString(7);
+		byte[] chatReference = resultSet.getBytes(8);
+		boolean isText = resultSet.getBoolean(9);
+		boolean isEncrypted = resultSet.getBoolean(10);
+		byte[] data = resultSet.getBytes(11);
+		byte[] signature = resultSet.getBytes(12);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, groupId, senderPublicKey, 0L, nonce, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, groupId, senderPublicKey, fee, nonce, signature);
 		return new ChatTransactionData(baseTransactionData, sender, nonce, recipient, chatReference, data, isText, isEncrypted);
 	}
 
