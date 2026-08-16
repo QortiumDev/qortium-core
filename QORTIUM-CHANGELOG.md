@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - docs: start ultra-review configuration and API hygiene tranche
+
+Starts T9 with an approved activation-aware trigger-compatibility design,
+explicit local-testnet trigger decisions, shared public-write route semantics,
+and retrospective changelog entries for adaptive-networking PRs #212 through
+#214. The base chain hash and current Previewnet trigger heights remain fixed;
+implementation must preserve pre-enforcement mixed-version connectivity.
+
 ### 2026-08-15 - docs: complete ultra-review repository and API correctness
 
 Records T8 complete in Core source, tests, and the local packaged artifact.
