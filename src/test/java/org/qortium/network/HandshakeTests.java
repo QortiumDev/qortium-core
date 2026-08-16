@@ -203,7 +203,7 @@ public class HandshakeTests {
 				capabilities.put(Handshake.I2P_QDN_CAPABILITY, dataB32);
 
 				Handshake next = Handshake.HELLO.onMessage(peer, new HelloMessage(NTP.getTime(),
-						"qortium-1.0.0", address, capabilities, peerType));
+						"qortium-1.0.0", "127.0.0.1:24892", capabilities, peerType));
 				assertSame(Handshake.CHALLENGE, next);
 
 				boolean i2p = address.endsWith(".i2p");

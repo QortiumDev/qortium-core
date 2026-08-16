@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - test(qdn): cover I2P-to-IP relay privacy
+
+Pins the original disclosure direction through the production response relay:
+an I2P holder forwarded to a clearnet requester becomes addressless relay-only,
+while an unusable direct-only reply is dropped. The mirrored request assertion
+and isolated HELLO fixture keep the privacy matrix deterministic across tests.
+
 ### 2026-08-15 - test(network): close T6 privacy acceptance matrix
 
 Exercises reward-identity migration through the production manager, initial
