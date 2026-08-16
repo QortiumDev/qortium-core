@@ -57,6 +57,10 @@ public class FeatureTriggerScheduleTests extends Common {
 		assertEquals(3, testnet.path("blockRewardBatchAccountsBlockCount").asInt());
 		assertEquals(97L, testnet.with("featureTriggers").path("onlineNodeRewardBundlesPayoutHeight").asLong()
 				- testnet.path("blockRewardBatchAccountsBlockCount").asLong());
+
+		loadConfig(testnet);
+		assertEquals(97L, BlockChain.getInstance().getOnlineNodeRewardBundlesCaptureStartHeight());
+		assertEquals(0L, BlockChain.getInstance().getFeatureTriggerScheduleEnforcementHeight());
 	}
 
 	@Test
@@ -66,6 +70,18 @@ public class FeatureTriggerScheduleTests extends Common {
 			chain.with("featureTriggers").put(unknownName, 123L);
 			assertThrows(RuntimeException.class, () -> loadConfig(chain));
 		}
+
+		ObjectNode blank = readJsonResource("test-chain-v2.json");
+		blank.with("featureTriggers").put(" ", 123L);
+		assertThrows(RuntimeException.class, () -> loadConfig(blank));
+
+		ObjectNode negative = readJsonResource("test-chain-v2.json");
+		negative.with("featureTriggers").put("atBalanceQueryHeight", -1L);
+		assertThrows(RuntimeException.class, () -> loadConfig(negative));
+
+		ObjectNode missingHeight = readJsonResource("test-chain-v2.json");
+		missingHeight.with("featureTriggers").putNull("atBalanceQueryHeight");
+		assertThrows(RuntimeException.class, () -> loadConfig(missingHeight));
 	}
 
 	@Test

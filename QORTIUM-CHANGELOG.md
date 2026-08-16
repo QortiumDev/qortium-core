@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - test(consensus): cover trigger registry configuration failures
+
+Loads the actual local-testnet schedule through Core's settings path and pins
+its height-97 capture boundary. The registry tests now also reject blank,
+negative, null, unknown, and misspelled trigger entries through full chain
+configuration validation instead of relying only on map-level assertions.
+
 ### 2026-08-15 - docs(testnet): explain feature-trigger rehearsal schedule
 
 Documents that the disposable local testnet starts already-active Previewnet
