@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - docs: start Windows developer-reference API hardening
+
+Starts A-03 as the final separately reviewed Core 1.7.0 hardening tranche. The
+inherited Windows installer remains a developer reference, but its example
+settings will bind the API to loopback, require the loopback whitelist, enable
+restricted API mode, and reject remote API-key bypass. Generic, Preview, Home,
+and Chat behavior remain outside this change.
+
 ### 2026-08-16 - docs: complete copy-isolated local archive export
 
 Completes A-02 after focused and clean full-suite validation. Local archive

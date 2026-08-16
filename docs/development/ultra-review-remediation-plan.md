@@ -114,7 +114,7 @@ importer class; and `git diff --check` passed.
 
 ### A-03 — Windows developer-reference API exposure
 
-Status: unassigned; release hardening outside T5.
+Status: in progress; separately approved before the Core 1.7.0 prerelease.
 
 `WindowsInstaller/Install Files/AppData/settings.json` explicitly disables both
 API restriction and whitelist enforcement. T5 leaves that developer-reference
@@ -210,10 +210,13 @@ controls in their own repositories:
 
 ## Current Work Boundary
 
-No implementation tranche is active. A-02 is complete in source and local
-validation but is not released or deployed. A-03 Windows developer-reference
-API hardening is the next Core 1.7.0 tranche. A-04 Home integration remains
-outside this Core-only boundary.
+A-03 Windows developer-reference API hardening is the only active
+implementation tranche. It may restrict the inherited developer-reference
+settings to loopback binding and whitelist access, enable restricted API mode,
+disable remote API-key bypass, and add profile/effective-behavior tests. It
+must not turn the inherited installer into a supported release artifact,
+change normal generic or Preview profiles, or enter Home/Chat scope. A-04 Home
+integration remains outside this Core-only boundary.
 
 A-02 was completed by `fix(bootstrap): isolate local archive export from live
 state`, following the tracked start commit. The focused bootstrap,
