@@ -130,6 +130,9 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 	}
 
 	private void onNotify(Session session, ChatTransactionData chatTransactionData, int txGroupId) {
+		if (!matchesGroupNotification(chatTransactionData, txGroupId))
+			return;
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			if (!isVisibleGroupNotification(repository.getChatStoreRepository(), chatTransactionData, txGroupId))
 				return;
@@ -143,14 +146,16 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 
 	static boolean isVisibleGroupNotification(ChatStoreRepository chatStoreRepository,
 			ChatTransactionData chatTransactionData, int txGroupId) throws DataException {
-		if (chatTransactionData == null)
-			return false;
-
-		// We only want public messages with our txGroupId, including groupless general chat.
-		if (chatTransactionData.getRecipient() != null || chatTransactionData.getTxGroupId() != txGroupId)
+		if (!matchesGroupNotification(chatTransactionData, txGroupId))
 			return false;
 
 		return chatStoreRepository.isGroupMessageVisible(chatTransactionData.getSignature());
+	}
+
+	private static boolean matchesGroupNotification(ChatTransactionData chatTransactionData, int txGroupId) {
+		return chatTransactionData != null
+				&& chatTransactionData.getRecipient() == null
+				&& chatTransactionData.getTxGroupId() == txGroupId;
 	}
 
 	private void onNotify(Session session, ChatTransactionData chatTransactionData, List<String> involvingAddresses) {

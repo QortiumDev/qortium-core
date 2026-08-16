@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-15 - fix(chat): gate websocket visibility lookups
+
+Applies the cheap recipient and group match before opening a repository to
+classify a live websocket notification. Each group subscriber therefore
+consults persisted envelope visibility only for a message that could actually
+belong to that subscription.
+
 ### 2026-08-15 - fix(network): reject empty PEERS messages
 
 Rejects zero or negative PEERS entry counts at the message boundary because the
