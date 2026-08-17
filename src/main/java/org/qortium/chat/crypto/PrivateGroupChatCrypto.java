@@ -18,7 +18,7 @@ public class PrivateGroupChatCrypto {
 	private static final String AES = "AES";
 	private static final String AES_GCM = "AES/GCM/NoPadding";
 	private static final String HMAC_SHA256 = "HmacSHA256";
-	private static final int GCM_TAG_LENGTH_BITS = 128;
+	private static final int GCM_TAG_LENGTH_BITS = PrivateGroupChatEnvelope.AUTH_TAG_LENGTH * Byte.SIZE;
 
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -60,6 +60,8 @@ public class PrivateGroupChatCrypto {
 		validateLength(groupKey, Transformer.AES256_LENGTH, "group key");
 		validateLength(nonce, PrivateGroupChatEnvelope.NONCE_LENGTH, "nonce");
 		validatePayload(plaintext, "plaintext");
+		if (plaintext.length > PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES)
+			throw new IllegalArgumentException("plaintext exceeds private group chat message limit");
 
 		byte[] associatedData = buildMessageAssociatedData(groupId, epochId, keyId);
 		return doAesGcm(Cipher.ENCRYPT_MODE, groupKey, nonce, associatedData, plaintext);
@@ -70,6 +72,9 @@ public class PrivateGroupChatCrypto {
 		validateLength(groupKey, Transformer.AES256_LENGTH, "group key");
 		validateLength(nonce, PrivateGroupChatEnvelope.NONCE_LENGTH, "nonce");
 		validatePayload(ciphertext, "ciphertext");
+		if (ciphertext.length > PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES
+				+ PrivateGroupChatEnvelope.AUTH_TAG_LENGTH)
+			throw new IllegalArgumentException("ciphertext exceeds private group chat message limit");
 
 		byte[] associatedData = buildMessageAssociatedData(groupId, epochId, keyId);
 		return doAesGcm(Cipher.DECRYPT_MODE, groupKey, nonce, associatedData, ciphertext);
@@ -191,8 +196,8 @@ public class PrivateGroupChatCrypto {
 		if (wrappedKey == null)
 			throw new IllegalArgumentException("wrapped key is missing");
 
-		if (wrappedKey.length <= PrivateGroupChatEnvelope.NONCE_LENGTH)
-			throw new IllegalArgumentException("wrapped key is too short");
+		if (wrappedKey.length != PrivateGroupChatEnvelope.WRAPPED_GROUP_KEY_LENGTH)
+			throw new IllegalArgumentException("wrapped key has invalid length");
 	}
 
 	private static void validateLength(byte[] bytes, int expectedLength, String fieldName) {

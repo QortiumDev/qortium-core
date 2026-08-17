@@ -18,7 +18,14 @@ import java.util.Comparator;
 import java.util.List;
 
 public class PrivateGroupChatMembership {
-	public static final int MAX_V1_MEMBERS = 39;
+	public static final int MAX_V1_MEMBERS = PrivateGroupChatEnvelope.MAX_KEY_ANNOUNCEMENT_WRAPPERS;
+
+	public enum UnavailableReason {
+		NO_MEMBERS,
+		MEMBERSHIP_INCONSISTENT,
+		MEMBER_PUBLIC_KEY_UNKNOWN,
+		MEMBER_LIMIT_EXCEEDED
+	}
 
 	private static final byte[] EPOCH_DOMAIN = "QPGC epoch v1".getBytes(StandardCharsets.US_ASCII);
 
@@ -46,9 +53,18 @@ public class PrivateGroupChatMembership {
 		if (groupData.isOpen())
 			throw new IllegalArgumentException("private group chat epochs require a closed group");
 
-		List<GroupMemberData> groupMembers = repository.getGroupRepository().getGroupMembers(groupId);
-		if (groupMembers == null || groupMembers.isEmpty())
-			throw new IllegalStateException("group has no members");
+		Integer memberCount = repository.getGroupRepository().countGroupMembers(groupId);
+		if (memberCount == null || memberCount <= 0)
+			throw new AvailabilityException(UnavailableReason.NO_MEMBERS, "group has no members");
+		if (memberCount > MAX_V1_MEMBERS)
+			throw new AvailabilityException(UnavailableReason.MEMBER_LIMIT_EXCEEDED,
+					"private group chat v1 supports at most " + MAX_V1_MEMBERS + " members");
+
+		List<GroupMemberData> groupMembers = repository.getGroupRepository().getGroupMembers(groupId,
+				MAX_V1_MEMBERS, null, false);
+		if (groupMembers == null || groupMembers.size() != memberCount)
+			throw new AvailabilityException(UnavailableReason.MEMBERSHIP_INCONSISTENT,
+					"group membership changed while resolving private chat availability");
 
 		List<byte[]> memberPublicKeys = new ArrayList<>(groupMembers.size());
 		for (GroupMemberData groupMemberData : groupMembers)
@@ -80,11 +96,13 @@ public class PrivateGroupChatMembership {
 		AccountData accountData = repository.getAccountRepository().getAccount(memberAddress);
 
 		if (accountData == null || !isUsablePublicKey(accountData.getPublicKey()))
-			throw new IllegalStateException("group member has no known public key: " + memberAddress);
+			throw new AvailabilityException(UnavailableReason.MEMBER_PUBLIC_KEY_UNKNOWN,
+					"group member has no known public key: " + memberAddress);
 
 		byte[] publicKey = accountData.getPublicKey();
 		if (!memberAddress.equals(Crypto.toAddress(publicKey)))
-			throw new IllegalStateException("group member public key does not match address: " + memberAddress);
+			throw new AvailabilityException(UnavailableReason.MEMBER_PUBLIC_KEY_UNKNOWN,
+					"group member public key does not match address: " + memberAddress);
 
 		return copy(publicKey);
 	}
@@ -95,6 +113,9 @@ public class PrivateGroupChatMembership {
 
 		if (memberPublicKeys.isEmpty())
 			throw new IllegalArgumentException("member public keys are empty");
+		if (memberPublicKeys.size() > MAX_V1_MEMBERS)
+			throw new AvailabilityException(UnavailableReason.MEMBER_LIMIT_EXCEEDED,
+					"private group chat v1 supports at most " + MAX_V1_MEMBERS + " members");
 
 		List<byte[]> sortedMemberPublicKeys = new ArrayList<>(memberPublicKeys.size());
 		for (byte[] memberPublicKey : memberPublicKeys) {
@@ -157,6 +178,19 @@ public class PrivateGroupChatMembership {
 
 		public byte[] getEpochId() {
 			return copy(this.epochId);
+		}
+	}
+
+	public static class AvailabilityException extends IllegalStateException {
+		private final UnavailableReason reason;
+
+		public AvailabilityException(UnavailableReason reason, String message) {
+			super(message);
+			this.reason = reason;
+		}
+
+		public UnavailableReason getReason() {
+			return this.reason;
 		}
 	}
 }

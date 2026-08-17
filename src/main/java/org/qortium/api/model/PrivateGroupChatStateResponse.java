@@ -23,6 +23,7 @@ public class PrivateGroupChatStateResponse {
 	public final List<String> missingPublicKeyAddresses;
 	public final int qpgcVersion;
 	public final int maxV1Members;
+	public final int maxMessagePlaintextBytes;
 	public final boolean available;
 	public final PrivateGroupChatPublicService.UnavailableReason unavailableReason;
 
@@ -37,6 +38,7 @@ public class PrivateGroupChatStateResponse {
 		this.missingPublicKeyAddresses = List.of();
 		this.qpgcVersion = PrivateGroupChatEnvelope.VERSION;
 		this.maxV1Members = PrivateGroupChatMembership.MAX_V1_MEMBERS;
+		this.maxMessagePlaintextBytes = PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES;
 		this.available = false;
 		this.unavailableReason = null;
 	}
@@ -55,6 +57,7 @@ public class PrivateGroupChatStateResponse {
 		this.missingPublicKeyAddresses = List.copyOf(state.getMissingPublicKeyAddresses());
 		this.qpgcVersion = PrivateGroupChatEnvelope.VERSION;
 		this.maxV1Members = PrivateGroupChatMembership.MAX_V1_MEMBERS;
+		this.maxMessagePlaintextBytes = PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES;
 		this.available = state.isAvailable();
 		this.unavailableReason = state.getUnavailableReason();
 	}

@@ -149,6 +149,52 @@ public class PrivateGroupChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testOversizedUtf8MessageFailsBeforeStorage() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-message-limit");
+			byte[] oversizedPayload = "€".repeat(1299).getBytes(StandardCharsets.UTF_8);
+
+			PrivateGroupChatService.PrivateGroupChatException exception = assertThrows(
+					PrivateGroupChatService.PrivateGroupChatException.class,
+					() -> PrivateGroupChatService.getInstance().send(repository, fixture.alice.getPrivateKey(),
+							fixture.groupId, oversizedPayload, true, null));
+			assertTrue(exception.getMessage().contains("3894-byte plaintext limit"));
+			assertNull(exception.getUnavailableReason());
+			assertTrue(repository.getChatStoreRepository().getPrivateGroupEnvelopes(fixture.groupId,
+					PrivateGroupChatEnvelope.Type.MESSAGE, null, null, null, null, 1).isEmpty());
+			assertTrue(repository.getChatStoreRepository().getPrivateGroupEnvelopes(fixture.groupId,
+					PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, null, null, null, null, 1).isEmpty());
+		}
+	}
+
+	@Test
+	public void testOversizedMembershipFailsBeforeStorage() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-member-limit");
+			GroupData groupData = repository.getGroupRepository().fromGroupId(fixture.groupId);
+			for (int index = 0; index < PrivateGroupChatMembership.MAX_V1_MEMBERS - 1; ++index) {
+				org.qortium.account.PrivateKeyAccount account = Common.generateDeterministicSeedAccount(repository,
+						"private-service-member-limit", index);
+				account.ensureAccount();
+				repository.getGroupRepository().save(new GroupMemberData(fixture.groupId, account.getAddress(),
+						groupData.getCreated(), groupData.getReference()));
+			}
+			repository.saveChanges();
+
+			PrivateGroupChatService.PrivateGroupChatException exception = assertThrows(
+					PrivateGroupChatService.PrivateGroupChatException.class,
+					() -> PrivateGroupChatService.getInstance().send(repository, fixture.alice.getPrivateKey(),
+							fixture.groupId, bytes("blocked"), true, null));
+			assertEquals(PrivateGroupChatMembership.UnavailableReason.MEMBER_LIMIT_EXCEEDED,
+					exception.getUnavailableReason());
+			assertTrue(repository.getChatStoreRepository().getPrivateGroupEnvelopes(fixture.groupId,
+					PrivateGroupChatEnvelope.Type.MESSAGE, null, null, null, null, 1).isEmpty());
+			assertTrue(repository.getChatStoreRepository().getPrivateGroupEnvelopes(fixture.groupId,
+					PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, null, null, null, null, 1).isEmpty());
+		}
+	}
+
+	@Test
 	public void testRequestKeyStoresKeyRequestEnvelope() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "private-service-key-request");

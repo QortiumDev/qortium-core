@@ -60,6 +60,25 @@ public class PrivateGroupChatCryptoTests {
 	}
 
 	@Test
+	public void testMessagePlaintextByteBoundaryUsesUtf8Bytes() throws GeneralSecurityException {
+		int groupId = 16;
+		byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 70);
+		byte[] groupKey = bytes(Transformer.AES256_LENGTH, 71);
+		byte[] keyId = PrivateGroupChatCrypto.computeKeyId(groupId, epochId, groupKey);
+		byte[] nonce = bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 72);
+		byte[] maximumPlaintext = "€".repeat(1298).getBytes(StandardCharsets.UTF_8);
+		byte[] oversizedPlaintext = "€".repeat(1299).getBytes(StandardCharsets.UTF_8);
+
+		assertEquals(PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES, maximumPlaintext.length);
+		byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epochId, keyId, nonce,
+				maximumPlaintext);
+		assertArrayEquals(maximumPlaintext, PrivateGroupChatCrypto.decryptMessage(groupKey, groupId, epochId,
+				keyId, nonce, ciphertext));
+		assertThrows(IllegalArgumentException.class, () -> PrivateGroupChatCrypto.encryptMessage(groupKey,
+				groupId, epochId, keyId, nonce, oversizedPlaintext));
+	}
+
+	@Test
 	public void testMessageDecryptFailsForWrongContextOrTampering() throws GeneralSecurityException {
 		int groupId = 11;
 		byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 20);

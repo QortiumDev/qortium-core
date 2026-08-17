@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): enforce QPGC v1 availability limits
+
+Derives QPGC v1's 39-member and 3,894-byte plaintext ceilings from the exact
+4,000-byte CHAT envelope layout and enforces them before key generation,
+encryption, proof of work, or storage. Closed-group membership resolution now
+counts first, loads at most the supported member set, and reports structured
+no-member, inconsistent-membership, unknown-public-key, and member-limit
+reasons. The public state response also reports the plaintext byte ceiling so
+Home can disable unavailable private-chat sends without ever falling back to
+plaintext.
+
 ### 2026-08-17 - feat(chat): retain required private-group key announcements
 
 Keeps an accepted QPGC key announcement beyond ordinary CHAT expiry only while
