@@ -1,8 +1,8 @@
 # Portable Chat Core Roadmap
 
 Status: active planning and implementation tracker
-Baseline: Qortium Core `2f9af28879319d6be28d7918c4039657960d7d1b`
-(`v1.7.1`)
+Baseline: Qortium Core `0ca1965a840d02d60941510d6cddac36d3718ac6`
+(portable QPGC foundations merged after `v1.7.1`)
 Order: Qortium Core first, Qortium Home second, Chat app last
 
 ## Purpose
@@ -10,6 +10,19 @@ Order: Qortium Core first, Qortium Home second, Chat app last
 This roadmap tracks the Qortium Core work needed before Home can provide the
 same Qortium chat features through local, authenticated custom, unauthenticated
 custom, and public nodes.
+
+Feature parity across those routes is a non-negotiable product requirement.
+The default public-node profile must provide every safe protocol primitive Home
+needs for public groups, closed/private groups, and direct messages. A public
+node is a network-serving node, not a reduced read-only edition of Qortium.
+Desktop and Android must expose the same end-user Chat features regardless of
+whether Home uses a local, authenticated custom, unauthenticated custom, or
+public node.
+
+Node operators remain free to remove routes in their own settings. That is an
+explicit operator opt-out which Home reports as a route capability error; it is
+not the shipped default, the product target, or a second lower-capability Chat
+tier.
 
 The main Core gap is portable private-group key recovery. QPGC v1 already
 encrypts closed-group messages and supplies local private APIs, but ordinary
@@ -40,6 +53,11 @@ high-level plaintext results authorized for the selected account.
 - Retained CHAT remains a roughly 24-hour transient window, not a durable
   mailbox. The retention change below only keeps a key announcement while a
   retained message still depends on it.
+- Default public access is capability-complete but least-authority: Core exposes
+  bounded reads and unsigned builders, while Home performs account-bound crypto,
+  proof of work, field attestation, signing, and approval on the user's device.
+  Security controls limit abuse and secret exposure; they must not remove
+  ordinary Chat features from the default public-node experience.
 
 ## Current foundation
 
@@ -47,9 +65,11 @@ Core already provides:
 
 - public/open group history, counts, active chats, unsigned CHAT construction,
   signed transaction processing, `chatReference`, and public-node protection;
-- QDM1 direct-message envelope/crypto and restricted local helper APIs;
+- QDM1 direct-message envelope/crypto, public encrypted CHAT history/build/
+  process primitives, and local private-key convenience helpers;
 - QPGC v1 membership epochs, messages, signed announcements, key requests,
-  relays, rotation requests, local key cache, and restricted local helper APIs;
+  relays, rotation requests, local key cache, and local private-key convenience
+  helpers;
 - public QDN fetch/ranged streaming and public upload construction; and
 - read-side group membership/details plus restricted join/leave builders.
 
@@ -63,10 +83,10 @@ later Home/Chat bridge and presentation tasks.
 | --- | --- | --- | --- |
 | C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC stays in C6 | Home clean-room crypto and byte attestation |
 | C1 | Store/index parsed QPGC epoch and key metadata | Complete | Bounded control/history reads |
-| C2 | Add bounded public QPGC control and atomic state APIs | Planned | Public/custom private-group recovery |
+| C2 | Add default-enabled bounded public QPGC control and atomic state APIs | Planned | All-route private-group recovery |
 | C3 | Retain accepted announcements while retained messages depend on them | Planned | Restart, new install, and node-switch recovery |
 | C4 | Enforce/report QPGC v1 member/public-key limits | Planned | Honest private-group availability UI |
-| C5 | Add protected public unsigned join/leave builders | Planned | Portable Home join/leave actions |
+| C5 | Add default-enabled, abuse-protected public unsigned join/leave builders | Planned | All-route Home join/leave actions |
 | C6 | Correct and freeze the QENC group-attachment contract | Deferred until attachment tranche | Private group/direct attachments |
 
 ## C0 — Shared protocol contracts and golden vectors
@@ -209,6 +229,27 @@ The state response fails coherently for a missing/open group, no members,
 unknown member public key, or more than 39 members. It must not publish an epoch
 as usable when encryption cannot cover every member.
 
+### Direct-message public-route parity
+
+QDM1 does not need a new public decryption endpoint. Home can obtain the
+recipient public key through the existing public address reads, query encrypted
+direct CHAT rows through `GET /chat/messages?involving=...`, encrypt/decrypt
+QDM1 locally, request exact unsigned bytes from `POST /chat/public/build`, and
+submit the locally attested, PoW-computed, signed transaction through
+`POST /transactions/process`.
+
+C2 must nevertheless pin this as a supported default contract rather than an
+accidental combination of routes:
+
+- seed and ordinary-node profiles retain `GET /addresses/*`, `GET /chat/*`,
+  `POST /chat/public/build`, and `POST /transactions/process` by default;
+- public-build tests cover encrypted direct messages with and without
+  `chatReference`, including exact recipient/sender/payload attestation;
+- public history/active-chat tests cover both participants without exposing
+  plaintext or private keys; and
+- Home golden-vector tests prove that the same QDM1 conversation works through
+  local, custom, and public routes on desktop and Android.
+
 ### Public abuse bounds
 
 - Add a public work class for these chat reads instead of leaving them as
@@ -216,10 +257,20 @@ as usable when encryption cannot cover every member.
 - Initial design ceiling: 120 requests/minute/IP, burst 30, and global
   concurrency 16, subject to focused load-test adjustment.
 - Reject oversized response construction before allocating or encoding it.
+- Add both endpoints to the shipped seed and ordinary-node public profiles by
+  default. Extend settings migration and drift tests so existing default
+  installations inherit them without a manual allowlist edit.
+- Preserve an operator's explicit custom route removals. Home reports that
+  opt-out accurately, but neither Core nor Chat treats it as the normal public
+  node capability set.
 
 ### Completion gate
 
-- Restricted public profiles expose only the bounded read endpoints.
+- Shipped seed and ordinary public-node profiles expose both bounded read
+  endpoints by default; settings migration preserves that default for upgrades.
+- The public endpoints expose signed protocol material and classification only,
+  while Home still provides the complete private-group experience through local
+  verification, key handling, decryption, encryption, PoW, and signing.
 - Invalid type/cursor/group requests fail before repository scanning.
 - Relay, historical epoch, same-timestamp cursor, response-size, and rate-limit
   tests pass.
@@ -229,13 +280,16 @@ as usable when encryption cannot cover every member.
 
 These are Home-internal node calls, not raw actions for Chat. Home will:
 
-- probe selected-node support and advertise only high-level private-group chat
-  actions;
+- probe selected-node support and advertise the complete high-level
+  private-group feature family on local, custom, and public routes;
 - fetch, parse, and independently verify signed controls;
 - bind data to the selected account/network/route revision;
 - keep reads side-effect free; and
 - expose explicit high-level key request/resolve/relay/rotation actions without
   returning controls or keys to the QDN app.
+
+An old node or an operator-disabled route produces a precise upgrade/policy
+error. It does not define a supported half-capable public-node product mode.
 
 ## C3 — Dependency-aware announcement retention
 
@@ -295,18 +349,22 @@ These are Home-internal node calls, not raw actions for Chat. Home will:
 
 ### Core changes
 
-- Add protected public builder routes for JOIN_GROUP and LEAVE_GROUP rather than
-  opening the existing unrestricted/local builders.
+- Add abuse-protected public builder routes for JOIN_GROUP and LEAVE_GROUP
+  rather than opening the existing private-key/local builders.
 - Return unsigned bytes only.
 - Reuse normal transaction validation and public builder work controls.
 - Include the Qortium MemoryPoW-fee nonce layout.
 - Keep invite, approval, ban, kick, and role builders out of this first write
   tranche.
+- Ship the routes in seed and ordinary-node public profiles by default, with
+  settings migration/drift coverage and operator custom-removal preservation.
 
 ### Completion gate
 
 - Public and unauthenticated custom profiles can build, but never sign, a
   selected account's exact join/leave intent.
+- Default and upgraded public-node settings expose both builders without a
+  manual operator edit.
 - Field-by-field decode/attestation fixtures cover group, account public key,
   timestamp, fee/nonce, and transaction type.
 - Signed output processes normally through `/transactions/process`.
@@ -364,7 +422,8 @@ full deterministic suite. Maven runs are serialized.
 Home begins only after the relevant Core contract is merged:
 
 1. consume C0 vectors and implement trusted QDM1/QPGC crypto on desktop and
-   Android;
+   Android, including full direct-message and private-group use through public
+   and custom nodes;
 2. add route-aware action discovery and structured errors;
 3. use C2/C3 for portable private-group read/recovery/send flows;
 4. use C5 for route-independent join/leave;
@@ -377,10 +436,22 @@ Chat follows Home and consumes high-level actions only. It never calls the raw
 QPGC control endpoint, performs wallet crypto, or receives reusable secret
 material.
 
+Home and Chat must not infer that a public route is intentionally read-only.
+They expose the same group, private-group, and direct-message features as the
+local route whenever the selected node runs the shipped capability-complete
+profile. A route disabled by an operator is reported as an explicit local
+policy exception.
+
 ## Final completion gate
 
-- Qortium private groups recover and send through local, authenticated custom,
-  unauthenticated custom, and public nodes on desktop and Android.
+- Qortium public groups, private groups, and direct messages read and send
+  through local, authenticated custom, unauthenticated custom, and public nodes
+  on desktop and Android.
+- Replies, edits, deletes, reactions, membership-aware discovery, and the
+  applicable public-resource embeds work consistently in those conversations
+  on every route and platform.
+- Shipped public-node defaults expose every required client-safe endpoint;
+  operators may explicitly opt out without changing the platform default.
 - Account, node, route, lock, membership, missing-key, member-limit, malformed,
   retention-gap, and ambiguous-broadcast states fail safely and visibly.
 - Open/public chat behavior and generic control-envelope filtering remain

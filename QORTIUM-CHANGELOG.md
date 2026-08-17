@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): require full public-node feature parity
+
+Clarifies that Qortium's default public-node profile must support the complete
+user-facing Chat feature set, including private groups and direct messages, on
+desktop and Android. Private keys, decrypted content, proof of work, and signing
+remain on the user's device; public Core endpoints provide only bounded,
+validated protocol primitives. Node operators can still remove routes as an
+explicit local policy choice, but a locked-down custom profile is not the
+platform default or an acceptable substitute for full route parity.
+
 ### 2026-08-17 - docs(chat): clean portability roadmap formatting
 
 Removes stray line-ending whitespace from the active Core-to-Home chat
