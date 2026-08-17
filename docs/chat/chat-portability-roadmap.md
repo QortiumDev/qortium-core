@@ -83,7 +83,7 @@ later Home/Chat bridge and presentation tasks.
 | --- | --- | --- | --- |
 | C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC stays in C6 | Home clean-room crypto and byte attestation |
 | C1 | Store/index parsed QPGC epoch and key metadata | Complete | Bounded control/history reads |
-| C2 | Add default-enabled bounded public QPGC control and atomic state APIs | Planned | All-route private-group recovery |
+| C2 | Add default-enabled bounded public QPGC control and atomic state APIs | Complete | All-route private-group recovery |
 | C3 | Retain accepted announcements while retained messages depend on them | Planned | Restart, new install, and node-switch recovery |
 | C4 | Enforce/report QPGC v1 member/public-key limits | Planned | Honest private-group availability UI |
 | C5 | Add default-enabled, abuse-protected public unsigned join/leave builders | Planned | All-route Home join/leave actions |
@@ -182,13 +182,18 @@ node.
 
 ## C2 — Public QPGC control and atomic state APIs
 
+Status: complete. Core now exposes bounded, read-only control pages and one
+blockchain-lock-consistent group state response through the default public chat
+wildcard. The endpoints have no API-key or private-key dependency, return no
+plaintext or group key, and are protected by a separate public work class.
+
 ### Public control API
 
 ```http
 GET /chat/private/group/control
   ?txGroupId=12
   &types=KEY_ANNOUNCEMENT,KEY_REQUEST,ROTATION_REQUEST
-  &afterCursor=<opaque-created_when-signature-cursor>
+  &afterCursor=<opaque-timestamp-signature-cursor>
   &limit=25
 ```
 
@@ -199,7 +204,8 @@ Contract:
 - mutually exclusive before/after cursors;
 - default 25, hard maximum 100;
 - stable `(created_when, signature)` cursor;
-- maximum 1 MiB encoded response;
+- optional exact Base58 epoch/key filters;
+- conservative maximum 1 MiB encoded response budget;
 - complete signed CHAT transaction bytes in Base58, plus safe classification
   metadata;
 - no private key, raw group key, decrypted wrapper, or plaintext; and
@@ -217,10 +223,11 @@ GET /chat/private/group/state/{groupId}
 
 Response fields:
 
-- group ID and closed/open state;
+- group ID, existence, and closed/open state;
 - epoch ID or `null`;
 - sorted member public keys and count;
 - whether all public keys are known;
+- addresses whose public keys are unknown or unusable;
 - QPGC version and `maxV1Members: 39`;
 - `available`; and
 - structured unavailable reason.
@@ -250,6 +257,12 @@ accidental combination of routes:
 - Home golden-vector tests prove that the same QDM1 conversation works through
   local, custom, and public routes on desktop and Android.
 
+Core-side parity coverage is complete: the shipped profiles retain those four
+public route families, unsigned direct CHAT construction preserves encrypted
+payloads and `chatReference`, and generic public history/active-chat reads retain
+the encrypted direct rows. Home golden-vector/platform coverage remains follow-on
+work.
+
 ### Public abuse bounds
 
 - Add a public work class for these chat reads instead of leaving them as
@@ -266,15 +279,17 @@ accidental combination of routes:
 
 ### Completion gate
 
-- Shipped seed and ordinary public-node profiles expose both bounded read
-  endpoints by default; settings migration preserves that default for upgrades.
-- The public endpoints expose signed protocol material and classification only,
+- Shipped seed and ordinary public-node profiles expose both bounded reads
+  through `GET /chat/*` by default; settings migration preserves the profile and
+  adds the new protection settings for upgrades.
+- The endpoints expose signed protocol material and classification only,
   while Home still provides the complete private-group experience through local
   verification, key handling, decryption, encryption, PoW, and signing.
 - Invalid type/cursor/group requests fail before repository scanning.
-- Relay, historical epoch, same-timestamp cursor, response-size, and rate-limit
-  tests pass.
-- Generic public chat history continues hiding all control traffic.
+- Multi-type, forward/backward, same-timestamp, signed-byte, page-limit,
+  state-failure, default-profile, and rate-limit tests pass.
+- Generic public chat history, counts, active chats, and websockets continue
+  hiding all control traffic.
 
 ### Corresponding Home work after Core
 
@@ -406,12 +421,14 @@ attachments.
 
 ## Planned Core PR sequence
 
-1. **Protocol fixtures:** C0 documentation, deterministic primitives, and
-   shared QDM1/QPGC/CHAT fixtures.
-2. **Portable QPGC reads:** C1-C4 repository migration, bounded APIs, retention,
-   limits, and full regression coverage.
-3. **Portable participation:** C5 public unsigned join/leave builders.
-4. **Private attachments:** C6 only when the Home attachment tranche is ready.
+1. **Portable QPGC foundations (complete):** C0-C1 documentation, deterministic
+   fixtures, indexed metadata, and bounded repository queries.
+2. **Portable QPGC reads (complete):** C2 bounded public controls/state,
+   default-route protections, and direct-message public-route parity tests.
+3. **Recovery durability and limits (next):** C3-C4 dependency-aware retention,
+   v1 member/public-key/plaintext limits, and full regression coverage.
+4. **Portable participation:** C5 public unsigned join/leave builders.
+5. **Private attachments:** C6 only when the Home attachment tranche is ready.
 
 Each PR must update `QORTIUM-CHANGELOG.md`, use a matching changelog/commit
 title, run focused tests with `-DskipJUnitTests=false`, and finish with the clean

@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): complete portable QPGC read phase
+
+Marks the C2 Core milestone complete after adding default-enabled, abuse-bounded
+private-group control/state reads and pinning the existing public direct-message
+transport contract. Records C3 dependency-aware announcement retention and C4
+availability enforcement as the next Core tranche before Home begins its
+portable private-group implementation.
+
 ### 2026-08-17 - fix(chat): bound and verify public QPGC reads
 
 Prevents the atomic private-group state endpoint from loading an oversized
