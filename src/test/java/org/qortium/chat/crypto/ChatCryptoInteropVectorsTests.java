@@ -1,0 +1,157 @@
+package org.qortium.chat.crypto;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.qortium.crypto.Crypto;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+
+public class ChatCryptoInteropVectorsTests {
+
+	private static final String FIXTURE = "chat/interop/chat-crypto-v1.json";
+	private static final HexFormat HEX = HexFormat.of();
+	private static final ObjectMapper JSON = new ObjectMapper();
+
+	private static JsonNode vectors;
+
+	@BeforeClass
+	public static void loadVectors() throws IOException {
+		try (InputStream input = ChatCryptoInteropVectorsTests.class.getClassLoader().getResourceAsStream(FIXTURE)) {
+			if (input == null)
+				throw new IOException("Missing chat interoperability fixture: " + FIXTURE);
+
+			vectors = JSON.readTree(input);
+		}
+
+		assertEquals("qortium-chat-crypto-v1", vectors.path("format").asText());
+	}
+
+	@Test
+	public void testQdm1Vector() throws Exception {
+		JsonNode qdm1 = vectors.path("qdm1");
+		JsonNode sender = account(qdm1.path("sender").asText());
+		JsonNode recipient = account(qdm1.path("recipient").asText());
+		byte[] senderPrivateKey = hex(sender, "privateKey");
+		byte[] senderPublicKey = hex(sender, "publicKey");
+		byte[] recipientPrivateKey = hex(recipient, "privateKey");
+		byte[] recipientPublicKey = hex(recipient, "publicKey");
+		byte[] nonce = hex(qdm1, "nonce");
+		byte[] plaintext = utf8(qdm1, "plaintextUtf8");
+
+		assertArrayEquals(senderPublicKey, Crypto.toPublicKey(senderPrivateKey));
+		assertArrayEquals(recipientPublicKey, Crypto.toPublicKey(recipientPrivateKey));
+
+		byte[] envelopeBytes = DirectPrivateChatCrypto.encryptMessage(senderPrivateKey, recipientPublicKey,
+				nonce, plaintext);
+		assertArrayEquals(hex(qdm1, "envelope"), envelopeBytes);
+
+		DirectPrivateChatEnvelope envelope = DirectPrivateChatEnvelope.fromBytes(envelopeBytes);
+		assertArrayEquals(hex(qdm1, "ciphertext"), envelope.getCiphertext());
+		assertArrayEquals(plaintext, DirectPrivateChatCrypto.decryptMessage(senderPrivateKey, envelope));
+		assertArrayEquals(plaintext, DirectPrivateChatCrypto.decryptMessage(recipientPrivateKey, envelope));
+
+		byte[] tamperedCiphertext = envelope.getCiphertext();
+		tamperedCiphertext[tamperedCiphertext.length - 1] ^= 1;
+		DirectPrivateChatEnvelope tampered = DirectPrivateChatEnvelope.message(senderPublicKey,
+				recipientPublicKey, nonce, tamperedCiphertext);
+		assertThrows(GeneralSecurityException.class,
+				() -> DirectPrivateChatCrypto.decryptMessage(recipientPrivateKey, tampered));
+	}
+
+	@Test
+	public void testQpgcMessageVector() throws Exception {
+		JsonNode qpgc = vectors.path("qpgc");
+		int groupId = qpgc.path("groupId").asInt();
+		List<byte[]> memberPublicKeys = memberPublicKeys(qpgc.path("membersInUnsortedInputOrder"));
+		byte[] epochId = hex(qpgc, "epochId");
+		byte[] groupKey = hex(qpgc, "groupKey");
+		byte[] keyId = hex(qpgc, "keyId");
+		JsonNode message = qpgc.path("message");
+		byte[] nonce = hex(message, "nonce");
+		byte[] plaintext = utf8(message, "plaintextUtf8");
+
+		assertArrayEquals(epochId, PrivateGroupChatMembership.computeEpochId(groupId, memberPublicKeys));
+		assertArrayEquals(keyId, PrivateGroupChatCrypto.computeKeyId(groupId, epochId, groupKey));
+
+		byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epochId, keyId,
+				nonce, plaintext);
+		assertArrayEquals(hex(message, "ciphertext"), ciphertext);
+		assertArrayEquals(plaintext, PrivateGroupChatCrypto.decryptMessage(groupKey, groupId, epochId,
+				keyId, nonce, ciphertext));
+
+		byte[] envelopeBytes = PrivateGroupChatEnvelope.message(groupId, epochId, keyId, nonce,
+				ciphertext).toBytes();
+		assertArrayEquals(hex(message, "envelope"), envelopeBytes);
+		assertArrayEquals(envelopeBytes, PrivateGroupChatEnvelope.fromBytes(envelopeBytes).toBytes());
+
+		assertThrows(GeneralSecurityException.class,
+				() -> PrivateGroupChatCrypto.decryptMessage(groupKey, groupId + 1, epochId, keyId,
+						nonce, ciphertext));
+	}
+
+	@Test
+	public void testQpgcKeyWrapVector() throws Exception {
+		JsonNode qpgc = vectors.path("qpgc");
+		JsonNode keyWrap = qpgc.path("bobKeyWrap");
+		JsonNode announcer = account(keyWrap.path("announcer").asText());
+		JsonNode recipient = account(keyWrap.path("recipient").asText());
+		int groupId = qpgc.path("groupId").asInt();
+		byte[] epochId = hex(qpgc, "epochId");
+		byte[] groupKey = hex(qpgc, "groupKey");
+		byte[] keyId = hex(qpgc, "keyId");
+		byte[] announcerPrivateKey = hex(announcer, "privateKey");
+		byte[] announcerPublicKey = hex(announcer, "publicKey");
+		byte[] recipientPrivateKey = hex(recipient, "privateKey");
+		byte[] recipientPublicKey = hex(recipient, "publicKey");
+		byte[] nonce = hex(keyWrap, "nonce");
+
+		byte[] wrappedKey = PrivateGroupChatCrypto.wrapGroupKey(groupId, epochId, keyId, groupKey,
+				announcerPrivateKey, recipientPublicKey, nonce);
+		assertArrayEquals(hex(keyWrap, "wrappedKey"), wrappedKey);
+		assertArrayEquals(groupKey, PrivateGroupChatCrypto.unwrapGroupKey(groupId, epochId, keyId,
+				wrappedKey, recipientPrivateKey, announcerPublicKey));
+
+		byte[] tampered = wrappedKey.clone();
+		tampered[tampered.length - 1] ^= 1;
+		assertThrows(GeneralSecurityException.class,
+				() -> PrivateGroupChatCrypto.unwrapGroupKey(groupId, epochId, keyId, tampered,
+						recipientPrivateKey, announcerPublicKey));
+	}
+
+	private static JsonNode account(String name) {
+		JsonNode account = vectors.path("accounts").path(name);
+		if (account.isMissingNode())
+			throw new IllegalArgumentException("Fixture references missing account: " + name);
+		return account;
+	}
+
+	private static List<byte[]> memberPublicKeys(JsonNode memberNames) {
+		List<byte[]> publicKeys = new ArrayList<>();
+		for (JsonNode memberName : memberNames)
+			publicKeys.add(hex(account(memberName.asText()), "publicKey"));
+		return publicKeys;
+	}
+
+	private static byte[] utf8(JsonNode object, String field) {
+		return object.path(field).asText().getBytes(StandardCharsets.UTF_8);
+	}
+
+	private static byte[] hex(JsonNode object, String field) {
+		String value = object.path(field).asText(null);
+		if (value == null)
+			throw new IllegalArgumentException("Fixture field is missing: " + field);
+		return HEX.parseHex(value);
+	}
+}

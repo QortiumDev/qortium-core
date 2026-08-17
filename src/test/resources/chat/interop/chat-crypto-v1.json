@@ -1,0 +1,41 @@
+{
+  "format": "qortium-chat-crypto-v1",
+  "description": "Deterministic QDM1 and QPGC v1 interoperability vectors. All binary values are lowercase hexadecimal and integers use big-endian serialization.",
+  "accounts": {
+    "alice": {
+      "privateKey": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "publicKey": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664"
+    },
+    "bob": {
+      "privateKey": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+      "publicKey": "e7f162a10bec559afea195e4dce84b69568d5d2cb0963eb446c0685e2b17f2f0"
+    }
+  },
+  "qdm1": {
+    "sender": "alice",
+    "recipient": "bob",
+    "nonce": "4142434445464748494a4b4c",
+    "plaintextUtf8": "QDM1 deterministic interop",
+    "ciphertext": "d87c602df202dd9c2d4f29f54323b2580bec928a4f6a6e6f324e52394624172215924f3836d418cdf058",
+    "envelope": "51444d3179b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664e7f162a10bec559afea195e4dce84b69568d5d2cb0963eb446c0685e2b17f2f04142434445464748494a4b4c0000002ad87c602df202dd9c2d4f29f54323b2580bec928a4f6a6e6f324e52394624172215924f3836d418cdf058"
+  },
+  "qpgc": {
+    "groupId": 12,
+    "membersInUnsortedInputOrder": ["bob", "alice"],
+    "epochId": "718f77dff652ec8107144d32a5ebe60746511a484ba40e0a30675b3ac57439f8",
+    "groupKey": "5152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70",
+    "keyId": "d453f57a0199813ff78bc10035c862a55a9aac2540a354d2ac8042c2b409eba4",
+    "message": {
+      "nonce": "7172737475767778797a7b7c",
+      "plaintextUtf8": "QPGC deterministic interop",
+      "ciphertext": "96a646c695b1c1aefdbe25b2d704ac2204514ed08b5f1611e946e62f23705f8dca514121bae49928bfa0",
+      "envelope": "5150474301010000000c718f77dff652ec8107144d32a5ebe60746511a484ba40e0a30675b3ac57439f8d453f57a0199813ff78bc10035c862a55a9aac2540a354d2ac8042c2b409eba47172737475767778797a7b7c0000002a96a646c695b1c1aefdbe25b2d704ac2204514ed08b5f1611e946e62f23705f8dca514121bae49928bfa0"
+    },
+    "bobKeyWrap": {
+      "announcer": "alice",
+      "recipient": "bob",
+      "nonce": "7d7e7f808182838485868788",
+      "wrappedKey": "7d7e7f808182838485868788d1104fb9478ea66a519ecd022f4f87e35485f7e29757be892807eea53a187bf8c9e95fcf789dd582ec2a67a524f48b7d"
+    }
+  }
+}

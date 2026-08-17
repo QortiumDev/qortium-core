@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - test(chat): freeze private chat crypto vectors
+
+Adds the first language-neutral chat interoperability fixture for Home and Core.
+Fixed QDM1 direct-message and QPGC private-group keys, membership order, nonces,
+ciphertext, envelopes, and member key wrapping now have exact committed bytes
+instead of Java-only round-trip expectations. Production encryption still uses
+secure random nonces; deterministic nonce injection is limited to package-local
+tests so a later Home implementation can prove byte-for-byte compatibility
+without changing the live protocol.
+
 ### 2026-08-17 - docs(chat): plan portable QPGC foundations
 
 Records the Core-first roadmap for making Qortium private-group chat recoverable

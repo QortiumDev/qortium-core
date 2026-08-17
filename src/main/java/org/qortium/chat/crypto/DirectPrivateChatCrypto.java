@@ -36,12 +36,17 @@ public class DirectPrivateChatCrypto {
 
 	public static byte[] encryptMessage(byte[] senderPrivateKey, byte[] recipientPublicKey, byte[] plaintext)
 			throws GeneralSecurityException {
+		return encryptMessage(senderPrivateKey, recipientPublicKey, generateNonce(), plaintext);
+	}
+
+	static byte[] encryptMessage(byte[] senderPrivateKey, byte[] recipientPublicKey, byte[] nonce, byte[] plaintext)
+			throws GeneralSecurityException {
 		validateLength(senderPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "sender private key");
 		validateLength(recipientPublicKey, Transformer.PUBLIC_KEY_LENGTH, "recipient public key");
+		validateLength(nonce, DirectPrivateChatEnvelope.NONCE_LENGTH, "nonce");
 		validatePayload(plaintext, "plaintext");
 
 		byte[] senderPublicKey = Crypto.toPublicKey(senderPrivateKey);
-		byte[] nonce = generateNonce();
 		byte[] associatedData = buildMessageAssociatedData(senderPublicKey, recipientPublicKey);
 		byte[] sharedSecret = Crypto.getSharedSecret(senderPrivateKey, recipientPublicKey);
 		byte[] sharedKey = deriveSharedKey(sharedSecret, associatedData);
