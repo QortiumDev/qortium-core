@@ -1,6 +1,7 @@
 package org.qortium.test;
 
 import org.bouncycastle.util.encoders.Base64;
+import org.bouncycastle.util.encoders.Hex;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
@@ -21,6 +22,7 @@ import org.qortium.utils.NTP;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
 
@@ -450,6 +452,115 @@ public class ChatStoreRepositoryTests extends Common {
 			assertNotNull(groupChat);
 			assertArrayEquals(messageData.getSignature(), groupChat.getSignature());
 			assertEquals(Base64.toBase64String(messageData.getData()), groupChat.getData());
+		}
+	}
+
+	@Test
+	public void testPrivateGroupEnvelopeCursorPaginatesSameTimestampWithoutGaps() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-store-private-cursor", false);
+			long timestamp = now();
+			byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 70);
+			byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 71);
+
+			for (int marker = 60; marker <= 64; ++marker) {
+				PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.message(groupId, epochId, keyId,
+						bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, marker), bytes("message-" + marker));
+				repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+						signature(marker), envelope.toBytes(), true, true, timestamp, null));
+			}
+			repository.saveChanges();
+
+			List<ChatTransactionData> firstPage = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+					groupId, PrivateGroupChatEnvelope.Type.MESSAGE, epochId, keyId, null, null, 2);
+			assertEquals(2, firstPage.size());
+			assertArrayEquals(signature(64), firstPage.get(0).getSignature());
+			assertArrayEquals(signature(63), firstPage.get(1).getSignature());
+
+			List<ChatTransactionData> secondPage = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+					groupId, PrivateGroupChatEnvelope.Type.MESSAGE, epochId, keyId,
+					firstPage.get(1).getTimestamp(), firstPage.get(1).getSignature(), 2);
+			assertEquals(2, secondPage.size());
+			assertArrayEquals(signature(62), secondPage.get(0).getSignature());
+			assertArrayEquals(signature(61), secondPage.get(1).getSignature());
+
+			List<ChatTransactionData> thirdPage = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+					groupId, PrivateGroupChatEnvelope.Type.MESSAGE, epochId, keyId,
+					secondPage.get(1).getTimestamp(), secondPage.get(1).getSignature(), 2);
+			assertEquals(1, thirdPage.size());
+			assertArrayEquals(signature(60), thirdPage.get(0).getSignature());
+
+			try {
+				repository.getChatStoreRepository().getPrivateGroupEnvelopes(groupId,
+						PrivateGroupChatEnvelope.Type.MESSAGE, epochId, keyId, null, signature(60), 2);
+				fail("Signature cursor without timestamp should be rejected");
+			} catch (DataException e) {
+				assertTrue(e.getMessage().contains("cursor"));
+			}
+
+			try {
+				repository.getChatStoreRepository().getPrivateGroupEnvelopes(groupId,
+						PrivateGroupChatEnvelope.Type.MESSAGE, epochId, keyId, null, null, 101);
+				fail("Oversized private group page should be rejected");
+			} catch (DataException e) {
+				assertTrue(e.getMessage().contains("page size"));
+			}
+		}
+	}
+
+	@Test
+	public void testPrivateGroupEnvelopeLookupUsesCompositeIndex() throws Exception {
+		try (final HSQLDBRepository repository = (HSQLDBRepository) RepositoryManager.getRepository()) {
+			byte[] epochBytes = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 80);
+			byte[] keyBytes = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 81);
+			try (PreparedStatement statement = repository.getConnection().prepareStatement(
+					"INSERT INTO PUBLIC.CHATMESSAGES "
+							+ "(SIGNATURE, CREATED_WHEN, TX_GROUP_ID, SENDER_PUBLIC_KEY, SENDER, NONCE, "
+							+ "RECIPIENT, CHAT_REFERENCE, IS_TEXT, IS_ENCRYPTED, DATA, "
+							+ "PRIVATE_GROUP_ENVELOPE_TYPE, PRIVATE_GROUP_EPOCH_ID, PRIVATE_GROUP_KEY_ID) "
+							+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+				for (int i = 0; i < 256; ++i) {
+					byte[] rowSignature = new byte[64];
+					rowSignature[62] = (byte) (i >>> 8);
+					rowSignature[63] = (byte) i;
+					statement.setBytes(1, rowSignature);
+					statement.setLong(2, 1_700_000_000_000L + i);
+					statement.setInt(3, 12);
+					statement.setBytes(4, new byte[32]);
+					statement.setString(5, "QWfYdC4N8mV4PmxRtbG5gH8XqLr2fP3mZt");
+					statement.setInt(6, i);
+					statement.setNull(7, java.sql.Types.VARCHAR);
+					statement.setNull(8, java.sql.Types.VARBINARY);
+					statement.setBoolean(9, false);
+					statement.setBoolean(10, true);
+					statement.setBytes(11, new byte[] {1});
+					statement.setString(12, PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT.name());
+					statement.setBytes(13, epochBytes);
+					statement.setBytes(14, keyBytes);
+					statement.addBatch();
+				}
+				statement.executeBatch();
+			}
+			repository.saveChanges();
+
+			String epochId = Hex.toHexString(epochBytes);
+			String keyId = Hex.toHexString(keyBytes);
+			String sql = "EXPLAIN PLAN FOR SELECT SIGNATURE FROM PUBLIC.CHATMESSAGES "
+					+ "WHERE TX_GROUP_ID = 12 AND PRIVATE_GROUP_ENVELOPE_TYPE = 'KEY_ANNOUNCEMENT' "
+					+ "AND PRIVATE_GROUP_EPOCH_ID = X'" + epochId + "' "
+					+ "AND PRIVATE_GROUP_KEY_ID = X'" + keyId + "' "
+					+ "ORDER BY CREATED_WHEN DESC, SIGNATURE DESC LIMIT 10";
+			try (Statement statement = repository.getConnection().createStatement()) {
+				assertTrue(statement.execute(sql));
+				try (ResultSet resultSet = statement.getResultSet()) {
+					StringBuilder planBuilder = new StringBuilder();
+					while (resultSet.next())
+						planBuilder.append(resultSet.getString(1)).append('\n');
+					String plan = planBuilder.toString();
+					assertTrue(plan, plan.toUpperCase().contains("CHATMESSAGESPRIVATEGROUPLOOKUPINDEX"));
+				}
+			}
 		}
 	}
 

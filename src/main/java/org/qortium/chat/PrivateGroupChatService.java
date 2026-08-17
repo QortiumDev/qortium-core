@@ -15,6 +15,7 @@ import org.qortium.data.chat.ChatMessage;
 import org.qortium.data.group.GroupData;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.ChatTransactionData;
+import org.qortium.repository.ChatStoreRepository;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.transaction.ChatTransaction;
@@ -26,7 +27,6 @@ import org.qortium.utils.NTP;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -94,20 +94,13 @@ public class PrivateGroupChatService {
 			throws DataException {
 		validatePrivateKey(recipientPrivateKey, "recipient private key");
 
+		int pageSize = normalizePageSize(limit);
+		Integer pageOffset = offset == null ? null : Math.max(offset, 0);
 		List<ListedMessageData> listedMessages = listMatchingPrivateMessages(repository, groupId, before, after,
-				chatReference, hasChatReference, sender);
-		sortListedMessages(listedMessages, reverse);
-
-		int fromIndex = Math.max(offset == null ? 0 : offset, 0);
-		if (fromIndex >= listedMessages.size())
-			return new ArrayList<>();
-
-		int toIndex = listedMessages.size();
-		if (limit != null && limit > 0)
-			toIndex = Math.min(fromIndex + limit, listedMessages.size());
+				chatReference, hasChatReference, sender, pageSize, pageOffset, reverse);
 
 		List<ListMessageResult> results = new ArrayList<>();
-		for (ListedMessageData listedMessage : listedMessages.subList(fromIndex, toIndex)) {
+		for (ListedMessageData listedMessage : listedMessages) {
 			ChatMessage message = repository.getChatStoreRepository().toChatMessage(listedMessage.chatTransactionData,
 					encoding);
 
@@ -128,8 +121,9 @@ public class PrivateGroupChatService {
 			Long after, byte[] chatReference, Boolean hasChatReference, String sender) throws DataException {
 		validatePrivateKey(recipientPrivateKey, "recipient private key");
 
-		return listMatchingPrivateMessages(repository, groupId, before, after, chatReference, hasChatReference,
-				sender).size();
+		validateClosedGroup(repository, groupId);
+		return repository.getChatStoreRepository().countPrivateGroupMessagesMatchingCriteria(groupId, before, after,
+				chatReference, hasChatReference, sender);
 	}
 
 	public List<ActiveChatResult> listActiveChats(Repository repository, byte[] recipientPrivateKey,
@@ -168,7 +162,8 @@ public class PrivateGroupChatService {
 	}
 
 	private static ListedMessageData latestPrivateMessage(Repository repository, int groupId) throws DataException {
-		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
+		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+				groupId, PrivateGroupChatEnvelope.Type.MESSAGE, null, null, null, null, 1)) {
 			ListedMessageData listedMessage = toListedPrivateMessage(chatTransactionData, groupId);
 			if (listedMessage != null)
 				return listedMessage;
@@ -178,24 +173,37 @@ public class PrivateGroupChatService {
 	}
 
 	private static List<ListedMessageData> listMatchingPrivateMessages(Repository repository, int groupId,
-			Long before, Long after, byte[] chatReference, Boolean hasChatReference, String sender) throws DataException {
-		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
-		if (groupData == null)
-			throw new IllegalArgumentException("group does not exist");
-		if (groupData.isOpen())
-			throw new IllegalArgumentException("group is not closed");
+			Long before, Long after, byte[] chatReference, Boolean hasChatReference, String sender,
+			int limit, Integer offset, Boolean reverse) throws DataException {
+		validateClosedGroup(repository, groupId);
 
 		List<ListedMessageData> listedMessages = new ArrayList<>();
-		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
-			if (!matchesListCriteria(chatTransactionData, before, after, chatReference, hasChatReference, sender))
-				continue;
-
+		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository()
+				.getPrivateGroupMessagesMatchingCriteria(groupId, before, after, chatReference,
+						hasChatReference, sender, limit, offset, reverse)) {
 			ListedMessageData listedMessage = toListedPrivateMessage(chatTransactionData, groupId);
 			if (listedMessage != null)
 				listedMessages.add(listedMessage);
 		}
 
 		return listedMessages;
+	}
+
+	private static void validateClosedGroup(Repository repository, int groupId) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		if (groupData == null)
+			throw new IllegalArgumentException("group does not exist");
+		if (groupData.isOpen())
+			throw new IllegalArgumentException("group is not closed");
+	}
+
+	private static int normalizePageSize(Integer limit) {
+		if (limit == null || limit <= 0)
+			return ChatStoreRepository.MAX_PRIVATE_GROUP_PAGE_SIZE;
+		if (limit > ChatStoreRepository.MAX_PRIVATE_GROUP_PAGE_SIZE)
+			throw new IllegalArgumentException("private group chat page size exceeds maximum");
+
+		return limit;
 	}
 
 	private static ListedMessageData toListedPrivateMessage(ChatTransactionData chatTransactionData, int groupId) {
@@ -216,17 +224,6 @@ public class PrivateGroupChatService {
 			return null;
 
 		return new ListedMessageData(chatTransactionData, envelope);
-	}
-
-	private static void sortListedMessages(List<ListedMessageData> listedMessages, Boolean reverse) {
-		Comparator<ListedMessageData> comparator = Comparator
-				.comparingLong((ListedMessageData data) -> data.chatTransactionData.getTimestamp())
-				.thenComparing((left, right) -> compareBytes(left.chatTransactionData.getSignature(),
-						right.chatTransactionData.getSignature()));
-		if (reverse != null && reverse)
-			comparator = comparator.reversed();
-
-		listedMessages.sort(comparator);
 	}
 
 	private static int compareActiveChats(ActiveChatResult left, ActiveChatResult right) {
@@ -264,45 +261,6 @@ public class PrivateGroupChatService {
 
 		return new DecryptResult(plaintext, chatTransactionData.getIsText(), envelope.getGroupId(),
 				envelope.getEpochId(), envelope.getKeyId());
-	}
-
-	private static boolean matchesListCriteria(ChatTransactionData chatTransactionData, Long before, Long after,
-			byte[] chatReference, Boolean hasChatReference, String sender) {
-		if (before != null && chatTransactionData.getTimestamp() >= before)
-			return false;
-
-		if (after != null && chatTransactionData.getTimestamp() <= after)
-			return false;
-
-		byte[] messageChatReference = chatTransactionData.getChatReference();
-		if (chatReference != null && !Arrays.equals(messageChatReference, chatReference))
-			return false;
-
-		if (hasChatReference != null && hasChatReference && messageChatReference == null)
-			return false;
-
-		if (hasChatReference != null && !hasChatReference && messageChatReference != null)
-			return false;
-
-		return sender == null || sender.equals(chatTransactionData.getSender());
-	}
-
-	private static int compareBytes(byte[] left, byte[] right) {
-		if (left == right)
-			return 0;
-		if (left == null)
-			return -1;
-		if (right == null)
-			return 1;
-
-		int minLength = Math.min(left.length, right.length);
-		for (int i = 0; i < minLength; ++i) {
-			int comparison = Byte.compare(left[i], right[i]);
-			if (comparison != 0)
-				return comparison;
-		}
-
-		return Integer.compare(left.length, right.length);
 	}
 
 	public KeyRequestResult requestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
@@ -463,8 +421,10 @@ public class PrivateGroupChatService {
 
 	private static PrivateGroupChatKeyCache.Entry rehydrateKeyFromAnnouncements(Repository repository,
 			PrivateGroupChatEnvelope messageEnvelope, byte[] recipientPrivateKey) throws DataException {
-		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(
-				messageEnvelope.getGroupId());
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+				messageEnvelope.getGroupId(), PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT,
+				messageEnvelope.getEpochId(), messageEnvelope.getKeyId(), null, null,
+				ChatStoreRepository.MAX_PRIVATE_GROUP_PAGE_SIZE);
 
 		for (ChatTransactionData groupMessage : groupMessages) {
 			if (!groupMessage.getIsEncrypted())
@@ -517,7 +477,9 @@ public class PrivateGroupChatService {
 			}
 		}
 
-		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(epoch.getGroupId());
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+				epoch.getGroupId(), PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, epoch.getEpochId(), keyId,
+				null, null, ChatStoreRepository.MAX_PRIVATE_GROUP_PAGE_SIZE);
 		for (ChatTransactionData groupMessage : groupMessages) {
 			if (!groupMessage.getIsEncrypted())
 				continue;
@@ -559,8 +521,9 @@ public class PrivateGroupChatService {
 			}
 		}
 
-		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(
-				currentEpoch.getGroupId());
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+				currentEpoch.getGroupId(), PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, epochId, keyId,
+				null, null, ChatStoreRepository.MAX_PRIVATE_GROUP_PAGE_SIZE);
 		for (ChatTransactionData groupMessage : groupMessages) {
 			if (!groupMessage.getIsEncrypted())
 				continue;
@@ -712,7 +675,9 @@ public class PrivateGroupChatService {
 		Set<EpochKey> relayedKeys = new HashSet<>();
 		byte[] relayedAnyRequestKeyId = null;
 		List<KeyRequestRecoveryResult> results = new ArrayList<>();
-		for (ChatTransactionData groupMessage : repository.getChatStoreRepository().getGroupMessages(groupId)) {
+		int pageSize = normalizePageSize(limit);
+		for (ChatTransactionData groupMessage : repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+				groupId, PrivateGroupChatEnvelope.Type.KEY_REQUEST, null, null, null, null, pageSize)) {
 			if (limit != null && limit > 0 && results.size() >= limit)
 				break;
 
@@ -828,7 +793,9 @@ public class PrivateGroupChatService {
 
 	private static Long latestAcceptedRotationRequestTimestamp(Repository repository,
 			PrivateGroupChatMembership.MembershipEpoch epoch) throws DataException {
-		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(epoch.getGroupId());
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+				epoch.getGroupId(), PrivateGroupChatEnvelope.Type.ROTATION_REQUEST, epoch.getEpochId(), null,
+				null, null, ChatStoreRepository.MAX_PRIVATE_GROUP_PAGE_SIZE);
 		for (ChatTransactionData groupMessage : groupMessages) {
 			if (!groupMessage.getIsEncrypted())
 				continue;

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): bound private group envelope queries
+
+Replaces private-group chat's full retained-group scans with typed indexed
+queries capped at 100 rows per call. User-message listing and counting now run
+in SQL, key announcements and requests are selected by their parsed epoch and
+key metadata, and rotation checks read only indexed rotation envelopes. A
+timestamp-plus-signature cursor prevents duplicate or missing rows when several
+CHAT transactions share one timestamp, while normal history continues hiding
+QPGC control traffic.
+
 ### 2026-08-17 - feat(chat): index private group envelope metadata
 
 Adds local indexed epoch and key identifiers to retained QPGC chat envelopes so

@@ -62,7 +62,7 @@ later Home/Chat bridge and presentation tasks.
 | ID | Core milestone | Status | Blocks Home work |
 | --- | --- | --- | --- |
 | C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC stays in C6 | Home clean-room crypto and byte attestation |
-| C1 | Store/index parsed QPGC epoch and key metadata | Planned | Bounded control/history reads |
+| C1 | Store/index parsed QPGC epoch and key metadata | Complete | Bounded control/history reads |
 | C2 | Add bounded public QPGC control and atomic state APIs | Planned | Public/custom private-group recovery |
 | C3 | Retain accepted announcements while retained messages depend on them | Planned | Restart, new install, and node-switch recovery |
 | C4 | Enforce/report QPGC v1 member/public-key limits | Planned | Honest private-group availability UI |
@@ -120,6 +120,13 @@ Required fixture coverage:
 - Decode and attest all unsigned CHAT bytes before signing.
 
 ## C1 — Indexed QPGC metadata and bounded repository queries
+
+Status: complete. The local chat store now backfills and indexes QPGC type,
+epoch, and optional key identifiers without a schema-version bump. QPGC service
+paths use typed SQL queries capped at 100 rows, private-message counts remain
+database-side, same-timestamp pages use a signature cursor, and an HSQLDB plan
+test proves the composite lookup index is selected under a 256-row group spam
+fixture.
 
 ### Core changes
 

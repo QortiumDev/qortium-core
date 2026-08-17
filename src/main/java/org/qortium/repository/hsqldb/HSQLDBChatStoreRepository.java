@@ -188,6 +188,117 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 	}
 
 	@Override
+	public List<ChatTransactionData> getPrivateGroupEnvelopes(int txGroupId,
+			PrivateGroupChatEnvelope.Type envelopeType, byte[] epochId, byte[] keyId,
+			Long beforeTimestamp, byte[] beforeSignature, int limit) throws DataException {
+		if (txGroupId <= 0 || envelopeType == null)
+			throw new DataException("Invalid private group envelope criteria");
+		if (epochId != null && epochId.length != PrivateGroupChatEnvelope.EPOCH_ID_LENGTH)
+			throw new DataException("Invalid private group epoch id");
+		if (keyId != null && keyId.length != PrivateGroupChatEnvelope.KEY_ID_LENGTH)
+			throw new DataException("Invalid private group key id");
+		if (beforeSignature != null && (beforeTimestamp == null
+				|| beforeSignature.length != PrivateGroupChatEnvelope.SIGNATURE_LENGTH))
+			throw new DataException("Invalid private group envelope cursor");
+		if (limit <= 0 || limit > MAX_PRIVATE_GROUP_PAGE_SIZE)
+			throw new DataException("Invalid private group envelope page size");
+
+		StringBuilder sql = new StringBuilder(512);
+		sql.append("SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, ")
+				.append("chat_reference, is_text, is_encrypted, data, signature ")
+				.append("FROM ChatMessages WHERE tx_group_id = ? AND recipient IS NULL ")
+				.append("AND private_group_envelope_type = ? ");
+		List<Object> bindParams = new ArrayList<>();
+		bindParams.add(txGroupId);
+		bindParams.add(envelopeType.name());
+
+		if (epochId != null) {
+			sql.append("AND private_group_epoch_id = ? ");
+			bindParams.add(epochId);
+		}
+		if (keyId != null) {
+			sql.append("AND private_group_key_id = ? ");
+			bindParams.add(keyId);
+		}
+		if (beforeTimestamp != null && beforeSignature == null) {
+			sql.append("AND created_when < ? ");
+			bindParams.add(beforeTimestamp);
+		} else if (beforeTimestamp != null) {
+			sql.append("AND (created_when < ? OR (created_when = ? AND signature < ?)) ");
+			bindParams.add(beforeTimestamp);
+			bindParams.add(beforeTimestamp);
+			bindParams.add(beforeSignature);
+		}
+
+		sql.append("ORDER BY created_when DESC, signature DESC LIMIT ").append(limit);
+
+		List<ChatTransactionData> envelopes = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
+			if (resultSet == null)
+				return envelopes;
+
+			do {
+				envelopes.add(this.toChatTransactionData(resultSet));
+			} while (resultSet.next());
+
+			return envelopes;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch private group envelopes from repository", e);
+		}
+	}
+
+	@Override
+	public List<ChatTransactionData> getPrivateGroupMessagesMatchingCriteria(int txGroupId,
+			Long before, Long after, byte[] chatReferenceBytes, Boolean hasChatReference,
+			String senderAddress, int limit, Integer offset, Boolean reverse) throws DataException {
+		if (limit <= 0 || limit > MAX_PRIVATE_GROUP_PAGE_SIZE)
+			throw new DataException("Invalid private group message page size");
+
+		MessageCriteria criteria = buildPrivateGroupMessageCriteria(txGroupId, before, after,
+				chatReferenceBytes, hasChatReference, senderAddress);
+		StringBuilder sql = new StringBuilder(512);
+		sql.append("SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, CM.fee, ")
+				.append("CM.recipient, CM.chat_reference, CM.is_text, CM.is_encrypted, CM.data, CM.signature ")
+				.append("FROM ChatMessages CM ").append(criteria.sql)
+				.append(" ORDER BY CM.created_when")
+				.append(reverse != null && reverse ? " DESC" : " ASC")
+				.append(", CM.signature")
+				.append(reverse != null && reverse ? " DESC" : " ASC");
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		List<ChatTransactionData> messages = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), criteria.bindParams.toArray())) {
+			if (resultSet == null)
+				return messages;
+
+			do {
+				messages.add(this.toChatTransactionData(resultSet));
+			} while (resultSet.next());
+
+			return messages;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch private group messages from repository", e);
+		}
+	}
+
+	@Override
+	public int countPrivateGroupMessagesMatchingCriteria(int txGroupId, Long before, Long after,
+			byte[] chatReferenceBytes, Boolean hasChatReference, String senderAddress) throws DataException {
+		MessageCriteria criteria = buildPrivateGroupMessageCriteria(txGroupId, before, after,
+				chatReferenceBytes, hasChatReference, senderAddress);
+		String sql = "SELECT COUNT(*) FROM ChatMessages CM " + criteria.sql;
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, criteria.bindParams.toArray())) {
+			if (resultSet == null)
+				return 0;
+
+			return resultSet.getInt(1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to count private group messages in repository", e);
+		}
+	}
+
+	@Override
 	public ChatMessage toChatMessage(ChatTransactionData chatTransactionData, Encoding encoding) throws DataException {
 		String sender = chatTransactionData.getSender();
 		if (sender == null)
@@ -476,6 +587,41 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		}
 
 		return new MessageCriteria(sql.toString(), bindParams);
+	}
+
+	private MessageCriteria buildPrivateGroupMessageCriteria(int txGroupId, Long before, Long after,
+			byte[] chatReferenceBytes, Boolean hasChatReference, String senderAddress) throws DataException {
+		if (txGroupId <= 0)
+			throw new DataException("Invalid private group message criteria");
+
+		List<String> whereClauses = new ArrayList<>();
+		List<Object> bindParams = new ArrayList<>();
+		whereClauses.add("CM.tx_group_id = ?");
+		bindParams.add(txGroupId);
+		whereClauses.add("CM.recipient IS NULL");
+		whereClauses.add("CM.private_group_envelope_type = ?");
+		bindParams.add(PrivateGroupChatEnvelope.Type.MESSAGE.name());
+
+		if (before != null) {
+			whereClauses.add("CM.created_when < ?");
+			bindParams.add(before);
+		}
+		if (after != null) {
+			whereClauses.add("CM.created_when > ?");
+			bindParams.add(after);
+		}
+		if (chatReferenceBytes != null) {
+			whereClauses.add("CM.chat_reference = ?");
+			bindParams.add(chatReferenceBytes);
+		}
+		if (hasChatReference != null)
+			whereClauses.add(hasChatReference ? "CM.chat_reference IS NOT NULL" : "CM.chat_reference IS NULL");
+		if (senderAddress != null) {
+			whereClauses.add("CM.sender = ?");
+			bindParams.add(senderAddress);
+		}
+
+		return new MessageCriteria(" WHERE " + String.join(" AND ", whereClauses), bindParams);
 	}
 
 	/**

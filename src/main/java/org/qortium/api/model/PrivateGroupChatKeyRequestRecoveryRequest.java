@@ -21,7 +21,7 @@ public class PrivateGroupChatKeyRequestRecoveryRequest {
 	public int groupId;
 
 	@Schema(
-		description = "maximum number of stored key requests to process",
+		description = "maximum number of stored key requests to process; defaults to 100 and cannot exceed 100",
 		example = "20"
 	)
 	public Integer limit;
