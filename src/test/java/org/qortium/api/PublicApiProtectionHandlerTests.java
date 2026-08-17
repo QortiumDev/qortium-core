@@ -42,8 +42,14 @@ public class PublicApiProtectionHandlerTests extends Common {
 		String[] routes = {
 				"POST /polls/public/vote", "POST /chat/public/build", "POST /transactions/convert",
 				"POST /transactions/process", "POST /arbitrary/public/*", "GET /arbitrary/public/data/*",
-				"GET /polls/public/capabilities"
+				"GET /polls/public/capabilities", "GET /chat/*"
 		};
+		assertEquals(WorkClass.CHAT_READ,
+				PublicApiRoutePolicy.classify("GET", "/chat/private/group/control", routes).workClass);
+		assertEquals(WorkClass.CHAT_READ,
+				PublicApiRoutePolicy.classify("GET", "/chat/private/group/state/12", routes).workClass);
+		assertEquals(WorkClass.NONE,
+				PublicApiRoutePolicy.classify("GET", "/chat/messages", routes).workClass);
 		assertEquals(WorkClass.BUILDER,
 				PublicApiRoutePolicy.classify("POST", "/polls/public/vote", routes).workClass);
 		assertEquals(WorkClass.BUILDER,
@@ -191,6 +197,24 @@ public class PublicApiProtectionHandlerTests extends Common {
 		}
 	}
 
+	@Test
+	public void testHandlerSeparatelyRateLimitsPrivateGroupProtocolReads() throws Exception {
+		FieldUtils.writeField(this.settings, "apiWhitelist", new String[0], true);
+		FieldUtils.writeField(this.settings, "publicApiPaths", new String[] {"GET /chat/*"}, true);
+		FieldUtils.writeField(this.settings, "publicChatReadRequestsPerMinute", 1, true);
+		FieldUtils.writeField(this.settings, "publicChatReadRateLimitBurst", 1, true);
+		FieldUtils.writeField(this.settings, "publicChatReadMaxConcurrentRequests", 1, true);
+
+		PublicApiProtectionHandler handler = new PublicApiProtectionHandler(() -> 0L);
+		try (HandlerServer server = new HandlerServer(handler)) {
+			assertResponseStatus("HTTP/1.1 204", "first bounded private-group read",
+					server.request(getRequest("/chat/private/group/control?txGroupId=12&types=KEY_REQUEST")));
+			String limited = server.request(getRequest("/chat/private/group/state/12"));
+			assertResponseStatus("HTTP/1.1 429", "second private-group read exceeds its own burst", limited);
+			assertTrue(limited.contains("Retry-After: 1"));
+		}
+	}
+
 	private static String fixedBody(String body) {
 		return "POST /polls/public/vote HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
 				+ body.length() + "\r\n\r\n" + body;
@@ -199,6 +223,10 @@ public class PublicApiProtectionHandlerTests extends Common {
 	private static String chunkedBody(String body) {
 		return "POST /polls/public/vote HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
 				+ Integer.toHexString(body.length()) + "\r\n" + body + "\r\n0\r\n\r\n";
+	}
+
+	private static String getRequest(String path) {
+		return "GET " + path + " HTTP/1.1\r\nHost: localhost\r\n\r\n";
 	}
 
 	private static final class HandlerServer implements AutoCloseable {

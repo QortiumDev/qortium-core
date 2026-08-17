@@ -21,6 +21,8 @@ import org.qortium.api.model.DirectPrivateChatSendRequest;
 import org.qortium.api.model.DirectPrivateChatSendResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatsRequest;
+import org.qortium.api.model.PrivateGroupChatControlPage;
+import org.qortium.api.model.PrivateGroupChatControlResponse;
 import org.qortium.api.model.PrivateGroupChatDecryptRequest;
 import org.qortium.api.model.PrivateGroupChatDecryptResponse;
 import org.qortium.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
@@ -38,8 +40,10 @@ import org.qortium.api.model.PrivateGroupChatRotationRequestRequest;
 import org.qortium.api.model.PrivateGroupChatRotationRequestResponse;
 import org.qortium.api.model.PrivateGroupChatSendRequest;
 import org.qortium.api.model.PrivateGroupChatSendResponse;
+import org.qortium.api.model.PrivateGroupChatStateResponse;
 import org.qortium.api.resource.ChatResource;
 import org.qortium.chat.ChatService;
+import org.qortium.chat.crypto.DirectPrivateChatCrypto;
 import org.qortium.chat.crypto.PrivateGroupChatCrypto;
 import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortium.chat.crypto.PrivateGroupChatKeyAnnouncement;
@@ -352,6 +356,68 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPublicBuildPreservesEncryptedDirectMessageReference() throws Exception {
+		ChatTransactionData request;
+		byte[] reference = signature(58);
+		byte[] encryptedPayload;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			bob.ensureAccount();
+			repository.saveChanges();
+			encryptedPayload = DirectPrivateChatCrypto.encryptMessage(alice.getPrivateKey(), bob.getPublicKey(),
+					"public-route direct".getBytes(StandardCharsets.UTF_8));
+			BaseTransactionData base = new BaseTransactionData(now(), Group.NO_GROUP, alice.getPublicKey(), 0L,
+					0, null);
+			request = new ChatTransactionData(base, alice.getAddress(), 0, bob.getAddress(), reference,
+					encryptedPayload, true, true);
+		}
+
+		ChatTransactionData decoded = decodeUnsignedChat(this.chatResource.buildPublicChat(request));
+		assertEquals(request.getSender(), decoded.getSender());
+		assertEquals(request.getRecipient(), decoded.getRecipient());
+		assertTrue(decoded.getIsEncrypted());
+		assertArrayEquals(reference, decoded.getChatReference());
+		assertArrayEquals(encryptedPayload, decoded.getData());
+		assertNull(decoded.getSignature());
+	}
+
+	@Test
+	public void testPublicHistoryAndActiveChatsRetainEncryptedDirectRows() throws Exception {
+		DirectPrivateChatSendRequest sendRequest = new DirectPrivateChatSendRequest();
+		String alice;
+		String bob;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount aliceAccount = Common.getTestAccount(repository, "alice");
+			TestAccount bobAccount = Common.getTestAccount(repository, "bob");
+			bobAccount.ensureAccount();
+			repository.saveChanges();
+			alice = aliceAccount.getAddress();
+			bob = bobAccount.getAddress();
+			sendRequest.senderPrivateKey = aliceAccount.getPrivateKey();
+			sendRequest.recipient = bob;
+			sendRequest.data = "public encrypted history".getBytes(StandardCharsets.UTF_8);
+			sendRequest.isText = true;
+		}
+
+		DirectPrivateChatSendResponse sent = this.chatResource.sendDirectPrivateChat(null, sendRequest);
+		List<ChatMessage> history = this.chatResource.searchChat(null, null, null, Arrays.asList(alice, bob),
+				null, null, null, ChatMessage.Encoding.BASE58, 25, null, false);
+		assertEquals(1, history.size());
+		assertTrue(history.get(0).isEncrypted());
+		assertArrayEquals(sent.messageSignature, history.get(0).getSignature());
+		assertFalse(Base58.encode(sendRequest.data).equals(history.get(0).getData()));
+
+		ActiveChats active = this.chatResource.getActiveChats(alice, ChatMessage.Encoding.BASE58, null);
+		ActiveChats.DirectChat direct = active.getDirect().stream()
+				.filter(chat -> bob.equals(chat.getAddress()))
+				.findFirst().orElse(null);
+		assertNotNull(direct);
+		assertEquals(alice, direct.getSender());
+		assertTrue(direct.getTimestamp() > 0L);
+	}
+
+	@Test
 	public void testPrivateGroupSendAndDecrypt() throws Exception {
 		byte[] payload = "private api message".getBytes(StandardCharsets.UTF_8);
 		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
@@ -384,6 +450,163 @@ public class ChatResourceTests extends ApiCommon {
 		assertEquals(sendRequest.groupId, decryptResponse.groupId);
 		assertArrayEquals(sendResponse.epochId, decryptResponse.epochId);
 		assertArrayEquals(sendResponse.keyId, decryptResponse.keyId);
+	}
+
+	@Test
+	public void testPublicPrivateGroupStateReturnsAtomicUsableEpoch() throws Exception {
+		int groupId;
+		byte[] expectedEpochId;
+		List<String> expectedPublicKeys;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			groupId = createClosedGroup(repository, alice, "chat-api-public-state");
+			addMember(repository, groupId, bob);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, groupId);
+			expectedEpochId = epoch.getEpochId();
+			expectedPublicKeys = epoch.getMemberPublicKeys().stream().map(Base58::encode).toList();
+		}
+
+		PrivateGroupChatStateResponse state = this.chatResource.getPrivateGroupChatState(groupId);
+		assertTrue(state.exists);
+		assertEquals(Boolean.FALSE, state.isOpen);
+		assertTrue(state.available);
+		assertNull(state.unavailableReason);
+		assertEquals(2, state.memberCount);
+		assertTrue(state.allPublicKeysKnown);
+		assertTrue(state.missingPublicKeyAddresses.isEmpty());
+		assertEquals(expectedPublicKeys, state.memberPublicKeys);
+		assertEquals(Base58.encode(expectedEpochId), state.epochId);
+		assertEquals(PrivateGroupChatEnvelope.VERSION, state.qpgcVersion);
+		assertEquals(PrivateGroupChatMembership.MAX_V1_MEMBERS, state.maxV1Members);
+	}
+
+	@Test
+	public void testPublicPrivateGroupStateFailsClosedWithStructuredReasons() throws Exception {
+		int openGroupId;
+		int missingKeyGroupId;
+		String unknownAddress;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			openGroupId = GroupUtils.createGroup(repository, alice, "chat-api-public-state-open", true);
+			missingKeyGroupId = createClosedGroup(repository, alice, "chat-api-public-state-missing");
+			PrivateKeyAccount unknown = Common.generateDeterministicSeedAccount(repository,
+					"chat-api-state-unknown", 1);
+			unknownAddress = unknown.getAddress();
+			GroupData groupData = repository.getGroupRepository().fromGroupId(missingKeyGroupId);
+			repository.getGroupRepository().save(new GroupMemberData(missingKeyGroupId, unknownAddress,
+					groupData.getCreated(), groupData.getReference()));
+			repository.saveChanges();
+		}
+
+		PrivateGroupChatStateResponse missingGroup = this.chatResource.getPrivateGroupChatState(Integer.MAX_VALUE);
+		assertFalse(missingGroup.exists);
+		assertFalse(missingGroup.available);
+		assertEquals(org.qortium.chat.PrivateGroupChatPublicService.UnavailableReason.GROUP_NOT_FOUND,
+				missingGroup.unavailableReason);
+
+		PrivateGroupChatStateResponse openGroup = this.chatResource.getPrivateGroupChatState(openGroupId);
+		assertTrue(openGroup.exists);
+		assertEquals(Boolean.TRUE, openGroup.isOpen);
+		assertFalse(openGroup.available);
+		assertEquals(org.qortium.chat.PrivateGroupChatPublicService.UnavailableReason.GROUP_IS_OPEN,
+				openGroup.unavailableReason);
+
+		PrivateGroupChatStateResponse missingKey = this.chatResource.getPrivateGroupChatState(missingKeyGroupId);
+		assertTrue(missingKey.exists);
+		assertFalse(missingKey.available);
+		assertNull(missingKey.epochId);
+		assertFalse(missingKey.allPublicKeysKnown);
+		assertEquals(List.of(unknownAddress), missingKey.missingPublicKeyAddresses);
+		assertEquals(org.qortium.chat.PrivateGroupChatPublicService.UnavailableReason.MEMBER_PUBLIC_KEY_UNKNOWN,
+				missingKey.unavailableReason);
+	}
+
+	@Test
+	public void testPublicPrivateGroupStateBoundsOversizedMembership() throws Exception {
+		int groupId;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			groupId = createClosedGroup(repository, alice, "chat-api-public-state-limit");
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			for (int i = 0; i < PrivateGroupChatMembership.MAX_V1_MEMBERS; ++i) {
+				PrivateKeyAccount account = Common.generateDeterministicSeedAccount(repository,
+						"chat-api-state-limit", i);
+				account.ensureAccount();
+				repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
+						groupData.getCreated(), groupData.getReference()));
+			}
+			repository.saveChanges();
+		}
+
+		PrivateGroupChatStateResponse state = this.chatResource.getPrivateGroupChatState(groupId);
+		assertFalse(state.available);
+		assertEquals(PrivateGroupChatMembership.MAX_V1_MEMBERS + 1, state.memberCount);
+		assertTrue(state.memberPublicKeys.isEmpty());
+		assertEquals(org.qortium.chat.PrivateGroupChatPublicService.UnavailableReason.MEMBER_LIMIT_EXCEEDED,
+				state.unavailableReason);
+	}
+
+	@Test
+	public void testPublicPrivateGroupControlsReturnSignedTransactionsOnly() throws Exception {
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		int groupId;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			groupId = createClosedGroup(repository, alice, "chat-api-public-controls");
+			addMember(repository, groupId, bob);
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = "public control feed".getBytes(StandardCharsets.UTF_8);
+			sendRequest.isText = true;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		keyRequest.keyId = sendResponse.keyId;
+		PrivateGroupChatKeyRequestResponse keyRequestResponse = this.chatResource.requestPrivateGroupChatKey(null,
+				keyRequest);
+
+		PrivateGroupChatControlPage page = this.chatResource.listPrivateGroupChatControls(groupId,
+				"KEY_ANNOUNCEMENT,KEY_REQUEST", Base58.encode(sendResponse.epochId), null,
+				null, null, 25);
+		assertEquals(groupId, page.txGroupId);
+		assertEquals(2, page.controls.size());
+		assertNotNull(page.nextCursor);
+
+		PrivateGroupChatControlResponse requestControl = page.controls.stream()
+				.filter(control -> control.type == PrivateGroupChatEnvelope.Type.KEY_REQUEST)
+				.findFirst().orElse(null);
+		assertNotNull(requestControl);
+		assertEquals(Base58.encode(keyRequestResponse.requestSignature), requestControl.signature);
+		assertEquals(Base58.encode(sendResponse.epochId), requestControl.epochId);
+		assertEquals(Base58.encode(sendResponse.keyId), requestControl.keyId);
+
+		TransactionData decoded = TransactionTransformer.fromBytes(Base58.decode(requestControl.signedTransaction));
+		assertTrue(decoded instanceof ChatTransactionData);
+		ChatTransactionData decodedChat = (ChatTransactionData) decoded;
+		assertArrayEquals(keyRequestResponse.requestSignature, decodedChat.getSignature());
+		assertArrayEquals(keyRequestResponse.requestSignature, Base58.decode(requestControl.signature));
+		assertTrue(decodedChat.getIsEncrypted());
+		PrivateGroupChatEnvelope decodedEnvelope = PrivateGroupChatEnvelope.fromBytes(decodedChat.getData());
+		assertEquals(PrivateGroupChatEnvelope.Type.KEY_REQUEST, decodedEnvelope.getType());
+
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.chatResource.listPrivateGroupChatControls(groupId, "MESSAGE", null, null,
+						null, null, 25));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.chatResource.listPrivateGroupChatControls(groupId,
+						"KEY_REQUEST,KEY_REQUEST", null, null, null, null, 25));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.chatResource.listPrivateGroupChatControls(groupId, "KEY_REQUEST", null, null,
+						page.nextCursor, page.nextCursor, 25));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.chatResource.listPrivateGroupChatControls(groupId, "KEY_REQUEST", null, null,
+						null, null, 101));
 	}
 
 	@Test
@@ -891,6 +1114,7 @@ public class ChatResourceTests extends ApiCommon {
 		byte[] payload = "private api relay message".getBytes(StandardCharsets.UTF_8);
 		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
 		PrivateGroupChatKeyAnnouncementRelayRequest relayRequest = new PrivateGroupChatKeyAnnouncementRelayRequest();
+		String relayerAddress;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -904,6 +1128,7 @@ public class ChatResourceTests extends ApiCommon {
 			sendRequest.isText = true;
 			relayRequest.relayerPrivateKey = bob.getPrivateKey();
 			relayRequest.groupId = groupId;
+			relayerAddress = bob.getAddress();
 		}
 
 		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
@@ -929,6 +1154,16 @@ public class ChatResourceTests extends ApiCommon {
 			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
 			assertArrayEquals(relayResponse.keyId, envelope.getKeyId());
 		}
+
+		PrivateGroupChatControlPage publicControls = this.chatResource.listPrivateGroupChatControls(
+				relayRequest.groupId, "KEY_ANNOUNCEMENT", Base58.encode(relayResponse.epochId),
+				Base58.encode(relayResponse.keyId), null, null, 25);
+		assertEquals(2, publicControls.controls.size());
+		PrivateGroupChatControlResponse relayed = publicControls.controls.stream()
+				.filter(control -> Base58.encode(relayResponse.announcementSignature).equals(control.signature))
+				.findFirst().orElse(null);
+		assertNotNull(relayed);
+		assertEquals(relayerAddress, relayed.sender);
 	}
 
 	@Test
@@ -1151,6 +1386,10 @@ public class ChatResourceTests extends ApiCommon {
 		PrivateGroupChatKeyRequestResponse response = this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
 		assertArrayEquals(epochId, response.epochId);
 		assertArrayEquals(keyId, response.keyId);
+		PrivateGroupChatControlPage historicalControls = this.chatResource.listPrivateGroupChatControls(groupId,
+				"KEY_REQUEST", Base58.encode(epochId), Base58.encode(keyId), null, null, 25);
+		assertEquals(1, historicalControls.controls.size());
+		assertEquals(Base58.encode(response.requestSignature), historicalControls.controls.get(0).signature);
 
 		keyRequest.keyId = null;
 		assertApiError(ApiError.INVALID_CRITERIA,

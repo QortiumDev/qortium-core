@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public class PrivateGroupChatMembership {
+	public static final int MAX_V1_MEMBERS = 39;
 
 	private static final byte[] EPOCH_DOMAIN = "QPGC epoch v1".getBytes(StandardCharsets.US_ASCII);
 

@@ -150,6 +150,12 @@ public class Settings {
 	private int publicApiBuilderRateLimitBurst = 30;
 	/** Maximum public builder requests executing at once across all remote clients. */
 	private int publicApiBuilderMaxConcurrentRequests = 16;
+	/** Per-client sustained request rate for bounded private-group protocol reads. */
+	private int publicChatReadRequestsPerMinute = 120;
+	/** Immediate per-client burst accepted for bounded private-group protocol reads. */
+	private int publicChatReadRateLimitBurst = 30;
+	/** Maximum bounded private-group protocol reads executing across all remote clients. */
+	private int publicChatReadMaxConcurrentRequests = 16;
 	/** Per-client sustained request rate for signed transaction submission. */
 	private int publicApiProcessRequestsPerMinute = 240;
 	/** Immediate per-client burst accepted for signed transaction submission. */
@@ -1187,6 +1193,9 @@ public class Settings {
 		settings.put("publicApiBuilderRequestsPerMinute", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("publicApiBuilderRateLimitBurst", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("publicApiBuilderMaxConcurrentRequests", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicChatReadRequestsPerMinute", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicChatReadRateLimitBurst", new WritableSetting(WritableSettingType.INTEGER, false));
+		settings.put("publicChatReadMaxConcurrentRequests", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("publicApiProcessRequestsPerMinute", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("publicApiProcessRateLimitBurst", new WritableSetting(WritableSettingType.INTEGER, false));
 		settings.put("publicApiProcessMaxConcurrentRequests", new WritableSetting(WritableSettingType.INTEGER, false));
@@ -1928,6 +1937,15 @@ public class Settings {
 		if (this.publicApiBuilderMaxConcurrentRequests < 1)
 			throwValidationError("publicApiBuilderMaxConcurrentRequests must be at least 1");
 
+		if (this.publicChatReadRequestsPerMinute < 1)
+			throwValidationError("publicChatReadRequestsPerMinute must be at least 1");
+
+		if (this.publicChatReadRateLimitBurst < 1)
+			throwValidationError("publicChatReadRateLimitBurst must be at least 1");
+
+		if (this.publicChatReadMaxConcurrentRequests < 1)
+			throwValidationError("publicChatReadMaxConcurrentRequests must be at least 1");
+
 		if (this.publicApiProcessRequestsPerMinute < 1)
 			throwValidationError("publicApiProcessRequestsPerMinute must be at least 1");
 
@@ -2174,6 +2192,18 @@ public class Settings {
 
 	public int getPublicApiBuilderMaxConcurrentRequests() {
 		return this.publicApiBuilderMaxConcurrentRequests;
+	}
+
+	public int getPublicChatReadRequestsPerMinute() {
+		return this.publicChatReadRequestsPerMinute;
+	}
+
+	public int getPublicChatReadRateLimitBurst() {
+		return this.publicChatReadRateLimitBurst;
+	}
+
+	public int getPublicChatReadMaxConcurrentRequests() {
+		return this.publicChatReadMaxConcurrentRequests;
 	}
 
 	public int getPublicApiProcessRequestsPerMinute() {

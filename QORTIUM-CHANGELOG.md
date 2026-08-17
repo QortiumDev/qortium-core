@@ -34,6 +34,65 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): complete portable QPGC read phase
+
+Marks the C2 Core milestone complete after adding default-enabled, abuse-bounded
+private-group control/state reads and pinning the existing public direct-message
+transport contract. Records C3 dependency-aware announcement retention and C4
+availability enforcement as the next Core tranche before Home begins its
+portable private-group implementation.
+
+### 2026-08-17 - fix(chat): bound and verify public QPGC reads
+
+Prevents the atomic private-group state endpoint from loading an oversized
+membership by counting first and reading at most the supported 39 QPGC v1
+members. Oversized or inconsistent membership fails closed without returning a
+partial epoch, and indexed control inconsistencies now fail explicitly instead
+of producing an unpageable empty result. Additional API coverage verifies the
+member-limit response, historical epoch/key filtering, and relayed announcement
+outer-sender identity.
+
+### 2026-08-17 - feat(chat): protect portable public chat routes
+
+Classifies the new private-group control/state reads as their own public work
+class with configurable 120-per-minute, burst-30, and 16-concurrent defaults,
+while leaving ordinary lightweight chat reads unchanged. Seed and ordinary-node
+profiles ship those limits and their existing public chat wildcard exposes the
+new reads automatically. Regression coverage also pins the complete public-node
+QDM1 foundation: public address/chat reads, encrypted direct-message history and
+active chats, reference-preserving unsigned CHAT construction, and signed
+transaction submission without server-side wallet keys.
+
+### 2026-08-17 - feat(chat): expose bounded QPGC recovery reads
+
+Adds public, read-only private-group control and atomic state APIs so trusted
+Home clients can recover QPGC keys through any node route without giving Core a
+wallet key or exposing group keys and plaintext. Control pages require explicit
+non-message types, use opaque dual-direction cursors, return complete signed
+CHAT bytes, cap pages at 100 records and responses at one MiB, and perform no
+side effects. State reads hold the blockchain lock while computing one coherent
+closed-group membership/public-key epoch and fail closed with structured
+missing-group, open-group, missing-key, or member-limit reasons.
+
+### 2026-08-17 - feat(chat): add dual-cursor QPGC envelope queries
+
+Extends the indexed private-group chat store with bounded multi-type pages and
+exclusive before/after cursors. Backward history pages remain newest-first,
+while forward polling pages are oldest-first so clients can process every
+same-timestamp control envelope without gaps or duplication. The existing
+single-type repository contract remains compatible for local private-chat
+helpers.
+
+### 2026-08-17 - docs(chat): require full public-node feature parity
+
+Clarifies that Qortium's default public-node profile must support the complete
+user-facing Chat feature set, including private groups and direct messages, on
+desktop and Android. Private keys, decrypted content, proof of work, and signing
+remain on the user's device; public Core endpoints provide only bounded,
+validated protocol primitives. Node operators can still remove routes as an
+explicit local policy choice, but a locked-down custom profile is not the
+platform default or an acceptable substitute for full route parity.
+
 ### 2026-08-17 - docs(chat): clean portability roadmap formatting
 
 Removes stray line-ending whitespace from the active Core-to-Home chat

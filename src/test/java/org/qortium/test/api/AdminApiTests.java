@@ -132,6 +132,12 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(false, metadata.writable.get("publicApiBuilderRateLimitBurst").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("publicApiBuilderMaxConcurrentRequests").type);
 		assertEquals(false, metadata.writable.get("publicApiBuilderMaxConcurrentRequests").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("publicChatReadRequestsPerMinute").type);
+		assertEquals(false, metadata.writable.get("publicChatReadRequestsPerMinute").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("publicChatReadRateLimitBurst").type);
+		assertEquals(false, metadata.writable.get("publicChatReadRateLimitBurst").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("publicChatReadMaxConcurrentRequests").type);
+		assertEquals(false, metadata.writable.get("publicChatReadMaxConcurrentRequests").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("publicApiProcessRequestsPerMinute").type);
 		assertEquals(false, metadata.writable.get("publicApiProcessRequestsPerMinute").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("publicApiProcessRateLimitBurst").type);

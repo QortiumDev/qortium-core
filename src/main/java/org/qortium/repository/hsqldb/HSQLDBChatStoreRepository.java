@@ -20,10 +20,12 @@ import org.qortium.utils.NTP;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.qortium.data.chat.ChatMessage.Encoding;
 
@@ -189,16 +191,23 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 	@Override
 	public List<ChatTransactionData> getPrivateGroupEnvelopes(int txGroupId,
-			PrivateGroupChatEnvelope.Type envelopeType, byte[] epochId, byte[] keyId,
-			Long beforeTimestamp, byte[] beforeSignature, int limit) throws DataException {
-		if (txGroupId <= 0 || envelopeType == null)
+			Set<PrivateGroupChatEnvelope.Type> envelopeTypes, byte[] epochId, byte[] keyId,
+			Long beforeTimestamp, byte[] beforeSignature, Long afterTimestamp, byte[] afterSignature,
+			int limit) throws DataException {
+		if (txGroupId <= 0 || envelopeTypes == null || envelopeTypes.isEmpty()
+				|| envelopeTypes.stream().anyMatch(type -> type == null))
 			throw new DataException("Invalid private group envelope criteria");
 		if (epochId != null && epochId.length != PrivateGroupChatEnvelope.EPOCH_ID_LENGTH)
 			throw new DataException("Invalid private group epoch id");
 		if (keyId != null && keyId.length != PrivateGroupChatEnvelope.KEY_ID_LENGTH)
 			throw new DataException("Invalid private group key id");
-		if (beforeSignature != null && (beforeTimestamp == null
-				|| beforeSignature.length != PrivateGroupChatEnvelope.SIGNATURE_LENGTH))
+		if (beforeTimestamp != null && afterTimestamp != null)
+			throw new DataException("Private group envelope cursors are mutually exclusive");
+		if ((beforeTimestamp == null) != (beforeSignature == null)
+				|| beforeSignature != null && beforeSignature.length != PrivateGroupChatEnvelope.SIGNATURE_LENGTH)
+			throw new DataException("Invalid private group envelope cursor");
+		if ((afterTimestamp == null) != (afterSignature == null)
+				|| afterSignature != null && afterSignature.length != PrivateGroupChatEnvelope.SIGNATURE_LENGTH)
 			throw new DataException("Invalid private group envelope cursor");
 		if (limit <= 0 || limit > MAX_PRIVATE_GROUP_PAGE_SIZE)
 			throw new DataException("Invalid private group envelope page size");
@@ -207,10 +216,18 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		sql.append("SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, ")
 				.append("chat_reference, is_text, is_encrypted, data, signature ")
 				.append("FROM ChatMessages WHERE tx_group_id = ? AND recipient IS NULL ")
-				.append("AND private_group_envelope_type = ? ");
+				.append("AND private_group_envelope_type IN (");
 		List<Object> bindParams = new ArrayList<>();
 		bindParams.add(txGroupId);
-		bindParams.add(envelopeType.name());
+		List<PrivateGroupChatEnvelope.Type> sortedTypes = new ArrayList<>(envelopeTypes);
+		sortedTypes.sort(Comparator.comparingInt(PrivateGroupChatEnvelope.Type::ordinal));
+		for (int i = 0; i < sortedTypes.size(); ++i) {
+			if (i > 0)
+				sql.append(", ");
+			sql.append('?');
+			bindParams.add(sortedTypes.get(i).name());
+		}
+		sql.append(") ");
 
 		if (epochId != null) {
 			sql.append("AND private_group_epoch_id = ? ");
@@ -220,17 +237,22 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 			sql.append("AND private_group_key_id = ? ");
 			bindParams.add(keyId);
 		}
-		if (beforeTimestamp != null && beforeSignature == null) {
-			sql.append("AND created_when < ? ");
-			bindParams.add(beforeTimestamp);
-		} else if (beforeTimestamp != null) {
+		if (beforeTimestamp != null) {
 			sql.append("AND (created_when < ? OR (created_when = ? AND signature < ?)) ");
 			bindParams.add(beforeTimestamp);
 			bindParams.add(beforeTimestamp);
 			bindParams.add(beforeSignature);
+		} else if (afterTimestamp != null) {
+			sql.append("AND (created_when > ? OR (created_when = ? AND signature > ?)) ");
+			bindParams.add(afterTimestamp);
+			bindParams.add(afterTimestamp);
+			bindParams.add(afterSignature);
 		}
 
-		sql.append("ORDER BY created_when DESC, signature DESC LIMIT ").append(limit);
+		boolean forward = afterTimestamp != null;
+		sql.append("ORDER BY created_when ").append(forward ? "ASC" : "DESC")
+				.append(", signature ").append(forward ? "ASC" : "DESC")
+				.append(" LIMIT ").append(limit);
 
 		List<ChatTransactionData> envelopes = new ArrayList<>();
 		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {

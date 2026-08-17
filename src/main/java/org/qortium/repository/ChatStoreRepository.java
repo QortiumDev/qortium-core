@@ -5,7 +5,9 @@ import org.qortium.data.chat.ActiveChats;
 import org.qortium.data.chat.ChatMessage;
 import org.qortium.data.transaction.ChatTransactionData;
 
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.qortium.data.chat.ChatMessage.Encoding;
 
@@ -35,9 +37,22 @@ public interface ChatStoreRepository {
 	 * Returns one bounded newest-first page of indexed QPGC envelopes.
 	 * A signature cursor disambiguates envelopes that share the same timestamp.
 	 */
-	public List<ChatTransactionData> getPrivateGroupEnvelopes(int txGroupId,
+	public default List<ChatTransactionData> getPrivateGroupEnvelopes(int txGroupId,
 			PrivateGroupChatEnvelope.Type envelopeType, byte[] epochId, byte[] keyId,
-			Long beforeTimestamp, byte[] beforeSignature, int limit) throws DataException;
+			Long beforeTimestamp, byte[] beforeSignature, int limit) throws DataException {
+		return getPrivateGroupEnvelopes(txGroupId, EnumSet.of(envelopeType), epochId, keyId,
+				beforeTimestamp, beforeSignature, null, null, limit);
+	}
+
+	/**
+	 * Returns one bounded page of indexed QPGC envelopes for one or more explicit types.
+	 * Before pages are newest-first; after pages are oldest-first so forward polling cannot
+	 * skip intermediate rows. Cursor timestamps and signatures are paired and exclusive.
+	 */
+	public List<ChatTransactionData> getPrivateGroupEnvelopes(int txGroupId,
+			Set<PrivateGroupChatEnvelope.Type> envelopeTypes, byte[] epochId, byte[] keyId,
+			Long beforeTimestamp, byte[] beforeSignature, Long afterTimestamp, byte[] afterSignature,
+			int limit) throws DataException;
 
 	public List<ChatTransactionData> getPrivateGroupMessagesMatchingCriteria(int txGroupId,
 			Long before, Long after, byte[] chatReferenceBytes, Boolean hasChatReference,

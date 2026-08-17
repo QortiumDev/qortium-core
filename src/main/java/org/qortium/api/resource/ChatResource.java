@@ -22,6 +22,7 @@ import org.qortium.api.model.DirectPrivateChatSendRequest;
 import org.qortium.api.model.DirectPrivateChatSendResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatsRequest;
+import org.qortium.api.model.PrivateGroupChatControlPage;
 import org.qortium.api.model.PrivateGroupChatDecryptRequest;
 import org.qortium.api.model.PrivateGroupChatDecryptResponse;
 import org.qortium.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
@@ -39,9 +40,13 @@ import org.qortium.api.model.PrivateGroupChatRotationRequestRequest;
 import org.qortium.api.model.PrivateGroupChatRotationRequestResponse;
 import org.qortium.api.model.PrivateGroupChatSendRequest;
 import org.qortium.api.model.PrivateGroupChatSendResponse;
+import org.qortium.api.model.PrivateGroupChatStateResponse;
 import org.qortium.chat.ChatService;
 import org.qortium.chat.DirectPrivateChatService;
+import org.qortium.chat.PrivateGroupChatControlCursor;
+import org.qortium.chat.PrivateGroupChatPublicService;
 import org.qortium.chat.PrivateGroupChatService;
+import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.chat.ActiveChats;
 import org.qortium.data.chat.ChatMessage;
@@ -65,7 +70,9 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 
 import static org.qortium.data.chat.ChatMessage.Encoding;
 
@@ -475,6 +482,106 @@ public class ChatResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	@GET
+	@Path("/private/group/control")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "List bounded signed private-group control envelopes",
+		description = "Returns complete signed CHAT transaction bytes plus safe QPGC classification metadata. "
+				+ "The endpoint never decrypts an envelope, returns a group key, or performs a side effect."
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public PrivateGroupChatControlPage listPrivateGroupChatControls(
+			@QueryParam("txGroupId") Integer groupId,
+			@QueryParam("types") String requestedTypes,
+			@QueryParam("epochId") String epochId,
+			@QueryParam("keyId") String keyId,
+			@QueryParam("beforeCursor") String beforeCursor,
+			@QueryParam("afterCursor") String afterCursor,
+			@QueryParam("limit") Integer limit) {
+		try {
+			if (groupId == null)
+				throw new IllegalArgumentException("group id is required");
+			EnumSet<PrivateGroupChatEnvelope.Type> types = parsePrivateGroupControlTypes(requestedTypes);
+			byte[] epochBytes = decodeFixedBase58(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
+			byte[] keyBytes = decodeFixedBase58(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
+			PrivateGroupChatControlCursor before = PrivateGroupChatControlCursor.decode(beforeCursor);
+			PrivateGroupChatControlCursor after = PrivateGroupChatControlCursor.decode(afterCursor);
+
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				PrivateGroupChatPublicService.ControlPage page = PrivateGroupChatPublicService.getInstance()
+						.listControls(repository, groupId, types, epochBytes, keyBytes, before, after, limit);
+				return new PrivateGroupChatControlPage(page);
+			}
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/private/group/state/{groupId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Get one atomic private-group protocol state",
+		description = "Returns one blockchain-lock-consistent group membership/public-key snapshot and its usable "
+				+ "QPGC v1 epoch. No private key, group key, or plaintext is returned."
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.OPERATION_IN_PROGRESS, ApiError.REPOSITORY_ISSUE})
+	public PrivateGroupChatStateResponse getPrivateGroupChatState(@PathParam("groupId") int groupId) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateGroupChatPublicService.GroupState state = PrivateGroupChatPublicService.getInstance()
+					.getGroupState(repository, groupId);
+			return new PrivateGroupChatStateResponse(state);
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (PrivateGroupChatPublicService.StateBusyException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
+					e.getMessage());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	private static EnumSet<PrivateGroupChatEnvelope.Type> parsePrivateGroupControlTypes(String requestedTypes) {
+		if (requestedTypes == null || requestedTypes.isBlank())
+			throw new IllegalArgumentException("at least one private group control type is required");
+
+		EnumSet<PrivateGroupChatEnvelope.Type> types = EnumSet.noneOf(PrivateGroupChatEnvelope.Type.class);
+		for (String value : requestedTypes.split(",", -1)) {
+			String normalized = value.trim().toUpperCase(Locale.ROOT);
+			if (normalized.isEmpty())
+				throw new IllegalArgumentException("private group control type is empty");
+
+			PrivateGroupChatEnvelope.Type type;
+			try {
+				type = PrivateGroupChatEnvelope.Type.valueOf(normalized);
+			} catch (IllegalArgumentException e) {
+				throw new IllegalArgumentException("private group control type is unsupported: " + value, e);
+			}
+			if (!types.add(type))
+				throw new IllegalArgumentException("private group control type is duplicated: " + normalized);
+		}
+		return types;
+	}
+
+	private static byte[] decodeFixedBase58(String encoded, int expectedLength, String fieldName) {
+		if (encoded == null || encoded.isBlank())
+			return null;
+		byte[] decoded;
+		try {
+			decoded = Base58.decode(encoded);
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("private group " + fieldName + " is not valid Base58", e);
+		}
+		if (decoded.length != expectedLength)
+			throw new IllegalArgumentException("private group " + fieldName + " length is invalid");
+		return decoded;
 	}
 
 	@POST
