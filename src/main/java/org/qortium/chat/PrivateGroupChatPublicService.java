@@ -133,10 +133,19 @@ public final class PrivateGroupChatPublicService {
 			return GroupState.unavailable(groupId, true, true, 0, false, List.of(), List.of(),
 					UnavailableReason.GROUP_IS_OPEN);
 
-		List<GroupMemberData> members = repository.getGroupRepository().getGroupMembers(groupId);
-		if (members == null || members.isEmpty())
+		Integer memberCount = repository.getGroupRepository().countGroupMembers(groupId);
+		if (memberCount == null || memberCount <= 0)
 			return GroupState.unavailable(groupId, true, false, 0, false, List.of(), List.of(),
 					UnavailableReason.NO_MEMBERS);
+		if (memberCount > PrivateGroupChatMembership.MAX_V1_MEMBERS)
+			return GroupState.unavailable(groupId, true, false, memberCount, false, List.of(), List.of(),
+					UnavailableReason.MEMBER_LIMIT_EXCEEDED);
+
+		List<GroupMemberData> members = repository.getGroupRepository().getGroupMembers(groupId,
+				PrivateGroupChatMembership.MAX_V1_MEMBERS, null, false);
+		if (members == null || members.size() != memberCount)
+			return GroupState.unavailable(groupId, true, false, memberCount, false, List.of(), List.of(),
+					UnavailableReason.MEMBERSHIP_INCONSISTENT);
 
 		List<byte[]> publicKeys = new ArrayList<>(members.size());
 		List<String> missingAddresses = new ArrayList<>();
@@ -155,9 +164,7 @@ public final class PrivateGroupChatPublicService {
 
 		boolean allPublicKeysKnown = missingAddresses.isEmpty() && publicKeys.size() == members.size();
 		UnavailableReason unavailableReason = null;
-		if (members.size() > PrivateGroupChatMembership.MAX_V1_MEMBERS)
-			unavailableReason = UnavailableReason.MEMBER_LIMIT_EXCEEDED;
-		else if (!allPublicKeysKnown)
+		if (!allPublicKeysKnown)
 			unavailableReason = UnavailableReason.MEMBER_PUBLIC_KEY_UNKNOWN;
 
 		byte[] epochId = unavailableReason == null
@@ -171,16 +178,17 @@ public final class PrivateGroupChatPublicService {
 			Set<PrivateGroupChatEnvelope.Type> requestedTypes) throws TransformationException {
 		if (row == null || row.getTxGroupId() != groupId || row.getRecipient() != null || !row.getIsEncrypted()
 				|| row.getSignature() == null || row.getSignature().length != Transformer.SIGNATURE_LENGTH)
-			return null;
+			throw new TransformationException("Indexed private group control CHAT row is inconsistent");
 
 		PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(row.getData());
 		if (envelope.getGroupId() != groupId || !requestedTypes.contains(envelope.getType())
 				|| envelope.getType() == PrivateGroupChatEnvelope.Type.MESSAGE)
-			return null;
+			throw new TransformationException("Indexed private group control envelope is inconsistent");
 
 		byte[] signedBytes = ChatTransactionTransformer.toBytes(row);
+		String sender = row.getSender() != null ? row.getSender() : Crypto.toAddress(row.getSenderPublicKey());
 		return new ControlRecord(row.getTimestamp(), groupId, envelope.getType(), envelope.getEpochId(),
-				envelope.getKeyId(), row.getSender(), row.getChatReference(), row.getSignature(), signedBytes);
+				envelope.getKeyId(), sender, row.getChatReference(), row.getSignature(), signedBytes);
 	}
 
 	private static EnumSet<PrivateGroupChatEnvelope.Type> normalizeControlTypes(
@@ -226,6 +234,7 @@ public final class PrivateGroupChatPublicService {
 		GROUP_NOT_FOUND,
 		GROUP_IS_OPEN,
 		NO_MEMBERS,
+		MEMBERSHIP_INCONSISTENT,
 		MEMBER_PUBLIC_KEY_UNKNOWN,
 		MEMBER_LIMIT_EXCEEDED
 	}

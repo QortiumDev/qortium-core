@@ -524,6 +524,31 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPublicPrivateGroupStateBoundsOversizedMembership() throws Exception {
+		int groupId;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			groupId = createClosedGroup(repository, alice, "chat-api-public-state-limit");
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			for (int i = 0; i < PrivateGroupChatMembership.MAX_V1_MEMBERS; ++i) {
+				PrivateKeyAccount account = Common.generateDeterministicSeedAccount(repository,
+						"chat-api-state-limit", i);
+				account.ensureAccount();
+				repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
+						groupData.getCreated(), groupData.getReference()));
+			}
+			repository.saveChanges();
+		}
+
+		PrivateGroupChatStateResponse state = this.chatResource.getPrivateGroupChatState(groupId);
+		assertFalse(state.available);
+		assertEquals(PrivateGroupChatMembership.MAX_V1_MEMBERS + 1, state.memberCount);
+		assertTrue(state.memberPublicKeys.isEmpty());
+		assertEquals(org.qortium.chat.PrivateGroupChatPublicService.UnavailableReason.MEMBER_LIMIT_EXCEEDED,
+				state.unavailableReason);
+	}
+
+	@Test
 	public void testPublicPrivateGroupControlsReturnSignedTransactionsOnly() throws Exception {
 		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
 		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
@@ -1089,6 +1114,7 @@ public class ChatResourceTests extends ApiCommon {
 		byte[] payload = "private api relay message".getBytes(StandardCharsets.UTF_8);
 		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
 		PrivateGroupChatKeyAnnouncementRelayRequest relayRequest = new PrivateGroupChatKeyAnnouncementRelayRequest();
+		String relayerAddress;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -1102,6 +1128,7 @@ public class ChatResourceTests extends ApiCommon {
 			sendRequest.isText = true;
 			relayRequest.relayerPrivateKey = bob.getPrivateKey();
 			relayRequest.groupId = groupId;
+			relayerAddress = bob.getAddress();
 		}
 
 		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
@@ -1127,6 +1154,16 @@ public class ChatResourceTests extends ApiCommon {
 			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
 			assertArrayEquals(relayResponse.keyId, envelope.getKeyId());
 		}
+
+		PrivateGroupChatControlPage publicControls = this.chatResource.listPrivateGroupChatControls(
+				relayRequest.groupId, "KEY_ANNOUNCEMENT", Base58.encode(relayResponse.epochId),
+				Base58.encode(relayResponse.keyId), null, null, 25);
+		assertEquals(2, publicControls.controls.size());
+		PrivateGroupChatControlResponse relayed = publicControls.controls.stream()
+				.filter(control -> Base58.encode(relayResponse.announcementSignature).equals(control.signature))
+				.findFirst().orElse(null);
+		assertNotNull(relayed);
+		assertEquals(relayerAddress, relayed.sender);
 	}
 
 	@Test
@@ -1349,6 +1386,10 @@ public class ChatResourceTests extends ApiCommon {
 		PrivateGroupChatKeyRequestResponse response = this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
 		assertArrayEquals(epochId, response.epochId);
 		assertArrayEquals(keyId, response.keyId);
+		PrivateGroupChatControlPage historicalControls = this.chatResource.listPrivateGroupChatControls(groupId,
+				"KEY_REQUEST", Base58.encode(epochId), Base58.encode(keyId), null, null, 25);
+		assertEquals(1, historicalControls.controls.size());
+		assertEquals(Base58.encode(response.requestSignature), historicalControls.controls.get(0).signature);
 
 		keyRequest.keyId = null;
 		assertApiError(ApiError.INVALID_CRITERIA,

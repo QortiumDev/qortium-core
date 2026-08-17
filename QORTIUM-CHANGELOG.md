@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - fix(chat): bound and verify public QPGC reads
+
+Prevents the atomic private-group state endpoint from loading an oversized
+membership by counting first and reading at most the supported 39 QPGC v1
+members. Oversized or inconsistent membership fails closed without returning a
+partial epoch, and indexed control inconsistencies now fail explicitly instead
+of producing an unpageable empty result. Additional API coverage verifies the
+member-limit response, historical epoch/key filtering, and relayed announcement
+outer-sender identity.
+
 ### 2026-08-17 - feat(chat): protect portable public chat routes
 
 Classifies the new private-group control/state reads as their own public work
