@@ -22,6 +22,11 @@ public class PrivateGroupChatKeyAnnouncement {
 
 	public static PrivateGroupChatEnvelope create(PrivateGroupChatMembership.MembershipEpoch epoch, byte[] groupKey,
 			byte[] announcerPrivateKey) throws GeneralSecurityException {
+		return create(epoch, groupKey, announcerPrivateKey, null);
+	}
+
+	static PrivateGroupChatEnvelope create(PrivateGroupChatMembership.MembershipEpoch epoch, byte[] groupKey,
+			byte[] announcerPrivateKey, List<byte[]> wrapperNonces) throws GeneralSecurityException {
 		validateEpoch(epoch);
 		validateLength(groupKey, Transformer.AES256_LENGTH, "group key");
 		validateLength(announcerPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "announcer private key");
@@ -33,12 +38,18 @@ public class PrivateGroupChatKeyAnnouncement {
 
 		if (!containsPublicKey(memberPublicKeys, announcerPublicKey))
 			throw new GeneralSecurityException("Key announcer is not a current group member");
+		if (wrapperNonces != null && wrapperNonces.size() != memberPublicKeys.size())
+			throw new IllegalArgumentException("wrapper nonce count does not match current group members");
 
 		byte[] keyId = PrivateGroupChatCrypto.computeKeyId(groupId, epochId, groupKey);
 		List<PrivateGroupChatEnvelope.KeyWrapper> keyWrappers = new ArrayList<>(memberPublicKeys.size());
-		for (byte[] recipientPublicKey : memberPublicKeys) {
-			byte[] wrappedKey = PrivateGroupChatCrypto.wrapGroupKey(groupId, epochId, keyId, groupKey,
-					announcerPrivateKey, recipientPublicKey);
+		for (int index = 0; index < memberPublicKeys.size(); ++index) {
+			byte[] recipientPublicKey = memberPublicKeys.get(index);
+			byte[] wrappedKey = wrapperNonces == null
+					? PrivateGroupChatCrypto.wrapGroupKey(groupId, epochId, keyId, groupKey,
+							announcerPrivateKey, recipientPublicKey)
+					: PrivateGroupChatCrypto.wrapGroupKey(groupId, epochId, keyId, groupKey,
+							announcerPrivateKey, recipientPublicKey, wrapperNonces.get(index));
 			keyWrappers.add(new PrivateGroupChatEnvelope.KeyWrapper(recipientPublicKey, wrappedKey));
 		}
 
@@ -211,7 +222,7 @@ public class PrivateGroupChatKeyAnnouncement {
 		return sortedWrappers(keyWrappers);
 	}
 
-	private static byte[] buildSigningBytes(int groupId, byte[] epochId, byte[] keyId, byte[] creatorPublicKey,
+	static byte[] buildSigningBytes(int groupId, byte[] epochId, byte[] keyId, byte[] creatorPublicKey,
 			List<PrivateGroupChatEnvelope.KeyWrapper> keyWrappers) {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		writeBytes(bytes, SIGNING_DOMAIN);

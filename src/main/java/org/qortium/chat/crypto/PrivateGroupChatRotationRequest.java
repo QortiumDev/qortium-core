@@ -69,7 +69,7 @@ public class PrivateGroupChatRotationRequest {
 			throw new GeneralSecurityException("Rotation request signature is invalid");
 	}
 
-	private static byte[] buildSigningBytes(int groupId, byte[] epochId, byte[] requesterPublicKey) {
+	static byte[] buildSigningBytes(int groupId, byte[] epochId, byte[] requesterPublicKey) {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		writeBytes(bytes, SIGNING_DOMAIN);
 		writeInt(bytes, groupId);

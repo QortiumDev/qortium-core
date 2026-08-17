@@ -53,6 +53,10 @@ public class PrivateGroupChatMembership {
 		for (GroupMemberData groupMemberData : groupMembers)
 			memberPublicKeys.add(loadMemberPublicKey(repository, groupMemberData));
 
+		return fromMemberPublicKeys(groupId, memberPublicKeys);
+	}
+
+	static MembershipEpoch fromMemberPublicKeys(int groupId, List<byte[]> memberPublicKeys) {
 		return new MembershipEpoch(groupId, memberPublicKeys);
 	}
 

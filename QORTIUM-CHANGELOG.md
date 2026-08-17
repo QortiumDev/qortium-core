@@ -34,6 +34,83 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): clean portability roadmap formatting
+
+Removes stray line-ending whitespace from the active Core-to-Home chat
+portability roadmap so the complete branch passes the repository's diff hygiene
+gate. No protocol, database, API, or runtime behavior changes.
+
+### 2026-08-17 - feat(chat): bound private group envelope queries
+
+Replaces private-group chat's full retained-group scans with typed indexed
+queries capped at 100 rows per call. User-message listing and counting now run
+in SQL, key announcements and requests are selected by their parsed epoch and
+key metadata, and rotation checks read only indexed rotation envelopes. A
+timestamp-plus-signature cursor prevents duplicate or missing rows when several
+CHAT transactions share one timestamp, while normal history continues hiding
+QPGC control traffic.
+
+### 2026-08-17 - feat(chat): index private group envelope metadata
+
+Adds local indexed epoch and key identifiers to retained QPGC chat envelopes so
+later bounded control lookups do not need to scan and parse every message in a
+closed group. Existing retained envelopes are backfilled in place on startup,
+malformed historical rows are skipped without blocking the node, and new rows
+record their type, epoch, and optional key identifier when they enter the local
+chat store. This changes only derived local chat data and does not alter chain
+consensus or require a repository reset.
+
+### 2026-08-17 - test(chat): complete private chat interoperability cases
+
+Completes the pre-attachment chat fixture with exact QDM1 shared-secret,
+associated-data, and derived-key bytes plus QPGC message and key-wrap context.
+Machine-readable cases now prove wrong participants, groups, epochs, key IDs,
+nonces, tags, signatures, trailing bytes, oversized data, and incomplete or
+duplicate announcement wrappers fail at the intended layer. Reordered wrappers
+remain an explicit accepted compatibility case after canonical sorting, while
+QENC attachment vectors stay deferred to their later roadmap phase.
+
+### 2026-08-17 - test(chat): freeze CHAT transaction vectors
+
+Extends the shared interoperability fixture through the CHAT transaction layer.
+Home can now verify exact unsigned, signing, signature, and signed bytes for an
+initial group message, a `chatReference` revision, and a member relaying another
+member's signed QPGC key announcement. The relay vector makes the trusted inner
+announcement creator distinct from the outer CHAT sender, while fixed nonces
+remain serialization inputs rather than claims of current MemoryPoW validity.
+
+### 2026-08-17 - test(chat): freeze QPGC control vectors
+
+Extends the shared chat fixture with exact signed QPGC key announcements,
+member wrappers, current and specific key requests, and rotation requests. The
+committed signing bytes, signatures, and full envelopes let Home reproduce and
+verify the private-group control protocol without copying Java logic. Test-only
+package access supplies fixed membership and wrapper nonces, while production
+announcement creation continues to use repository membership and secure random
+nonces.
+
+### 2026-08-17 - test(chat): freeze private chat crypto vectors
+
+Adds the first language-neutral chat interoperability fixture for Home and Core.
+Fixed QDM1 direct-message and QPGC private-group keys, membership order, nonces,
+ciphertext, envelopes, and member key wrapping now have exact committed bytes
+instead of Java-only round-trip expectations. Production encryption still uses
+secure random nonces; deterministic nonce injection is limited to package-local
+tests so a later Home implementation can prove byte-for-byte compatibility
+without changing the live protocol.
+
+### 2026-08-17 - docs(chat): plan portable QPGC foundations
+
+Records the Core-first roadmap for making Qortium private-group chat recoverable
+through local, custom, and public nodes without exposing private keys, group
+keys, or plaintext to QDN apps. The tracked phases freeze shared protocol
+vectors, replace unbounded group scans with indexed queries, add bounded signed
+control and atomic group-state reads, retain key announcements only while
+retained messages depend on them, report the QPGC v1 member limit, and later add
+protected unsigned join/leave builders. It also maps each Core milestone to the
+trusted Home work that follows, keeps Chat last, and explicitly excludes Qortal
+Core changes.
+
 ### 2026-08-16 - chore(release): prepare Core 1.7.1
 
 Marks the emergency Core 1.7.1 Preview prerelease that fixes a synchronization

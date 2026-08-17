@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.Account;
 import org.qortium.asset.Asset;
+import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortium.controller.arbitrary.ArbitraryDataCacheManager;
 import org.qortium.crosschain.BitcoinyACCTv3;
 import org.qortium.crypto.Crypto;
@@ -121,6 +122,9 @@ public class RepositoryTests extends Common {
 				assertTrue(resultSet.next());
 			}
 			assertColumnExists(connection, "CHATMESSAGES", "FEE");
+			assertColumnExists(connection, "CHATMESSAGES", "PRIVATE_GROUP_EPOCH_ID");
+			assertColumnExists(connection, "CHATMESSAGES", "PRIVATE_GROUP_KEY_ID");
+			assertIndexExists(connection, "CHATMESSAGES", "CHATMESSAGESPRIVATEGROUPLOOKUPINDEX");
 
 			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATES", null)) {
 				assertTrue(resultSet.next());
@@ -191,6 +195,104 @@ public class RepositoryTests extends Common {
 				assertTrue(resultSet.next());
 				assertEquals(0L, resultSet.getLong(1));
 			}
+		}
+	}
+
+	@Test
+	public void testCurrentSchemaBackfillsPrivateGroupMetadataWithoutLosingRows() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:chat-private-metadata-current-schema-" + System.nanoTime();
+		byte[] signature = new byte[64];
+		signature[0] = 43;
+		byte[] malformedSignature = new byte[64];
+		malformedSignature[0] = 46;
+		byte[] epochId = new byte[PrivateGroupChatEnvelope.EPOCH_ID_LENGTH];
+		epochId[0] = 44;
+		byte[] keyId = new byte[PrivateGroupChatEnvelope.KEY_ID_LENGTH];
+		keyId[0] = 45;
+		PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.message(12, epochId, keyId,
+				new byte[PrivateGroupChatEnvelope.NONCE_LENGTH], new byte[] {1, 2, 3});
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+			assertTrue(HSQLDBDatabaseUpdates.updateDatabase(connection));
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("DROP INDEX PUBLIC.CHATMESSAGESPRIVATEGROUPLOOKUPINDEX");
+				statement.execute("ALTER TABLE PUBLIC.CHATMESSAGES DROP COLUMN PRIVATE_GROUP_KEY_ID");
+				statement.execute("ALTER TABLE PUBLIC.CHATMESSAGES DROP COLUMN PRIVATE_GROUP_EPOCH_ID");
+			}
+
+			try (PreparedStatement statement = connection.prepareStatement(
+					"INSERT INTO PUBLIC.CHATMESSAGES "
+							+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+							+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type) "
+							+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+				statement.setBytes(1, signature);
+				statement.setLong(2, 123456790L);
+				statement.setInt(3, 12);
+				statement.setBytes(4, new byte[32]);
+				statement.setString(5, "QWfYdC4N8mV4PmxRtbG5gH8XqLr2fP3mZt");
+				statement.setInt(6, 8);
+				statement.setNull(7, java.sql.Types.VARCHAR);
+				statement.setNull(8, java.sql.Types.VARBINARY);
+				statement.setBoolean(9, false);
+				statement.setBoolean(10, true);
+				statement.setBytes(11, envelope.toBytes());
+				statement.setString(12, PrivateGroupChatEnvelope.Type.MESSAGE.name());
+				statement.executeUpdate();
+			}
+			try (PreparedStatement statement = connection.prepareStatement(
+					"INSERT INTO PUBLIC.CHATMESSAGES "
+							+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+							+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type) "
+							+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+				statement.setBytes(1, malformedSignature);
+				statement.setLong(2, 123456791L);
+				statement.setInt(3, 12);
+				statement.setBytes(4, new byte[32]);
+				statement.setString(5, "QWfYdC4N8mV4PmxRtbG5gH8XqLr2fP3mZt");
+				statement.setInt(6, 9);
+				statement.setNull(7, java.sql.Types.VARCHAR);
+				statement.setNull(8, java.sql.Types.VARBINARY);
+				statement.setBoolean(9, false);
+				statement.setBoolean(10, true);
+				statement.setBytes(11, new byte[] {9, 8, 7});
+				statement.setString(12, PrivateGroupChatEnvelope.Type.KEY_REQUEST.name());
+				statement.executeUpdate();
+			}
+			connection.commit();
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertColumnExists(connection, "CHATMESSAGES", "PRIVATE_GROUP_EPOCH_ID");
+			assertColumnExists(connection, "CHATMESSAGES", "PRIVATE_GROUP_KEY_ID");
+			assertIndexExists(connection, "CHATMESSAGES", "CHATMESSAGESPRIVATEGROUPLOOKUPINDEX");
+
+			try (PreparedStatement statement = connection.prepareStatement(
+					"SELECT PRIVATE_GROUP_ENVELOPE_TYPE, PRIVATE_GROUP_EPOCH_ID, PRIVATE_GROUP_KEY_ID, DATA "
+							+ "FROM PUBLIC.CHATMESSAGES WHERE SIGNATURE = ?")) {
+				statement.setBytes(1, signature);
+				try (ResultSet resultSet = statement.executeQuery()) {
+					assertTrue(resultSet.next());
+					assertEquals(PrivateGroupChatEnvelope.Type.MESSAGE.name(), resultSet.getString(1));
+					assertArrayEquals(epochId, resultSet.getBytes(2));
+					assertArrayEquals(keyId, resultSet.getBytes(3));
+					assertArrayEquals(envelope.toBytes(), resultSet.getBytes(4));
+					assertFalse(resultSet.next());
+				}
+			}
+			try (PreparedStatement statement = connection.prepareStatement(
+					"SELECT PRIVATE_GROUP_EPOCH_ID, PRIVATE_GROUP_KEY_ID, DATA "
+							+ "FROM PUBLIC.CHATMESSAGES WHERE SIGNATURE = ?")) {
+				statement.setBytes(1, malformedSignature);
+				try (ResultSet resultSet = statement.executeQuery()) {
+					assertTrue(resultSet.next());
+					assertNull(resultSet.getBytes(1));
+					assertNull(resultSet.getBytes(2));
+					assertArrayEquals(new byte[] {9, 8, 7}, resultSet.getBytes(3));
+				}
+			}
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
 		}
 	}
 

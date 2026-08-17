@@ -116,7 +116,7 @@ public class PrivateGroupChatKeyRequest {
 			throw new GeneralSecurityException("Key request signature is invalid");
 	}
 
-	private static byte[] buildSigningBytes(int groupId, byte[] epochId, byte[] requesterPublicKey, byte[] keyId) {
+	static byte[] buildSigningBytes(int groupId, byte[] epochId, byte[] requesterPublicKey, byte[] keyId) {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		writeBytes(bytes, SIGNING_DOMAIN);
 		writeInt(bytes, groupId);

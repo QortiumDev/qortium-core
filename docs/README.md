@@ -53,6 +53,7 @@ history.
 
 ## Chat And QDN
 
+- `Planning note` [Portable Chat Core roadmap](chat/chat-portability-roadmap.md) - tracked QPGC portability, public join/leave, protocol-vector, and later Home bridge work
 - `Developer reference` [Private group chat encryption workflow](chat/private-group-chat-encryption.md) - Core-managed private group chat design and client API flow
 - `Developer reference` [QDN app documentation](qdn/q-apps.md) - QDN app concepts and request examples
 - `Developer reference` [Multi-file resources and entry points](qdn/multi-file-resources.md) - client guide to multi-file resources, the entryPoint, default-file resolution, private resources, and app responsibilities

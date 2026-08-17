@@ -77,15 +77,21 @@ public class PrivateGroupChatCrypto {
 
 	public static byte[] wrapGroupKey(int groupId, byte[] epochId, byte[] keyId, byte[] groupKey,
 			byte[] announcerPrivateKey, byte[] recipientPublicKey) throws GeneralSecurityException {
+		return wrapGroupKey(groupId, epochId, keyId, groupKey, announcerPrivateKey, recipientPublicKey,
+				generateNonce());
+	}
+
+	static byte[] wrapGroupKey(int groupId, byte[] epochId, byte[] keyId, byte[] groupKey,
+			byte[] announcerPrivateKey, byte[] recipientPublicKey, byte[] nonce) throws GeneralSecurityException {
 		validateLength(groupKey, Transformer.AES256_LENGTH, "group key");
 		validateLength(announcerPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "announcer private key");
 		validateLength(recipientPublicKey, Transformer.PUBLIC_KEY_LENGTH, "recipient public key");
+		validateLength(nonce, PrivateGroupChatEnvelope.NONCE_LENGTH, "nonce");
 
 		byte[] announcerPublicKey = Crypto.toPublicKey(announcerPrivateKey);
 		byte[] sharedSecret = Crypto.getSharedSecret(announcerPrivateKey, recipientPublicKey);
 		byte[] associatedData = buildKeyWrapAssociatedData(groupId, epochId, keyId, announcerPublicKey, recipientPublicKey);
 		byte[] wrappingKey = deriveWrappingKey(sharedSecret, associatedData);
-		byte[] nonce = generateNonce();
 		byte[] encryptedKey = doAesGcm(Cipher.ENCRYPT_MODE, wrappingKey, nonce, associatedData, groupKey);
 
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -115,7 +121,7 @@ public class PrivateGroupChatCrypto {
 		return groupKey;
 	}
 
-	private static byte[] buildMessageAssociatedData(int groupId, byte[] epochId, byte[] keyId) {
+	static byte[] buildMessageAssociatedData(int groupId, byte[] epochId, byte[] keyId) {
 		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
 		validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
 
@@ -127,7 +133,7 @@ public class PrivateGroupChatCrypto {
 		return bytes.toByteArray();
 	}
 
-	private static byte[] buildKeyWrapAssociatedData(int groupId, byte[] epochId, byte[] keyId,
+	static byte[] buildKeyWrapAssociatedData(int groupId, byte[] epochId, byte[] keyId,
 			byte[] announcerPublicKey, byte[] recipientPublicKey) {
 		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
 		validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
@@ -152,7 +158,7 @@ public class PrivateGroupChatCrypto {
 		return cipher.doFinal(input);
 	}
 
-	private static byte[] deriveWrappingKey(byte[] sharedSecret, byte[] info) throws GeneralSecurityException {
+	static byte[] deriveWrappingKey(byte[] sharedSecret, byte[] info) throws GeneralSecurityException {
 		validateLength(sharedSecret, Crypto.SHARED_SECRET_LENGTH, "shared secret");
 
 		byte[] pseudorandomKey = hmac(KEY_WRAP_HKDF_SALT, sharedSecret);

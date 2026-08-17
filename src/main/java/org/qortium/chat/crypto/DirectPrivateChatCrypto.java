@@ -36,12 +36,17 @@ public class DirectPrivateChatCrypto {
 
 	public static byte[] encryptMessage(byte[] senderPrivateKey, byte[] recipientPublicKey, byte[] plaintext)
 			throws GeneralSecurityException {
+		return encryptMessage(senderPrivateKey, recipientPublicKey, generateNonce(), plaintext);
+	}
+
+	static byte[] encryptMessage(byte[] senderPrivateKey, byte[] recipientPublicKey, byte[] nonce, byte[] plaintext)
+			throws GeneralSecurityException {
 		validateLength(senderPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "sender private key");
 		validateLength(recipientPublicKey, Transformer.PUBLIC_KEY_LENGTH, "recipient public key");
+		validateLength(nonce, DirectPrivateChatEnvelope.NONCE_LENGTH, "nonce");
 		validatePayload(plaintext, "plaintext");
 
 		byte[] senderPublicKey = Crypto.toPublicKey(senderPrivateKey);
-		byte[] nonce = generateNonce();
 		byte[] associatedData = buildMessageAssociatedData(senderPublicKey, recipientPublicKey);
 		byte[] sharedSecret = Crypto.getSharedSecret(senderPrivateKey, recipientPublicKey);
 		byte[] sharedKey = deriveSharedKey(sharedSecret, associatedData);
@@ -76,7 +81,7 @@ public class DirectPrivateChatCrypto {
 				envelope.getCiphertext());
 	}
 
-	private static byte[] buildMessageAssociatedData(byte[] senderPublicKey, byte[] recipientPublicKey) {
+	static byte[] buildMessageAssociatedData(byte[] senderPublicKey, byte[] recipientPublicKey) {
 		validateLength(senderPublicKey, Transformer.PUBLIC_KEY_LENGTH, "sender public key");
 		validateLength(recipientPublicKey, Transformer.PUBLIC_KEY_LENGTH, "recipient public key");
 
@@ -96,7 +101,7 @@ public class DirectPrivateChatCrypto {
 		return cipher.doFinal(input);
 	}
 
-	private static byte[] deriveSharedKey(byte[] sharedSecret, byte[] info) throws GeneralSecurityException {
+	static byte[] deriveSharedKey(byte[] sharedSecret, byte[] info) throws GeneralSecurityException {
 		validateLength(sharedSecret, Crypto.SHARED_SECRET_LENGTH, "shared secret");
 
 		byte[] pseudorandomKey = hmac(SHARED_KEY_HKDF_SALT, sharedSecret);

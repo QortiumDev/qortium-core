@@ -56,7 +56,7 @@ public class PrivateGroupChatMessagesRequest {
 	public Encoding encoding;
 
 	@Schema(
-		description = "maximum number of user messages to return",
+		description = "maximum number of user messages to return; defaults to 100 and cannot exceed 100",
 		example = "20"
 	)
 	public Integer limit;
