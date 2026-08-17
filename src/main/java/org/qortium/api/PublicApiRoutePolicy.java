@@ -7,6 +7,7 @@ final class PublicApiRoutePolicy {
 
 	enum WorkClass {
 		NONE,
+		CHAT_READ,
 		BUILDER,
 		PROCESS,
 		QDN
@@ -36,8 +37,13 @@ final class PublicApiRoutePolicy {
 		if (!allowed)
 			return Decision.DENIED;
 
-		if ("GET".equals(requestMethod))
-			return new Decision(true, isPublicStagedDataPath(path) ? WorkClass.QDN : WorkClass.NONE);
+		if ("GET".equals(requestMethod)) {
+			if (isPublicStagedDataPath(path))
+				return new Decision(true, WorkClass.QDN);
+			if (isPrivateGroupProtocolRead(path))
+				return new Decision(true, WorkClass.CHAT_READ);
+			return new Decision(true, WorkClass.NONE);
+		}
 
 		if ("POST".equals(requestMethod)) {
 			if (path.equals("/arbitrary/public") || path.startsWith("/arbitrary/public/"))
@@ -54,6 +60,11 @@ final class PublicApiRoutePolicy {
 	private static boolean isPublicStagedDataPath(String path) {
 		String base = "/arbitrary/public/data";
 		return path.equals(base) || path.startsWith(base + "/");
+	}
+
+	private static boolean isPrivateGroupProtocolRead(String path) {
+		return "/chat/private/group/control".equals(path)
+				|| path.startsWith("/chat/private/group/state/");
 	}
 
 	private static boolean matchesConfiguredPath(String configuredPath, String requestPath) {

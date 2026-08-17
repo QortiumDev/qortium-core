@@ -314,6 +314,12 @@ public class PublicApiAccessHandlerTests extends Common {
 				settingsJson.getLong("publicQdnPublishMaxSize") == 104857600L);
 		assertTrue(settingsPath + " should bound public write bodies",
 				settingsJson.getLong("publicApiWriteMaxBodySize") == 262144L);
+		assertEquals(settingsPath + " should bound private-group read rate",
+				120, settingsJson.getInt("publicChatReadRequestsPerMinute"));
+		assertEquals(settingsPath + " should bound private-group read burst",
+				30, settingsJson.getInt("publicChatReadRateLimitBurst"));
+		assertEquals(settingsPath + " should bound private-group read concurrency",
+				16, settingsJson.getInt("publicChatReadMaxConcurrentRequests"));
 		assertTrue(settingsPath + " should bound public QDN concurrency",
 				settingsJson.getInt("publicQdnApiMaxConcurrentRequests") == 2);
 		assertTrue(settingsPath + " should allow public render reads",
@@ -324,6 +330,8 @@ public class PublicApiAccessHandlerTests extends Common {
 				jsonArrayContains(publicApiPaths, "GET /peers/data/known"));
 		assertTrue(settingsPath + " should allow keyless public chat builds",
 				jsonArrayContains(publicApiPaths, "POST /chat/public/build"));
+		assertTrue(settingsPath + " should allow bounded private-group protocol reads",
+				jsonArrayContains(publicApiPaths, "GET /chat/*"));
 		assertTrue(settingsPath + " should allow public poll create builds",
 				jsonArrayContains(publicApiPaths, "POST /polls/public/create"));
 		assertTrue(settingsPath + " should allow public poll vote builds",

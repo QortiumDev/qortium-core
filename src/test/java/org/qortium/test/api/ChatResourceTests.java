@@ -43,6 +43,7 @@ import org.qortium.api.model.PrivateGroupChatSendResponse;
 import org.qortium.api.model.PrivateGroupChatStateResponse;
 import org.qortium.api.resource.ChatResource;
 import org.qortium.chat.ChatService;
+import org.qortium.chat.crypto.DirectPrivateChatCrypto;
 import org.qortium.chat.crypto.PrivateGroupChatCrypto;
 import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortium.chat.crypto.PrivateGroupChatKeyAnnouncement;
@@ -352,6 +353,68 @@ public class ChatResourceTests extends ApiCommon {
 
 		assertApiError(ApiError.TRANSACTION_INVALID,
 				() -> this.chatResource.sendDirectPrivateChat(null, sendRequest));
+	}
+
+	@Test
+	public void testPublicBuildPreservesEncryptedDirectMessageReference() throws Exception {
+		ChatTransactionData request;
+		byte[] reference = signature(58);
+		byte[] encryptedPayload;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			bob.ensureAccount();
+			repository.saveChanges();
+			encryptedPayload = DirectPrivateChatCrypto.encryptMessage(alice.getPrivateKey(), bob.getPublicKey(),
+					"public-route direct".getBytes(StandardCharsets.UTF_8));
+			BaseTransactionData base = new BaseTransactionData(now(), Group.NO_GROUP, alice.getPublicKey(), 0L,
+					0, null);
+			request = new ChatTransactionData(base, alice.getAddress(), 0, bob.getAddress(), reference,
+					encryptedPayload, true, true);
+		}
+
+		ChatTransactionData decoded = decodeUnsignedChat(this.chatResource.buildPublicChat(request));
+		assertEquals(request.getSender(), decoded.getSender());
+		assertEquals(request.getRecipient(), decoded.getRecipient());
+		assertTrue(decoded.getIsEncrypted());
+		assertArrayEquals(reference, decoded.getChatReference());
+		assertArrayEquals(encryptedPayload, decoded.getData());
+		assertNull(decoded.getSignature());
+	}
+
+	@Test
+	public void testPublicHistoryAndActiveChatsRetainEncryptedDirectRows() throws Exception {
+		DirectPrivateChatSendRequest sendRequest = new DirectPrivateChatSendRequest();
+		String alice;
+		String bob;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount aliceAccount = Common.getTestAccount(repository, "alice");
+			TestAccount bobAccount = Common.getTestAccount(repository, "bob");
+			bobAccount.ensureAccount();
+			repository.saveChanges();
+			alice = aliceAccount.getAddress();
+			bob = bobAccount.getAddress();
+			sendRequest.senderPrivateKey = aliceAccount.getPrivateKey();
+			sendRequest.recipient = bob;
+			sendRequest.data = "public encrypted history".getBytes(StandardCharsets.UTF_8);
+			sendRequest.isText = true;
+		}
+
+		DirectPrivateChatSendResponse sent = this.chatResource.sendDirectPrivateChat(null, sendRequest);
+		List<ChatMessage> history = this.chatResource.searchChat(null, null, null, Arrays.asList(alice, bob),
+				null, null, null, ChatMessage.Encoding.BASE58, 25, null, false);
+		assertEquals(1, history.size());
+		assertTrue(history.get(0).isEncrypted());
+		assertArrayEquals(sent.messageSignature, history.get(0).getSignature());
+		assertFalse(Base58.encode(sendRequest.data).equals(history.get(0).getData()));
+
+		ActiveChats active = this.chatResource.getActiveChats(alice, ChatMessage.Encoding.BASE58, null);
+		ActiveChats.DirectChat direct = active.getDirect().stream()
+				.filter(chat -> bob.equals(chat.getAddress()))
+				.findFirst().orElse(null);
+		assertNotNull(direct);
+		assertEquals(alice, direct.getSender());
+		assertTrue(direct.getTimestamp() > 0L);
 	}
 
 	@Test

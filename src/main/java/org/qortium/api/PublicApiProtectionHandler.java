@@ -36,6 +36,7 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 			.maximumSize(100_000)
 			.expireAfterAccess(10, TimeUnit.MINUTES)
 			.build();
+	private final AtomicInteger activeChatReads = new AtomicInteger();
 	private final AtomicInteger activeBuilders = new AtomicInteger();
 	private final AtomicInteger activeProcesses = new AtomicInteger();
 	private final AtomicInteger activeQdnRequests = new AtomicInteger();
@@ -140,17 +141,24 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 			bucket = existing == null ? candidate : existing;
 		}
 
-		int rate = requestClass == PublicApiRoutePolicy.WorkClass.PROCESS
-				? settings.getPublicApiProcessRequestsPerMinute()
-				: settings.getPublicApiBuilderRequestsPerMinute();
-		int burst = requestClass == PublicApiRoutePolicy.WorkClass.PROCESS
-				? settings.getPublicApiProcessRateLimitBurst()
-				: settings.getPublicApiBuilderRateLimitBurst();
+		int rate = switch (requestClass) {
+			case CHAT_READ -> settings.getPublicChatReadRequestsPerMinute();
+			case PROCESS -> settings.getPublicApiProcessRequestsPerMinute();
+			case BUILDER, QDN -> settings.getPublicApiBuilderRequestsPerMinute();
+			case NONE -> Integer.MAX_VALUE;
+		};
+		int burst = switch (requestClass) {
+			case CHAT_READ -> settings.getPublicChatReadRateLimitBurst();
+			case PROCESS -> settings.getPublicApiProcessRateLimitBurst();
+			case BUILDER, QDN -> settings.getPublicApiBuilderRateLimitBurst();
+			case NONE -> Integer.MAX_VALUE;
+		};
 		return bucket.tryAcquire(now, rate, burst);
 	}
 
 	private AtomicInteger activeCounter(PublicApiRoutePolicy.WorkClass requestClass) {
 		return switch (requestClass) {
+			case CHAT_READ -> this.activeChatReads;
 			case BUILDER -> this.activeBuilders;
 			case PROCESS -> this.activeProcesses;
 			case QDN -> this.activeQdnRequests;
@@ -160,6 +168,7 @@ public class PublicApiProtectionHandler extends Handler.Wrapper {
 
 	private static int maxConcurrent(PublicApiRoutePolicy.WorkClass requestClass, Settings settings) {
 		return switch (requestClass) {
+			case CHAT_READ -> settings.getPublicChatReadMaxConcurrentRequests();
 			case BUILDER -> settings.getPublicApiBuilderMaxConcurrentRequests();
 			case PROCESS -> settings.getPublicApiProcessMaxConcurrentRequests();
 			case QDN -> settings.getPublicQdnApiMaxConcurrentRequests();

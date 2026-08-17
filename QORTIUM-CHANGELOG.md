@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): protect portable public chat routes
+
+Classifies the new private-group control/state reads as their own public work
+class with configurable 120-per-minute, burst-30, and 16-concurrent defaults,
+while leaving ordinary lightweight chat reads unchanged. Seed and ordinary-node
+profiles ship those limits and their existing public chat wildcard exposes the
+new reads automatically. Regression coverage also pins the complete public-node
+QDM1 foundation: public address/chat reads, encrypted direct-message history and
+active chats, reference-preserving unsigned CHAT construction, and signed
+transaction submission without server-side wallet keys.
+
 ### 2026-08-17 - feat(chat): expose bounded QPGC recovery reads
 
 Adds public, read-only private-group control and atomic state APIs so trusted
