@@ -1,8 +1,8 @@
 # Portable Chat Core Roadmap
 
-Status: active planning and implementation tracker  
+Status: active planning and implementation tracker
 Baseline: Qortium Core `2f9af28879319d6be28d7918c4039657960d7d1b`
-(`v1.7.1`)  
+(`v1.7.1`)
 Order: Qortium Core first, Qortium Home second, Chat app last
 
 ## Purpose

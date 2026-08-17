@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): clean portability roadmap formatting
+
+Removes stray line-ending whitespace from the active Core-to-Home chat
+portability roadmap so the complete branch passes the repository's diff hygiene
+gate. No protocol, database, API, or runtime behavior changes.
+
 ### 2026-08-17 - feat(chat): bound private group envelope queries
 
 Replaces private-group chat's full retained-group scans with typed indexed
