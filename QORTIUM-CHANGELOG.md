@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): index private group envelope metadata
+
+Adds local indexed epoch and key identifiers to retained QPGC chat envelopes so
+later bounded control lookups do not need to scan and parse every message in a
+closed group. Existing retained envelopes are backfilled in place on startup,
+malformed historical rows are skipped without blocking the node, and new rows
+record their type, epoch, and optional key identifier when they enter the local
+chat store. This changes only derived local chat data and does not alter chain
+consensus or require a repository reset.
+
 ### 2026-08-17 - test(chat): complete private chat interoperability cases
 
 Completes the pre-attachment chat fixture with exact QDM1 shared-secret,

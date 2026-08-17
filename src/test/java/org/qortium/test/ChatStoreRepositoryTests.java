@@ -12,12 +12,15 @@ import org.qortium.group.Group;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
+import org.qortium.repository.hsqldb.HSQLDBRepository;
 import org.qortium.test.common.Common;
 import org.qortium.test.common.GroupUtils;
 import org.qortium.test.common.TestAccount;
 import org.qortium.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Arrays;
 import java.util.List;
 
@@ -357,7 +360,7 @@ public class ChatStoreRepositoryTests extends Common {
 	}
 
 	@Test
-	public void testPrivateGroupControlsHiddenFromNormalQueriesButRawScanRetainsThem() throws DataException {
+	public void testPrivateGroupControlsHiddenFromNormalQueriesButRawScanRetainsThem() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			int groupId = GroupUtils.createGroup(repository, alice, "chat-store-private-classify", false);
@@ -379,6 +382,19 @@ public class ChatStoreRepositoryTests extends Common {
 			repository.getChatStoreRepository().save(messageData);
 			repository.getChatStoreRepository().save(keyRequestData);
 			repository.saveChanges();
+
+			try (PreparedStatement statement = ((HSQLDBRepository) repository).getConnection().prepareStatement(
+					"SELECT PRIVATE_GROUP_ENVELOPE_TYPE, PRIVATE_GROUP_EPOCH_ID, PRIVATE_GROUP_KEY_ID "
+							+ "FROM PUBLIC.CHATMESSAGES WHERE SIGNATURE = ?")) {
+				statement.setBytes(1, keyRequestData.getSignature());
+				try (ResultSet resultSet = statement.executeQuery()) {
+					assertTrue(resultSet.next());
+					assertEquals(PrivateGroupChatEnvelope.Type.KEY_REQUEST.name(), resultSet.getString(1));
+					assertArrayEquals(epochId, resultSet.getBytes(2));
+					assertArrayEquals(keyRequestEnvelope.getKeyId(), resultSet.getBytes(3));
+					assertFalse(resultSet.next());
+				}
+			}
 
 			List<ChatMessage> messages = repository.getChatStoreRepository().getMessagesMatchingCriteria(
 					null, null, groupId, null, null, null, null, ChatMessage.Encoding.BASE64, null, null, null);

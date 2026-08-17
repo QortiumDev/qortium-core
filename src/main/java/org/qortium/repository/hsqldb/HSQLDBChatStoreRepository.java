@@ -1,6 +1,7 @@
 package org.qortium.repository.hsqldb;
 
 import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
+import org.qortium.chat.crypto.PrivateGroupChatEnvelopeMetadata;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.chat.ActiveChats;
 import org.qortium.data.chat.ActiveChats.DirectChat;
@@ -53,9 +54,10 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 		String sql = "INSERT INTO ChatMessages "
 				+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, "
-				+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type) "
-				+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-		String privateGroupEnvelopeType = classifyPrivateGroupEnvelope(chatTransactionData);
+				+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type, "
+				+ "private_group_epoch_id, private_group_key_id) "
+				+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+		PrivateGroupChatEnvelopeMetadata privateGroupMetadata = classifyPrivateGroupEnvelope(chatTransactionData);
 
 		try {
 			this.repository.executeCheckedUpdate(sql,
@@ -71,7 +73,9 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 					chatTransactionData.getIsText(),
 					chatTransactionData.getIsEncrypted(),
 					chatTransactionData.getData(),
-					privateGroupEnvelopeType);
+					privateGroupMetadata == null ? null : privateGroupMetadata.getType().name(),
+					privateGroupMetadata == null ? null : privateGroupMetadata.getEpochId(),
+					privateGroupMetadata == null ? null : privateGroupMetadata.getKeyId());
 		} catch (SQLException e) {
 			throw new DataException("Unable to save chat message into repository", e);
 		}
@@ -760,7 +764,8 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				recipientName, chatReference, encoding, data, isText, isEncrypted, signature);
 	}
 
-	private String classifyPrivateGroupEnvelope(ChatTransactionData chatTransactionData) throws DataException {
+	private PrivateGroupChatEnvelopeMetadata classifyPrivateGroupEnvelope(ChatTransactionData chatTransactionData)
+			throws DataException {
 		if (chatTransactionData.getRecipient() != null
 				|| !chatTransactionData.getIsEncrypted()
 				|| chatTransactionData.getTxGroupId() <= 0)
@@ -771,11 +776,8 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 			return null;
 
 		try {
-			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
-			if (envelope.getGroupId() != chatTransactionData.getTxGroupId())
-				return null;
-
-			return envelope.getType().name();
+			return PrivateGroupChatEnvelopeMetadata.fromBytes(
+					chatTransactionData.getData(), chatTransactionData.getTxGroupId());
 		} catch (TransformationException e) {
 			return null;
 		}

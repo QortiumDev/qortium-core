@@ -2,7 +2,9 @@ package org.qortium.repository.hsqldb;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.chat.crypto.PrivateGroupChatEnvelopeMetadata;
 import org.qortium.controller.Controller;
+import org.qortium.transform.TransformationException;
 import org.qortium.utils.StartupStatus;
 
 import java.io.BufferedReader;
@@ -11,9 +13,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 public class HSQLDBDatabaseUpdates {
 
@@ -38,6 +43,7 @@ public class HSQLDBDatabaseUpdates {
 			ensureLocalTables(connection);
 			ensureArbitraryTransactionCreatedWhen(connection);
 			ensureChatMessageFee(connection);
+			ensureChatPrivateGroupMetadata(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -63,6 +69,7 @@ public class HSQLDBDatabaseUpdates {
 			ensureLocalTables(connection);
 			ensureArbitraryTransactionCreatedWhen(connection);
 			ensureChatMessageFee(connection);
+			ensureChatPrivateGroupMetadata(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -310,6 +317,83 @@ public class HSQLDBDatabaseUpdates {
 		LOGGER.info("Adding signed transaction fees to the local chat message store - please wait...");
 		try (Statement stmt = connection.createStatement()) {
 			stmt.execute("ALTER TABLE PUBLIC.CHATMESSAGES ADD FEE PUBLIC.ASSETAMOUNT DEFAULT 0 NOT NULL");
+		}
+	}
+
+	private static void ensureChatPrivateGroupMetadata(Connection connection) throws SQLException {
+		if (!tableExists(connection, "CHATMESSAGES"))
+			return;
+
+		try (Statement stmt = connection.createStatement()) {
+			if (!columnExists(connection, "CHATMESSAGES", "PRIVATE_GROUP_EPOCH_ID"))
+				stmt.execute("ALTER TABLE PUBLIC.CHATMESSAGES ADD PRIVATE_GROUP_EPOCH_ID VARBINARY(32)");
+
+			if (!columnExists(connection, "CHATMESSAGES", "PRIVATE_GROUP_KEY_ID"))
+				stmt.execute("ALTER TABLE PUBLIC.CHATMESSAGES ADD PRIVATE_GROUP_KEY_ID VARBINARY(32)");
+		}
+
+		backfillChatPrivateGroupMetadata(connection);
+
+		if (!indexExists(connection, "CHATMESSAGES", "CHATMESSAGESPRIVATEGROUPLOOKUPINDEX")) {
+			try (Statement stmt = connection.createStatement()) {
+				stmt.execute("CREATE INDEX PUBLIC.CHATMESSAGESPRIVATEGROUPLOOKUPINDEX ON PUBLIC.CHATMESSAGES "
+						+ "(TX_GROUP_ID, PRIVATE_GROUP_ENVELOPE_TYPE, PRIVATE_GROUP_EPOCH_ID, "
+						+ "PRIVATE_GROUP_KEY_ID, CREATED_WHEN DESC, SIGNATURE DESC)");
+			}
+		}
+	}
+
+	private static void backfillChatPrivateGroupMetadata(Connection connection) throws SQLException {
+		List<ChatPrivateGroupMetadataBackfill> backfills = new ArrayList<>();
+		int malformedRows = 0;
+
+		try (Statement stmt = connection.createStatement();
+				ResultSet resultSet = stmt.executeQuery("SELECT SIGNATURE, TX_GROUP_ID, DATA "
+						+ "FROM PUBLIC.CHATMESSAGES WHERE PRIVATE_GROUP_ENVELOPE_TYPE IS NOT NULL "
+						+ "AND PRIVATE_GROUP_EPOCH_ID IS NULL")) {
+			while (resultSet.next()) {
+				byte[] signature = resultSet.getBytes(1);
+				int groupId = resultSet.getInt(2);
+				byte[] data = resultSet.getBytes(3);
+
+				try {
+					PrivateGroupChatEnvelopeMetadata metadata =
+							PrivateGroupChatEnvelopeMetadata.fromBytes(data, groupId);
+					backfills.add(new ChatPrivateGroupMetadataBackfill(signature, metadata));
+				} catch (TransformationException e) {
+					++malformedRows;
+				}
+			}
+		}
+
+		if (!backfills.isEmpty()) {
+			LOGGER.info("Backfilling indexed QPGC metadata for {} retained chat messages", backfills.size());
+			try (PreparedStatement stmt = connection.prepareStatement("UPDATE PUBLIC.CHATMESSAGES SET "
+					+ "PRIVATE_GROUP_ENVELOPE_TYPE = ?, PRIVATE_GROUP_EPOCH_ID = ?, PRIVATE_GROUP_KEY_ID = ? "
+					+ "WHERE SIGNATURE = ?")) {
+				for (ChatPrivateGroupMetadataBackfill backfill : backfills) {
+					PrivateGroupChatEnvelopeMetadata metadata = backfill.metadata;
+					stmt.setString(1, metadata.getType().name());
+					stmt.setBytes(2, metadata.getEpochId());
+					stmt.setBytes(3, metadata.getKeyId());
+					stmt.setBytes(4, backfill.signature);
+					stmt.addBatch();
+				}
+				stmt.executeBatch();
+			}
+		}
+
+		if (malformedRows > 0)
+			LOGGER.warn("Skipped QPGC metadata backfill for {} malformed retained chat messages", malformedRows);
+	}
+
+	private static class ChatPrivateGroupMetadataBackfill {
+		private final byte[] signature;
+		private final PrivateGroupChatEnvelopeMetadata metadata;
+
+		private ChatPrivateGroupMetadataBackfill(byte[] signature, PrivateGroupChatEnvelopeMetadata metadata) {
+			this.signature = signature;
+			this.metadata = metadata;
 		}
 	}
 
