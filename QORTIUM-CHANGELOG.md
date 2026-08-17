@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): plan portable QPGC foundations
+
+Records the Core-first roadmap for making Qortium private-group chat recoverable
+through local, custom, and public nodes without exposing private keys, group
+keys, or plaintext to QDN apps. The tracked phases freeze shared protocol
+vectors, replace unbounded group scans with indexed queries, add bounded signed
+control and atomic group-state reads, retain key announcements only while
+retained messages depend on them, report the QPGC v1 member limit, and later add
+protected unsigned join/leave builders. It also maps each Core milestone to the
+trusted Home work that follows, keeps Chat last, and explicitly excludes Qortal
+Core changes.
+
 ### 2026-08-16 - chore(release): prepare Core 1.7.1
 
 Marks the emergency Core 1.7.1 Preview prerelease that fixes a synchronization
