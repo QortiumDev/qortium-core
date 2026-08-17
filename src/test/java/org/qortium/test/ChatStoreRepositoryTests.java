@@ -24,6 +24,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -505,6 +506,59 @@ public class ChatStoreRepositoryTests extends Common {
 				fail("Oversized private group page should be rejected");
 			} catch (DataException e) {
 				assertTrue(e.getMessage().contains("page size"));
+			}
+		}
+	}
+
+	@Test
+	public void testPrivateGroupEnvelopeQuerySupportsTypedForwardPages() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-store-private-forward", false);
+			long timestamp = now();
+			byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 90);
+			byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 91);
+
+			PrivateGroupChatEnvelope announcement = PrivateGroupChatEnvelope.keyAnnouncement(groupId, epochId,
+					keyId, alice.getPublicKey(), List.of(new PrivateGroupChatEnvelope.KeyWrapper(
+							alice.getPublicKey(), bytes(48, 92))), signature(93));
+			PrivateGroupChatEnvelope keyRequest = PrivateGroupChatEnvelope.keyRequest(groupId, epochId,
+					alice.getPublicKey(), keyId, signature(94));
+			PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatEnvelope.rotationRequest(groupId, epochId,
+					alice.getPublicKey(), signature(95));
+
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					signature(93), announcement.toBytes(), true, true, timestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					signature(94), keyRequest.toBytes(), true, true, timestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					signature(95), rotationRequest.toBytes(), true, true, timestamp, null));
+			repository.saveChanges();
+
+			List<ChatTransactionData> typed = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+					groupId, EnumSet.of(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT,
+							PrivateGroupChatEnvelope.Type.KEY_REQUEST), epochId, null,
+					null, null, null, null, 10);
+			assertEquals(2, typed.size());
+			assertArrayEquals(signature(94), typed.get(0).getSignature());
+			assertArrayEquals(signature(93), typed.get(1).getSignature());
+
+			List<ChatTransactionData> forward = repository.getChatStoreRepository().getPrivateGroupEnvelopes(
+					groupId, EnumSet.of(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT,
+							PrivateGroupChatEnvelope.Type.KEY_REQUEST,
+							PrivateGroupChatEnvelope.Type.ROTATION_REQUEST), null, null,
+					null, null, timestamp, signature(93), 10);
+			assertEquals(2, forward.size());
+			assertArrayEquals(signature(94), forward.get(0).getSignature());
+			assertArrayEquals(signature(95), forward.get(1).getSignature());
+
+			try {
+				repository.getChatStoreRepository().getPrivateGroupEnvelopes(groupId,
+						EnumSet.of(PrivateGroupChatEnvelope.Type.KEY_REQUEST), null, null,
+						timestamp, signature(94), timestamp, signature(94), 10);
+				fail("Before and after cursors should be mutually exclusive");
+			} catch (DataException e) {
+				assertTrue(e.getMessage().contains("mutually exclusive"));
 			}
 		}
 	}

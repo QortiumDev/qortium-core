@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): add dual-cursor QPGC envelope queries
+
+Extends the indexed private-group chat store with bounded multi-type pages and
+exclusive before/after cursors. Backward history pages remain newest-first,
+while forward polling pages are oldest-first so clients can process every
+same-timestamp control envelope without gaps or duplication. The existing
+single-type repository contract remains compatible for local private-chat
+helpers.
+
 ### 2026-08-17 - docs(chat): require full public-node feature parity
 
 Clarifies that Qortium's default public-node profile must support the complete
