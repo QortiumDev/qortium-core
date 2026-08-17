@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - chore(release): prepare Core 1.7.1
+
+Marks the emergency Core 1.7.1 Preview prerelease that fixes a synchronization
+deadlock introduced in Core 1.7.0. Nodes can now replace a competing fork that
+contains QDN publishes without a second resource-cache database session waiting
+on the atomic chain transaction. Failed replacements leave the original chain
+and cache state intact, while successful replacements rebuild affected resource
+caches from confirmed transactions on the durably adopted chain. No Preview
+chain configuration or activation schedule changes in this release.
+
 ### 2026-08-16 - fix(sync): prevent QDN cache deadlock during atomic reorg
 
 Prevents Core from stalling while replacing a fork whose blocks contain QDN
