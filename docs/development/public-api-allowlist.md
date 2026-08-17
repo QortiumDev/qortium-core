@@ -407,7 +407,35 @@ before signing.
 
 ---
 
-## 11. Key references
+## 11. Public group membership builders (implemented 2026-08-17)
+
+Group participation uses two dedicated no-key routes instead of exposing the
+older restricted group transaction namespace:
+
+- `POST /groups/public/join`
+- `POST /groups/public/leave`
+
+They share the normal JOIN_GROUP and LEAVE_GROUP validation and serializers,
+clear any supplied signature before serialization, and return Base58 unsigned
+bytes containing the caller's timestamp, transaction group, account public key,
+MemoryPoW-fee nonce, target group, and fee. JOIN_GROUP also retains its optional
+minting public key field. The routes do not compute MemoryPoW, sign, broadcast,
+or mutate membership; clients attest the decoded intent, compute MemoryPoW and
+sign locally, then submit through `POST /transactions/process`.
+
+Only the exact public join and leave paths are enabled in ordinary and seed
+Previewnet profiles. The restricted `/groups/join` and `/groups/leave` siblings,
+all invite/approval/moderation routes, `/transactions/mempow/compute`, and
+`/transactions/sign` remain outside public access. Anonymous requests share the
+existing builder token bucket, concurrency ceiling, and small-body limit.
+
+Managed settings that still match their prior template gain the two defaults
+on upgrade. Any operator-customized `publicApiPaths` array remains unchanged,
+including an explicit removal of public group builders.
+
+---
+
+## 12. Key references
 
 Core:
 - `src/main/java/org/qortium/api/PublicApiAccessHandler.java` — Gate 1.
@@ -420,6 +448,8 @@ Core:
 - `src/main/java/org/qortium/settings/Settings.java` — operator-tunable limits.
 - `src/main/java/org/qortium/api/resource/ChatResource.java:1134` (`/public/build`),
   `:1182` (`/compute`), `:275-1010` (apiKey-gated `/private/*`).
+- `src/main/java/org/qortium/api/resource/GroupsResource.java` — restricted and
+  public unsigned JOIN_GROUP/LEAVE_GROUP builders.
 - `preview/settings-preview*.json` — the allowlist configs.
 
 Home (`qortium-home`):

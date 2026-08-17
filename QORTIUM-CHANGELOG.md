@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): complete portable group participation phase
+
+Marks C5 complete now that Core exposes default-enabled, abuse-protected public
+unsigned join and leave builders. The portability roadmap records their exact
+trust boundary and verification coverage, moves the active work to Home's
+trusted desktop and Android bridge, and keeps private attachment protocol work
+deferred until that later tranche. The public API guide now documents the two
+exact routes, local signing flow, inherited work limits, upgrade behavior, and
+the group administration routes that remain restricted.
+
 ### 2026-08-17 - feat(groups): add portable public join and leave builders
 
 Lets Home build group join and leave transactions through public or custom
