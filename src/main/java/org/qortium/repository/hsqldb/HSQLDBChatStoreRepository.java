@@ -520,8 +520,23 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 	@Override
 	public int deleteOlderThan(long cutoffTimestamp) throws DataException {
+		String whereClause = "created_when < ? AND ("
+				+ "COALESCE(private_group_envelope_type, '') <> ? OR NOT EXISTS ("
+				+ "SELECT 1 FROM ChatMessages DependentMessage "
+				+ "WHERE DependentMessage.tx_group_id = ChatMessages.tx_group_id "
+				+ "AND DependentMessage.recipient IS NULL "
+				+ "AND DependentMessage.is_encrypted = TRUE "
+				+ "AND DependentMessage.private_group_envelope_type = ? "
+				+ "AND DependentMessage.private_group_epoch_id = ChatMessages.private_group_epoch_id "
+				+ "AND DependentMessage.private_group_key_id = ChatMessages.private_group_key_id "
+				+ "AND DependentMessage.created_when >= ?))";
+
 		try {
-			return this.repository.delete("ChatMessages", "created_when < ?", cutoffTimestamp);
+			return this.repository.delete("ChatMessages", whereClause,
+					cutoffTimestamp,
+					PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT.name(),
+					PrivateGroupChatEnvelope.Type.MESSAGE.name(),
+					cutoffTimestamp);
 		} catch (SQLException e) {
 			throw new DataException("Unable to delete old chat messages from repository", e);
 		}

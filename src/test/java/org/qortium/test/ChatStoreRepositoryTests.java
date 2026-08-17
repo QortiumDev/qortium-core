@@ -294,6 +294,98 @@ public class ChatStoreRepositoryTests extends Common {
 	}
 
 	@Test
+	public void testRetentionCleanupKeepsOnlyRequiredKeyAnnouncement() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-retention-dependency", false);
+			long cutoffTimestamp = now() - 50_000L;
+			long oldTimestamp = cutoffTimestamp - 1L;
+			long retainedTimestamp = cutoffTimestamp + 1L;
+			byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 20);
+			byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 21);
+
+			PrivateGroupChatEnvelope announcement = PrivateGroupChatEnvelope.keyAnnouncement(groupId, epochId,
+					keyId, alice.getPublicKey(), List.of(new PrivateGroupChatEnvelope.KeyWrapper(
+							alice.getPublicKey(), bytes(60, 22))), signature(23));
+			PrivateGroupChatEnvelope message = PrivateGroupChatEnvelope.message(groupId, epochId, keyId,
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 24), bytes(32, 25));
+			PrivateGroupChatEnvelope keyRequest = PrivateGroupChatEnvelope.keyRequest(groupId, epochId,
+					alice.getPublicKey(), keyId, signature(26));
+			PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatEnvelope.rotationRequest(groupId, epochId,
+					alice.getPublicKey(), signature(27));
+
+			byte[] announcementSignature = signature(30);
+			byte[] messageSignature = signature(31);
+			byte[] requestSignature = signature(32);
+			byte[] rotationSignature = signature(33);
+			byte[] ordinarySignature = signature(34);
+
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					announcementSignature, announcement.toBytes(), false, true, oldTimestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					messageSignature, message.toBytes(), true, true, retainedTimestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					requestSignature, keyRequest.toBytes(), false, true, oldTimestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					rotationSignature, rotationRequest.toBytes(), false, true, oldTimestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, Group.NO_GROUP, null,
+					ordinarySignature, bytes("ordinary"), true, false, oldTimestamp, null));
+			repository.saveChanges();
+
+			assertEquals(3, repository.getChatStoreRepository().deleteOlderThan(cutoffTimestamp));
+			repository.saveChanges();
+
+			assertNotNull(repository.getChatStoreRepository().fromSignature(announcementSignature));
+			assertNotNull(repository.getChatStoreRepository().fromSignature(messageSignature));
+			assertNull(repository.getChatStoreRepository().fromSignature(requestSignature));
+			assertNull(repository.getChatStoreRepository().fromSignature(rotationSignature));
+			assertNull(repository.getChatStoreRepository().fromSignature(ordinarySignature));
+
+			assertEquals(2, repository.getChatStoreRepository().deleteOlderThan(retainedTimestamp + 1L));
+			repository.saveChanges();
+			assertNull(repository.getChatStoreRepository().fromSignature(announcementSignature));
+			assertNull(repository.getChatStoreRepository().fromSignature(messageSignature));
+		}
+	}
+
+	@Test
+	public void testRetentionCleanupDoesNotKeepUnmatchedOrMalformedControls() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-retention-mismatch", false);
+			long cutoffTimestamp = now() - 50_000L;
+			long oldTimestamp = cutoffTimestamp - 1L;
+			long retainedTimestamp = cutoffTimestamp + 1L;
+			byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 40);
+			byte[] announcementKeyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 41);
+			byte[] messageKeyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 42);
+
+			PrivateGroupChatEnvelope announcement = PrivateGroupChatEnvelope.keyAnnouncement(groupId, epochId,
+					announcementKeyId, alice.getPublicKey(), List.of(new PrivateGroupChatEnvelope.KeyWrapper(
+							alice.getPublicKey(), bytes(60, 43))), signature(44));
+			PrivateGroupChatEnvelope message = PrivateGroupChatEnvelope.message(groupId, epochId, messageKeyId,
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 45), bytes(32, 46));
+
+			byte[] announcementSignature = signature(47);
+			byte[] malformedSignature = signature(48);
+			byte[] messageSignature = signature(49);
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					announcementSignature, announcement.toBytes(), false, true, oldTimestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					malformedSignature, bytes("not-qpgc"), false, true, oldTimestamp, null));
+			repository.getChatStoreRepository().save(chat(repository, alice, groupId, null,
+					messageSignature, message.toBytes(), true, true, retainedTimestamp, null));
+			repository.saveChanges();
+
+			assertEquals(2, repository.getChatStoreRepository().deleteOlderThan(cutoffTimestamp));
+			repository.saveChanges();
+			assertNull(repository.getChatStoreRepository().fromSignature(announcementSignature));
+			assertNull(repository.getChatStoreRepository().fromSignature(malformedSignature));
+			assertNotNull(repository.getChatStoreRepository().fromSignature(messageSignature));
+		}
+	}
+
+	@Test
 	public void testGetGroupMessagesReturnsBroadcastRowsNewestFirst() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");

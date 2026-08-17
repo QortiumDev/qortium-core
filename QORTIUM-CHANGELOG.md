@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): retain required private-group key announcements
+
+Keeps an accepted QPGC key announcement beyond ordinary CHAT expiry only while
+a retained encrypted private-group message still references the same group,
+membership epoch, and key. Key requests, rotation requests, malformed controls,
+and unrelated announcements continue to expire normally, and the announcement
+is removed in the same transactional cleanup that removes its final dependent
+message. This preserves portable recovery across restart and node changes
+without turning transient CHAT into indefinite history.
+
 ### 2026-08-17 - docs(chat): complete portable QPGC read phase
 
 Marks the C2 Core milestone complete after adding default-enabled, abuse-bounded
