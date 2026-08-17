@@ -422,10 +422,11 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 	}
 
 	private ArbitraryTransactionData getSingleTransaction(String name, Service service, Method method, String identifier, boolean firstNotLast) throws DataException {
-		return this.getSingleTransaction(name, service, method, identifier, firstNotLast, null);
+		return this.getSingleTransaction(name, service, method, identifier, firstNotLast, null, false);
 	}
 
-	private ArbitraryTransactionData getSingleTransaction(String name, Service service, Method method, String identifier, boolean firstNotLast, byte[] excludedSignature) throws DataException {
+	private ArbitraryTransactionData getSingleTransaction(String name, Service service, Method method, String identifier,
+			boolean firstNotLast, byte[] excludedSignature, boolean confirmedOnly) throws DataException {
 		if (name == null || service == null) {
 			// Required fields
 			return null;
@@ -455,6 +456,9 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			sql.append(" AND signature != ?");
 			bindParams.add(excludedSignature);
 		}
+
+		if (confirmedOnly)
+			sql.append(" AND block_height IS NOT NULL");
 
 		sql.append(" ORDER BY ArbitraryTransactions.created_when");
 
@@ -590,8 +594,13 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 	}
 
 	@Override
+	public ArbitraryTransactionData getLatestConfirmedTransaction(String name, Service service, Method method, String identifier) throws DataException {
+		return this.getSingleTransaction(name, service, method, identifier, false, null, true);
+	}
+
+	@Override
 	public ArbitraryTransactionData getLatestTransactionExcludingSignature(String name, Service service, Method method, String identifier, byte[] excludedSignature) throws DataException {
-		return this.getSingleTransaction(name, service, method, identifier, false, excludedSignature);
+		return this.getSingleTransaction(name, service, method, identifier, false, excludedSignature, false);
 	}
 
 	public List<ArbitraryTransactionData> getArbitraryTransactions(boolean requireName, Integer limit, Integer offset, Boolean reverse) throws DataException {

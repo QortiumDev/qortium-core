@@ -38,9 +38,12 @@ import org.qortium.utils.NTP;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -58,6 +61,8 @@ public class ArbitraryTransaction extends Transaction {
 	public static final int MAX_METADATA_LENGTH = 32;
 	public static final int HASH_LENGTH = TransactionTransformer.SHA256_LENGTH;
 	public static final int MAX_IDENTIFIER_LENGTH = 64;
+
+	private static final ThreadLocal<Map<ResourceKey, ArbitraryTransactionData>> DEFERRED_CACHE_UPDATES = new ThreadLocal<>();
 
 	/** If time difference between transaction and now is greater than this then we don't verify proof-of-work. */
 	public static final long HISTORIC_THRESHOLD = 2 * 7 * 24 * 60 * 60 * 1000L;
@@ -325,6 +330,9 @@ public class ArbitraryTransaction extends Transaction {
 	}
 
 	private void updateCaches() {
+		if (deferCacheUpdateIfNeeded())
+			return;
+
 		// Very important to use a separate repository instance from the one being used for validation/processing
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			// A new transaction always makes any built cache and the in-memory rate-limit
@@ -373,6 +381,9 @@ public class ArbitraryTransaction extends Transaction {
 	}
 
 	private void updateCachesAfterOrphan() {
+		if (deferCacheUpdateIfNeeded())
+			return;
+
 		if (arbitraryTransactionData.getName() == null || arbitraryTransactionData.getService() == null) {
 			return;
 		}
@@ -406,6 +417,121 @@ public class ArbitraryTransaction extends Transaction {
 		} catch (Exception e) {
 			// Log and ignore all exceptions. The cache is updated from other places too, and can be rebuilt if needed.
 			LOGGER.info("Unable to update arbitrary caches after orphan", e);
+		}
+	}
+
+	private boolean deferCacheUpdateIfNeeded() {
+		Map<ResourceKey, ArbitraryTransactionData> deferredUpdates = DEFERRED_CACHE_UPDATES.get();
+		if (deferredUpdates == null)
+			return false;
+
+		if (arbitraryTransactionData.getName() != null && arbitraryTransactionData.getService() != null) {
+			ResourceKey resourceKey = new ResourceKey(arbitraryTransactionData.getService(),
+					arbitraryTransactionData.getName(), arbitraryTransactionData.getIdentifier());
+			deferredUpdates.put(resourceKey, arbitraryTransactionData);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Defers derived QDN cache changes while a peer fork is staged atomically.
+	 * Closing without calling {@link CacheUpdateScope#refreshAfterCommit()} discards the journal.
+	 */
+	public static CacheUpdateScope deferCacheUpdates() {
+		if (DEFERRED_CACHE_UPDATES.get() != null)
+			throw new IllegalStateException("Arbitrary cache updates are already deferred on this thread");
+
+		Map<ResourceKey, ArbitraryTransactionData> deferredUpdates = new LinkedHashMap<>();
+		DEFERRED_CACHE_UPDATES.set(deferredUpdates);
+		return new CacheUpdateScope(deferredUpdates);
+	}
+
+	public static final class CacheUpdateScope implements AutoCloseable {
+		private final Map<ResourceKey, ArbitraryTransactionData> deferredUpdates;
+		private boolean closed;
+
+		private CacheUpdateScope(Map<ResourceKey, ArbitraryTransactionData> deferredUpdates) {
+			this.deferredUpdates = deferredUpdates;
+		}
+
+		/** Reconciles every affected resource from the durable final chain. This is best-effort. */
+		public void refreshAfterCommit() {
+			if (this.closed)
+				throw new IllegalStateException("Arbitrary cache update scope is already closed");
+
+			this.clearThreadContext();
+			refreshDeferredCacheUpdates(this.deferredUpdates.values());
+		}
+
+		@Override
+		public void close() {
+			if (!this.closed)
+				this.clearThreadContext();
+		}
+
+		private void clearThreadContext() {
+			if (DEFERRED_CACHE_UPDATES.get() != this.deferredUpdates)
+				throw new IllegalStateException("Arbitrary cache update scope does not belong to this thread");
+
+			DEFERRED_CACHE_UPDATES.remove();
+			this.closed = true;
+		}
+	}
+
+	private static void refreshDeferredCacheUpdates(Collection<ArbitraryTransactionData> deferredUpdates) {
+		for (ArbitraryTransactionData deferredTransactionData : deferredUpdates) {
+			try (Repository repository = RepositoryManager.getRepository()) {
+				try {
+					ArbitraryTransaction deferredTransaction = new ArbitraryTransaction(repository, deferredTransactionData);
+					deferredTransaction.refreshCacheFromConfirmedChain(repository);
+					repository.saveChanges();
+				} catch (Exception e) {
+					try {
+						repository.discardChanges();
+					} catch (DataException discardException) {
+						e.addSuppressed(discardException);
+					}
+
+					// Chain adoption is already durable. Derived caches are best-effort and can be rebuilt later.
+					LOGGER.info("Unable to refresh arbitrary caches after atomic peer-fork adoption", e);
+				}
+			} catch (Exception e) {
+				LOGGER.info("Unable to open repository for arbitrary cache refresh after atomic peer-fork adoption", e);
+			}
+		}
+	}
+
+	private void refreshCacheFromConfirmedChain(Repository repository) throws DataException {
+		Service service = arbitraryTransactionData.getService();
+		String name = arbitraryTransactionData.getName();
+		String identifier = arbitraryTransactionData.getIdentifier();
+		ArbitraryTransactionData latestTransactionData = repository.getArbitraryRepository()
+				.getLatestConfirmedTransaction(name, service, null, identifier);
+
+		ArbitraryTransactionData invalidationData = latestTransactionData != null
+				? latestTransactionData
+				: arbitraryTransactionData;
+		boolean isDataLocal = latestTransactionData != null
+				&& new ArbitraryTransaction(repository, latestTransactionData).isDataLocal();
+		ArbitraryDataManager.getInstance().invalidateCache(invalidationData, isDataLocal);
+
+		if (latestTransactionData == null) {
+			this.deleteArbitraryResourceCache(repository,
+					this.createArbitraryResourceData(service, name, identifier));
+			return;
+		}
+
+		ArbitraryTransaction latestTransaction = new ArbitraryTransaction(repository, latestTransactionData);
+		latestTransaction.updateArbitraryResourceCacheIncludingMetadata(
+				repository,
+				Set.of(new ArbitraryTransactionDataHashWrapper(latestTransactionData)),
+				new HashMap<>(0));
+	}
+
+	private record ResourceKey(Service service, String name, String identifier) {
+		private ResourceKey {
+			name = name.toLowerCase(Locale.ROOT);
 		}
 	}
 

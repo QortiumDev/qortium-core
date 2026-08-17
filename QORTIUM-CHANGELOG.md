@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-16 - fix(sync): prevent QDN cache deadlock during atomic reorg
+
+Prevents Core from stalling while replacing a fork whose blocks contain QDN
+publishes. Atomic fork adoption now defers derived resource-cache updates until
+the replacement chain is durably committed, discards them when adoption rolls
+back, and rebuilds affected entries from confirmed transactions on the final
+chain. This removes the second-database-session lock cycle that left some Core
+1.7.0 nodes stuck at the first competing QDN block while preserving the
+all-or-nothing chain replacement introduced for normal synchronization.
+
 ### 2026-08-16 - chore(release): prepare Core 1.7.0
 
 Marks the version for the first Core-only Preview release after the node
