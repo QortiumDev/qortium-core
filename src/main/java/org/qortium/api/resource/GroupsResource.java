@@ -1018,6 +1018,23 @@ public class GroupsResource {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+		return buildJoinGroup(transactionData);
+	}
+
+	@POST
+	@Path("/public/join")
+	@Operation(
+		summary = "Build raw, unsigned, JOIN_GROUP transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicJoinGroup(JoinGroupTransactionData transactionData) {
+		return buildJoinGroup(transactionData);
+	}
+
+	private String buildJoinGroup(JoinGroupTransactionData transactionData) {
+		transactionData.setSignature(null);
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -1063,6 +1080,23 @@ public class GroupsResource {
 	public String leaveGroup(LeaveGroupTransactionData transactionData) {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		return buildLeaveGroup(transactionData);
+	}
+
+	@POST
+	@Path("/public/leave")
+	@Operation(
+		summary = "Build raw, unsigned, LEAVE_GROUP transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicLeaveGroup(LeaveGroupTransactionData transactionData) {
+		return buildLeaveGroup(transactionData);
+	}
+
+	private String buildLeaveGroup(LeaveGroupTransactionData transactionData) {
+		transactionData.setSignature(null);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);

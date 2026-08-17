@@ -1,8 +1,8 @@
 # Portable Chat Core Roadmap
 
 Status: active planning and implementation tracker
-Baseline: Qortium Core `0ca1965a840d02d60941510d6cddac36d3718ac6`
-(portable QPGC foundations merged after `v1.7.1`)
+Baseline: Qortium Core `076918d22ac88992f39128f8f60d326b2cbc8210`
+(C0-C4 merged after `v1.7.1`)
 Order: Qortium Core first, Qortium Home second, Chat app last
 
 ## Purpose
@@ -86,7 +86,7 @@ later Home/Chat bridge and presentation tasks.
 | C2 | Add default-enabled bounded public QPGC control and atomic state APIs | Complete | All-route private-group recovery |
 | C3 | Retain accepted announcements while retained messages depend on them | Complete | Restart, new install, and node-switch recovery |
 | C4 | Enforce/report QPGC v1 member/public-key/message limits | Complete | Honest private-group availability UI |
-| C5 | Add default-enabled, abuse-protected public unsigned join/leave builders | Planned | All-route Home join/leave actions |
+| C5 | Add default-enabled, abuse-protected public unsigned join/leave builders | Complete | All-route Home join/leave actions |
 | C6 | Correct and freeze the QENC group-attachment contract | Deferred until attachment tranche | Private group/direct attachments |
 
 ## C0 — Shared protocol contracts and golden vectors
@@ -375,6 +375,16 @@ Home.
 
 ## C5 — Public unsigned join/leave builders
 
+Progress (2026-08-17): Core now exposes exact `POST /groups/public/join` and
+`POST /groups/public/leave` routes. Both return signature-free transaction
+bytes, retain the Qortium MemoryPoW-fee nonce field, use normal unconfirmed
+validation, and enter the existing anonymous builder rate, concurrency, and
+body-size controls. All three tracked Previewnet profiles enable only these two
+group mutation routes. Untouched managed settings inherit them on upgrade;
+customized public route lists remain operator-owned. Tests decode and attest
+every target field, compute MemoryPoW, sign locally, process both transactions,
+and pin `ALREADY_GROUP_MEMBER` and `NOT_GROUP_MEMBER` as identifiable states.
+
 ### Core changes
 
 - Add abuse-protected public builder routes for JOIN_GROUP and LEAVE_GROUP
@@ -440,7 +450,7 @@ attachments.
    default-route protections, and direct-message public-route parity tests.
 3. **Recovery durability and limits (complete):** C3-C4 dependency-aware retention,
    v1 member/public-key/plaintext limits, and full regression coverage.
-4. **Portable participation (next):** C5 public unsigned join/leave builders.
+4. **Portable participation (complete):** C5 public unsigned join/leave builders.
 5. **Private attachments:** C6 only when the Home attachment tranche is ready.
 
 Each PR must update `QORTIUM-CHANGELOG.md`, use a matching changelog/commit
@@ -449,7 +459,8 @@ full deterministic suite. Maven runs are serialized.
 
 ## Home follow-on roadmap
 
-Home begins only after the relevant Core contract is merged:
+Home begins after the relevant Core contract is merged. With C0-C5 complete,
+the trusted Home bridge is now the next active portability tranche:
 
 1. consume C0 vectors and implement trusted QDM1/QPGC crypto on desktop and
    Android, including full direct-message and private-group use through public
