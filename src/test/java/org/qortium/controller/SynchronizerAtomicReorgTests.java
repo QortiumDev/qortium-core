@@ -3,7 +3,9 @@ package org.qortium.controller;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
@@ -11,12 +13,21 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
+import org.qortium.arbitrary.misc.Service;
 import org.qortium.asset.Asset;
 import org.qortium.block.Block;
+import org.qortium.block.BlockChain;
 import org.qortium.block.Block.ValidationResult;
 import org.qortium.data.at.ATStateData;
 import org.qortium.data.block.BlockData;
+import org.qortium.data.PaymentData;
+import org.qortium.data.arbitrary.ArbitraryResourceCache;
+import org.qortium.data.arbitrary.ArbitraryResourceData;
+import org.qortium.data.transaction.ArbitraryTransactionData;
+import org.qortium.data.transaction.BaseTransactionData;
+import org.qortium.data.transaction.RegisterNameTransactionData;
 import org.qortium.data.transaction.TransactionData;
+import org.qortium.group.Group;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -24,6 +35,10 @@ import org.qortium.settings.Settings;
 import org.qortium.test.common.AccountUtils;
 import org.qortium.test.common.BlockUtils;
 import org.qortium.test.common.Common;
+import org.qortium.test.common.TransactionUtils;
+import org.qortium.test.common.transaction.TestTransaction;
+import org.qortium.transaction.RegisterNameTransaction;
+import org.qortium.transaction.ArbitraryTransaction;
 import org.qortium.transaction.Transaction;
 
 import static org.junit.Assert.*;
@@ -117,6 +132,73 @@ public class SynchronizerAtomicReorgTests extends Common {
 		}
 	}
 
+	@Test(timeout = 30_000L)
+	public void testArbitraryResourceForkReplacementRefreshesCachesAfterCommit() throws Exception {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			ArbitraryForkFixture fixture = buildArbitraryForkFixture(repository,
+					"TEST-atomic-reorg-cache-success", "resource");
+			RecordingCallbacks callbacks = new RecordingCallbacks(repository,
+					fixture.replacementTip.getSignature());
+
+			assertResourceCacheSignature(repository, fixture, fixture.originalLatestTransaction.getSignature());
+			assertTrue("discarded branch must be newer to exercise confirmed-only cache refresh",
+					fixture.originalLatestTransaction.getTimestamp()
+							> fixture.replacementLatestTransaction.getTimestamp());
+
+			Synchronizer.SynchronizationResult result = this.synchronizer.adoptPeerForkAtomically(
+					repository, fixture.commonBlock, fixture.originalTip.getHeight(), null,
+					fixture.replacementBlocks, callbacks);
+
+			assertEquals(Synchronizer.SynchronizationResult.OK, result);
+			assertArrayEquals(fixture.replacementTip.getSignature(),
+					repository.getBlockRepository().getLastBlock().getSignature());
+			assertNull(repository.getTransactionRepository()
+					.fromSignature(fixture.originalLatestTransaction.getSignature()).getBlockHeight());
+			assertNotNull(repository.getTransactionRepository()
+					.fromSignature(fixture.replacementLatestTransaction.getSignature()).getBlockHeight());
+			assertResourceCacheSignature(repository, fixture, fixture.replacementLatestTransaction.getSignature());
+			assertEquals(2, callbacks.orphanedTips.size());
+			assertEquals(2, callbacks.newBlocks.size());
+			assertTrue("callbacks must observe the durably adopted tip", callbacks.everyCallbackSawReplacementTip);
+		}
+	}
+
+	@Test(timeout = 30_000L)
+	public void testFailedArbitraryResourceForkReplacementLeavesCachesUnchanged() throws Exception {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			ArbitraryForkFixture fixture = buildArbitraryForkFixture(repository,
+					"TEST-atomic-reorg-cache-rollback", "resource");
+			List<Block> failingReplacement = new ArrayList<>(fixture.replacementBlocks);
+			Block lastBlock = failingReplacement.get(failingReplacement.size() - 1);
+			failingReplacement.set(failingReplacement.size() - 1,
+					new FailingAfterProcessBlock(repository, lastBlock));
+			RecordingCallbacks callbacks = new RecordingCallbacks();
+
+			assertResourceCacheSignature(repository, fixture, fixture.originalLatestTransaction.getSignature());
+
+			try {
+				this.synchronizer.adoptPeerForkAtomically(repository, fixture.commonBlock,
+						fixture.originalTip.getHeight(), null, failingReplacement, callbacks);
+				fail("Expected injected replacement processing failure");
+			} catch (DataException e) {
+				assertTrue(e.getMessage().contains("injected replacement processing failure"));
+			}
+
+			assertArrayEquals(fixture.originalTip.getSignature(),
+					repository.getBlockRepository().getLastBlock().getSignature());
+			assertNotNull(repository.getTransactionRepository()
+					.fromSignature(fixture.originalLatestTransaction.getSignature()).getBlockHeight());
+			assertResourceCacheSignature(repository, fixture, fixture.originalLatestTransaction.getSignature());
+			assertTrue(callbacks.orphanedTips.isEmpty());
+			assertTrue(callbacks.newBlocks.isEmpty());
+
+			// A failed adoption must not leak the deferral context into later synchronization work.
+			try (ArbitraryTransaction.CacheUpdateScope ignored = ArbitraryTransaction.deferCacheUpdates()) {
+				// Opening and closing the next scope is the assertion.
+			}
+		}
+	}
+
 	@Test
 	public void testCommitFailureRestoresOriginalForkWithoutCallbacks() throws Exception {
 		try (Repository repository = RepositoryManager.getRepository()) {
@@ -174,6 +256,92 @@ public class SynchronizerAtomicReorgTests extends Common {
 		assertArrayEquals(originalTip.getSignature(), repository.getBlockRepository().getLastBlock().getSignature());
 		return new ForkFixture(commonBlock, originalBlocks, originalTip, replacementBlocks,
 				replacementTip, aliceMinted, bobMinted, bobBalance);
+	}
+
+	private ArbitraryForkFixture buildArbitraryForkFixture(Repository repository, String name, String identifier)
+			throws Exception {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		registerName(repository, alice, name);
+		BlockData commonBlock = new BlockData(repository.getBlockRepository().getLastBlock());
+
+		// Build the replacement first so its timestamps predate the abandoned branch. After
+		// adoption, an unconfirmed discarded-fork transaction must not win a "latest" query.
+		List<Block> replacementBlocks = new ArrayList<>();
+		ArbitraryTransactionData replacementFirstTransaction = createPutTransaction(repository, alice,
+				name, identifier, (byte) 1);
+		replacementBlocks.add(signAndMintDetached(repository, replacementFirstTransaction, alice));
+		ArbitraryTransactionData replacementLatestTransaction = createPutTransaction(repository, alice,
+				name, identifier, (byte) 2);
+		replacementBlocks.add(signAndMintDetached(repository, replacementLatestTransaction, alice));
+		BlockData replacementTip = new BlockData(repository.getBlockRepository().getLastBlock());
+
+		BlockUtils.orphanToBlock(repository, commonBlock.getHeight());
+		TransactionUtils.deleteUnconfirmedTransactions(repository);
+
+		ArbitraryTransactionData originalFirstTransaction = createPutTransaction(repository, alice,
+				name, identifier, (byte) 3);
+		signAndMintDetached(repository, originalFirstTransaction, alice);
+		ArbitraryTransactionData originalLatestTransaction = createPutTransaction(repository, alice,
+				name, identifier, (byte) 4);
+		signAndMintDetached(repository, originalLatestTransaction, alice);
+		BlockData originalTip = new BlockData(repository.getBlockRepository().getLastBlock());
+
+		List<Block> validatingReplacementBlocks = replacementBlocks.stream()
+				.map(block -> validatingCopy(repository, block))
+				.toList();
+
+		return new ArbitraryForkFixture(commonBlock, originalTip, validatingReplacementBlocks,
+				replacementTip, originalLatestTransaction, replacementLatestTransaction, name, identifier);
+	}
+
+	private static Block signAndMintDetached(Repository repository, TransactionData transactionData,
+			PrivateKeyAccount signingAccount) throws DataException {
+		TransactionUtils.signAndImportValid(repository, transactionData, signingAccount);
+		return detachedCopy(repository, BlockUtils.mintBlock(repository));
+	}
+
+	private static void registerName(Repository repository, PrivateKeyAccount account, String name)
+			throws DataException {
+		RegisterNameTransactionData transactionData = new RegisterNameTransactionData(
+				TestTransaction.generateBase(account), name, "");
+		transactionData.setFee(new RegisterNameTransaction(null, null)
+				.getUnitFee(transactionData.getTimestamp()));
+		TransactionUtils.signAndMint(repository, transactionData, account);
+	}
+
+	private static ArbitraryTransactionData createPutTransaction(Repository repository,
+			PrivateKeyAccount account, String name, String identifier, byte value) throws DataException {
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		long fee = BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP,
+				account.getPublicKey(), fee, null);
+		int version = Transaction.getVersionByTimestamp(timestamp);
+		byte[] data = new byte[32];
+		Arrays.fill(data, value);
+
+		return new ArbitraryTransactionData(baseTransactionData, version, Service.ARBITRARY_DATA.value,
+				0, data.length, name, identifier, ArbitraryTransactionData.Method.PUT, null,
+				ArbitraryTransactionData.Compression.NONE, data,
+				ArbitraryTransactionData.DataType.RAW_DATA, null, new ArrayList<PaymentData>());
+	}
+
+	private static void assertResourceCacheSignature(Repository repository, ArbitraryForkFixture fixture,
+			byte[] expectedSignature) throws DataException {
+		ArbitraryResourceData databaseCache = repository.getArbitraryRepository()
+				.getArbitraryResource(Service.ARBITRARY_DATA, fixture.name, fixture.identifier);
+		assertNotNull(databaseCache);
+		assertArrayEquals(expectedSignature, databaseCache.latestSignature);
+
+		ArbitraryResourceCache cache = ArbitraryResourceCache.getInstance();
+		synchronized (cache.getDataByService()) {
+			Map<String, ArbitraryResourceData> resources = cache.getDataByService()
+					.get(Service.ARBITRARY_DATA.value);
+			assertNotNull(resources);
+			ArbitraryResourceData memoryCache = resources.get(
+					ArbitraryResourceCache.resourceKey(fixture.name, fixture.identifier));
+			assertNotNull(memoryCache);
+			assertArrayEquals(expectedSignature, memoryCache.latestSignature);
+		}
 	}
 
 	private static List<Block> mintDetachedBlocks(Repository repository, PrivateKeyAccount minter, int count)
@@ -244,6 +412,13 @@ public class SynchronizerAtomicReorgTests extends Common {
 	private record ForkFixture(BlockData commonBlock, List<Block> originalBlocks, BlockData originalTip,
 			List<Block> replacementBlocks, BlockData replacementTip, int aliceMinted, int bobMinted,
 			long bobBalance) {
+	}
+
+	private record ArbitraryForkFixture(BlockData commonBlock, BlockData originalTip,
+			List<Block> replacementBlocks, BlockData replacementTip,
+			ArbitraryTransactionData originalLatestTransaction,
+			ArbitraryTransactionData replacementLatestTransaction,
+			String name, String identifier) {
 	}
 
 	private static final class ValidatingBlock extends Block {
