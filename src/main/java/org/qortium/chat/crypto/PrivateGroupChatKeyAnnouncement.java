@@ -188,8 +188,8 @@ public class PrivateGroupChatKeyAnnouncement {
 				throw new GeneralSecurityException("Key announcement includes duplicate recipient wrapper");
 
 			byte[] wrappedKey = keyWrapper.getWrappedKey();
-			if (wrappedKey == null || wrappedKey.length <= PrivateGroupChatEnvelope.NONCE_LENGTH)
-				throw new GeneralSecurityException("Key announcement wrapper is too short");
+			if (wrappedKey == null || wrappedKey.length != PrivateGroupChatEnvelope.WRAPPED_GROUP_KEY_LENGTH)
+				throw new GeneralSecurityException("Key announcement wrapper has invalid length");
 		}
 
 		if (recipientSet.size() != memberSet.size())
@@ -215,8 +215,8 @@ public class PrivateGroupChatKeyAnnouncement {
 				throw new GeneralSecurityException("Key announcement includes duplicate recipient wrapper");
 
 			byte[] wrappedKey = keyWrapper.getWrappedKey();
-			if (wrappedKey == null || wrappedKey.length <= PrivateGroupChatEnvelope.NONCE_LENGTH)
-				throw new GeneralSecurityException("Key announcement wrapper is too short");
+			if (wrappedKey == null || wrappedKey.length != PrivateGroupChatEnvelope.WRAPPED_GROUP_KEY_LENGTH)
+				throw new GeneralSecurityException("Key announcement wrapper has invalid length");
 		}
 
 		return sortedWrappers(keyWrappers);

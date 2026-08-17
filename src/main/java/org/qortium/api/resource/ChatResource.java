@@ -1013,7 +1013,7 @@ public class ChatResource {
 			return response;
 		} catch (PrivateGroupChatService.ValidationException e) {
 			throw TransactionsResource.createTransactionInvalidException(request, e.getValidationResult());
-		} catch (GeneralSecurityException | IllegalArgumentException e) {
+		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);

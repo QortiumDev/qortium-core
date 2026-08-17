@@ -18,8 +18,21 @@ public class PrivateGroupChatEnvelope {
 	public static final int EPOCH_ID_LENGTH = Transformer.SHA256_LENGTH;
 	public static final int KEY_ID_LENGTH = Transformer.SHA256_LENGTH;
 	public static final int NONCE_LENGTH = 12;
+	public static final int AUTH_TAG_LENGTH = 16;
 	public static final int PUBLIC_KEY_LENGTH = Transformer.PUBLIC_KEY_LENGTH;
 	public static final int SIGNATURE_LENGTH = Transformer.SIGNATURE_LENGTH;
+	public static final int WRAPPED_GROUP_KEY_LENGTH = NONCE_LENGTH + Transformer.AES256_LENGTH + AUTH_TAG_LENGTH;
+
+	private static final int COMMON_HEADER_LENGTH = Integer.BYTES + 1 + 1 + Integer.BYTES + EPOCH_ID_LENGTH;
+	private static final int MESSAGE_FIXED_LENGTH = COMMON_HEADER_LENGTH + KEY_ID_LENGTH + NONCE_LENGTH + Integer.BYTES;
+	private static final int KEY_ANNOUNCEMENT_FIXED_LENGTH = COMMON_HEADER_LENGTH + KEY_ID_LENGTH
+			+ PUBLIC_KEY_LENGTH + Integer.BYTES + SIGNATURE_LENGTH;
+	private static final int KEY_ANNOUNCEMENT_WRAPPER_LENGTH = PUBLIC_KEY_LENGTH + Integer.BYTES
+			+ WRAPPED_GROUP_KEY_LENGTH;
+	public static final int MAX_MESSAGE_PLAINTEXT_BYTES = ChatTransaction.MAX_DATA_SIZE
+			- MESSAGE_FIXED_LENGTH - AUTH_TAG_LENGTH;
+	public static final int MAX_KEY_ANNOUNCEMENT_WRAPPERS = (ChatTransaction.MAX_DATA_SIZE
+			- KEY_ANNOUNCEMENT_FIXED_LENGTH) / KEY_ANNOUNCEMENT_WRAPPER_LENGTH;
 
 	private static final int MAX_VARIABLE_LENGTH = ChatTransaction.MAX_DATA_SIZE;
 
@@ -95,6 +108,9 @@ public class PrivateGroupChatEnvelope {
 	}
 
 	public static PrivateGroupChatEnvelope message(int groupId, byte[] epochId, byte[] keyId, byte[] nonce, byte[] ciphertext) {
+		if (ciphertext != null && ciphertext.length > MAX_MESSAGE_PLAINTEXT_BYTES + AUTH_TAG_LENGTH)
+			throw new IllegalArgumentException("private group chat message ciphertext is too large");
+
 		return new PrivateGroupChatEnvelope(Type.MESSAGE, groupId, epochId, keyId, nonce, ciphertext,
 				null, null, null, false, null);
 	}
@@ -103,6 +119,17 @@ public class PrivateGroupChatEnvelope {
 			byte[] creatorPublicKey, List<KeyWrapper> keyWrappers, byte[] signature) {
 		if (keyWrappers == null || keyWrappers.isEmpty())
 			throw new IllegalArgumentException("key announcement must include at least one wrapper");
+		if (keyWrappers.size() > MAX_KEY_ANNOUNCEMENT_WRAPPERS)
+			throw new IllegalArgumentException("key announcement has too many wrappers");
+
+		long serializedLength = KEY_ANNOUNCEMENT_FIXED_LENGTH;
+		for (KeyWrapper keyWrapper : keyWrappers) {
+			if (keyWrapper == null)
+				throw new IllegalArgumentException("key announcement wrapper is missing");
+			serializedLength += PUBLIC_KEY_LENGTH + Integer.BYTES + (long) keyWrapper.wrappedKey.length;
+		}
+		if (serializedLength > ChatTransaction.MAX_DATA_SIZE)
+			throw new IllegalArgumentException("key announcement is too large");
 
 		return new PrivateGroupChatEnvelope(Type.KEY_ANNOUNCEMENT, groupId, epochId, keyId, null, null,
 				creatorPublicKey, keyWrappers, null, false, signature);
@@ -190,6 +217,8 @@ public class PrivateGroupChatEnvelope {
 		int wrapperCount = byteBuffer.getInt();
 		if (wrapperCount <= 0)
 			throw new TransformationException("Key announcement must include at least one wrapper");
+		if (wrapperCount > MAX_KEY_ANNOUNCEMENT_WRAPPERS)
+			throw new TransformationException("Key announcement has too many wrappers");
 
 		int minimumWrapperLength = PUBLIC_KEY_LENGTH + Integer.BYTES + 1;
 		if (wrapperCount > byteBuffer.remaining() / minimumWrapperLength)

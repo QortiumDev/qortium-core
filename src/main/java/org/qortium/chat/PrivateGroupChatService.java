@@ -51,6 +51,9 @@ public class PrivateGroupChatService {
 		validatePrivateKey(senderPrivateKey, "sender private key");
 		if (data == null || data.length == 0)
 			throw new PrivateGroupChatException("Private group chat message data is missing");
+		if (data.length > PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES)
+			throw new PrivateGroupChatException("Private group chat message exceeds the "
+					+ PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES + "-byte plaintext limit");
 
 		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
 		boolean locked;
@@ -328,7 +331,8 @@ public class PrivateGroupChatService {
 	}
 
 	public List<KeyRequestRecoveryResult> resolveKeyRequests(Repository repository, byte[] relayerPrivateKey,
-			int groupId, Integer limit) throws DataException, GeneralSecurityException, ValidationException {
+			int groupId, Integer limit) throws DataException, GeneralSecurityException, PrivateGroupChatException,
+			ValidationException {
 		validatePrivateKey(relayerPrivateKey, "relayer private key");
 
 		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
@@ -586,8 +590,7 @@ public class PrivateGroupChatService {
 			boolean isText, byte[] chatReference) throws DataException, GeneralSecurityException,
 			TransformationException, PrivateGroupChatException, ValidationException {
 		PrivateKeyAccount sender = new PrivateKeyAccount(repository, senderPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				groupId);
+		PrivateGroupChatMembership.MembershipEpoch epoch = currentAvailableEpoch(repository, groupId);
 
 		if (!isMember(epoch, sender.getPublicKey()))
 			throw new GeneralSecurityException("Sender is not a current member of this private group chat epoch");
@@ -629,8 +632,7 @@ public class PrivateGroupChatService {
 			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
 			ValidationException {
 		PrivateKeyAccount rotator = new PrivateKeyAccount(repository, rotatorPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				groupId);
+		PrivateGroupChatMembership.MembershipEpoch epoch = currentAvailableEpoch(repository, groupId);
 
 		if (!isMember(epoch, rotator.getPublicKey()))
 			throw new GeneralSecurityException("Key rotator is not a current member of this private group chat epoch");
@@ -646,8 +648,7 @@ public class PrivateGroupChatService {
 			byte[] epochId, byte[] keyId) throws DataException, GeneralSecurityException, TransformationException,
 			PrivateGroupChatException, ValidationException {
 		PrivateKeyAccount requester = new PrivateKeyAccount(repository, requesterPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
-				repository, groupId);
+		PrivateGroupChatMembership.MembershipEpoch currentEpoch = currentAvailableEpoch(repository, groupId);
 
 		if (!isMember(currentEpoch, requester.getPublicKey()))
 			throw new GeneralSecurityException("Key requester is not a current member of this private group chat epoch");
@@ -664,10 +665,9 @@ public class PrivateGroupChatService {
 	}
 
 	private List<KeyRequestRecoveryResult> doResolveKeyRequests(Repository repository, byte[] relayerPrivateKey,
-			int groupId, Integer limit) throws DataException, GeneralSecurityException {
+			int groupId, Integer limit) throws DataException, GeneralSecurityException, PrivateGroupChatException {
 		PrivateKeyAccount relayer = new PrivateKeyAccount(repository, relayerPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
-				repository, groupId);
+		PrivateGroupChatMembership.MembershipEpoch currentEpoch = currentAvailableEpoch(repository, groupId);
 
 		if (!isMember(currentEpoch, relayer.getPublicKey()))
 			throw new GeneralSecurityException("Key request relayer is not a current member of this private group chat epoch");
@@ -774,8 +774,7 @@ public class PrivateGroupChatService {
 			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
 			ValidationException {
 		PrivateKeyAccount requester = new PrivateKeyAccount(repository, requesterPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				groupId);
+		PrivateGroupChatMembership.MembershipEpoch epoch = currentAvailableEpoch(repository, groupId);
 
 		if (!isMember(epoch, requester.getPublicKey()))
 			throw new GeneralSecurityException("Rotation requester is not a current member of this private group chat epoch");
@@ -835,8 +834,7 @@ public class PrivateGroupChatService {
 			int groupId, byte[] epochId, byte[] keyId) throws DataException, GeneralSecurityException,
 			TransformationException, PrivateGroupChatException, ValidationException {
 		PrivateKeyAccount relayer = new PrivateKeyAccount(repository, relayerPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				groupId);
+		PrivateGroupChatMembership.MembershipEpoch epoch = currentAvailableEpoch(repository, groupId);
 
 		if (!Arrays.equals(epoch.getEpochId(), epochId))
 			throw new PrivateGroupChatException("Private group chat key announcement relay requires the current membership epoch");
@@ -872,6 +870,15 @@ public class PrivateGroupChatService {
 
 		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, null, chatReference,
 				data, isText, isEncrypted);
+	}
+
+	private static PrivateGroupChatMembership.MembershipEpoch currentAvailableEpoch(Repository repository,
+			int groupId) throws DataException, PrivateGroupChatException {
+		try {
+			return PrivateGroupChatMembership.currentClosedGroupEpoch(repository, groupId);
+		} catch (PrivateGroupChatMembership.AvailabilityException e) {
+			throw new PrivateGroupChatException(e.getMessage(), e.getReason());
+		}
 	}
 
 	private static KeyAnnouncementResult createAndStoreKeyAnnouncement(Repository repository, PrivateKeyAccount sender,
@@ -1368,8 +1375,20 @@ public class PrivateGroupChatService {
 	}
 
 	public static class PrivateGroupChatException extends Exception {
+		private final PrivateGroupChatMembership.UnavailableReason unavailableReason;
+
 		public PrivateGroupChatException(String message) {
+			this(message, null);
+		}
+
+		private PrivateGroupChatException(String message,
+				PrivateGroupChatMembership.UnavailableReason unavailableReason) {
 			super(message);
+			this.unavailableReason = unavailableReason;
+		}
+
+		public PrivateGroupChatMembership.UnavailableReason getUnavailableReason() {
+			return this.unavailableReason;
 		}
 	}
 

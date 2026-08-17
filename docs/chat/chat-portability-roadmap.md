@@ -84,8 +84,8 @@ later Home/Chat bridge and presentation tasks.
 | C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC stays in C6 | Home clean-room crypto and byte attestation |
 | C1 | Store/index parsed QPGC epoch and key metadata | Complete | Bounded control/history reads |
 | C2 | Add default-enabled bounded public QPGC control and atomic state APIs | Complete | All-route private-group recovery |
-| C3 | Retain accepted announcements while retained messages depend on them | Planned | Restart, new install, and node-switch recovery |
-| C4 | Enforce/report QPGC v1 member/public-key limits | Planned | Honest private-group availability UI |
+| C3 | Retain accepted announcements while retained messages depend on them | Complete | Restart, new install, and node-switch recovery |
+| C4 | Enforce/report QPGC v1 member/public-key/message limits | Complete | Honest private-group availability UI |
 | C5 | Add default-enabled, abuse-protected public unsigned join/leave builders | Planned | All-route Home join/leave actions |
 | C6 | Correct and freeze the QENC group-attachment contract | Deferred until attachment tranche | Private group/direct attachments |
 
@@ -308,6 +308,12 @@ error. It does not define a supported half-capable public-node product mode.
 
 ## C3 — Dependency-aware announcement retention
 
+Status: complete. Cleanup retains an accepted key announcement only while a
+retained encrypted QPGC message references its exact group, membership epoch,
+and key. Unmatched announcements and ordinary controls still expire normally,
+and the announcement is deleted transactionally with its final dependent
+message.
+
 ### Core changes
 
 - Change cleanup so an accepted `KEY_ANNOUNCEMENT` older than the ordinary
@@ -336,6 +342,13 @@ error. It does not define a supported half-capable public-node product mode.
 - Report genuine retention gaps clearly; do not promise an offline mailbox.
 
 ## C4 — QPGC v1 availability limits
+
+Status: complete. The envelope implementation derives the 39-recipient
+announcement ceiling and 3,894-byte message plaintext ceiling from the exact
+4,000-byte CHAT limit. Membership resolution counts before loading, returns
+structured local availability reasons, and never silently drops a member whose
+public key is missing. The atomic state response now reports both limits for
+Home.
 
 ### Core changes
 
@@ -425,9 +438,9 @@ attachments.
    fixtures, indexed metadata, and bounded repository queries.
 2. **Portable QPGC reads (complete):** C2 bounded public controls/state,
    default-route protections, and direct-message public-route parity tests.
-3. **Recovery durability and limits (next):** C3-C4 dependency-aware retention,
+3. **Recovery durability and limits (complete):** C3-C4 dependency-aware retention,
    v1 member/public-key/plaintext limits, and full regression coverage.
-4. **Portable participation:** C5 public unsigned join/leave builders.
+4. **Portable participation (next):** C5 public unsigned join/leave builders.
 5. **Private attachments:** C6 only when the Home attachment tranche is ready.
 
 Each PR must update `QORTIUM-CHANGELOG.md`, use a matching changelog/commit

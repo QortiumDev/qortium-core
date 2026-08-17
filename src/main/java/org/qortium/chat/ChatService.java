@@ -204,8 +204,10 @@ public class ChatService {
 		PrivateGroupChatMembership.MembershipEpoch epoch;
 		try {
 			epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository, txGroupId);
-		} catch (IllegalStateException e) {
-			return ValidationResult.PUBLIC_KEY_UNKNOWN;
+		} catch (PrivateGroupChatMembership.AvailabilityException e) {
+			return e.getReason() == PrivateGroupChatMembership.UnavailableReason.MEMBER_PUBLIC_KEY_UNKNOWN
+					? ValidationResult.PUBLIC_KEY_UNKNOWN
+					: ValidationResult.INVALID_DATA_LENGTH;
 		} catch (IllegalArgumentException e) {
 			return ValidationResult.INVALID_TX_GROUP_ID;
 		}

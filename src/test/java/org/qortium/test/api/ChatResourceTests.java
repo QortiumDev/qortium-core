@@ -480,6 +480,7 @@ public class ChatResourceTests extends ApiCommon {
 		assertEquals(Base58.encode(expectedEpochId), state.epochId);
 		assertEquals(PrivateGroupChatEnvelope.VERSION, state.qpgcVersion);
 		assertEquals(PrivateGroupChatMembership.MAX_V1_MEMBERS, state.maxV1Members);
+		assertEquals(PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES, state.maxMessagePlaintextBytes);
 	}
 
 	@Test

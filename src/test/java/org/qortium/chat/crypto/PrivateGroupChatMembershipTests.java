@@ -13,6 +13,7 @@ import org.qortium.test.common.Common;
 import org.qortium.test.common.GroupUtils;
 import org.qortium.test.common.TestAccount;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -116,8 +117,11 @@ public class PrivateGroupChatMembershipTests extends Common {
 			int closedGroupId = createClosedGroup(repository, alice, "membership-invalid");
 			addUnknownMember(repository, closedGroupId, "QmissingPublicKey");
 
-			assertThrows(IllegalStateException.class,
+			PrivateGroupChatMembership.AvailabilityException missingKey = assertThrows(
+					PrivateGroupChatMembership.AvailabilityException.class,
 					() -> PrivateGroupChatMembership.currentClosedGroupEpoch(repository, closedGroupId));
+			assertEquals(PrivateGroupChatMembership.UnavailableReason.MEMBER_PUBLIC_KEY_UNKNOWN,
+					missingKey.getReason());
 
 			int openGroupId = GroupUtils.createGroup(repository, alice, "membership-open", true,
 					ApprovalThreshold.ONE, 10, 40);
@@ -127,12 +131,52 @@ public class PrivateGroupChatMembershipTests extends Common {
 			int emptyGroupId = createClosedGroup(repository, alice, "membership-empty");
 			repository.getGroupRepository().deleteMember(emptyGroupId, alice.getAddress());
 			repository.saveChanges();
-			assertThrows(IllegalStateException.class,
+			PrivateGroupChatMembership.AvailabilityException emptyGroup = assertThrows(
+					PrivateGroupChatMembership.AvailabilityException.class,
 					() -> PrivateGroupChatMembership.currentClosedGroupEpoch(repository, emptyGroupId));
+			assertEquals(PrivateGroupChatMembership.UnavailableReason.NO_MEMBERS, emptyGroup.getReason());
 
 			assertThrows(IllegalArgumentException.class,
 					() -> PrivateGroupChatMembership.currentClosedGroupEpoch(repository, 999999));
 		}
+	}
+
+	@Test
+	public void testV1MemberLimitFailsBeforeUnboundedMembershipLoad() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = createClosedGroup(repository, alice, "membership-limit");
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			for (int index = 0; index < PrivateGroupChatMembership.MAX_V1_MEMBERS; ++index) {
+				org.qortium.account.PrivateKeyAccount account = Common.generateDeterministicSeedAccount(repository,
+						"membership-limit", index);
+				account.ensureAccount();
+				repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
+						groupData.getCreated(), groupData.getReference()));
+			}
+			repository.saveChanges();
+
+			PrivateGroupChatMembership.AvailabilityException exception = assertThrows(
+					PrivateGroupChatMembership.AvailabilityException.class,
+					() -> PrivateGroupChatMembership.currentClosedGroupEpoch(repository, groupId));
+			assertEquals(PrivateGroupChatMembership.UnavailableReason.MEMBER_LIMIT_EXCEEDED,
+					exception.getReason());
+		}
+	}
+
+	@Test
+	public void testMemberVectorBoundary() {
+		List<byte[]> memberPublicKeys = new ArrayList<>();
+		for (int index = 0; index < PrivateGroupChatMembership.MAX_V1_MEMBERS; ++index)
+			memberPublicKeys.add(bytes(index + 1));
+
+		assertEquals(PrivateGroupChatMembership.MAX_V1_MEMBERS,
+				PrivateGroupChatMembership.fromMemberPublicKeys(17, memberPublicKeys).getMemberPublicKeys().size());
+		memberPublicKeys.add(bytes(100));
+		PrivateGroupChatMembership.AvailabilityException exception = assertThrows(
+				PrivateGroupChatMembership.AvailabilityException.class,
+				() -> PrivateGroupChatMembership.fromMemberPublicKeys(17, memberPublicKeys));
+		assertEquals(PrivateGroupChatMembership.UnavailableReason.MEMBER_LIMIT_EXCEEDED, exception.getReason());
 	}
 
 	@Test
@@ -187,5 +231,12 @@ public class PrivateGroupChatMembershipTests extends Common {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
 		repository.getGroupRepository().save(new GroupMemberData(groupId, address, groupData.getCreated(), groupData.getReference()));
 		repository.saveChanges();
+	}
+
+	private static byte[] bytes(int seed) {
+		byte[] bytes = new byte[32];
+		for (int index = 0; index < bytes.length; ++index)
+			bytes[index] = (byte) (seed + index);
+		return bytes;
 	}
 }

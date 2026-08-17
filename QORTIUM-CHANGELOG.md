@@ -34,6 +34,36 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): complete QPGC recovery durability phase
+
+Marks the C3 and C4 portability milestones complete after Core made retained
+private messages recoverable across restart and node changes, derived and
+enforced QPGC v1's exact member and message limits, and exposed honest
+availability data for Home. The roadmap now identifies default-enabled public
+unsigned join and leave builders as the next Core tranche before Home begins
+route-independent group participation.
+
+### 2026-08-17 - feat(chat): enforce QPGC v1 availability limits
+
+Derives QPGC v1's 39-member and 3,894-byte plaintext ceilings from the exact
+4,000-byte CHAT envelope layout and enforces them before key generation,
+encryption, proof of work, or storage. Closed-group membership resolution now
+counts first, loads at most the supported member set, and reports structured
+no-member, inconsistent-membership, unknown-public-key, and member-limit
+reasons. The public state response also reports the plaintext byte ceiling so
+Home can disable unavailable private-chat sends without ever falling back to
+plaintext.
+
+### 2026-08-17 - feat(chat): retain required private-group key announcements
+
+Keeps an accepted QPGC key announcement beyond ordinary CHAT expiry only while
+a retained encrypted private-group message still references the same group,
+membership epoch, and key. Key requests, rotation requests, malformed controls,
+and unrelated announcements continue to expire normally, and the announcement
+is removed in the same transactional cleanup that removes its final dependent
+message. This preserves portable recovery across restart and node changes
+without turning transient CHAT into indefinite history.
+
 ### 2026-08-17 - docs(chat): complete portable QPGC read phase
 
 Marks the C2 Core milestone complete after adding default-enabled, abuse-bounded

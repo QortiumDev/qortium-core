@@ -3,6 +3,7 @@ package org.qortium.chat.crypto;
 import org.junit.Test;
 import org.qortium.transform.TransformationException;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +66,40 @@ public class PrivateGroupChatEnvelopeTests {
 		assertArrayEquals(secondWrapper.getRecipientPublicKey(), parsedWrappers.get(1).getRecipientPublicKey());
 		assertArrayEquals(secondWrapper.getWrappedKey(), parsedWrappers.get(1).getWrappedKey());
 		assertArrayEquals(envelope.toBytes(), parsedEnvelope.toBytes());
+	}
+
+	@Test
+	public void testMessageAndKeyAnnouncementBoundaries() {
+		byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 80);
+		byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 81);
+		byte[] nonce = bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 82);
+		byte[] maximumCiphertext = bytes(PrivateGroupChatEnvelope.MAX_MESSAGE_PLAINTEXT_BYTES
+				+ PrivateGroupChatEnvelope.AUTH_TAG_LENGTH, 83);
+
+		PrivateGroupChatEnvelope message = PrivateGroupChatEnvelope.message(14, epochId, keyId, nonce,
+				maximumCiphertext);
+		assertEquals(4000, message.toBytes().length);
+		assertThrows(IllegalArgumentException.class, () -> PrivateGroupChatEnvelope.message(14, epochId, keyId,
+				nonce, Arrays.copyOf(maximumCiphertext, maximumCiphertext.length + 1)));
+
+		List<PrivateGroupChatEnvelope.KeyWrapper> wrappers = new ArrayList<>();
+		for (int index = 0; index < PrivateGroupChatEnvelope.MAX_KEY_ANNOUNCEMENT_WRAPPERS; ++index)
+			wrappers.add(new PrivateGroupChatEnvelope.KeyWrapper(
+					bytes(PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, 90 + index),
+					bytes(PrivateGroupChatEnvelope.WRAPPED_GROUP_KEY_LENGTH, 130 + index)));
+
+		PrivateGroupChatEnvelope announcement = PrivateGroupChatEnvelope.keyAnnouncement(14, epochId, keyId,
+				bytes(PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, 84), wrappers,
+				bytes(PrivateGroupChatEnvelope.SIGNATURE_LENGTH, 85));
+		assertEquals(39, PrivateGroupChatEnvelope.MAX_KEY_ANNOUNCEMENT_WRAPPERS);
+		assertTrue(announcement.toBytes().length <= 4000);
+
+		wrappers.add(new PrivateGroupChatEnvelope.KeyWrapper(
+				bytes(PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, 200),
+				bytes(PrivateGroupChatEnvelope.WRAPPED_GROUP_KEY_LENGTH, 201)));
+		assertThrows(IllegalArgumentException.class, () -> PrivateGroupChatEnvelope.keyAnnouncement(14,
+				epochId, keyId, bytes(PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, 84), wrappers,
+				bytes(PrivateGroupChatEnvelope.SIGNATURE_LENGTH, 85)));
 	}
 
 	@Test

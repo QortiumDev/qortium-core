@@ -2,6 +2,7 @@ package org.qortium.chat.crypto;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortium.account.PrivateKeyAccount;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.group.GroupData;
 import org.qortium.data.group.GroupMemberData;
@@ -59,6 +60,24 @@ public class PrivateGroupChatKeyAnnouncementTests extends Common {
 			assertArrayEquals(groupKey, PrivateGroupChatKeyAnnouncement.unwrapForRecipient(epoch, envelope, bob.getPrivateKey()));
 			assertArrayEquals(groupKey, PrivateGroupChatKeyAnnouncement.unwrapForRecipient(epoch, envelope, chloe.getPrivateKey()));
 		}
+	}
+
+	@Test
+	public void testMaximumMemberAnnouncementFitsChatEnvelope() throws GeneralSecurityException {
+		PrivateKeyAccount announcer = account(100);
+		List<byte[]> publicKeys = new ArrayList<>();
+		publicKeys.add(announcer.getPublicKey());
+		while (publicKeys.size() < PrivateGroupChatMembership.MAX_V1_MEMBERS)
+			publicKeys.add(account(100 + publicKeys.size()).getPublicKey());
+
+		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.fromMemberPublicKeys(18,
+				publicKeys);
+		PrivateGroupChatEnvelope envelope = PrivateGroupChatKeyAnnouncement.create(epoch,
+				bytes(Transformer.AES256_LENGTH, 90), announcer.getPrivateKey());
+
+		assertEquals(39, envelope.getKeyWrappers().size());
+		assertTrue(envelope.toBytes().length <= 4000);
+		assertTrue(PrivateGroupChatKeyAnnouncement.isValid(epoch, envelope));
 	}
 
 	@Test
@@ -271,6 +290,10 @@ public class PrivateGroupChatKeyAnnouncementTests extends Common {
 			List<PrivateGroupChatEnvelope.KeyWrapper> keyWrappers) {
 		return PrivateGroupChatEnvelope.keyAnnouncement(envelope.getGroupId(), envelope.getEpochId(),
 				envelope.getKeyId(), envelope.getCreatorPublicKey(), keyWrappers, envelope.getSignature());
+	}
+
+	private static PrivateKeyAccount account(int seed) {
+		return new PrivateKeyAccount(null, bytes(Transformer.PRIVATE_KEY_LENGTH, seed));
 	}
 
 	private static int createClosedGroup(Repository repository, TestAccount owner, String groupName) throws DataException {
