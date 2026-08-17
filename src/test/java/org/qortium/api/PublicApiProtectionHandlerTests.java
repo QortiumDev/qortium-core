@@ -40,7 +40,8 @@ public class PublicApiProtectionHandlerTests extends Common {
 	@Test
 	public void testOnlyAnonymousPublicWriteWorkIsClassified() {
 		String[] routes = {
-				"POST /polls/public/vote", "POST /chat/public/build", "POST /transactions/convert",
+				"POST /polls/public/vote", "POST /chat/public/build", "POST /groups/public/join",
+				"POST /groups/public/leave", "POST /transactions/convert",
 				"POST /transactions/process", "POST /arbitrary/public/*", "GET /arbitrary/public/data/*",
 				"GET /polls/public/capabilities", "GET /chat/*"
 		};
@@ -54,6 +55,10 @@ public class PublicApiProtectionHandlerTests extends Common {
 				PublicApiRoutePolicy.classify("POST", "/polls/public/vote", routes).workClass);
 		assertEquals(WorkClass.BUILDER,
 				PublicApiRoutePolicy.classify("POST", "/chat/public/build", routes).workClass);
+		assertEquals(WorkClass.BUILDER,
+				PublicApiRoutePolicy.classify("POST", "/groups/public/join", routes).workClass);
+		assertEquals(WorkClass.BUILDER,
+				PublicApiRoutePolicy.classify("POST", "/groups/public/leave", routes).workClass);
 		assertEquals(WorkClass.BUILDER,
 				PublicApiRoutePolicy.classify("POST", "/transactions/convert", routes).workClass);
 		assertEquals(WorkClass.PROCESS,

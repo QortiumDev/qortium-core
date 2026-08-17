@@ -141,6 +141,37 @@ public class MergeSettingsTests {
 	}
 
 	@Test
+	public void testUpgradeAddsPublicGroupBuildersToUntouchedPublicApiPaths() throws Exception {
+		String oldPaths = "[\"GET /admin/status\",\"POST /chat/public/build\",\"POST /transactions/process\"]";
+		String newPaths = "[\"GET /admin/status\",\"POST /chat/public/build\","
+				+ "\"POST /groups/public/join\",\"POST /groups/public/leave\",\"POST /transactions/process\"]";
+		writeJson(snapshotPath, "{\"publicApiPaths\":" + oldPaths + "}");
+		writeJson(settingsPath, "{\"publicApiPaths\":" + oldPaths + "}");
+		writeJson(templatePath, "{\"publicApiPaths\":" + newPaths + "}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue(newPaths, Object.class), readJson(settingsPath).get("publicApiPaths"));
+		assertFalse(result.preserved.contains("publicApiPaths"));
+	}
+
+	@Test
+	public void testUpgradePreservesExplicitPublicGroupBuilderRemoval() throws Exception {
+		String oldPaths = "[\"GET /admin/status\",\"POST /chat/public/build\",\"POST /transactions/process\"]";
+		String operatorPaths = "[\"GET /admin/status\",\"POST /transactions/process\"]";
+		String newPaths = "[\"GET /admin/status\",\"POST /chat/public/build\","
+				+ "\"POST /groups/public/join\",\"POST /groups/public/leave\",\"POST /transactions/process\"]";
+		writeJson(snapshotPath, "{\"publicApiPaths\":" + oldPaths + "}");
+		writeJson(settingsPath, "{\"publicApiPaths\":" + operatorPaths + "}");
+		writeJson(templatePath, "{\"publicApiPaths\":" + newPaths + "}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue(operatorPaths, Object.class), readJson(settingsPath).get("publicApiPaths"));
+		assertTrue(result.preserved.contains("publicApiPaths"));
+	}
+
+	@Test
 	public void testMigrationAndRollbackKeepRetiredPeerClaimOrphaningDisabled() throws Exception {
 		writeJson(templatePath, "{\"developmentPeerClaimOrphaningEnabled\":false}");
 		writeJson(snapshotPath, "{\"apiPort\":24891}");

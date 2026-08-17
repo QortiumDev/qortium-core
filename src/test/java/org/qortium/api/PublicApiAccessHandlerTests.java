@@ -159,6 +159,24 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
+	public void testPublicGroupBuildersAreExactAllowlistEntries() throws Exception {
+		enablePublicApi();
+
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/groups/public/join", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/groups/public/leave", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/groups/join", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/groups/leave", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/groups/invite", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/transactions/sign", this.settings));
+	}
+
+	@Test
 	public void testPreviewSettingsExposePublicReadsAndKeylessBuildsOnly() throws Exception {
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview.json"));
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed.json"));
@@ -297,6 +315,8 @@ public class PublicApiAccessHandlerTests extends Common {
 				"GET /names/*",
 				"GET /transactions/*",
 				"GET /polls/*",
+				"POST /groups/public/join",
+				"POST /groups/public/leave",
 				"POST /polls/public/create",
 				"POST /polls/public/vote",
 				"POST /polls/public/update",
@@ -330,6 +350,10 @@ public class PublicApiAccessHandlerTests extends Common {
 				jsonArrayContains(publicApiPaths, "GET /peers/data/known"));
 		assertTrue(settingsPath + " should allow keyless public chat builds",
 				jsonArrayContains(publicApiPaths, "POST /chat/public/build"));
+		assertTrue(settingsPath + " should allow keyless public group join builds",
+				jsonArrayContains(publicApiPaths, "POST /groups/public/join"));
+		assertTrue(settingsPath + " should allow keyless public group leave builds",
+				jsonArrayContains(publicApiPaths, "POST /groups/public/leave"));
 		assertTrue(settingsPath + " should allow bounded private-group protocol reads",
 				jsonArrayContains(publicApiPaths, "GET /chat/*"));
 		assertTrue(settingsPath + " should allow public poll create builds",

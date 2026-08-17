@@ -78,6 +78,8 @@
     "GET /crosschain/*/feerequired",
     "GET /crosschain/*/serverconnectionhistory",
     "POST /chat/public/build",
+    "POST /groups/public/join",
+    "POST /groups/public/leave",
     "POST /polls/public/create",
     "POST /polls/public/vote",
     "POST /polls/public/update",
