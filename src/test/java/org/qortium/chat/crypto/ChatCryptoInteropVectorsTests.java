@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.qortium.crypto.Crypto;
+import org.qortium.transform.TransformationException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 
@@ -51,9 +53,16 @@ public class ChatCryptoInteropVectorsTests {
 		byte[] recipientPublicKey = hex(recipient, "publicKey");
 		byte[] nonce = hex(qdm1, "nonce");
 		byte[] plaintext = utf8(qdm1, "plaintextUtf8");
+		byte[] sharedSecret = Crypto.getSharedSecret(senderPrivateKey, recipientPublicKey);
+		byte[] associatedData = DirectPrivateChatCrypto.buildMessageAssociatedData(senderPublicKey,
+				recipientPublicKey);
 
 		assertArrayEquals(senderPublicKey, Crypto.toPublicKey(senderPrivateKey));
 		assertArrayEquals(recipientPublicKey, Crypto.toPublicKey(recipientPrivateKey));
+		assertArrayEquals(hex(qdm1, "sharedSecret"), sharedSecret);
+		assertArrayEquals(hex(qdm1, "associatedData"), associatedData);
+		assertArrayEquals(hex(qdm1, "sharedKey"),
+				DirectPrivateChatCrypto.deriveSharedKey(sharedSecret, associatedData));
 
 		byte[] envelopeBytes = DirectPrivateChatCrypto.encryptMessage(senderPrivateKey, recipientPublicKey,
 				nonce, plaintext);
@@ -86,6 +95,8 @@ public class ChatCryptoInteropVectorsTests {
 
 		assertArrayEquals(epochId, PrivateGroupChatMembership.computeEpochId(groupId, memberPublicKeys));
 		assertArrayEquals(keyId, PrivateGroupChatCrypto.computeKeyId(groupId, epochId, groupKey));
+		assertArrayEquals(hex(message, "associatedData"),
+				PrivateGroupChatCrypto.buildMessageAssociatedData(groupId, epochId, keyId));
 
 		byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epochId, keyId,
 				nonce, plaintext);
@@ -118,6 +129,14 @@ public class ChatCryptoInteropVectorsTests {
 		byte[] recipientPrivateKey = hex(recipient, "privateKey");
 		byte[] recipientPublicKey = hex(recipient, "publicKey");
 		byte[] nonce = hex(keyWrap, "nonce");
+		byte[] sharedSecret = Crypto.getSharedSecret(announcerPrivateKey, recipientPublicKey);
+		byte[] associatedData = PrivateGroupChatCrypto.buildKeyWrapAssociatedData(groupId, epochId, keyId,
+				announcerPublicKey, recipientPublicKey);
+
+		assertArrayEquals(hex(keyWrap, "sharedSecret"), sharedSecret);
+		assertArrayEquals(hex(keyWrap, "associatedData"), associatedData);
+		assertArrayEquals(hex(keyWrap, "wrappingKey"),
+				PrivateGroupChatCrypto.deriveWrappingKey(sharedSecret, associatedData));
 
 		byte[] wrappedKey = PrivateGroupChatCrypto.wrapGroupKey(groupId, epochId, keyId, groupKey,
 				announcerPrivateKey, recipientPublicKey, nonce);
@@ -193,6 +212,154 @@ public class ChatCryptoInteropVectorsTests {
 		assertArrayEquals(hex(vector, "signature"), envelope.getSignature());
 		assertArrayEquals(hex(vector, "envelope"), envelope.toBytes());
 		assertTrue(PrivateGroupChatRotationRequest.isValid(epoch, envelope));
+	}
+
+	@Test
+	public void testLanguageNeutralPositiveVariants() throws Exception {
+		int count = 0;
+		for (JsonNode vector : vectors.path("interopCases").path("positiveVariants")) {
+			assertEquals("validateReorderedAnnouncement", vector.path("operation").asText());
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(resolveSource(vector));
+			List<PrivateGroupChatEnvelope.KeyWrapper> wrappers = new ArrayList<>(envelope.getKeyWrappers());
+			Collections.reverse(wrappers);
+			PrivateGroupChatEnvelope reordered = PrivateGroupChatEnvelope.keyAnnouncement(envelope.getGroupId(),
+					envelope.getEpochId(), envelope.getKeyId(), envelope.getCreatorPublicKey(), wrappers,
+					envelope.getSignature());
+			assertTrue(vector.path("id").asText(),
+					PrivateGroupChatKeyAnnouncement.isValid(qpgcEpoch(vectors.path("qpgc")), reordered));
+			++count;
+		}
+		assertEquals(1, count);
+	}
+
+	@Test
+	public void testLanguageNeutralNegativeCases() throws Exception {
+		int count = 0;
+		for (JsonNode vector : vectors.path("interopCases").path("negativeCases")) {
+			assertFalse("missing expected layer for " + vector.path("id").asText(),
+					vector.path("expectedLayer").asText().isBlank());
+			assertNegativeCase(vector);
+			++count;
+		}
+		assertEquals(15, count);
+	}
+
+	private static void assertNegativeCase(JsonNode vector) throws Exception {
+		String operation = vector.path("operation").asText();
+		switch (operation) {
+			case "decryptQdm1Mutation": {
+				DirectPrivateChatEnvelope envelope = DirectPrivateChatEnvelope.fromBytes(mutate(vector));
+				byte[] recipientPrivateKey = hex(account(vectors.path("qdm1").path("recipient").asText()),
+						"privateKey");
+				assertThrows(vector.path("id").asText(), GeneralSecurityException.class,
+						() -> DirectPrivateChatCrypto.decryptMessage(recipientPrivateKey, envelope));
+				break;
+			}
+
+			case "parseDirectMutation":
+				assertThrows(vector.path("id").asText(), TransformationException.class,
+						() -> DirectPrivateChatEnvelope.fromBytes(mutate(vector)));
+				break;
+
+			case "decryptQpgcMutation": {
+				PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(mutate(vector));
+				byte[] groupKey = hex(vectors.path("qpgc"), "groupKey");
+				assertThrows(vector.path("id").asText(), GeneralSecurityException.class,
+						() -> PrivateGroupChatCrypto.decryptMessage(groupKey, envelope.getGroupId(),
+								envelope.getEpochId(), envelope.getKeyId(), envelope.getNonce(),
+								envelope.getCiphertext()));
+				break;
+			}
+
+			case "parseQpgcMutation":
+				assertThrows(vector.path("id").asText(), TransformationException.class,
+						() -> PrivateGroupChatEnvelope.fromBytes(mutate(vector)));
+				break;
+
+			case "validateDuplicateAnnouncementWrapper":
+				assertFalse(vector.path("id").asText(), validateAnnouncementWithWrapperChange(vector, true));
+				break;
+
+			case "validateMissingAnnouncementWrapper":
+				assertFalse(vector.path("id").asText(), validateAnnouncementWithWrapperChange(vector, false));
+				break;
+
+			case "validateAnnouncementSignatureMutation": {
+				PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(resolveSource(vector));
+				byte[] signature = envelope.getSignature();
+				signature[0] ^= 1;
+				PrivateGroupChatEnvelope tampered = PrivateGroupChatEnvelope.keyAnnouncement(envelope.getGroupId(),
+						envelope.getEpochId(), envelope.getKeyId(), envelope.getCreatorPublicKey(),
+						envelope.getKeyWrappers(), signature);
+				assertFalse(vector.path("id").asText(), PrivateGroupChatKeyAnnouncement.isValid(
+						qpgcEpoch(vectors.path("qpgc")), tampered));
+				break;
+			}
+
+			case "constructOversizedDirectEnvelope":
+				assertThrows(vector.path("id").asText(), IllegalArgumentException.class,
+						() -> DirectPrivateChatEnvelope.message(new byte[32], new byte[32], new byte[12],
+								new byte[vector.path("length").asInt()]));
+				break;
+
+			case "constructOversizedQpgcEnvelope":
+				assertThrows(vector.path("id").asText(), IllegalArgumentException.class,
+						() -> PrivateGroupChatEnvelope.message(12, new byte[32], new byte[32], new byte[12],
+								new byte[vector.path("length").asInt()]));
+				break;
+
+			default:
+				throw new AssertionError("Unhandled negative fixture operation: " + operation);
+		}
+	}
+
+	private static boolean validateAnnouncementWithWrapperChange(JsonNode vector, boolean duplicate)
+			throws TransformationException {
+		PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(resolveSource(vector));
+		List<PrivateGroupChatEnvelope.KeyWrapper> wrappers = new ArrayList<>(envelope.getKeyWrappers());
+		if (duplicate)
+			wrappers.set(1, wrappers.get(0));
+		else
+			wrappers.remove(0);
+		PrivateGroupChatEnvelope changed = PrivateGroupChatEnvelope.keyAnnouncement(envelope.getGroupId(),
+				envelope.getEpochId(), envelope.getKeyId(), envelope.getCreatorPublicKey(), wrappers,
+				envelope.getSignature());
+		return PrivateGroupChatKeyAnnouncement.isValid(qpgcEpoch(vectors.path("qpgc")), changed);
+	}
+
+	private static byte[] mutate(JsonNode vector) {
+		byte[] source = resolveSource(vector);
+		JsonNode mutation = vector.path("mutation");
+		switch (mutation.path("kind").asText()) {
+			case "xorByte": {
+				int offset = mutation.has("offset") ? mutation.path("offset").asInt()
+						: source.length - mutation.path("offsetFromEnd").asInt();
+				source[offset] ^= (byte) mutation.path("xor").asInt();
+				return source;
+			}
+
+			case "appendByte": {
+				byte[] output = java.util.Arrays.copyOf(source, source.length + 1);
+				output[output.length - 1] = (byte) mutation.path("value").asInt();
+				return output;
+			}
+
+			default:
+				throw new AssertionError("Unhandled fixture mutation: " + mutation.path("kind").asText());
+		}
+	}
+
+	private static byte[] resolveSource(JsonNode vector) {
+		switch (vector.path("source").asText()) {
+			case "qdm1.envelope":
+				return hex(vectors.path("qdm1"), "envelope");
+			case "qpgc.message.envelope":
+				return hex(vectors.path("qpgc").path("message"), "envelope");
+			case "qpgc.keyAnnouncement.envelope":
+				return hex(vectors.path("qpgc").path("keyAnnouncement"), "envelope");
+			default:
+				throw new AssertionError("Unknown fixture source: " + vector.path("source").asText());
+		}
 	}
 
 	private static void assertKeyRequestVector(PrivateGroupChatMembership.MembershipEpoch epoch,

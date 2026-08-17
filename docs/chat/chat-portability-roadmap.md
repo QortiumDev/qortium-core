@@ -61,7 +61,7 @@ later Home/Chat bridge and presentation tasks.
 
 | ID | Core milestone | Status | Blocks Home work |
 | --- | --- | --- | --- |
-| C0 | Freeze shared QDM1, QPGC, CHAT, and later QENC vectors | In progress | Home clean-room crypto and byte attestation |
+| C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC stays in C6 | Home clean-room crypto and byte attestation |
 | C1 | Store/index parsed QPGC epoch and key metadata | Planned | Bounded control/history reads |
 | C2 | Add bounded public QPGC control and atomic state APIs | Planned | Public/custom private-group recovery |
 | C3 | Retain accepted announcements while retained messages depend on them | Planned | Restart, new install, and node-switch recovery |
@@ -75,7 +75,9 @@ Progress (2026-08-17): the first versioned fixture now freezes QDM1 direct
 encryption plus QPGC membership, message encryption, member key wrapping, key
 announcements, current/specific key requests, and rotation requests. Relayed
 control context and initial/revision CHAT transaction bytes are also frozen.
-Negative transaction cases and QENC remain open within C0.
+The fixture now also records exact shared-secret/AAD/KDF intermediates and
+machine-readable positive/negative validation cases. QENC remains deferred to
+C6 and does not keep C0 open.
 
 ### Core changes
 
@@ -96,9 +98,10 @@ Required fixture coverage:
   announcement signing bytes/signature, relayed outer sender, encrypted message,
   key request, and rotation request;
 - Qortium CHAT unsigned/signed bytes with and without `chatReference`;
-- negative parsing cases: wrong group/epoch/key, reordered/duplicate/missing
-  wrapper, bad signature/tag/nonce, trailing bytes, and oversized data; and
-- QENC recipient and corrected group-header fixtures before C6 begins.
+- negative parsing cases: wrong group/epoch/key, duplicate/missing wrapper,
+  bad signature/tag/nonce, trailing bytes, and oversized data;
+- positive canonicalization of reordered announcement wrappers; and
+- QENC recipient and corrected group-header fixtures when C6 begins.
 
 ### Completion gate
 

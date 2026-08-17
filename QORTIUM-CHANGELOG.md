@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - test(chat): complete private chat interoperability cases
+
+Completes the pre-attachment chat fixture with exact QDM1 shared-secret,
+associated-data, and derived-key bytes plus QPGC message and key-wrap context.
+Machine-readable cases now prove wrong participants, groups, epochs, key IDs,
+nonces, tags, signatures, trailing bytes, oversized data, and incomplete or
+duplicate announcement wrappers fail at the intended layer. Reordered wrappers
+remain an explicit accepted compatibility case after canonical sorting, while
+QENC attachment vectors stay deferred to their later roadmap phase.
+
 ### 2026-08-17 - test(chat): freeze CHAT transaction vectors
 
 Extends the shared interoperability fixture through the CHAT transaction layer.

@@ -121,7 +121,7 @@ public class PrivateGroupChatCrypto {
 		return groupKey;
 	}
 
-	private static byte[] buildMessageAssociatedData(int groupId, byte[] epochId, byte[] keyId) {
+	static byte[] buildMessageAssociatedData(int groupId, byte[] epochId, byte[] keyId) {
 		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
 		validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
 
@@ -133,7 +133,7 @@ public class PrivateGroupChatCrypto {
 		return bytes.toByteArray();
 	}
 
-	private static byte[] buildKeyWrapAssociatedData(int groupId, byte[] epochId, byte[] keyId,
+	static byte[] buildKeyWrapAssociatedData(int groupId, byte[] epochId, byte[] keyId,
 			byte[] announcerPublicKey, byte[] recipientPublicKey) {
 		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
 		validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
@@ -158,7 +158,7 @@ public class PrivateGroupChatCrypto {
 		return cipher.doFinal(input);
 	}
 
-	private static byte[] deriveWrappingKey(byte[] sharedSecret, byte[] info) throws GeneralSecurityException {
+	static byte[] deriveWrappingKey(byte[] sharedSecret, byte[] info) throws GeneralSecurityException {
 		validateLength(sharedSecret, Crypto.SHARED_SECRET_LENGTH, "shared secret");
 
 		byte[] pseudorandomKey = hmac(KEY_WRAP_HKDF_SALT, sharedSecret);

@@ -19,19 +19,22 @@ and the trusted Home implementations that reproduce Core chat cryptography.
 `chat-crypto-v1.json` currently freezes:
 
 - QDM1 sender/recipient keys, nonce, ciphertext, full envelope, both-party
-  decryption, and authentication-tag tamper rejection;
+  decryption, shared secret, AAD, derived key, and authentication failures;
 - QPGC v1 sorted-membership epoch and group-key identifiers;
 - QPGC v1 message nonce, ciphertext, full envelope, wrong-context rejection,
-  and authentication-tag validation;
+  exact AAD, and authentication-tag validation;
 - QPGC member key wrapping, a full signed key announcement, current/specific
   key requests, and a rotation request, including exact signing and envelope
-  bytes; and
+  bytes;
 - Qortium CHAT unsigned/signing/signed bytes for an initial group message, a
   `chatReference` revision, and a member relaying another member's signed QPGC
-  announcement.
+  announcement; and
+- Machine-readable positive and negative cases identify the source fixture,
+  deterministic mutation/operation, and expected validation layer. Wrapper
+  reordering is explicitly accepted after canonical sorting; duplicate or
+  missing wrappers are rejected.
 
-The fixture will grow additively during roadmap milestone C0. Explicit negative
-transaction/control cases and QENC attachment vectors remain open. Fixed CHAT
+QENC attachment vectors remain deferred to roadmap milestone C6. Fixed CHAT
 nonces exercise serialization and signing; they do not claim to satisfy the
 current network MemoryPoW policy.
 
