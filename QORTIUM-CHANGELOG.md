@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - docs(chat): complete QPGC recovery durability phase
+
+Marks the C3 and C4 portability milestones complete after Core made retained
+private messages recoverable across restart and node changes, derived and
+enforced QPGC v1's exact member and message limits, and exposed honest
+availability data for Home. The roadmap now identifies default-enabled public
+unsigned join and leave builders as the next Core tranche before Home begins
+route-independent group participation.
+
 ### 2026-08-17 - feat(chat): enforce QPGC v1 availability limits
 
 Derives QPGC v1's 39-member and 3,894-byte plaintext ceilings from the exact
