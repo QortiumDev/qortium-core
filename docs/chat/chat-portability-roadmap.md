@@ -74,7 +74,8 @@ later Home/Chat bridge and presentation tasks.
 Progress (2026-08-17): the first versioned fixture now freezes QDM1 direct
 encryption plus QPGC membership, message encryption, member key wrapping, key
 announcements, current/specific key requests, and rotation requests. Relayed
-control context, CHAT transaction bytes, and QENC remain open within C0.
+control context and initial/revision CHAT transaction bytes are also frozen.
+Negative transaction cases and QENC remain open within C0.
 
 ### Core changes
 

@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - test(chat): freeze CHAT transaction vectors
+
+Extends the shared interoperability fixture through the CHAT transaction layer.
+Home can now verify exact unsigned, signing, signature, and signed bytes for an
+initial group message, a `chatReference` revision, and a member relaying another
+member's signed QPGC key announcement. The relay vector makes the trusted inner
+announcement creator distinct from the outer CHAT sender, while fixed nonces
+remain serialization inputs rather than claims of current MemoryPoW validity.
+
 ### 2026-08-17 - test(chat): freeze QPGC control vectors
 
 Extends the shared chat fixture with exact signed QPGC key announcements,
