@@ -72,9 +72,9 @@ later Home/Chat bridge and presentation tasks.
 ## C0 — Shared protocol contracts and golden vectors
 
 Progress (2026-08-17): the first versioned fixture now freezes QDM1 direct
-encryption plus QPGC membership, message encryption, envelopes, and one member
-key wrap. Announcement signing, request/rotation controls, CHAT transaction
-bytes, and QENC remain open within C0.
+encryption plus QPGC membership, message encryption, member key wrapping, key
+announcements, current/specific key requests, and rotation requests. Relayed
+control context, CHAT transaction bytes, and QENC remain open within C0.
 
 ### Core changes
 

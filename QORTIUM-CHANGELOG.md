@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - test(chat): freeze QPGC control vectors
+
+Extends the shared chat fixture with exact signed QPGC key announcements,
+member wrappers, current and specific key requests, and rotation requests. The
+committed signing bytes, signatures, and full envelopes let Home reproduce and
+verify the private-group control protocol without copying Java logic. Test-only
+package access supplies fixed membership and wrapper nonces, while production
+announcement creation continues to use repository membership and secure random
+nonces.
+
 ### 2026-08-17 - test(chat): freeze private chat crypto vectors
 
 Adds the first language-neutral chat interoperability fixture for Home and Core.

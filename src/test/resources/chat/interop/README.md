@@ -23,11 +23,12 @@ and the trusted Home implementations that reproduce Core chat cryptography.
 - QPGC v1 sorted-membership epoch and group-key identifiers;
 - QPGC v1 message nonce, ciphertext, full envelope, wrong-context rejection,
   and authentication-tag validation; and
-- one QPGC member key wrap with exact nonce and wrapped bytes.
+- QPGC member key wrapping, a full signed key announcement, current/specific
+  key requests, and a rotation request, including exact signing and envelope
+  bytes.
 
 The fixture will grow additively during roadmap milestone C0. Key-announcement
-signing, key/rotation requests, relayed controls, CHAT transaction bytes, and
-QENC attachment vectors are not part of this first slice.
+relay context, CHAT transaction bytes, and QENC attachment vectors remain open.
 
 Home must consume these committed values rather than copying expected output
 from Java source. Core remains the protocol authority; Home must keep private

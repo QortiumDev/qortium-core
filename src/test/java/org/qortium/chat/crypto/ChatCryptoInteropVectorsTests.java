@@ -16,7 +16,9 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class ChatCryptoInteropVectorsTests {
 
@@ -130,6 +132,90 @@ public class ChatCryptoInteropVectorsTests {
 						recipientPrivateKey, announcerPublicKey));
 	}
 
+	@Test
+	public void testQpgcKeyAnnouncementVector() throws Exception {
+		JsonNode qpgc = vectors.path("qpgc");
+		JsonNode vector = qpgc.path("keyAnnouncement");
+		PrivateGroupChatMembership.MembershipEpoch epoch = qpgcEpoch(qpgc);
+		JsonNode announcer = account(vector.path("announcer").asText());
+		byte[] groupKey = hex(qpgc, "groupKey");
+		List<byte[]> wrapperNonces = hexList(vector.path("wrapperNoncesInSortedMemberOrder"));
+
+		PrivateGroupChatEnvelope envelope = PrivateGroupChatKeyAnnouncement.create(epoch, groupKey,
+				hex(announcer, "privateKey"), wrapperNonces);
+		assertArrayEquals(hex(vector, "signingBytes"), PrivateGroupChatKeyAnnouncement.buildSigningBytes(
+				epoch.getGroupId(), epoch.getEpochId(), envelope.getKeyId(), envelope.getCreatorPublicKey(),
+				envelope.getKeyWrappers()));
+		assertArrayEquals(hex(vector, "signature"), envelope.getSignature());
+		assertArrayEquals(hex(vector, "envelope"), envelope.toBytes());
+		assertEquals(vector.path("wrappers").size(), envelope.getKeyWrappers().size());
+
+		for (int index = 0; index < envelope.getKeyWrappers().size(); ++index) {
+			JsonNode expectedWrapper = vector.path("wrappers").path(index);
+			PrivateGroupChatEnvelope.KeyWrapper wrapper = envelope.getKeyWrappers().get(index);
+			assertArrayEquals(hex(account(expectedWrapper.path("recipient").asText()), "publicKey"),
+					wrapper.getRecipientPublicKey());
+			assertArrayEquals(hex(expectedWrapper, "wrappedKey"), wrapper.getWrappedKey());
+		}
+
+		assertTrue(PrivateGroupChatKeyAnnouncement.isValid(epoch, envelope));
+		for (JsonNode memberName : qpgc.path("membersInUnsortedInputOrder"))
+			assertArrayEquals(groupKey, PrivateGroupChatKeyAnnouncement.unwrapForRecipient(epoch, envelope,
+					hex(account(memberName.asText()), "privateKey")));
+
+		byte[] badSignature = envelope.getSignature();
+		badSignature[0] ^= 1;
+		PrivateGroupChatEnvelope tampered = PrivateGroupChatEnvelope.keyAnnouncement(envelope.getGroupId(),
+				envelope.getEpochId(), envelope.getKeyId(), envelope.getCreatorPublicKey(),
+				envelope.getKeyWrappers(), badSignature);
+		assertFalse(PrivateGroupChatKeyAnnouncement.isValid(epoch, tampered));
+	}
+
+	@Test
+	public void testQpgcKeyRequestVectors() throws Exception {
+		JsonNode qpgc = vectors.path("qpgc");
+		PrivateGroupChatMembership.MembershipEpoch epoch = qpgcEpoch(qpgc);
+		assertKeyRequestVector(epoch, qpgc.path("keyRequest"), hex(qpgc, "keyId"));
+		assertKeyRequestVector(epoch, qpgc.path("currentKeyRequest"), null);
+	}
+
+	@Test
+	public void testQpgcRotationRequestVector() throws Exception {
+		JsonNode qpgc = vectors.path("qpgc");
+		JsonNode vector = qpgc.path("rotationRequest");
+		PrivateGroupChatMembership.MembershipEpoch epoch = qpgcEpoch(qpgc);
+		JsonNode requester = account(vector.path("requester").asText());
+
+		PrivateGroupChatEnvelope envelope = PrivateGroupChatRotationRequest.create(epoch,
+				hex(requester, "privateKey"));
+		assertArrayEquals(hex(vector, "signingBytes"), PrivateGroupChatRotationRequest.buildSigningBytes(
+				epoch.getGroupId(), epoch.getEpochId(), hex(requester, "publicKey")));
+		assertArrayEquals(hex(vector, "signature"), envelope.getSignature());
+		assertArrayEquals(hex(vector, "envelope"), envelope.toBytes());
+		assertTrue(PrivateGroupChatRotationRequest.isValid(epoch, envelope));
+	}
+
+	private static void assertKeyRequestVector(PrivateGroupChatMembership.MembershipEpoch epoch,
+			JsonNode vector, byte[] keyId) throws Exception {
+		JsonNode requester = account(vector.path("requester").asText());
+		byte[] requesterPrivateKey = hex(requester, "privateKey");
+		byte[] requesterPublicKey = hex(requester, "publicKey");
+		PrivateGroupChatEnvelope envelope = PrivateGroupChatKeyRequest.create(epoch.getGroupId(),
+				epoch.getEpochId(), requesterPrivateKey, keyId);
+
+		assertArrayEquals(hex(vector, "signingBytes"), PrivateGroupChatKeyRequest.buildSigningBytes(
+				epoch.getGroupId(), epoch.getEpochId(), requesterPublicKey, keyId));
+		assertArrayEquals(hex(vector, "signature"), envelope.getSignature());
+		assertArrayEquals(hex(vector, "envelope"), envelope.toBytes());
+		assertEquals(keyId != null, envelope.hasRequestedKeyId());
+		assertTrue(PrivateGroupChatKeyRequest.isValid(epoch, envelope));
+	}
+
+	private static PrivateGroupChatMembership.MembershipEpoch qpgcEpoch(JsonNode qpgc) {
+		return PrivateGroupChatMembership.fromMemberPublicKeys(qpgc.path("groupId").asInt(),
+				memberPublicKeys(qpgc.path("membersInUnsortedInputOrder")));
+	}
+
 	private static JsonNode account(String name) {
 		JsonNode account = vectors.path("accounts").path(name);
 		if (account.isMissingNode())
@@ -142,6 +228,13 @@ public class ChatCryptoInteropVectorsTests {
 		for (JsonNode memberName : memberNames)
 			publicKeys.add(hex(account(memberName.asText()), "publicKey"));
 		return publicKeys;
+	}
+
+	private static List<byte[]> hexList(JsonNode values) {
+		List<byte[]> output = new ArrayList<>();
+		for (JsonNode value : values)
+			output.add(HEX.parseHex(value.asText()));
+		return output;
 	}
 
 	private static byte[] utf8(JsonNode object, String field) {
