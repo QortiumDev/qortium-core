@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-17 - feat(chat): expose bounded QPGC recovery reads
+
+Adds public, read-only private-group control and atomic state APIs so trusted
+Home clients can recover QPGC keys through any node route without giving Core a
+wallet key or exposing group keys and plaintext. Control pages require explicit
+non-message types, use opaque dual-direction cursors, return complete signed
+CHAT bytes, cap pages at 100 records and responses at one MiB, and perform no
+side effects. State reads hold the blockchain lock while computing one coherent
+closed-group membership/public-key epoch and fail closed with structured
+missing-group, open-group, missing-key, or member-limit reasons.
+
 ### 2026-08-17 - feat(chat): add dual-cursor QPGC envelope queries
 
 Extends the indexed private-group chat store with bounded multi-type pages and
