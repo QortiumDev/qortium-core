@@ -275,9 +275,9 @@ public enum Service {
             return ValidationResult.INVALID_FILE_COUNT;
         }
 
-        // Validate private data for single file resources. Accept either the v1 encrypted envelope
-        // or a legacy encryption prefix; reject plaintext for private services (and reject encrypted
-        // data for public services).
+        // Validate private data for single file resources. Accept a supported binary encrypted
+        // envelope or a legacy encryption prefix; reject plaintext for private services (and reject
+        // encrypted data for public services).
         if (this.single) {
             boolean encrypted = EncryptedDataEnvelope.isEncrypted(data);
             if (this.isPrivate && !encrypted) {

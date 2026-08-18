@@ -362,6 +362,24 @@ public class ArbitraryServiceTests extends Common {
         return out;
     }
 
+    /** A minimal structurally-valid QENC v2 group envelope with a complete GCM tag. */
+    private static byte[] encryptedAttachmentEnvelopeV2() {
+        int headerLength = EncryptedDataEnvelope.GROUP_HEADER_LENGTH;
+        byte[] out = new byte[EncryptedDataEnvelope.FIXED_HEADER_LENGTH + headerLength
+                + EncryptedDataEnvelope.AUTH_TAG_LENGTH];
+        out[0] = 'Q'; out[1] = 'E'; out[2] = 'N'; out[3] = 'C';
+        out[4] = EncryptedDataEnvelope.VERSION_2;
+        out[5] = EncryptedDataEnvelope.MODE_GROUP;
+        out[6] = EncryptedDataEnvelope.CIPHER_AES_256_GCM;
+        out[8] = (byte) (headerLength >>> 8); out[9] = (byte) headerLength;
+        int headerOffset = EncryptedDataEnvelope.FIXED_HEADER_LENGTH;
+        out[headerOffset + 3] = 12;
+        out[headerOffset + EncryptedDataEnvelope.GROUP_ID_LENGTH] = 1;
+        out[headerOffset + EncryptedDataEnvelope.GROUP_ID_LENGTH
+                + EncryptedDataEnvelope.EPOCH_ID_LENGTH] = 1;
+        return out;
+    }
+
     private static Path singleFileResource(String prefix, byte[] content) throws IOException {
         Path dir = Files.createTempDirectory(prefix);
         dir.toFile().deleteOnExit();
@@ -375,6 +393,12 @@ public class ArbitraryServiceTests extends Common {
     public void testPrivateServiceAcceptsEncryptedEnvelope() throws IOException {
         Path file = singleFileResource("privEnvelope", encryptedEnvelope());
         assertEquals(ValidationResult.OK, Service.IMAGE_PRIVATE.validate(file));
+    }
+
+    @Test
+    public void testPrivateChatAttachmentServiceAcceptsStrictVersion2Envelope() throws IOException {
+        Path file = singleFileResource("privateChatAttachmentV2", encryptedAttachmentEnvelopeV2());
+        assertEquals(ValidationResult.OK, Service.QCHAT_ATTACHMENT_PRIVATE.validate(file));
     }
 
     @Test

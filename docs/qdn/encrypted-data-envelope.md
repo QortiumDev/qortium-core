@@ -1,211 +1,214 @@
-# QDN Encrypted Data Envelope (v1)
+# QDN Encrypted Data Envelope
 
-This document specifies the **encrypted data envelope** that clients (Home / Hub /
-Q-Apps) prepend to the data of a **private** QDN resource. It replaces the older
-bare text prefix (`qdnEncryptedData…`) with a compact, structurally-verifiable
-binary header.
+QENC is the binary envelope clients place around a private QDN resource. Core
+does not receive the content, group, or account keys. It validates enough of the
+outer framing to prevent accidental plaintext publication; Home performs the
+cryptography and authorization.
 
-## Why this exists
+QENC v2 is the interoperable format for new Qortium private chat attachments.
+QENC v1 and the older text prefixes remain accepted unchanged for existing
+generic private resources. New chat attachment implementations MUST emit v2.
 
-Core never holds the decryption key — **encryption and decryption happen entirely
-client-side**, so private content stays private even from the node operator. The
-trade-off is that Core **cannot cryptographically prove** a payload is real
-ciphertext (it has no key, and good ciphertext is indistinguishable from random).
+All integers are unsigned big-endian. All protocol domain strings are exact
+US-ASCII bytes without a terminator.
 
-What Core *can* do is validate the **shape** of a well-defined envelope. That
-robustly catches the failure that actually matters: an app accidentally publishing
-**plaintext** as "private". Plaintext will not carry a valid envelope, so publishing
-is rejected (`DATA_NOT_ENCRYPTED`).
+## QENC v2 outer envelope
 
-This check runs only at **publish** and **read** time. It is **not** part of
-consensus (arbitrary data is an opaque hash to the chain), so the format can evolve
-without any coordinated network upgrade. Existing resources that use the legacy
-prefix continue to work (see [Migration](#migration)).
-
-## Audience model
-
-A private resource is encrypted for one of three audiences. These are the choices a
-client offers the user:
-
-| Mode | Who can decrypt | Extra input the client needs |
-|------|-----------------|------------------------------|
-| **PUBLISHER** | only the publishing account | none (uses the publisher's own key) |
-| **ACCOUNTS**  | a chosen set of accounts | `recipientPublicKeys` — the list |
-| **GROUP**     | members of a Qortium group | `groupId` (resolves to a group key epoch) |
-
-**PUBLISHER and ACCOUNTS use the same cryptography** — a single content key wrapped
-to each recipient's public key. PUBLISHER is just "the only recipient is the
-publisher". So at the wire level there are **two envelope modes**:
-
-- `RECIPIENTS` (`0x01`) — covers PUBLISHER (1 recipient = self) and ACCOUNTS (N recipients)
-- `GROUP` (`0x02`)
-
-## Envelope layout (v1)
-
-The envelope is the **raw bytes** of the resource's data file: a fixed header, a
-mode-specific header, then the ciphertext. All integers are **big-endian**.
-
-```
-Offset  Size           Field        Notes
-------  -------------  -----------  -------------------------------------------
-0       4              magic        ASCII "QENC" = 0x51 0x45 0x4E 0x43
-4       1              version      0x01
-5       1              mode         0x01 = RECIPIENTS, 0x02 = GROUP
-6       1              cipher       0x01 = AES-256-GCM
-7       1              flags        reserved, set to 0x00
-8       2 (uint16)     headerLen    byte length of the mode-specific header below
-10      headerLen      header       key material + nonce (see modes below)
-10+hl   (rest)         ciphertext   AES-256-GCM(contentKey, nonce, plaintext) + 16-byte tag
+```text
+Offset  Size       Field
+0       4          magic = ASCII "QENC"
+4       1          version = 0x02
+5       1          mode: 0x01 RECIPIENTS, 0x02 GROUP
+6       1          cipher = 0x01 AES-256-GCM
+7       1          flags = 0x00
+8       2          headerLen
+10      headerLen  exact mode header
+10+hl   remaining  content ciphertext including the 16-byte GCM tag
 ```
 
-Fixed header = **10 bytes**. The mode-specific header and the ciphertext follow.
+The content ciphertext is:
 
-The **content** is always `AES-256-GCM(contentKey, contentNonce, plaintext)`; the
-modes differ only in how `contentKey` is delivered to readers.
-
-### Mode 0x01 — RECIPIENTS (PUBLISHER / ACCOUNTS)
-
-One random `contentKey` is wrapped to each recipient's public key via X25519 ECDH. A
-reader finds its own wrap by key id and unwraps `contentKey`.
-
-```
-header (headerLen = 46 + 68 * recipientCount):
-  recipientCount     2 bytes    uint16, number of recipients (1..N)
-  contentNonce       12 bytes   GCM IV for the content ciphertext
-  ephemeralPublicKey 32 bytes   X25519 ephemeral public key (shared by all wraps)
-  recipients[recipientCount], each entry (68 bytes):
-     keyId           8 bytes    SHA-256(recipientPublicKey)[0:8] — lets a reader find its wrap
-     wrapNonce       12 bytes   GCM IV for this wrap
-     wrappedKey      48 bytes   AES-256-GCM(wrapKey, wrapNonce, contentKey) = 32-byte key + 16-byte tag
+```text
+AES-256-GCM(contentKey, contentNonce, QATT plaintext,
+            AAD = "QENC attachment content v2" || fixedHeader || modeHeader)
 ```
 
-- `wrapKey = HKDF-SHA256(X25519(ephemeralPrivate, recipientPublic), info="qdn-enc-v1-wrap")`
-- A reader recomputes `wrapKey = HKDF-SHA256(X25519(recipientPrivate, ephemeralPublic), …)`,
-  decrypts its `wrappedKey` → `contentKey`, then decrypts the content.
-- **PUBLISHER** = `recipientCount == 1` with the publisher's own public key as the recipient.
-- **ACCOUNTS** = `recipientCount == N` over the chosen `recipientPublicKeys`.
+The fixed header in AAD is the exact first ten bytes, including `headerLen`.
+The mode header is the exact serialized header. Any header mutation therefore
+invalidates the content authentication tag.
 
-### Mode 0x02 — GROUP
+Every content and wrap nonce is 12 cryptographically random bytes. A producer
+MUST NOT reuse a nonce with the same AES key. Deterministic fixture nonces are
+test inputs only.
 
-The content is encrypted directly with the group's shared key; no per-recipient wraps.
+## Mode 0x01 — RECIPIENTS
 
-```
-header (headerLen = 20):
-  groupId            4 bytes    uint32 — the Qortium group
-  groupKeyId         4 bytes    uint32 — which group key epoch/version
-  contentNonce       12 bytes   GCM IV
-ciphertext:          AES-256-GCM(groupKey, contentNonce, plaintext) + 16-byte tag
-```
+```text
+headerLen = 46 + 68 * recipientCount
 
-The `groupKey` for `(groupId, groupKeyId)` is obtained **client-side** from the group
-key-announcement mechanism (the same announcements used by private group chat): a
-member fetches the announcement, unwraps the group key with their own wallet key, and
-caches it. Core stores the announcements but never holds the group key. Group access
-is **forward-only**: rotating to a new `groupKeyId` protects *future* resources;
-anything already published stays readable by whoever held the key at publish time.
-
-## Multi-file (private apps, websites, galleries)
-
-A private resource that is logically multi-file (an app, a website, an image
-collection) is encrypted as **one envelope over the whole compressed archive** — the
-client zips the directory, then encrypts that archive as the `plaintext` above. The
-stored resource is therefore a **single encrypted blob**; after the client decrypts
-it, it unzips into the directory and renders/uses it locally.
-
-This keeps things simple and more private (the file list is hidden, not just the file
-contents) and means private multi-file resources validate with the same single-file
-envelope check — there is no separate per-file format. Because the resource is one opaque
-blob to Core, there is no `?filepath=` support for private resources; the client decrypts,
-unzips, and resolves paths itself. See
-[multi-file-resources.md](multi-file-resources.md) for the full client guide (entry points,
-default-file resolution, and app responsibilities).
-
-## What Core validates (and what it does not)
-
-Core validates **only the outer framing**, enough to reject plaintext:
-
-- magic == `QENC`, version == `0x01`
-- mode ∈ { `0x01`, `0x02` }, cipher == `0x01`
-- `0 < headerLen ≤ 65535`, and the header plus **at least one ciphertext byte** are present
-
-Core does **not** parse the header internals or the ciphertext, and cannot verify the
-data actually decrypts. The header layouts above are a **client interop contract**,
-not enforced by Core — different clients must agree on them to decrypt each other's
-data. New `mode`/`cipher` ids must be added to Core before it will accept them.
-
-> Note: Core inspects only the leading portion of the data (currently ~25 KB) to
-> validate. The `RECIPIENTS` header grows with `recipientCount` (68 bytes each), so it
-> must fit within that window — a practical ceiling of a few hundred recipients. For
-> larger audiences, use `GROUP`.
-
-## Public vs private services
-
-- **Private** services (e.g. `*_PRIVATE`) require the data to be an envelope (or a
-  legacy prefix). Plaintext → `DATA_NOT_ENCRYPTED`.
-- **Public** services reject encrypted data → `DATA_ENCRYPTED`. Do not wrap public
-  content in an envelope.
-
-## Migration
-
-Core accepts **both** formats:
-
-1. the v1 envelope (preferred), and
-2. the legacy ASCII prefixes `qdnEncryptedData` / `qdnGroupEncryptedData`.
-
-Roll out in this order, with no consensus coordination required:
-
-1. **Ship Core** that accepts envelope **or** legacy prefix (already done). Existing
-   resources keep working.
-2. **Update clients** to emit the v1 envelope for new publishes.
-3. The legacy prefix can be accepted indefinitely; only deliberately sunset it once no
-   resources rely on it.
-
-## Client pseudocode
-
-```js
-// ---- common content encryption ----
-const contentKey   = randomBytes(32);
-const contentNonce = randomBytes(12);
-const ciphertext   = aes256gcm.encrypt(contentKey, contentNonce, plaintext); // + 16-byte tag
-
-function fixedHeader(mode, headerLen) {
-  return bytes([
-    0x51,0x45,0x4E,0x43,        // "QENC"
-    0x01,                       // version
-    mode,                       // 0x01 RECIPIENTS | 0x02 GROUP
-    0x01,                       // cipher = AES-256-GCM
-    0x00,                       // flags
-    (headerLen >> 8) & 0xFF, headerLen & 0xFF,
-  ]);
-}
-
-// ---- PUBLISHER / ACCOUNTS (mode 0x01) ----
-// recipients = [publisherPublicKey]            for PUBLISHER
-// recipients = recipientPublicKeys             for ACCOUNTS
-const eph = x25519.generateKeyPair();
-const entries = recipients.map(pub => {
-  const wrapKey   = hkdfSha256(x25519.scalarMult(eph.private, pub), "qdn-enc-v1-wrap");
-  const wrapNonce = randomBytes(12);
-  const wrapped   = aes256gcm.encrypt(wrapKey, wrapNonce, contentKey); // 32 + 16 tag
-  return concat(sha256(pub).slice(0,8) /*keyId*/, wrapNonce, wrapped);
-});
-const header = concat(uint16(recipients.length), contentNonce, eph.public /*32*/, ...entries);
-const envelope = concat(fixedHeader(0x01, header.length), header, ciphertext);
-
-// ---- GROUP (mode 0x02) ----
-// groupKey resolved client-side from the group key announcement for (groupId, groupKeyId)
-const ct2 = aes256gcm.encrypt(groupKey, contentNonce, plaintext);
-const header2 = concat(uint32(groupId), uint32(groupKeyId), contentNonce);
-const envelope2 = concat(fixedHeader(0x02, header2.length), header2, ct2);
-
-// ---- read (RECIPIENTS) ----
-// parse fixed header; headerLen = uint16(bytes[8..10]); header = bytes[10 .. 10+headerLen]
-// recipientCount = uint16(header[0..2]); contentNonce = header[2..14]; eph = header[14..46]
-// scan recipient entries for keyId == sha256(myPublicKey)[0:8]
-// wrapKey = hkdfSha256(x25519(myPrivate, eph), "qdn-enc-v1-wrap")
-// contentKey = aes256gcm.decrypt(wrapKey, wrapNonce, wrappedKey)
-// plaintext  = aes256gcm.decrypt(contentKey, contentNonce, ciphertext)
+recipientCount       2 bytes   1..256
+contentNonce         12 bytes
+ephemeralPublicKey   32 bytes  raw X25519 public key
+recipients[]         recipientCount entries, strictly sorted by keyId:
+  keyId               8 bytes  SHA-256(recipient Ed25519 public key)[0:8]
+  wrapNonce           12 bytes
+  wrappedContentKey   48 bytes  32-byte key plus 16-byte GCM tag
 ```
 
-The legacy format remains: `"qdnEncryptedData" + base64(ciphertext)` (recipient) or
-`"qdnGroupEncryptedData" + base64(ciphertext)` (group).
+Recipient key ids MUST be nonzero, unique, and in ascending unsigned byte order.
+The ephemeral public key MUST be nonzero. Core enforces those canonical framing
+rules so implementations cannot disagree about the serialized header.
+
+For each recipient:
+
+1. Convert the recipient's Qortium Ed25519 public key to X25519 using the same
+   Edwards-to-Montgomery conversion as `Ed25519Extras.toX25519PublicKey`.
+2. Compute `sharedSecret = X25519(ephemeralPrivateKey, recipientX25519PublicKey)`.
+3. Build:
+
+   ```text
+   wrapInfo = "QENC attachment recipient wrap v2"
+              || ephemeralPublicKey || keyId || contentNonce
+   ```
+
+4. Derive `wrapKey = HKDF32(sharedSecret,
+   "QENC attachment recipient hkdf salt v2", wrapInfo)`.
+5. Serialize `wrappedContentKey = AES-256-GCM(wrapKey, wrapNonce,
+   contentKey, AAD=wrapInfo)`.
+
+For decryption, an account converts its Ed25519 private seed to X25519 using the
+same SHA-512-and-clamp conversion as `Ed25519Extras.toX25519PrivateKey`, finds
+its key-id entry, derives the same wrap key, and unwraps the content key.
+
+`HKDF32` is the one-block HKDF-SHA256 construction used by QDM1 and QPGC:
+
+```text
+prk = HMAC-SHA256(salt, inputKeyMaterial)
+HKDF32 = HMAC-SHA256(prk, info || 0x01)
+```
+
+For a direct-message attachment, Home MUST use exactly the two distinct CHAT
+participant public keys: sender and recipient. Wrapping to the sender is
+required so the sender can reopen sent files. On read, Home MUST resolve and
+attest both participants against the signed CHAT conversation before decrypting;
+the app never supplies the authoritative key set.
+
+The generic recipient mode still permits 1..256 entries for non-chat private
+resources. Direct chat is the stricter two-participant profile above.
+
+## Mode 0x02 — GROUP
+
+```text
+headerLen = 80
+
+groupId       4 bytes  1..2147483647
+epochId       32 bytes QPGC membership epoch id
+keyId         32 bytes QPGC group-key id
+contentNonce  12 bytes
+```
+
+`epochId` and `keyId` MUST be nonzero. The resolved 32-byte `groupKey` MUST
+satisfy `PrivateGroupChatCrypto.computeKeyId(groupId, epochId, groupKey) ==
+keyId`.
+
+Attachments do not reuse the QPGC message key directly. Build:
+
+```text
+groupInfo = "QENC attachment group content v2"
+            || groupId || epochId || keyId
+
+contentKey = HKDF32(groupKey,
+                    "QENC attachment group hkdf salt v2",
+                    groupInfo)
+```
+
+Home obtains the QPGC key through the portable key-state/recovery flow, verifies
+the group/epoch/key context, derives the attachment key, and keeps every key out
+of app requests and results. A member removed after publication might retain a
+previous epoch key and downloaded plaintext; rotation protects future content,
+not already-disclosed bytes.
+
+## QATT v1 encrypted plaintext
+
+The plaintext inside QENC v2 is one QATT container, so sensitive metadata is
+authenticated and encrypted with the file bytes:
+
+```text
+Offset  Size          Field
+0       4             magic = ASCII "QATT"
+4       1             version = 0x01
+5       1             flags = 0x00
+6       2             filenameLen (1..255 UTF-8 bytes)
+8       2             mediaTypeLen (0..255 UTF-8 bytes)
+10      4             dataLen (1..uint32)
+14      32            SHA-256(data)
+46      filenameLen   filename UTF-8
+...     mediaTypeLen  media type UTF-8, or empty if unknown
+...     dataLen       exact file bytes
+```
+
+The total decoded length MUST equal the declared lengths. UTF-8 MUST decode
+strictly. Filenames cannot be `.`, `..`, contain a slash, backslash, or control
+character. Media types cannot contain control characters. Consumers still
+sanitize the filename and sniff bytes before display; encrypted publisher
+metadata is not automatically trustworthy.
+
+## Size and QDN service
+
+`QCHAT_ATTACHMENT_PRIVATE` has a 1 MiB (1,048,576-byte) limit. The limit counts
+the complete QENC envelope: fixed header, mode header, encrypted QATT framing
+and metadata, file data, and GCM tag. It is not a 1 MiB plaintext-file limit.
+The reference codec rejects an envelope one byte over this ceiling.
+
+Ciphertext is published under an opaque identifier. The signed chat descriptor
+must pin the resource transaction signature and/or ciphertext SHA-256; a mutable
+coordinate alone is not an authenticated attachment identity. QDN still exposes
+publisher, resource size, and publication timing. Encryption does not hide that
+metadata.
+
+## What Core validates
+
+For v2 Core checks:
+
+- exact magic, version, mode, cipher, zero flags, and `headerLen`;
+- at least a complete 16-byte content authentication tag;
+- the exact recipient count/header formula, 1..256 bound, nonzero X25519 key,
+  and strictly sorted unique nonzero recipient key ids; or
+- the exact 80-byte group header, positive signed-int-range group id, and
+  nonzero epoch/key ids.
+
+Core cannot authenticate ciphertext without a key. Home verifies all KDF, AAD,
+context, QATT, digest, and AEAD conditions after authorization.
+
+Core inspects the leading 25 KiB during QDN service validation. The maximum v2
+recipient header is 17,454 bytes, so every supported header plus a full GCM tag
+fits in that window. The complete resource-size check separately enforces the
+service ceiling.
+
+## Compatibility
+
+QENC v1 keeps its historical behavior: Core recognizes its fixed fields, an
+opaque nonempty mode header, and at least one following byte. Its stale
+four-byte group-key concept is not redefined. Existing v1 and legacy-prefix
+resources therefore remain readable and valid, but new private chat attachments
+MUST use v2.
+
+For archival interoperability, the previously documented v1 client layout was:
+
+- RECIPIENTS: `recipientCount:2 | contentNonce:12 |
+  ephemeralPublicKey:32 | N * (keyId:8 | wrapNonce:12 | wrappedKey:48)`, with
+  `headerLen = 46 + 68*N`; and
+- GROUP: `groupId:4 | groupKeyId:4 | contentNonce:12`, with `headerLen = 20`.
+
+The old recipient guide named HKDF info `qdn-enc-v1-wrap` but did not freeze an
+exact salt/AAD contract, and Core never parsed either mode header. That
+underspecification is why v1 is preserved as historical data rather than used
+for new interoperable chat attachments. The still older accepted text forms are
+ASCII `qdnEncryptedData` or `qdnGroupEncryptedData` followed by their legacy
+client ciphertext encoding.
+
+The deterministic language-neutral fixture is
+`src/test/resources/chat/interop/qenc-attachment-v2.json`. It freezes the QATT
+bytes, both QENC modes, Ed25519/X25519 shared secrets, key ids, salts/info/AAD,
+derived and wrapped keys, complete envelopes, sender reopen, the exact size
+boundary, and negative mutations. Production nonces and keys remain random.
