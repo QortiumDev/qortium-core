@@ -77,7 +77,7 @@
 		<swagger-api.version>2.2.53</swagger-api.version>
 		<swagger-ui.version>5.32.13</swagger-ui.version>
 		<tika-core.version>3.3.2</tika-core.version>
-		<jupnp.version>3.0.4</jupnp.version>
+		<jupnp.version>3.0.5</jupnp.version>
 		<xz.version>1.12</xz.version>
 	</properties>
 	<dependencyManagement>
