@@ -81,13 +81,13 @@ later Home/Chat bridge and presentation tasks.
 
 | ID | Core milestone | Status | Blocks Home work |
 | --- | --- | --- | --- |
-| C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC stays in C6 | Home clean-room crypto and byte attestation |
+| C0 | Freeze shared QDM1, QPGC, and CHAT vectors | Complete; QENC completed in C6 | Home clean-room crypto and byte attestation |
 | C1 | Store/index parsed QPGC epoch and key metadata | Complete | Bounded control/history reads |
 | C2 | Add default-enabled bounded public QPGC control and atomic state APIs | Complete | All-route private-group recovery |
 | C3 | Retain accepted announcements while retained messages depend on them | Complete | Restart, new install, and node-switch recovery |
 | C4 | Enforce/report QPGC v1 member/public-key/message limits | Complete | Honest private-group availability UI |
 | C5 | Add default-enabled, abuse-protected public unsigned join/leave builders | Complete | All-route Home join/leave actions |
-| C6 | Correct and freeze the QENC group-attachment contract | Deferred until attachment tranche | Private group/direct attachments |
+| C6 | Correct and freeze the QENC private-attachment contract | Complete | Private group/direct attachments |
 
 ## C0 — Shared protocol contracts and golden vectors
 
@@ -96,8 +96,8 @@ encryption plus QPGC membership, message encryption, member key wrapping, key
 announcements, current/specific key requests, and rotation requests. Relayed
 control context and initial/revision CHAT transaction bytes are also frozen.
 The fixture now also records exact shared-secret/AAD/KDF intermediates and
-machine-readable positive/negative validation cases. QENC remains deferred to
-C6 and does not keep C0 open.
+machine-readable positive/negative validation cases. C6 adds the separate QENC
+v2 attachment fixture without changing the C0 chat-wire contract.
 
 ### Core changes
 
@@ -121,7 +121,7 @@ Required fixture coverage:
 - negative parsing cases: wrong group/epoch/key, duplicate/missing wrapper,
   bad signature/tag/nonce, trailing bytes, and oversized data;
 - positive canonicalization of reordered announcement wrappers; and
-- QENC recipient and corrected group-header fixtures when C6 begins.
+- QENC v2 recipient and corrected group-header fixtures completed in C6.
 
 ### Completion gate
 
@@ -418,12 +418,13 @@ and pin `ALREADY_GROUP_MEMBER` and `NOT_GROUP_MEMBER` as identifiable states.
 
 ## C6 — QENC private attachment contract
 
-This does not block initial Home chat work, but it must finish before private
-attachments.
+Status (2026-08-18): complete. QENC v2 is the required format for new private
+chat attachments. QENC v1 and legacy-prefix recognition remain unchanged for
+existing generic private resources.
 
 ### Core/spec changes
 
-- Replace the stale four-byte group-key reference with the QPGC context:
+- Replace the stale four-byte group-key reference in new v2 resources with the QPGC context:
   `groupId:uint32 | epochId:32 | keyId:32 | contentNonce:12`.
 - Derive a domain-separated attachment key instead of reusing the QPGC message
   key directly.
@@ -433,6 +434,35 @@ attachments.
   service limit.
 - Direct attachments wrap to both recipient and sender so sent files remain
   reopenable.
+
+### Implementation record
+
+- `EncryptedDataEnvelope` recognizes v1 exactly as before and strictly parses
+  v2 mode headers, flags, recipient counts/order, full group context, and a
+  complete authentication tag.
+- `PrivateChatAttachmentCrypto` is the Core reference for Ed25519-to-X25519
+  recipient wrapping, domain-separated HKDF-SHA256, AES-256-GCM, group-key
+  derivation, direct sender reopen, and the exact full-envelope ceiling.
+- QATT v1 encrypts filename, media type, byte count, SHA-256, and file data in
+  one authenticated plaintext container. Consumers still sniff and sanitize
+  the decrypted file before display.
+- `qenc-attachment-v2.json` was generated independently of the Java codec and
+  is reproduced by Core tests byte for byte. It includes both participant
+  decryptions, group context, KDF/AAD intermediates, full envelopes, boundary
+  size, and negative mutations.
+- `QCHAT_ATTACHMENT_PRIVATE` continues counting the entire stored resource
+  against its existing 1 MiB limit; the reference codec applies the same bound
+  before publication.
+
+### Completion gate
+
+- Both direct participants decrypt the deterministic recipient envelope and a
+  third account cannot select a wrap.
+- A current QPGC member decrypts only with the exact group, epoch, key id, and
+  matching group key.
+- Header/context/ciphertext/payload mutations fail at the structural, context,
+  AEAD, or digest layer as appropriate.
+- One byte over the complete 1 MiB envelope limit is rejected.
 
 ### Corresponding Home work after Core
 
@@ -451,7 +481,8 @@ attachments.
 3. **Recovery durability and limits (complete):** C3-C4 dependency-aware retention,
    v1 member/public-key/plaintext limits, and full regression coverage.
 4. **Portable participation (complete):** C5 public unsigned join/leave builders.
-5. **Private attachments:** C6 only when the Home attachment tranche is ready.
+5. **Private attachments (complete):** C6 QENC v2 framing, crypto reference,
+   encrypted payload, deterministic vectors, compatibility, and limits.
 
 Each PR must update `QORTIUM-CHANGELOG.md`, use a matching changelog/commit
 title, run focused tests with `-DskipJUnitTests=false`, and finish with the clean
@@ -471,7 +502,8 @@ the trusted Home bridge is now the next active portability tranche:
 5. preserve and attest `chatReference` for public/private edit, delete, and
    reaction actions;
 6. provide Qortium and Qortal resource viewer/stream/save/publish parity; and
-7. implement C6 private attachments only after its wire contract is frozen.
+7. consume the now-frozen C6 QENC v2 fixture for private attachments without
+   exposing attachment, group, or account keys to Chat.
 
 Chat follows Home and consumes high-level actions only. It never calls the raw
 QPGC control endpoint, performs wallet crypto, or receives reusable secret

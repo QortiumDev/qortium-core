@@ -9,7 +9,7 @@ import static org.junit.Assert.assertTrue;
 
 public class EncryptedDataEnvelopeTests {
 
-    /** Build a v1 envelope: fixed header + headerLen bytes of (zeroed) header + ciphertextLen bytes. */
+    /** Build an envelope: fixed header + headerLen bytes of (zeroed) header + ciphertextLen bytes. */
     private static byte[] envelope(byte version, byte mode, byte cipher, int headerLen, int ciphertextLen) {
         byte[] out = new byte[EncryptedDataEnvelope.FIXED_HEADER_LENGTH + Math.max(headerLen, 0) + Math.max(ciphertextLen, 0)];
         out[0] = 'Q'; out[1] = 'E'; out[2] = 'N'; out[3] = 'C';
@@ -23,9 +23,38 @@ public class EncryptedDataEnvelopeTests {
     }
 
     private static byte[] validSingleRecipientEnvelope() {
-        // single-recipient header = ephemeral pubkey(32) + nonce(12) = 44, plus some ciphertext
+        // Historical v1 only enforced an opaque nonempty header.
         return envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 64);
+    }
+
+    private static byte[] validVersion2RecipientsEnvelope(int recipientCount) {
+        int headerLength = EncryptedDataEnvelope.RECIPIENTS_HEADER_PREFIX_LENGTH
+                + recipientCount * EncryptedDataEnvelope.RECIPIENT_ENTRY_LENGTH;
+        byte[] data = envelope(EncryptedDataEnvelope.VERSION_2, EncryptedDataEnvelope.MODE_RECIPIENTS,
+                EncryptedDataEnvelope.CIPHER_AES_256_GCM, headerLength,
+                EncryptedDataEnvelope.AUTH_TAG_LENGTH);
+        int offset = EncryptedDataEnvelope.FIXED_HEADER_LENGTH;
+        data[offset] = (byte) (recipientCount >>> 8);
+        data[offset + 1] = (byte) recipientCount;
+        data[offset + 2 + EncryptedDataEnvelope.CONTENT_NONCE_LENGTH] = 1;
+        int entryOffset = offset + EncryptedDataEnvelope.RECIPIENTS_HEADER_PREFIX_LENGTH;
+        for (int index = 0; index < recipientCount; ++index) {
+            data[entryOffset + EncryptedDataEnvelope.RECIPIENT_KEY_ID_LENGTH - 1] = (byte) (index + 1);
+            entryOffset += EncryptedDataEnvelope.RECIPIENT_ENTRY_LENGTH;
+        }
+        return data;
+    }
+
+    private static byte[] validVersion2GroupEnvelope() {
+        byte[] data = envelope(EncryptedDataEnvelope.VERSION_2, EncryptedDataEnvelope.MODE_GROUP,
+                EncryptedDataEnvelope.CIPHER_AES_256_GCM, EncryptedDataEnvelope.GROUP_HEADER_LENGTH,
+                EncryptedDataEnvelope.AUTH_TAG_LENGTH);
+        int offset = EncryptedDataEnvelope.FIXED_HEADER_LENGTH;
+        data[offset + 3] = 12;
+        data[offset + EncryptedDataEnvelope.GROUP_ID_LENGTH] = 1;
+        data[offset + EncryptedDataEnvelope.GROUP_ID_LENGTH + EncryptedDataEnvelope.EPOCH_ID_LENGTH] = 1;
+        return data;
     }
 
     @Test
@@ -37,7 +66,7 @@ public class EncryptedDataEnvelopeTests {
 
     @Test
     public void acceptsValidGroupEnvelope() {
-        // group header = groupKeyId(4) + nonce(12) = 16, plus ciphertext
+        // Historical v1 only enforced an opaque nonempty header.
         byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_GROUP,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 16, 64);
         assertTrue(EncryptedDataEnvelope.isEnvelope(data));
@@ -53,9 +82,53 @@ public class EncryptedDataEnvelopeTests {
 
     @Test
     public void rejectsUnknownVersion() {
-        byte[] data = envelope((byte) 0x02, EncryptedDataEnvelope.MODE_RECIPIENTS,
+        byte[] data = envelope((byte) 0x03, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 64);
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
+    }
+
+    @Test
+    public void acceptsStrictVersion2Modes() {
+        assertTrue(EncryptedDataEnvelope.isEnvelope(validVersion2RecipientsEnvelope(2)));
+        assertTrue(EncryptedDataEnvelope.isEnvelope(validVersion2GroupEnvelope()));
+    }
+
+    @Test
+    public void rejectsVersion2ReservedFlagsAndShortTag() {
+        byte[] reservedFlags = validVersion2RecipientsEnvelope(2);
+        reservedFlags[7] = 1;
+        assertFalse(EncryptedDataEnvelope.isEnvelope(reservedFlags));
+
+        byte[] shortTag = validVersion2RecipientsEnvelope(2);
+        byte[] truncated = java.util.Arrays.copyOf(shortTag, shortTag.length - 1);
+        assertFalse(EncryptedDataEnvelope.isEnvelope(truncated));
+    }
+
+    @Test
+    public void rejectsVersion2RecipientCountMismatchAndNonCanonicalOrder() {
+        byte[] wrongCount = validVersion2RecipientsEnvelope(2);
+        wrongCount[EncryptedDataEnvelope.FIXED_HEADER_LENGTH + 1] = 1;
+        assertFalse(EncryptedDataEnvelope.isEnvelope(wrongCount));
+
+        byte[] duplicateKeyId = validVersion2RecipientsEnvelope(2);
+        int firstEntry = EncryptedDataEnvelope.FIXED_HEADER_LENGTH
+                + EncryptedDataEnvelope.RECIPIENTS_HEADER_PREFIX_LENGTH;
+        int secondEntry = firstEntry + EncryptedDataEnvelope.RECIPIENT_ENTRY_LENGTH;
+        System.arraycopy(duplicateKeyId, firstEntry, duplicateKeyId, secondEntry,
+                EncryptedDataEnvelope.RECIPIENT_KEY_ID_LENGTH);
+        assertFalse(EncryptedDataEnvelope.isEnvelope(duplicateKeyId));
+    }
+
+    @Test
+    public void rejectsVersion2InvalidGroupContext() {
+        byte[] zeroGroupId = validVersion2GroupEnvelope();
+        zeroGroupId[EncryptedDataEnvelope.FIXED_HEADER_LENGTH + 3] = 0;
+        assertFalse(EncryptedDataEnvelope.isEnvelope(zeroGroupId));
+
+        byte[] shortHeader = envelope(EncryptedDataEnvelope.VERSION_2,
+                EncryptedDataEnvelope.MODE_GROUP, EncryptedDataEnvelope.CIPHER_AES_256_GCM,
+                EncryptedDataEnvelope.GROUP_HEADER_LENGTH - 1, EncryptedDataEnvelope.AUTH_TAG_LENGTH);
+        assertFalse(EncryptedDataEnvelope.isEnvelope(shortHeader));
     }
 
     @Test

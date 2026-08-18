@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-18 - feat(chat): freeze QENC v2 private attachments
+
+Defines the interoperable encrypted-resource format that Home will use for
+Qortium private-group and direct-message attachments. QENC v2 now binds the
+complete header as authenticated data, uses the full QPGC group/epoch/key
+context with a separate attachment key, wraps direct content to both
+participants, and encrypts filename, media type, digest, and file bytes inside
+one QATT payload. Core strictly validates the new framing while continuing to
+accept old QENC v1 and legacy resources unchanged. Language-neutral vectors
+freeze both modes, sender reopen, tamper failures, and the complete 1 MiB
+service boundary for Home's desktop and Android implementation.
+
 ### 2026-08-17 - docs(chat): complete portable group participation phase
 
 Marks C5 complete now that Core exposes default-enabled, abuse-protected public

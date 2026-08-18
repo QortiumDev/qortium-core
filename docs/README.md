@@ -57,7 +57,7 @@ history.
 - `Developer reference` [Private group chat encryption workflow](chat/private-group-chat-encryption.md) - Core-managed private group chat design and client API flow
 - `Developer reference` [QDN app documentation](qdn/q-apps.md) - QDN app concepts and request examples
 - `Developer reference` [Multi-file resources and entry points](qdn/multi-file-resources.md) - client guide to multi-file resources, the entryPoint, default-file resolution, private resources, and app responsibilities
-- `Developer reference` [QDN encrypted data envelope](qdn/encrypted-data-envelope.md) - v1 envelope format for private resource encryption, with legacy-prefix fallback
+- `Developer reference` [QDN encrypted data envelope](qdn/encrypted-data-envelope.md) - strict QENC v2 private-chat attachment format plus v1/legacy compatibility
 
 ## Cross-Chain Support
 
