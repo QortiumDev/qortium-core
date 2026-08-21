@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-21 - chore(release): prepare Core 1.7.2
+
+Marks the Core 1.7.2 Preview prerelease that delivers the portable chat and
+group participation work completed since 1.7.1. Clients on public nodes can
+now read private-group chat state and control metadata through bounded,
+rate-limited endpoints, keep private-group key recovery working across the
+retention window, and build unsigned public group join and leave transactions
+for local signing, and Core now strictly validates the frozen QENC v2
+private-attachment format that Home 2 publishes for direct and group
+attachments. Default Preview settings templates allowlist the new public
+routes with dedicated rate limits. This entry also records three
+Dependabot-maintained updates merged without modifying the bot-authored pull
+requests: jUPnP `3.0.5`, Swagger UI `5.32.13`, and the CodeQL action `4.37.7`.
+None of these changes alter Qortium consensus rules, and no Preview chain
+configuration or activation schedule changes in this release.
+
 ### 2026-08-18 - feat(chat): freeze QENC v2 private attachments
 
 Defines the interoperable encrypted-resource format that Home will use for
