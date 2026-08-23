@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-23 - fix(sync): recover stale short forks automatically
+
+Restores unattended synchronization when a node becomes trapped on a stale
+short local fork. Normal chain-weight comparison remains unchanged while the
+tip is recent. After the tip becomes stale, Core can retain a strictly higher
+replacement branch only when the local fork is at most three blocks deep and
+at least two distinct fresh peers report the same common block and first
+replacement block. Core then downloads and fully validates the replacement
+blocks and commits the reorganization atomically, restoring the original fork
+if anything fails. The retired peer-claim orphaning settings remain disabled;
+no confirmed block is discarded merely because peers advertise a height or
+archive capability.
+
 ### 2026-08-21 - chore(release): prepare Core 1.7.2
 
 Marks the Core 1.7.2 Preview prerelease that delivers the portable chat and

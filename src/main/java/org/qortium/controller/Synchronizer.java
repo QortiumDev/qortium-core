@@ -60,6 +60,10 @@ public class Synchronizer extends Thread {
 
 	/** Maximum number of consecutive failed sync attempts before marking peer as misbehaved */
 	private static final int MAX_CONSECUTIVE_FAILED_SYNC_ATTEMPTS = 3;
+	/** Minimum distinct peers that must report the same replacement branch for stale-fork recovery. */
+	private static final int STALE_FORK_RECOVERY_MIN_BRANCH_PEERS = 2;
+	/** Maximum local fork depth that normal synchronization may override after the tip becomes stale. */
+	private static final int STALE_FORK_RECOVERY_MAX_LOCAL_DEPTH = 3;
 
 	private boolean running;
 
@@ -338,8 +342,8 @@ public class Synchronizer extends Thread {
 		// Recovery mode is the path that lets a delayed or stalled network continue from older block timestamps.
 		beforeCount = peers.size();
 		boolean enteredRecoveryFromStalePeers = false;
-		boolean staleChainCatchUpActive = Controller.getInstance().isStaleChainCatchUpActive();
-		if (!this.recoveryMode && !staleChainCatchUpActive) {
+		boolean staleChainSynchronizationActive = Controller.getInstance().isStaleChainSynchronizationActive();
+		if (!this.recoveryMode && !staleChainSynchronizationActive) {
 			List<Peer> peersBeforeRecentFilter = new ArrayList<>(peers);
 			List<Peer> noRecentBlockPeers = peers.stream().filter(Controller.hasNoRecentBlock).collect(Collectors.toList());
 			peers.removeIf(Controller.hasNoRecentBlock);
@@ -353,8 +357,8 @@ public class Synchronizer extends Thread {
 				enteredRecoveryFromStalePeers = true;
 				LOGGER.debug("Recovery mode active; allowing peers with older chain tips for synchronization");
 			}
-		} else if (staleChainCatchUpActive) {
-			LOGGER.debug("Stale chain catch-up active; skipping recent-block peer filter");
+		} else if (staleChainSynchronizationActive) {
+			LOGGER.debug("Stale-chain synchronization recovery active; skipping recent-block peer filter");
 		} else {
 			LOGGER.debug("Recovery mode active; skipping recent-block peer filter");
 		}
@@ -368,7 +372,7 @@ public class Synchronizer extends Thread {
 					oldVersionPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 		}
 
-		if (!enteredRecoveryFromStalePeers && !staleChainCatchUpActive) {
+		if (!enteredRecoveryFromStalePeers && !staleChainSynchronizationActive) {
 			peers = this.applyRecoveryModePeerPolicy(initialPeerCount > 0, peers);
 		}
 
@@ -424,7 +428,7 @@ public class Synchronizer extends Thread {
 		peers.removeIf(Controller.hasInferiorChainTip);
 
 		// Remove any peers that are no longer on a recent block since the last check, unless recovery or catch-up mode is active.
-		if (!this.recoveryMode && !staleChainCatchUpActive)
+		if (!this.recoveryMode && !staleChainSynchronizationActive)
 			peers.removeIf(Controller.hasNoRecentBlock);
 
 		final int peersRemoved = peersBeforeComparison - peers.size();
@@ -444,10 +448,10 @@ public class Synchronizer extends Thread {
 		}
 
 		Peer peer;
-		if (staleChainCatchUpActive) {
-			peer = getBestStaleCatchUpPeer(peers);
+		if (staleChainSynchronizationActive) {
+			peer = getBestStaleSynchronizationPeer(peers);
 			final BlockSummaryData selectedPeerChainTipData = peer.getChainTipData();
-			LOGGER.debug("Stale chain catch-up active; selected peer {} with height {}, ts {}", peer,
+			LOGGER.debug("Stale-chain synchronization recovery active; selected peer {} with height {}, ts {}", peer,
 					selectedPeerChainTipData != null ? selectedPeerChainTipData.getHeight() : null,
 					selectedPeerChainTipData != null ? selectedPeerChainTipData.getTimestamp() : null);
 		} else {
@@ -676,7 +680,7 @@ public class Synchronizer extends Thread {
 			inferiorChainSignatures.add(inferiorChainSignature);
 	}
 
-	private static Peer getBestStaleCatchUpPeer(List<Peer> peers) {
+	private static Peer getBestStaleSynchronizationPeer(List<Peer> peers) {
 		return peers.stream()
 				.max((left, right) -> Controller.compareChainTipsByHeightThenTimestamp(left.getChainTipData(), right.getChainTipData()))
 				.orElseThrow(IllegalArgumentException::new);
@@ -708,9 +712,9 @@ public class Synchronizer extends Thread {
 					return SynchronizationResult.REPOSITORY_ISSUE;
 
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
-				boolean staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
+				boolean staleChainSynchronizationActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
 				if (ourLatestBlockData.getTimestamp() < minLatestBlockTimestamp) {
-					if (!this.recoveryMode && !staleChainCatchUpActive) {
+					if (!this.recoveryMode && !staleChainSynchronizationActive) {
 						LOGGER.debug(String.format("Our latest block is very old, so we won't collect common block info from peers"));
 						return SynchronizationResult.NOTHING_TO_DO;
 					}
@@ -718,7 +722,7 @@ public class Synchronizer extends Thread {
 					if (this.recoveryMode)
 						LOGGER.debug("Recovery mode active; collecting common block info despite older local chain tip");
 					else
-						LOGGER.debug("Stale chain catch-up active; collecting common block info despite older local chain tip");
+						LOGGER.debug("Stale-chain synchronization recovery active; collecting common block info despite older local chain tip");
 				}
 
 				LOGGER.debug(String.format("Searching for common blocks with %d peers...", peers.size()));
@@ -847,9 +851,9 @@ public class Synchronizer extends Thread {
 					return peers;
 
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
-				boolean staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
+				boolean staleChainSynchronizationActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
 				if (ourLatestBlockData.getTimestamp() < minLatestBlockTimestamp) {
-					if (!this.recoveryMode && !staleChainCatchUpActive) {
+					if (!this.recoveryMode && !staleChainSynchronizationActive) {
 						LOGGER.debug(String.format("Our latest block is very old, so we won't filter the peers list"));
 						return peers;
 					}
@@ -857,7 +861,7 @@ public class Synchronizer extends Thread {
 					if (this.recoveryMode)
 						LOGGER.debug("Recovery mode active; comparing peers despite older local chain tip");
 					else
-						LOGGER.debug("Stale chain catch-up active; comparing peers despite older local chain tip");
+						LOGGER.debug("Stale-chain synchronization recovery active; comparing peers despite older local chain tip");
 				}
 
 				LOGGER.debug("Using same-length chain weight consensus algorithm");
@@ -1039,8 +1043,8 @@ public class Synchronizer extends Thread {
 
 						// If peer is out of date (since our last check), we should exclude it from this round unless recovery mode is active.
 						minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
-						staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
-						if (!this.recoveryMode && !staleChainCatchUpActive && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
+						staleChainSynchronizationActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
+						if (!this.recoveryMode && !staleChainSynchronizationActive && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
 							LOGGER.debug(String.format("Peer %s is out of date - removing it from this round", peer));
 							peers.remove(peer);
 							continue;
@@ -1055,13 +1059,28 @@ public class Synchronizer extends Thread {
 						peer.getCommonBlockData().setChainWeight(peerChainWeight);
 						LOGGER.debug(String.format("Chain weight of peer %s based on %d blocks (%d - %d) is %s", peer, minChainLength, peerBlockSummariesAfterCommonBlock.get(0).getHeight(), peerBlockSummariesAfterCommonBlock.get(peerBlockSummariesAfterCommonBlock.size()-1).getHeight(), accurateFormatter.format(peerChainWeight)));
 
-						// Compare against our chain - if our blockchain has greater weight then don't synchronize with peer (or any others in this group)
-						if (ourChainWeight.compareTo(peerChainWeight) > 0) {
+						int agreeingBranchPeers = countDistinctPeersOnSameBranch(peer,
+								peersSharingCommonBlock, ourHeight, minLatestBlockTimestamp);
+						boolean staleForkRecoveryOverride = isStaleForkRecoveryOverrideEligible(
+								staleChainSynchronizationActive, ourHeight, commonBlockSummary.getHeight(),
+								peerHeight, agreeingBranchPeers);
+
+						// Normally same-length chain weight decides. Once a short local fork is stale, a
+						// higher branch reported by multiple distinct healthy peers must remain eligible
+						// so synchronize() can fetch every block, validate it, and adopt it atomically.
+						if (!shouldRetainPeerChain(staleChainSynchronizationActive,
+								ourHeight, commonBlockSummary.getHeight(), peerHeight, agreeingBranchPeers,
+								ourChainWeight, peerChainWeight)) {
 							// This peer is on an inferior chain - remove it
 							LOGGER.debug(String.format("Peer %s is on an inferior chain to us - removing it from this round", peer));
 							peers.remove(peer);
 						}
 						else {
+							if (staleForkRecoveryOverride) {
+								LOGGER.info("Retaining higher peer {} for bounded stale-fork recovery: local height {}, "
+										+ "common height {}, peer height {}, agreeing peers {}", peer, ourHeight,
+										commonBlockSummary.getHeight(), peerHeight, agreeingBranchPeers);
+							}
 							// Our chain is inferior or equal
 							LOGGER.debug(String.format("Peer %s is on an equal or better chain to us. We will compare the other peers sharing this common block against each other, and drop all peers sharing higher common blocks.", peer));
 							dropPeersAfterCommonBlockHeight = commonBlockSummary.getHeight();
@@ -1136,6 +1155,77 @@ public class Synchronizer extends Thread {
 				minChainLength = peerAdditionalBlocksAfterCommonBlock;
 		}
 		return minChainLength;
+	}
+
+	/* package */ static boolean isStaleForkRecoveryOverrideEligible(boolean staleChainSynchronizationActive,
+			int ourHeight, int commonBlockHeight, int peerHeight, int agreeingBranchPeers) {
+		int localForkDepth = ourHeight - commonBlockHeight;
+		return staleChainSynchronizationActive
+				&& peerHeight > ourHeight
+				&& localForkDepth > 0
+				&& localForkDepth <= STALE_FORK_RECOVERY_MAX_LOCAL_DEPTH
+				&& agreeingBranchPeers >= STALE_FORK_RECOVERY_MIN_BRANCH_PEERS;
+	}
+
+	/* package */ static boolean shouldRetainPeerChain(boolean staleChainSynchronizationActive,
+			int ourHeight, int commonBlockHeight, int peerHeight, int agreeingBranchPeers,
+			BigInteger ourChainWeight, BigInteger peerChainWeight) {
+		return isStaleForkRecoveryOverrideEligible(staleChainSynchronizationActive,
+				ourHeight, commonBlockHeight, peerHeight, agreeingBranchPeers)
+				|| ourChainWeight.compareTo(peerChainWeight) <= 0;
+	}
+
+	/* package */ static int countDistinctPeersOnSameBranch(Peer candidate, List<Peer> peers,
+			int ourHeight, Long minLatestBlockTimestamp) {
+		BlockSummaryData candidateTip = candidate.getChainTipData();
+		CommonBlockData candidateCommonBlockData = candidate.getCommonBlockData();
+		if (candidateTip == null || candidateTip.getHeight() <= ourHeight || candidateTip.getTimestamp() == null
+				|| minLatestBlockTimestamp == null || candidateTip.getTimestamp() < minLatestBlockTimestamp
+				|| candidateCommonBlockData == null || candidateCommonBlockData.getCommonBlockSummary() == null)
+			return 0;
+
+		BlockSummaryData candidateCommonBlock = candidateCommonBlockData.getCommonBlockSummary();
+		List<BlockSummaryData> candidateSummaries = candidateCommonBlockData.getBlockSummariesAfterCommonBlock();
+		if (candidateSummaries == null || candidateSummaries.isEmpty())
+			return 0;
+
+		BlockSummaryData candidateFirstReplacement = candidateSummaries.get(0);
+		byte[] commonBlockSignature = candidateCommonBlock.getSignature();
+		byte[] firstReplacementSignature = candidateFirstReplacement.getSignature();
+		if (commonBlockSignature == null || firstReplacementSignature == null)
+			return 0;
+		if (candidateFirstReplacement.getHeight() != candidateCommonBlock.getHeight() + 1)
+			return 0;
+		Set<String> distinctPeerIdentities = new HashSet<>();
+
+		for (Peer peer : peers) {
+			BlockSummaryData peerTip = peer.getChainTipData();
+			CommonBlockData peerCommonBlockData = peer.getCommonBlockData();
+			if (peerTip == null || peerTip.getHeight() <= ourHeight || peerTip.getTimestamp() == null
+					|| minLatestBlockTimestamp == null || peerTip.getTimestamp() < minLatestBlockTimestamp
+					|| peerCommonBlockData == null
+					|| peerCommonBlockData.getCommonBlockSummary() == null)
+				continue;
+
+			BlockSummaryData peerCommonBlock = peerCommonBlockData.getCommonBlockSummary();
+			List<BlockSummaryData> peerSummaries = peerCommonBlockData.getBlockSummariesAfterCommonBlock();
+			if (peerSummaries == null || peerSummaries.isEmpty()
+					|| peerCommonBlock.getHeight() != candidateCommonBlock.getHeight()
+					|| peerSummaries.get(0).getHeight() != candidateFirstReplacement.getHeight()
+					|| !Arrays.equals(commonBlockSignature, peerCommonBlock.getSignature())
+					|| !Arrays.equals(firstReplacementSignature, peerSummaries.get(0).getSignature()))
+				continue;
+
+			String peerIdentity = peer.getPeersNodeId();
+			if (peerIdentity == null && peer.getPeerData() != null && peer.getPeerData().getAddress() != null)
+				peerIdentity = peer.getPeerData().getAddress().toString();
+			if (peerIdentity == null)
+				peerIdentity = peer.toString();
+
+			distinctPeerIdentities.add(peerIdentity);
+		}
+
+		return distinctPeerIdentities.size();
 	}
 
 	private BlockSummaryData blockSummaryWithSignature(byte[] signature, List<BlockSummaryData> blockSummaries) {
@@ -1650,8 +1740,8 @@ public class Synchronizer extends Thread {
 				final Long minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
 				final Long peerLastBlockTimestamp = peer.getChainTipData().getTimestamp();
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
-				final boolean staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
-				if (!this.recoveryMode && !staleChainCatchUpActive && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
+				final boolean staleChainSynchronizationActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
+				if (!this.recoveryMode && !staleChainSynchronizationActive && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
 					LOGGER.info(String.format("Peer %s is out of date, so abandoning sync attempt", peer));
 					return SynchronizationResult.CHAIN_TIP_TOO_OLD;
 				}

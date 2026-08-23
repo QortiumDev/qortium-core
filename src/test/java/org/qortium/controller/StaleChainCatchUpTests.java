@@ -1,10 +1,19 @@
 package org.qortium.controller;
 
+import java.util.List;
+
+import org.apache.commons.lang3.reflect.FieldUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.block.Block;
 import org.qortium.block.BlockChain;
 import org.qortium.data.block.BlockData;
+import org.qortium.data.block.BlockSummaryData;
+import org.qortium.data.network.PeerData;
+import org.qortium.network.Network;
+import org.qortium.network.Peer;
+import org.qortium.network.PeerAddress;
 import org.qortium.repository.DataException;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
@@ -21,6 +30,12 @@ public class StaleChainCatchUpTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+	}
+
+	@After
+	public void afterTest() throws IllegalAccessException {
+		FieldUtils.writeField(Network.getInstance(), "immutableHandshakedPeers", List.of(), true);
+		NTP.setFixedOffset(Settings.getInstance().getTestNtpOffset());
 	}
 
 	@Test
@@ -77,9 +92,40 @@ public class StaleChainCatchUpTests extends Common {
 		}
 	}
 
+	@Test
+	public void testFreshHigherPeerEnablesSyncRecoveryButDisablesCatchUpMinting() throws Exception {
+		try (var repository = RepositoryManager.getRepository()) {
+			BlockData latestBlockData = repository.getBlockRepository().getLastBlock();
+			long desiredNow = latestBlockData.getTimestamp() + 10 * 60 * 1000L;
+			NTP.setFixedOffset(desiredNow - System.currentTimeMillis());
+			Controller.getInstance().refillLatestBlocksCache();
+
+			Peer peer = new CurrentVersionPeer("198.51.100.10:24892");
+			peer.setChainTipData(new BlockSummaryData(latestBlockData.getHeight() + 1,
+					new byte[128], Common.getTestAccount(repository, "alice-reward-share").getPublicKey(), desiredNow));
+			FieldUtils.writeField(Network.getInstance(), "immutableHandshakedPeers", List.of(peer), true);
+
+			assertTrue("fresh higher peers must keep stale-tip synchronization recovery active",
+					Controller.getInstance().isStaleChainSynchronizationActive());
+			assertFalse("fresh higher peers must prevent stale catch-up minting",
+					Controller.getInstance().isStaleChainCatchUpActive());
+		}
+	}
+
 	private static BlockData blockDataAtTimestamp(long timestamp) {
 		return new BlockData(Block.CURRENT_VERSION, new byte[128], 0, 0L, new byte[64], TEST_PARENT_HEIGHT, timestamp,
 				new byte[32], new byte[64], 0, 0L);
+	}
+
+	private static final class CurrentVersionPeer extends Peer {
+		private CurrentVersionPeer(String address) {
+			super(new PeerData(PeerAddress.fromString(address)), Peer.NETWORK);
+		}
+
+		@Override
+		public boolean isAtLeastVersion(String minVersionString) {
+			return true;
+		}
 	}
 
 }

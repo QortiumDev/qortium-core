@@ -398,6 +398,21 @@ suite passed 30/30, the serialized full suite passed 3,008 tests with 68 skips,
 blocker. These results do not claim release, deployment, live-network
 verification, or failure atomicity in the unchanged normal reorganization path.
 
+A 2026-08-23 follow-up restores the missing liveness behavior inside normal
+synchronization without reviving the retired peer-claim orphan path. A stale
+local fork can bypass its otherwise-superior same-length weight only when it is
+at most three blocks deep, a peer branch is strictly higher, and at least two
+distinct fresh peers report the same common block and first replacement block.
+Those summaries only keep the branch eligible for synchronization: Core still
+downloads every replacement block, fully validates it, and uses the A-01 atomic
+fork-adoption transaction so a missing, invalid, interrupted, or failed
+replacement restores the exact original tip. The two retired settings remain
+permanently false. Recent local tips, deeper forks, unagreed branches, and the
+ordinary same-length chain-weight rule are unchanged. The focused five-class
+suite passed 38/38 and the clean serialized full suite passed 3,185 tests with
+67 skips. These results do not claim release, deployment, or the retained live
+stale-fork acceptance test.
+
 T2 was completed by `security(sync): disable peer-claim recovery watchdog by
 default`, `fix(sync): exit recovery mode when a recent peer returns`,
 `fix(minting): defer genesis minting to a fresh higher peer`, and the corrective
