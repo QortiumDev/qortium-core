@@ -2766,6 +2766,22 @@ public class Controller extends Thread {
 	}
 
 	/**
+	 * Whether the local tip is stale and its next timestamp is viable, so synchronization may
+	 * recover it from a higher peer branch. Unlike {@link #isStaleChainCatchUpActive()}, this does
+	 * not turn off when fresh higher peers exist: those peers are exactly what synchronization
+	 * needs in order to recover a stale local fork.
+	 */
+	public boolean isStaleChainSynchronizationActive() {
+		// Snapshot the chain tip once so a concurrent block commit cannot shift the state
+		// partway through this decision.
+		final BlockData latestBlockData = getChainTip();
+		final Long minLatestBlockTimestamp = getMinimumLatestBlockTimestamp();
+		final Long now = NTP.getTime();
+
+		return isStaleChainCatchUpActive(latestBlockData, minLatestBlockTimestamp, now);
+	}
+
+	/**
 	 * Returns whether any handshaked, in-version, valid-signer peer advertises a RECENT
 	 * chain tip strictly higher than the given tip. Used to distinguish "the network is alive
 	 * and ahead of me" (defer to sync) from "the network is dead and I am its most-advanced

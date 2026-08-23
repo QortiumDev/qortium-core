@@ -132,6 +132,31 @@ public class SynchronizerAtomicReorgTests extends Common {
 		}
 	}
 
+	@Test
+	public void testOneBlockLocalForkAtomicallyAdoptsLongerPeerBranch() throws Exception {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			ForkFixture fixture = buildForkFixture(repository, 1, 3);
+			RecordingCallbacks callbacks = new RecordingCallbacks(repository, fixture.replacementTip.getSignature());
+
+			Synchronizer.SynchronizationResult result = this.synchronizer.adoptPeerForkAtomically(
+					repository, fixture.commonBlock, fixture.originalTip.getHeight(), null,
+					fixture.replacementBlocks, callbacks);
+
+			assertEquals(Synchronizer.SynchronizationResult.OK, result);
+			assertEquals(fixture.commonBlock.getHeight() + 3,
+					repository.getBlockRepository().getLastBlock().getHeight().intValue());
+			assertArrayEquals(fixture.replacementTip.getSignature(),
+					repository.getBlockRepository().getLastBlock().getSignature());
+			assertNull(repository.getBlockRepository().fromSignature(fixture.originalTip.getSignature()));
+			int firstForkHeight = fixture.commonBlock.getHeight() + 1;
+			assertEquals(List.of(fixture.commonBlock.getHeight()),
+					callbacks.orphanedTips.stream().map(BlockData::getHeight).toList());
+			assertEquals(List.of(firstForkHeight, firstForkHeight + 1, firstForkHeight + 2),
+					callbacks.newBlocks.stream().map(BlockData::getHeight).toList());
+			assertTrue(callbacks.everyCallbackSawReplacementTip);
+		}
+	}
+
 	@Test(timeout = 30_000L)
 	public void testArbitraryResourceForkReplacementRefreshesCachesAfterCommit() throws Exception {
 		try (Repository repository = RepositoryManager.getRepository()) {
@@ -232,19 +257,24 @@ public class SynchronizerAtomicReorgTests extends Common {
 	}
 
 	private ForkFixture buildForkFixture(Repository repository, int forkLength) throws Exception {
+		return buildForkFixture(repository, forkLength, forkLength);
+	}
+
+	private ForkFixture buildForkFixture(Repository repository, int originalForkLength,
+			int replacementForkLength) throws Exception {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice-reward-share");
 		PrivateKeyAccount aliceMinter = Common.getTestAccount(repository, "alice");
 		PrivateKeyAccount bobMinter = Common.getTestAccount(repository, "bob");
 		BlockData commonBlock = new BlockData(repository.getBlockRepository().getLastBlock());
 
-		List<Block> originalBlocks = mintDetachedBlocks(repository, alice, forkLength);
+		List<Block> originalBlocks = mintDetachedBlocks(repository, alice, originalForkLength);
 		BlockData originalTip = new BlockData(repository.getBlockRepository().getLastBlock());
 		int aliceMinted = repository.getAccountRepository().getAccount(aliceMinter.getAddress()).getBlocksMinted();
 		int bobMinted = repository.getAccountRepository().getAccount(bobMinter.getAddress()).getBlocksMinted();
 		long bobBalance = bobMinter.getConfirmedBalance(Asset.NATIVE);
 
 		BlockUtils.orphanToBlock(repository, commonBlock.getHeight());
-		List<Block> replacementBlocks = mintDetachedPaymentBlocks(repository, forkLength);
+		List<Block> replacementBlocks = mintDetachedPaymentBlocks(repository, replacementForkLength);
 		BlockData replacementTip = new BlockData(repository.getBlockRepository().getLastBlock());
 
 		BlockUtils.orphanToBlock(repository, commonBlock.getHeight());
