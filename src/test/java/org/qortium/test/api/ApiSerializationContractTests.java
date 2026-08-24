@@ -3,6 +3,7 @@ package org.qortium.test.api;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.junit.Test;
 import org.qortium.api.ApiService;
+import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.data.rating.ResourceRatingData;
 import org.qortium.data.transaction.RateResourceTransactionData;
 import org.qortium.test.common.ApiCommon;
@@ -61,6 +62,9 @@ public class ApiSerializationContractTests extends ApiCommon {
 
 		Set<Class<?>> entityTypes = new LinkedHashSet<>(responseTypes);
 		entityTypes.addAll(requestTypes);
+		// This opt-in JSON entity is returned through Response so endpoint-signature
+		// discovery cannot see it automatically.
+		entityTypes.add(PirateChainSyncStatus.class);
 
 		List<String> failures = new ArrayList<>();
 		for (Class<?> entityType : entityTypes) {

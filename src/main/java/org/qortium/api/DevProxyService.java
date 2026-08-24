@@ -124,7 +124,7 @@ public class DevProxyService {
 				RequestLogWriter logWriter = new RequestLogWriter("devproxy-requests.log");
 				logWriter.setAppend(true);
 				logWriter.setTimeZone("UTC");
-				RequestLog requestLog = new CustomRequestLog(logWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT);
+				RequestLog requestLog = new CustomRequestLog(logWriter, ApiService.API_REQUEST_LOG_FORMAT);
 				this.server.setRequestLog(requestLog);
 			}
 

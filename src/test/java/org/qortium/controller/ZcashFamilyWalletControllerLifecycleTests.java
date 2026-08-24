@@ -3,6 +3,7 @@ package org.qortium.controller;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.json.JSONObject;
 import org.qortium.crosschain.PirateChain;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.ZcashFamilyNativeCoordinator;
@@ -13,6 +14,8 @@ import org.qortium.test.common.Common;
 import org.qortium.utils.Base58;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -154,15 +157,167 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		}
 	}
 
+	@Test
+	public void testStatusParserNormalizesLegacyAndUnifiedProgress() {
+		ZcashFamilyWalletController.WalletSyncStatus legacy =
+				ZcashFamilyWalletController.interpretNativeSyncStatus(new JSONObject()
+						.put("syncing", "true")
+						.put("synced_blocks", 12)
+						.put("total_blocks", 30), false);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, legacy.getState());
+		assertEquals("Sync in progress (12 / 30)", legacy.getMessage());
+		assertEquals(Long.valueOf(12), legacy.getSyncedBlocks());
+		assertEquals(Long.valueOf(30), legacy.getTotalBlocks());
+
+		ZcashFamilyWalletController.WalletSyncStatus unified =
+				ZcashFamilyWalletController.interpretNativeSyncStatus(new JSONObject()
+						.put("in_progress", true), false);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, unified.getState());
+		assertEquals("Sync in progress", unified.getMessage());
+		assertNull(unified.getSyncedBlocks());
+
+		ZcashFamilyWalletController.WalletSyncStatus ready =
+				ZcashFamilyWalletController.interpretNativeSyncStatus(new JSONObject(), true);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, ready.getState());
+		assertEquals("Synchronized", ready.getMessage());
+	}
+
+	@Test
+	public void testBusyStatusNeverReturnsAnotherWalletsCachedReadyState() throws Exception {
+		TestController controller = new TestController();
+		assertTrue(controller.startController());
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		TestWallet walletA = new TestWallet(entropyA);
+		setControllerField(controller, "currentWallet", walletA);
+		controller.cacheCurrentWalletStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+
+		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
+		CountDownLatch operationEntered = new CountDownLatch(1);
+		CountDownLatch releaseOperation = new CountDownLatch(1);
+		ExecutorService caller = Executors.newSingleThreadExecutor();
+		try {
+			Future<String> operation = caller.submit(() -> coordinator.execute("busy wallet identity test", nativeAdapter -> {
+				operationEntered.countDown();
+				releaseOperation.await();
+				return "done";
+			}));
+			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
+
+			ZcashFamilyWalletController.WalletSyncStatus matching =
+					controller.getSyncStatusDetails(Base58.encode(entropyA));
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, matching.getState());
+
+			ZcashFamilyWalletController.WalletSyncStatus different =
+					controller.getSyncStatusDetails(Base58.encode(entropyB));
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, different.getState());
+			assertEquals("Wallet status unavailable while another native operation is running", different.getMessage());
+
+			releaseOperation.countDown();
+			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
+		} finally {
+			releaseOperation.countDown();
+			caller.shutdownNow();
+			controller.shutdown();
+		}
+	}
+
+	@Test
+	public void testBusyStatusRejectsCacheFromReplacedWallet() throws Exception {
+		TestController controller = new TestController();
+		assertTrue(controller.startController());
+		byte[] entropyB = filledEntropy(2);
+		TestWallet walletA = new TestWallet(filledEntropy(1));
+		TestWallet walletB = new TestWallet(entropyB);
+		setControllerField(controller, "currentWallet", walletA);
+		controller.cacheCurrentWalletStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+		setControllerField(controller, "currentWallet", walletB);
+
+		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
+		CountDownLatch operationEntered = new CountDownLatch(1);
+		CountDownLatch releaseOperation = new CountDownLatch(1);
+		ExecutorService caller = Executors.newSingleThreadExecutor();
+		try {
+			Future<String> operation = caller.submit(() -> coordinator.execute("stale status cache test", nativeAdapter -> {
+				operationEntered.countDown();
+				releaseOperation.await();
+				return "done";
+			}));
+			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
+
+			ZcashFamilyWalletController.WalletSyncStatus status =
+					controller.getSyncStatusDetails(Base58.encode(entropyB));
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, status.getState());
+			assertEquals("Wallet status unavailable while another native operation is running", status.getMessage());
+
+			releaseOperation.countDown();
+			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
+		} finally {
+			releaseOperation.countDown();
+			caller.shutdownNow();
+			controller.shutdown();
+		}
+	}
+
+	@Test
+	public void testFailedWalletSelectionNeverReturnsAnotherWalletsCachedReadyState() throws Exception {
+		TestController controller = new TestController();
+		assertTrue(controller.startController());
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		TestWallet walletA = new TestWallet(entropyA);
+		setControllerField(controller, "currentWallet", walletA);
+		controller.cacheCurrentWalletStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+
+		try {
+			ZcashFamilyWalletController.WalletSyncStatus status =
+					controller.getSyncStatusDetails(Base58.encode(entropyB));
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, status.getState());
+			assertEquals("Test wallet isn't initialized yet", status.getMessage());
+		} finally {
+			controller.shutdown();
+		}
+	}
+
+	private static byte[] filledEntropy(int value) {
+		byte[] entropy = new byte[32];
+		Arrays.fill(entropy, (byte) value);
+		return entropy;
+	}
+
+	private static void setControllerField(TestController controller, String fieldName, Object value)
+			throws ReflectiveOperationException {
+		Field field = ZcashFamilyWalletController.class.getDeclaredField(fieldName);
+		field.setAccessible(true);
+		field.set(controller, value);
+	}
+
 	private static class TestController extends ZcashFamilyWalletController<ZcashFamilyWallet> {
+		private static final ZcashFamilyWalletConfig TEST_CONFIG = new ZcashFamilyWalletConfig(
+				"Test", "TEST", "Test", "signature", "TestEncryption", "zs", () -> 1, () -> null);
+
 		private TestController() {
-			super(new ZcashFamilyWalletConfig("Test", "TEST", "Test", "signature",
-					"TestEncryption", "zs", () -> 1, () -> null));
+			super(TEST_CONFIG);
 		}
 
 		@Override
 		protected ZcashFamilyWallet createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
 			return null;
+		}
+	}
+
+	private static class TestWallet extends ZcashFamilyWallet {
+		private TestWallet(byte[] entropyBytes) throws IOException {
+			super(TestController.TEST_CONFIG, entropyBytes, false, false, false);
+			this.setReady(true);
+		}
+
+		@Override
+		public boolean save() {
+			return false;
 		}
 	}
 }
