@@ -15,7 +15,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Objects;
@@ -34,28 +35,51 @@ public class ZcashFamilyWallet {
 	private final boolean isNullSeedWallet;
 	private String seedPhrase;
 	private boolean ready = false;
+	private boolean initializationAvailable = false;
 
 	private String params;
 	private String saplingOutput64;
 	private String saplingSpend64;
 
 	public ZcashFamilyWallet(ZcashFamilyWalletConfig config, byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
+		this(config, entropyBytes, isNullSeedWallet, true, true);
+	}
+
+	protected ZcashFamilyWallet(ZcashFamilyWalletConfig config, byte[] entropyBytes, boolean isNullSeedWallet,
+			boolean loadLegacyParameters, boolean initializeImmediately) throws IOException {
 		this.config = config;
 		this.entropyBytes = entropyBytes;
 		this.isNullSeedWallet = isNullSeedWallet;
 
-		Path libDirectory = config.getRustLibOuterDirectory();
-		if (!Files.exists(Paths.get(libDirectory.toString(), COIN_PARAMS_FILENAME)))
+		if (loadLegacyParameters && !this.loadLegacyParameters(config.getLegacyRustLibOuterDirectory()))
 			return;
 
-		this.params = Files.readString(Paths.get(libDirectory.toString(), COIN_PARAMS_FILENAME));
-		this.saplingOutput64 = Files.readString(Paths.get(libDirectory.toString(), SAPLING_OUTPUT_FILENAME));
-		this.saplingSpend64 = Files.readString(Paths.get(libDirectory.toString(), SAPLING_SPEND_FILENAME));
+		if (!loadLegacyParameters) {
+			this.params = "";
+			this.saplingOutput64 = "";
+			this.saplingSpend64 = "";
+		}
+		this.initializationAvailable = true;
 
-		this.ready = this.initialize();
+		if (initializeImmediately)
+			this.ready = this.initializeWallet();
 	}
 
-	private boolean initialize() {
+	private boolean loadLegacyParameters(Path libDirectory) throws IOException {
+		Path coinParamsPath = libDirectory.resolve(COIN_PARAMS_FILENAME);
+		if (!Files.exists(coinParamsPath))
+			return false;
+
+		this.params = Files.readString(coinParamsPath);
+		this.saplingOutput64 = Files.readString(libDirectory.resolve(SAPLING_OUTPUT_FILENAME));
+		this.saplingSpend64 = Files.readString(libDirectory.resolve(SAPLING_SPEND_FILENAME));
+		return true;
+	}
+
+	protected final boolean initializeWallet() {
+		if (!this.initializationAvailable)
+			return false;
+
 		try {
 			return NATIVE_COORDINATOR.execute("initialize wallet", this::initialize);
 		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
@@ -64,7 +88,7 @@ public class ZcashFamilyWallet {
 		}
 	}
 
-	private boolean initialize(ZcashFamilyNativeAdapter nativeAdapter) {
+	protected boolean initialize(ZcashFamilyNativeAdapter nativeAdapter) {
 		try {
 			nativeAdapter.initLogging();
 
@@ -140,6 +164,10 @@ public class ZcashFamilyWallet {
 		return Arrays.equals(testEntropyBytes, this.entropyBytes);
 	}
 
+	public boolean matchesWallet(byte[] testEntropyBytes, boolean testNullSeedWallet) {
+		return this.isNullSeedWallet == testNullSeedWallet && this.entropyBytesEqual(testEntropyBytes);
+	}
+
 	private void encrypt(ZcashFamilyNativeAdapter nativeAdapter) {
 		if (this.isEncrypted(nativeAdapter))
 			return;
@@ -175,7 +203,33 @@ public class ZcashFamilyWallet {
 		return NATIVE_COORDINATOR.execute("save wallet", this::save);
 	}
 
-	private boolean save(ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
+	/** Native-family hook used before replacing the process-global wallet context. */
+	public boolean prepareForSwitch(ZcashFamilyNativeAdapter nativeAdapter) {
+		return true;
+	}
+
+	/** Native-family hook run after a replacement wallet has selected its storage. */
+	public void cleanupAfterSwitch() {
+	}
+
+	/** Native-family hook run while the native lane is still available during controller shutdown. */
+	public boolean prepareForShutdown(ZcashFamilyNativeAdapter nativeAdapter) {
+		return true;
+	}
+
+	/** Native-family hook used after a sync has reached a validated chain tip. */
+	public void recordValidatedSync(ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
+	}
+
+	public boolean usesPersistentNativeStorage() {
+		return false;
+	}
+
+	public boolean isNativeSyncInProgress(ZcashFamilyNativeAdapter nativeAdapter) {
+		return false;
+	}
+
+	protected boolean save(ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
 		if (!isInitialized()) {
 			LOGGER.info("Error: can't save wallet because no wallet is initialized");
 			return false;
@@ -200,11 +254,26 @@ public class ZcashFamilyWallet {
 		}
 
 		Path walletPath = this.getCurrentWalletPath();
-		Files.createDirectories(walletPath.getParent());
-		Files.write(walletPath, wallet, StandardOpenOption.CREATE);
+		writeWalletAtomically(walletPath, wallet);
 
 		LOGGER.debug("Saved {} wallet", this.config.getDisplayName());
 		return true;
+	}
+
+	static void writeWalletAtomically(Path walletPath, byte[] wallet) throws IOException {
+		Files.createDirectories(walletPath.getParent());
+		Path temporaryPath = Files.createTempFile(walletPath.getParent(), ".wallet-", ".tmp");
+		try {
+			Files.write(temporaryPath, wallet, StandardOpenOption.TRUNCATE_EXISTING);
+			try {
+				Files.move(temporaryPath, walletPath, StandardCopyOption.ATOMIC_MOVE,
+						StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(temporaryPath, walletPath, StandardCopyOption.REPLACE_EXISTING);
+			}
+		} finally {
+			Files.deleteIfExists(temporaryPath);
+		}
 	}
 
 	public String load() throws IOException {
@@ -222,7 +291,7 @@ public class ZcashFamilyWallet {
 		return Base64.toBase64String(wallet);
 	}
 
-	private String getEntropyHash58() {
+	protected String getEntropyHash58() {
 		if (this.entropyBytes == null)
 			return null;
 
@@ -234,7 +303,15 @@ public class ZcashFamilyWallet {
 		return this.seedPhrase;
 	}
 
-	private String getEncryptionKey() {
+	protected void setSeedPhrase(String seedPhrase) {
+		this.seedPhrase = seedPhrase;
+	}
+
+	protected byte[] getEntropyBytes() {
+		return this.entropyBytes;
+	}
+
+	protected String getEncryptionKey() {
 		if (this.entropyBytes == null)
 			return null;
 
@@ -250,7 +327,7 @@ public class ZcashFamilyWallet {
 		return Base58.encode(encryptionKeyHash);
 	}
 
-	private Path getCurrentWalletPath() {
+	protected Path getCurrentWalletPath() {
 		String entropyHash58 = this.getEntropyHash58();
 		String filename = String.format("wallet-%s.dat", entropyHash58);
 		return this.config.getWalletPath(filename);
@@ -276,7 +353,7 @@ public class ZcashFamilyWallet {
 		return NATIVE_COORDINATOR.execute("get wallet height", this::getHeight);
 	}
 
-	private Integer getHeight(ZcashFamilyNativeAdapter nativeAdapter) {
+	protected Integer getHeight(ZcashFamilyNativeAdapter nativeAdapter) {
 		String response = nativeAdapter.execute("height", "");
 		JSONObject json = new JSONObject(response);
 		return json.has("height") ? json.getInt("height") : null;
@@ -286,7 +363,7 @@ public class ZcashFamilyWallet {
 		return NATIVE_COORDINATOR.execute("get wallet chain tip", this::getChainTip);
 	}
 
-	private Integer getChainTip(ZcashFamilyNativeAdapter nativeAdapter) {
+	protected Integer getChainTip(ZcashFamilyNativeAdapter nativeAdapter) {
 		String response = nativeAdapter.execute("info", "");
 		JSONObject json = new JSONObject(response);
 		return json.has("latest_block_height") ? json.getInt("latest_block_height") : null;
@@ -343,7 +420,7 @@ public class ZcashFamilyWallet {
 		return NATIVE_COORDINATOR.execute("get wallet address", this::getWalletAddress);
 	}
 
-	private String getWalletAddress(ZcashFamilyNativeAdapter nativeAdapter) {
+	protected String getWalletAddress(ZcashFamilyNativeAdapter nativeAdapter) {
 		String response = nativeAdapter.execute("balance", "");
 		JSONObject json = new JSONObject(response);
 

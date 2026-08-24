@@ -34,6 +34,30 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - feat(arrr): add opt-in persistent Unified wallet storage
+
+Adds the default-off Pirate Unified wallet's persistent storage and recovery
+path. Each account receives an isolated directory named from a one-way entropy
+hash, while null-seed trade wallets use separate transient directories. A
+crash-safe local record distinguishes legacy, migrating, ready, and recoverable
+failure states. Existing legacy wallet files are never moved or deleted, every
+normal account restores from the conservative configured birthday, and legacy
+mode records a one-way address identity before the native library changes. A
+migration becomes ready only after reaching a validated chain tip, reopening
+cleanly on a later Core start, and matching that wallet identity.
+Operators migrating an existing Pirate wallet must first open that account once
+with Unified mode disabled, stop Core, then enable Unified mode and restart. A
+direct opt-in without this one-time identity preflight fails safely and leaves
+the legacy wallet untouched.
+
+### 2026-08-24 - feat(arrr): add gated Unified wallet surface
+
+Adds the Pirate protobuf types, guarded JNI calls, and strictly validated
+settings needed by the newer Pirate wallet implementation. The integration is
+off by default; while disabled, Core continues selecting the existing pinned
+legacy wallet bundle without consulting a Unified signature or enabling its
+diagnostic logging.
+
 ### 2026-08-24 - fix(arrr): harden status lifecycle and lightwallet failover
 
 Makes the Pirate wallet controller explicitly restartable after a clean stop,
