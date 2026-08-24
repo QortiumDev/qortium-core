@@ -35,7 +35,10 @@ public class PirateChain extends Bitcoiny {
 			"ARRRWalletEncryption",
 			"zs",
 			() -> Settings.getInstance().getArrrDefaultBirthday(),
-			PirateChain::getInstance);
+			PirateChain::getInstance,
+			() -> Settings.getInstance().isPirateChainWalletUnified(),
+			() -> Settings.getInstance().getPirateChainWalletQdnSignature(),
+			() -> Settings.getInstance().isPirateChainWalletDebugLogging());
 
 	private static final Coin DEFAULT_FEE_PER_KB = Coin.valueOf(10000); // 0.0001 ARRR per 1000 bytes
 
