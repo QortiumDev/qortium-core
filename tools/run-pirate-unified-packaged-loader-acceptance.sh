@@ -96,46 +96,8 @@ run_inside_namespace() {
 	core_pid=$!
 
 	ready=false
-	preparation_restart_done=false
 	wait_count=0
 	while [ "$wait_count" -lt 120 ]; do
-		if [ "$preparation_restart_done" = false ] \
-				&& grep -F 'Database upgrade needed. Please restart the core to complete the upgrade process.' \
-				"$log" >/dev/null 2>&1; then
-			# Allow the settings/repository try-with-resources frames to unwind after
-			# emitting the restart gate before terminating the otherwise idle JVM.
-			sleep 2
-			if kill -0 "$core_pid" 2>/dev/null; then
-				kill -TERM "$core_pid" 2>/dev/null || true
-				restart_wait=0
-				while kill -0 "$core_pid" 2>/dev/null && [ "$restart_wait" -lt 30 ]; do
-					sleep 1
-					restart_wait=$((restart_wait + 1))
-				done
-				if kill -0 "$core_pid" 2>/dev/null; then
-					printf '%s\n' 'Preparatory Core did not stop after its required restart gate' >&2
-					return 1
-				fi
-			fi
-			wait "$core_pid" 2>/dev/null || true
-			core_pid=
-			if [ -e "$expected_cache" ] || [ -e "$unified_wallets" ]; then
-				printf '%s\n' 'Preparatory database run reached wallet cache/storage unexpectedly' >&2
-				return 1
-			fi
-			printf 'databasePreparationRestart=PASS\n' >> "$result_file"
-			printf '\n--- packaged Core after required database-preparation restart ---\n' >> "$log"
-			(
-				cd "$runtime"
-				exec java -Djava.awt.headless=true \
-					-Dlog4j.configurationFile="$runtime/log4j2-acceptance.properties" \
-					-jar "$jar" "$settings"
-			) >> "$log" 2>&1 &
-			core_pid=$!
-			preparation_restart_done=true
-			wait_count=0
-			continue
-		fi
 		if ! kill -0 "$core_pid" 2>/dev/null; then
 			printf '%s\n' 'Packaged Core exited before its API became ready' >&2
 			return 1
@@ -151,9 +113,6 @@ run_inside_namespace() {
 	if [ "$ready" != true ]; then
 		printf '%s\n' 'Timed out waiting for the packaged Core API' >&2
 		return 1
-	fi
-	if [ "$preparation_restart_done" = false ]; then
-		printf 'databasePreparationRestart=NOT_NEEDED\n' >> "$result_file"
 	fi
 
 	# This is the sole entropy-bearing request. On an unloaded controller it
@@ -337,7 +296,7 @@ fixture_manifest_sha256=$(property bundleManifestSha256 "$fixture_properties") |
 transaction_state=$(property transactionState "$fixture_properties") || {
 	printf '%s\n' 'Fixture transaction state property must appear exactly once' >&2; exit 1;
 }
-if [ "$format" != 'qortium-pirate-unified-local-qdn-fixture-v1' ] \
+if [ "$format" != 'qortium-pirate-unified-local-qdn-fixture-v2' ] \
 		|| [ "$transaction_state" != 'synthetic-direct-repository-row' ] \
 		|| ! printf '%s\n' "$signature" | grep -Eq '^[1-9A-HJ-NP-Za-km-z]{80,100}$' \
 		|| ! printf '%s\n' "$fixture_manifest_sha256" | grep -Eq '^[0-9a-f]{64}$'; then
@@ -350,6 +309,7 @@ for expected_property in \
 	'dataPath=data' \
 	'tempDataPath=temp' \
 	'walletsPath=wallets' \
+	'arbitraryResourceCacheReady=true' \
 	'unconfirmedPoolEntry=false' \
 	'blockHeight=null'; do
 	expected_key=${expected_property%%=*}
@@ -520,7 +480,6 @@ set -e
 
 result=FAIL
 network_result=NOT_PROVEN
-preparation_restart_result=NOT_PROVEN
 trigger_result=NOT_PROVEN
 qdn_result=NOT_PROVEN
 cache_result=NOT_PROVEN
@@ -535,7 +494,6 @@ mapped_library_sha256=UNAVAILABLE
 mapped_library_device_inode=UNAVAILABLE
 if [ -f "$result_file" ]; then
 	network_result=$(property networkEgress "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
-	preparation_restart_result=$(property databasePreparationRestart "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 	trigger_result=$(property triggerSafety "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 	qdn_result=$(property localQdnResolution "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 	cache_result=$(property cacheInstallation "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
@@ -585,7 +543,6 @@ temporary_receipt=$work_directory/receipt.md
 	printf '| Boundary | Result | Evidence |\n'
 	printf '|---|---:|---|\n'
 	printf '| Network egress | %s | rootless network namespace; non-loopback interfaces `%s`; default routes `%s`; non-loopback routes `%s` |\n' "$network_result" "$non_loopback_interfaces" "$default_routes" "$non_loopback_routes"
-	printf '| Database preparation restart | %s | at most one restart, only after Core explicitly requested completion of repository metadata preparation |\n' "$preparation_restart_result"
 	printf '| One-shot trigger safety | %s | library absent before POST; structured response required `LOADING`, not initialized, and no restart |\n' "$trigger_result"
 	printf '| Local-QDN resolution | %s | production `TRANSACTION_DATA` reader using retained repository/data fixture |\n' "$qdn_result"
 	printf '| Cache installation | %s | fresh target; exact staged/cache inventory and SHA-256 equality |\n' "$cache_result"

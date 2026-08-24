@@ -138,7 +138,9 @@ resolves the placeholder signature through the production pinned-resource
 loader with missing-file network requests explicitly disabled, validates the
 rebuilt bundle, and byte-compares every output file to the staged source.
 `fixture.properties` records the placeholder signature, relative repository/data
-paths, source-manifest hash, and synthetic transaction state.
+paths, source-manifest hash, synthetic transaction state, and production-startup
+readiness of the derived arbitrary-resource cache. Cache readiness is asserted
+again after the retained repository is closed and reopened.
 
 This is a **local fixture**, not a QDN publication or peer-retrieval result. It
 does not load native code or start Core. A later packaged-Core runner must use a
@@ -165,13 +167,6 @@ loopback-only API with ephemeral request files, a lite test-chain profile,
 Pirate `TEST3` (which has no configured lightwallet servers), no seed or fixed
 peers, and all non-ARRR wallets disabled. The namespace route/interface checks
 are mandatory; the fixture's completeness is not treated as an egress control.
-
-The production repository startup can populate derived repository metadata
-and then explicitly require a Core restart. The runner permits at most one such
-preparatory restart, and only after matching Core's exact restart-required log
-message. Before restarting it requires both the native cache and persistent
-wallet-storage path to remain absent. The restart operates only on the
-disposable repository copy and happens before the entropy-bearing trigger.
 
 After the API is ready, the runner sends exactly one entropy-bearing
 `POST /crosschain/arrr/syncstatus`. On an unloaded controller this only schedules
