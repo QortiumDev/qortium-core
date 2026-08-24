@@ -58,6 +58,30 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	}
 
 	@Test
+	public void testPendingShutdownInterruptIsConsumedBeforeCleanup() {
+		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
+		assertFalse(coordinator.isDegraded());
+
+		TestController controller = new TestController();
+		Thread testThread = Thread.currentThread();
+		String originalName = testThread.getName();
+		int originalPriority = testThread.getPriority();
+		testThread.interrupt();
+		try {
+			// Calling run directly with a pending interrupt deterministically models shutdown
+			// winning the race before the controller can enter an interruptible wait.
+			controller.run();
+			assertFalse(testThread.isInterrupted());
+			assertEquals(ZcashFamilyWalletController.LifecycleState.TERMINATED, controller.getLifecycleState());
+			assertFalse(coordinator.isDegraded());
+		} finally {
+			Thread.interrupted();
+			testThread.setName(originalName);
+			testThread.setPriority(originalPriority);
+		}
+	}
+
+	@Test
 	public void testOnlyRunningControllersAcceptWalletOperations() {
 		assertFalse(ZcashFamilyWalletController.acceptsWalletOperations(ZcashFamilyWalletController.LifecycleState.NEW));
 		assertTrue(ZcashFamilyWalletController.acceptsWalletOperations(ZcashFamilyWalletController.LifecycleState.RUNNING));

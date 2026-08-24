@@ -147,6 +147,9 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			LOGGER.error("{} wallet controller stopped because the native lane is unavailable: {}",
 					this.config.getDisplayName(), e.getMessage());
 		} finally {
+			// Consume any shutdown signal that arrived after the last interruptible wait so cleanup
+			// does not present it to the native coordinator as an interrupted native operation.
+			Thread.interrupted();
 			this.running = false;
 			if (NATIVE_COORDINATOR.isDegraded()) {
 				this.lifecycleState = LifecycleState.DEGRADED;
