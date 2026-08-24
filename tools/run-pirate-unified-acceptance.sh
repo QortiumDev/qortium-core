@@ -37,15 +37,17 @@ if [ ! -d "$bundle" ]; then
 	printf 'Bundle directory does not exist: %s\n' "$bundle" >&2
 	exit 1
 fi
+script_directory=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+repository=$(CDPATH='' cd "$script_directory/.." && pwd)
+receipt_parent=$(dirname "$receipt")
+receipt_name=$(basename "$receipt")
+mkdir -p "$receipt_parent"
+receipt_parent=$(CDPATH='' cd "$receipt_parent" && pwd -P)
+receipt=$receipt_parent/$receipt_name
 if [ -e "$receipt" ] || [ -e "$receipt.log" ]; then
 	printf 'Refusing to overwrite receipt or log: %s\n' "$receipt" >&2
 	exit 1
 fi
-
-script_directory=$(CDPATH='' cd "$(dirname "$0")" && pwd)
-repository=$(CDPATH='' cd "$script_directory/.." && pwd)
-receipt_parent=$(dirname "$receipt")
-mkdir -p "$receipt_parent"
 lock_directory=$receipt.lock
 if ! mkdir "$lock_directory" 2>/dev/null; then
 	printf 'Another acceptance run already owns this receipt: %s\n' "$receipt" >&2
@@ -61,22 +63,27 @@ trap 'rm -rf "$work_directory"; rmdir "$lock_directory" 2>/dev/null || true' 0 H
 report_suffix=$(basename "$work_directory" | sed 's/[^A-Za-z0-9]/-/g')
 
 tests='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,PirateUnifiedArtifactAcceptanceTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests'
+required_report_classes='org.qortium.controller.PirateUnifiedArtifactPinTests org.qortium.controller.PirateUnifiedWalletBundleTests org.qortium.controller.PirateUnifiedArtifactAcceptanceTests com.rust.litewalletjni.LiteWalletJniSurfaceTests org.qortium.controller.ZcashFamilyWalletControllerQdnTests'
 native_result=NOT_RUN
-native_flag=
 if [ "$mode" = '--native' ]; then
 	tests=$tests,PirateUnifiedNativeSmokeTests
-	native_flag='-Dqortium.runPirateUnifiedNativeSmokeTests=true'
+	required_report_classes="$required_report_classes org.qortium.controller.PirateUnifiedNativeSmokeTests"
 fi
 
-command_text="mvn -DskipTests=false -Dqortium.runPirateUnifiedArtifactAcceptanceTests=true -Dqortium.pirateUnifiedArtifactPath=<artifact> -Dqortium.pirateUnifiedBundlePath=<bundle> -Dtest=$tests test"
-set +e
-(cd "$repository" && mvn -DskipTests=false \
+command_text="mvn -DskipTests=false -Dqortium.runPirateUnifiedArtifactAcceptanceTests=true -Dqortium.pirateUnifiedArtifactPath=<artifact> -Dqortium.pirateUnifiedBundlePath=<bundle>"
+set -- mvn -DskipTests=false \
 	-Dqortium.runPirateUnifiedArtifactAcceptanceTests=true \
 	-Dqortium.pirateUnifiedArtifactPath="$artifact" \
-	-Dqortium.pirateUnifiedBundlePath="$bundle" \
-	$native_flag \
-	-Dsurefire.reportNameSuffix="$report_suffix" \
-	-Dtest="$tests" test) > "$receipt.log" 2>&1
+	-Dqortium.pirateUnifiedBundlePath="$bundle"
+if [ "$mode" = '--native' ]; then
+	command_text="$command_text -Dqortium.runPirateUnifiedNativeSmokeTests=true -Dqortium.pirateUnifiedNativeStoragePath=<temporary-storage>"
+	set -- "$@" -Dqortium.runPirateUnifiedNativeSmokeTests=true \
+		-Dqortium.pirateUnifiedNativeStoragePath="$work_directory/native-storage"
+fi
+command_text="$command_text -Dtest=$tests test"
+set -- "$@" -Dsurefire.reportNameSuffix="$report_suffix" -Dtest="$tests" test
+set +e
+(cd "$repository" && "$@") > "$receipt.log" 2>&1
 maven_status=$?
 set -e
 
@@ -89,13 +96,6 @@ for report in "$repository"/target/surefire-reports/TEST-*-"$report_suffix".xml;
 		cp "$report" "$work_directory/reports/"
 	fi
 done
-
-result=PASS
-if [ "$maven_status" -ne 0 ]; then
-	result=FAIL
-elif [ "$mode" = '--native' ]; then
-	native_result=PASS
-fi
 
 sum_attribute() {
 	attribute=$1
@@ -131,6 +131,72 @@ if [ "$reports_found" = true ]; then
 	failures=$(sum_attribute failures)
 	errors=$(sum_attribute errors)
 	skipped=$(sum_attribute skipped)
+fi
+
+report_attribute() {
+	report=$1
+	attribute=$2
+	awk -v attribute="$attribute" '
+		/<testsuite / {
+			needle = attribute "=\""
+			start = index($0, needle)
+			if (start > 0) {
+				rest = substr($0, start + length(needle))
+				end = index(rest, "\"")
+				print substr(rest, 1, end - 1)
+				exit
+			}
+		}
+	' "$report"
+}
+
+report_passed() {
+	report=$1
+	expected_tests=${2:-}
+	[ -f "$report" ] || return 1
+	report_tests=$(report_attribute "$report" tests)
+	report_failures=$(report_attribute "$report" failures)
+	report_errors=$(report_attribute "$report" errors)
+	report_skipped=$(report_attribute "$report" skipped)
+	[ -n "$report_tests" ] && [ "$report_tests" -gt 0 ] \
+		&& [ "$report_failures" -eq 0 ] && [ "$report_errors" -eq 0 ] \
+		&& [ "$report_skipped" -eq 0 ] \
+		&& { [ -z "$expected_tests" ] || [ "$report_tests" -eq "$expected_tests" ]; }
+}
+
+reports_complete=true
+for required_class in $required_report_classes; do
+	required_report="$work_directory/reports/TEST-$required_class-$report_suffix.xml"
+	if ! report_passed "$required_report"; then
+		reports_complete=false
+	fi
+done
+
+artifact_result=NOT_VALIDATED
+artifact_report="$work_directory/reports/TEST-org.qortium.controller.PirateUnifiedArtifactAcceptanceTests-$report_suffix.xml"
+if report_passed "$artifact_report" 1; then
+	artifact_result=STAGED
+elif [ -f "$artifact_report" ]; then
+	artifact_result=FAIL
+fi
+
+if [ "$mode" = '--native' ]; then
+	native_result=FAIL
+	native_report="$work_directory/reports/TEST-org.qortium.controller.PirateUnifiedNativeSmokeTests-$report_suffix.xml"
+	if report_passed "$native_report" 1; then
+		native_result=PASS
+	fi
+fi
+
+acceptance_status=$maven_status
+result=FAIL
+if [ "$maven_status" -eq 0 ] && [ "$reports_complete" = true ] \
+		&& [ "$tests_run" -gt 0 ] && [ "$failures" -eq 0 ] \
+		&& [ "$errors" -eq 0 ] && [ "$skipped" -eq 0 ]; then
+	result=PASS
+	acceptance_status=0
+elif [ "$acceptance_status" -eq 0 ]; then
+	acceptance_status=1
 fi
 
 core_commit=$(cd "$repository" && git rev-parse HEAD)
@@ -173,22 +239,23 @@ temporary_receipt=$work_directory/receipt.md
 	printf '%s `%s`\n' '- Bundle:' "$bundle"
 	printf '%s `%s`\n' '- Pinned release artifact SHA-256:' "$artifact_sha256"
 	printf '%s `%s`\n' '- Bundle manifest SHA-256:' "$manifest_sha256"
-	printf '%s `%s`\n' '- Native smoke:' "$native_result"
+	printf '%s `%s`\n' '- Offline native contract:' "$native_result"
 	printf '%s `%s` run, `%s` failures, `%s` errors, `%s` skipped\n' '- Tests:' \
 		"$tests_run" "$failures" "$errors" "$skipped"
-	printf '%s `%s`\n' '- Command:' "$command_text"
+	printf '%s `%s`\n' '- Normalized command:' "$command_text"
 	printf '%s `%s`\n\n' '- Full log:' "$receipt.log"
-	printf '## Platform runtime matrix\n\n'
-	printf '| Target | Result |\n|---|---|\n'
+	printf '## Platform acceptance matrix\n\n'
+	printf '| Target | Artifact | Offline JNI | Packaged Core |\n'
+	printf '|---|---|---|---|\n'
 	for target in 'Linux x86_64' 'Linux aarch64' 'macOS x86_64' 'macOS aarch64' 'Windows x86_64'; do
-		platform_result=NOT_RUN
-		if [ "$target" = "$host_target" ] && [ "$native_result" = PASS ]; then
-			platform_result=PASS
+		platform_native_result=NOT_RUN
+		if [ "$target" = "$host_target" ] && [ "$mode" = '--native' ]; then
+			platform_native_result=$native_result
 		fi
-		printf '| %s | %s |\n' "$target" "$platform_result"
+		printf '| %s | %s | %s | NOT_RUN |\n' "$target" "$artifact_result" "$platform_native_result"
 	done
-	printf '\nFilename presence and bundle validation do not count as native runtime acceptance. '
-	printf 'Replace a platform result only after an actual host JNI and packaged-Core run.\n'
+	printf '\nArtifact staging does not count as runtime acceptance. '
+	printf 'Offline JNI and packaged-Core results advance only after their separate host runs.\n'
 	printf '\n## Counterexamples\n\n'
 	if [ "$result" = PASS ]; then
 		printf 'None observed in this run.\n'
@@ -201,8 +268,8 @@ mv "$temporary_receipt" "$receipt"
 trap - 0 HUP INT TERM
 rm -rf "$work_directory"
 rmdir "$lock_directory"
-if [ "$maven_status" -ne 0 ]; then
+if [ "$acceptance_status" -ne 0 ]; then
 	printf 'Acceptance failed; receipt: %s, log: %s\n' "$receipt" "$receipt.log" >&2
-	exit "$maven_status"
+	exit "$acceptance_status"
 fi
 printf 'Acceptance passed; receipt: %s, log: %s\n' "$receipt" "$receipt.log"
