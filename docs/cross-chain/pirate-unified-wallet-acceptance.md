@@ -113,6 +113,38 @@ tools/run-pirate-unified-acceptance.sh \
   /absolute/new/path/pirate-unified-receipt.md
 ```
 
+## Disposable local-QDN fixture
+
+Packaged-Core acceptance first needs a repository-backed resource that can be
+resolved through the production `TRANSACTION_DATA` reader without publishing
+anything. Prepare that fixture from an already validated staged bundle:
+
+```sh
+tools/prepare-pirate-unified-local-qdn-fixture.sh \
+  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/new/path/pirate-unified-local-qdn-fixture
+```
+
+The script refuses to overwrite its output. Its opt-in test uses Core's real
+QDN writer to compress, split, and describe the bundle, assigns a deterministic
+64-byte placeholder signature, and saves the `ARBITRARY_DATA` row directly into
+a disposable on-disk repository. It does not compute a transaction nonce, use a
+production/operator private key, sign, import, broadcast, confirm, or mint. The
+test chain uses its normal deterministic bootstrap identities. The generated row
+has no block height and is absent from the unconfirmed transaction pool.
+
+Before retaining the fixture, the test closes and reopens the repository,
+resolves the placeholder signature through the production pinned-resource
+loader with missing-file network requests explicitly disabled, validates the
+rebuilt bundle, and byte-compares every output file to the staged source.
+`fixture.properties` records the placeholder signature, relative repository/data
+paths, source-manifest hash, and synthetic transaction state.
+
+This is a **local fixture**, not a QDN publication or peer-retrieval result. It
+does not load native code or start Core. A later packaged-Core runner must use a
+fail-closed no-egress sandbox and report local-QDN resolution, cache installation,
+native loading, and wallet lifecycle as separate results.
+
 ## Acceptance matrix
 
 Artifact presence is `STAGED`, not runtime acceptance. Offline JNI and isolated

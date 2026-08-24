@@ -438,6 +438,12 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	static Path resolvePinnedQdnWalletPath(String signature58, ArbitraryTransactionData transactionData,
 			boolean overwrite)
 			throws DataException, IOException, MissingDataException {
+		return resolvePinnedQdnWalletPath(signature58, transactionData, overwrite, true);
+	}
+
+	static Path resolvePinnedQdnWalletPath(String signature58, ArbitraryTransactionData transactionData,
+			boolean overwrite, boolean canRequestMissingFiles)
+			throws DataException, IOException, MissingDataException {
 		if (transactionData == null)
 			throw new DataException("Configured wallet QDN transaction is missing");
 		if (transactionData.getService() != Service.ARBITRARY_DATA)
@@ -446,6 +452,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(signature58,
 				ArbitraryDataFile.ResourceIdType.TRANSACTION_DATA, transactionData.getService(), transactionData.getIdentifier());
 		arbitraryDataReader.setTransactionData(transactionData);
+		arbitraryDataReader.setCanRequestMissingFiles(canRequestMissingFiles);
 		arbitraryDataReader.loadSynchronously(overwrite);
 		return arbitraryDataReader.getFilePath();
 	}
