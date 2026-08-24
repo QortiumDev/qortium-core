@@ -166,6 +166,13 @@ Pirate `TEST3` (which has no configured lightwallet servers), no seed or fixed
 peers, and all non-ARRR wallets disabled. The namespace route/interface checks
 are mandatory; the fixture's completeness is not treated as an egress control.
 
+The production repository startup can populate derived repository metadata
+and then explicitly require a Core restart. The runner permits at most one such
+preparatory restart, and only after matching Core's exact restart-required log
+message. Before restarting it requires both the native cache and persistent
+wallet-storage path to remain absent. The restart operates only on the
+disposable repository copy and happens before the entropy-bearing trigger.
+
 After the API is ready, the runner sends exactly one entropy-bearing
 `POST /crosschain/arrr/syncstatus`. On an unloaded controller this only schedules
 the asynchronous native-library load. The runner never repeats the request:
