@@ -290,8 +290,10 @@ if ! unshare -Urn sh -c '
 	trap '\''rm -f "$links" "$routes"'\'' 0 HUP INT TERM
 	ip -o link show > "$links" || exit 1
 	ip route show table all > "$routes" || exit 1
-	[ "$(grep -Evc "^[0-9]+: lo(:|@)" "$links")" -eq 0 ] || exit 1
-	! grep -Eq "^default " "$routes"
+	non_loopback_interfaces=$(awk -F": " '\''$2 !~ /^lo(@|$)/ { count++ } END { print count + 0 }'\'' "$links") || exit 1
+	default_routes=$(awk '\''$1 == "default" { count++ } END { print count + 0 }'\'' "$routes") || exit 1
+	[ "$non_loopback_interfaces" -eq 0 ] || exit 1
+	[ "$default_routes" -eq 0 ]
 '; then
 	printf '%s\n' 'Rootless loopback-only network namespace preflight failed' >&2
 	exit 1
