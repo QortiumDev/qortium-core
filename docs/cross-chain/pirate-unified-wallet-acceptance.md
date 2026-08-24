@@ -85,17 +85,22 @@ mvn -DskipTests=false \
   test
 ```
 
-Native host smoke is a second explicit gate. It loads the mapped host library
-through Qortium's serialized native coordinator and performs one deterministic
-entropy-to-seed call without recording the returned seed:
+Offline native host acceptance is a second explicit gate. It loads the mapped
+host library through Qortium's serialized native coordinator and uses temporary
+storage to exercise deterministic seed derivation, fresh initialization,
+birthday height, address/nonempty-key export, zero total and verified balances,
+empty transaction listing, same-process persistent reopen, encryption-status
+compatibility, two isolated wallet namespaces, typed invocation, and
+local-loopback sync/cancel command compatibility. Returned seed, key, address,
+and raw native responses are not written to receipts or logs. The deterministic
+fixture databases are removed on normal runner exit:
 
 ```sh
-mvn -DskipTests=false \
-  -Dqortium.runPirateUnifiedNativeSmokeTests=true \
-  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.1.7 \
-  -Dtest=PirateUnifiedNativeSmokeTests \
-  test
+tools/run-pirate-unified-acceptance.sh \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
+  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/new/path/pirate-unified-native-receipt.md \
+  --native
 ```
 
 The receipt runner performs real-bundle validation and writes a new Markdown
@@ -110,12 +115,12 @@ tools/run-pirate-unified-acceptance.sh \
 
 ## Acceptance matrix
 
-Artifact presence is `STAGED`, not runtime acceptance. Each target remains
-`NOT_RUN` until its JNI smoke and isolated packaged-Core workflow run on that
-platform. FreeBSD is not in the official five-target artifact; the legacy Linux
-filename mapping is not FreeBSD acceptance.
+Artifact presence is `STAGED`, not runtime acceptance. Offline JNI and isolated
+packaged-Core results remain separate for every target. FreeBSD is not in the
+official five-target artifact; the legacy Linux filename mapping is not
+FreeBSD acceptance.
 
-| Target | Artifact | JNI smoke | Packaged Core |
+| Target | Artifact | Offline JNI | Packaged Core |
 |---|---:|---:|---:|
 | Linux x86_64 | NOT_RUN | NOT_RUN | NOT_RUN |
 | Linux aarch64 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -131,6 +136,7 @@ identity, retrieval by immutable transaction signature, byte comparison,
 controlled receive/send, and ARRR HTLC/P2SH fund/redeem/refund recovery.
 
 Receipts must include the artifact and manifest hashes, Core commit and tree
-state, exact commands, test counts, host/platform results, logs, and any
-counterexamples. Never record entropy, seed phrases, keys, API keys,
+state, a normalized command with sensitive paths redacted, test counts,
+host/platform results, logs, and any counterexamples. Never record entropy,
+seed phrases, keys, API keys,
 passphrases, or wallet debug responses.

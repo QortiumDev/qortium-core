@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - test(arrr): expand offline native acceptance evidence
+
+Expands the explicitly opt-in Pirate Unified native acceptance from library
+linkage and seed derivation to a temporary, unfunded offline wallet lifecycle.
+It now covers fresh initialization, birthday height, address/key export, zero
+total and verified balances, empty transaction history, same-process persistent
+reopen, encryption-status compatibility, two isolated wallet namespaces, typed
+invocation, and loopback-only sync/cancel command compatibility. Returned
+wallet material is not written to receipts or logs, and deterministic fixture
+storage is removed on normal runner exit. Acceptance receipts now report
+artifact staging, offline JNI, and packaged-Core results separately so a host
+JNI pass cannot be mistaken for packaged runtime acceptance.
+
 ### 2026-08-24 - test(arrr): add Unified artifact and acceptance harness
 
 Pins the five-platform Pirate Unified JNI artifact and adds portable, local-only
