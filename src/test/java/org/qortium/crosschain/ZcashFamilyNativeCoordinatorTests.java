@@ -203,6 +203,21 @@ public class ZcashFamilyNativeCoordinatorTests {
 		}
 	}
 
+	@Test
+	public void testUnifiedSurfaceUsesGuardedNativeAdapter() {
+		CountingAdapter adapter = new CountingAdapter();
+		try (ZcashFamilyNativeCoordinator coordinator = coordinator(adapter)) {
+			coordinator.execute("Unified surface", nativeAdapter -> {
+				assertEquals("entropy", nativeAdapter.getSeedPhraseFromEntropy("entropy"));
+				assertEquals("wallets/PirateChain", nativeAdapter.configureStorage("wallets/PirateChain", "passphrase"));
+				assertEquals("{\"method\":\"info\"}", nativeAdapter.invokeJson("{\"method\":\"info\"}", false));
+				return null;
+			});
+
+			assertEquals(List.of("entropy", "configure", "invoke"), adapter.unifiedCalls);
+		}
+	}
+
 	private static ZcashFamilyNativeCoordinator coordinator(ZcashFamilyNativeAdapter adapter) {
 		return new ZcashFamilyNativeCoordinator(adapter, "Native Coordinator Test");
 	}
@@ -216,6 +231,7 @@ public class ZcashFamilyNativeCoordinatorTests {
 		private final AtomicInteger callCount = new AtomicInteger();
 		private final AtomicInteger inFlight = new AtomicInteger();
 		private final AtomicInteger maximumInFlight = new AtomicInteger();
+		private final List<String> unifiedCalls = new ArrayList<>();
 		private ExecuteHandler handler = command -> command;
 
 		@Override
@@ -234,6 +250,24 @@ public class ZcashFamilyNativeCoordinatorTests {
 		@Override
 		public String getSeedPhraseFromEntropyB64(String entropy64) {
 			return entropy64;
+		}
+
+		@Override
+		public String getSeedPhraseFromEntropy(String entropy) {
+			this.unifiedCalls.add("entropy");
+			return entropy;
+		}
+
+		@Override
+		public String configureStorage(String baseDirectory, String passphrase) {
+			this.unifiedCalls.add("configure");
+			return baseDirectory;
+		}
+
+		@Override
+		public String invokeJson(String requestJson, boolean pretty) {
+			this.unifiedCalls.add("invoke");
+			return requestJson;
 		}
 
 		@Override

@@ -193,6 +193,24 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 		}
 
 		@Override
+		public String getSeedPhraseFromEntropy(String entropy) {
+			ensureHealthy();
+			return adapter.getSeedPhraseFromEntropy(entropy);
+		}
+
+		@Override
+		public String configureStorage(String baseDirectory, String passphrase) {
+			ensureHealthy();
+			return adapter.configureStorage(baseDirectory, passphrase);
+		}
+
+		@Override
+		public String invokeJson(String requestJson, boolean pretty) {
+			ensureHealthy();
+			return adapter.invokeJson(requestJson, pretty);
+		}
+
+		@Override
 		public String initFromSeed(String serverUri, String params, String seedPhrase, String birthday,
 				String saplingOutput64, String saplingSpend64) {
 			ensureHealthy();

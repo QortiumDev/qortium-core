@@ -67,8 +67,8 @@
 		<!-- Toolchain versions used for code generation -->
 		<protoc.version>3.25.3</protoc.version>
 		<protoc-gen-grpc-java.version>1.68.1</protoc-gen-grpc-java.version>
-		<!-- Keep committed generated sources authoritative during normal builds.
-		     Set -Dprotoc.skip=false when intentionally regenerating proto/grpc Java classes. -->
+		<!-- Keep committed legacy Zcash generated sources authoritative during normal builds.
+		     Set -Dprotoc.skip=false when intentionally regenerating them. -->
 		<protoc.skip>true</protoc.skip>
 		<protobuf.version>3.25.9</protobuf.version>
 		<replacer.version>1.5.3</replacer.version>
@@ -360,6 +360,18 @@
 				</configuration>
 				<executions>
 					<execution>
+						<goals>
+							<goal>compile</goal>
+							<goal>compile-custom</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>generate-pirate-protos</id>
+						<configuration>
+							<protoSourceRoot>${project.basedir}/src/main/resources/proto/pirate</protoSourceRoot>
+							<clearOutputDirectory>false</clearOutputDirectory>
+							<skip>false</skip>
+						</configuration>
 						<goals>
 							<goal>compile</goal>
 							<goal>compile-custom</goal>
@@ -935,6 +947,8 @@
 							<excludes>
 								<!-- Generated Zcash protobuf/grpc protocol stubs should not dilute Qortium's coverage gate. -->
 								<exclude>cash/z/wallet/sdk/rpc/**</exclude>
+								<!-- Generated Pirate protobuf/grpc protocol stubs are target-only integration code. -->
+								<exclude>pirate/wallet/sdk/rpc/**</exclude>
 								<!-- Coverage instrumentation makes this performance-sensitive PoW loop too slow for full-suite runs. -->
 								<exclude>org/qortium/crypto/MemoryPoW*</exclude>
 							</excludes>

@@ -27,6 +27,21 @@ final class LiteWalletJniAdapter implements ZcashFamilyNativeAdapter {
 	}
 
 	@Override
+	public String getSeedPhraseFromEntropy(String entropy) {
+		return LiteWalletJni.getseedphrasefromentropy(entropy);
+	}
+
+	@Override
+	public String configureStorage(String baseDirectory, String passphrase) {
+		return LiteWalletJni.configurestorage(baseDirectory, passphrase);
+	}
+
+	@Override
+	public String invokeJson(String requestJson, boolean pretty) {
+		return LiteWalletJni.invokeJson(requestJson, pretty);
+	}
+
+	@Override
 	public String initFromSeed(String serverUri, String params, String seedPhrase, String birthday,
 			String saplingOutput64, String saplingSpend64) {
 		return LiteWalletJni.initfromseed(serverUri, params, seedPhrase, birthday, saplingOutput64, saplingSpend64);

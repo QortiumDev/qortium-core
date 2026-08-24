@@ -45,6 +45,7 @@ import javax.xml.transform.stream.StreamSource;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bitcoinj.base.Base58;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
@@ -61,6 +62,7 @@ import org.qortium.crosschain.ForeignBlockchainRegistry;
 import org.qortium.crosschain.PirateChain.PirateChainNet;
 import org.qortium.crypto.ElectrumSSLSocketFactory;
 import org.qortium.network.message.MessageType;
+import org.qortium.transform.Transformer;
 import org.qortium.utils.EnumUtils;
 
 // All properties to be converted to JSON via JAXB
@@ -453,6 +455,12 @@ public class Settings {
 	private String walletsPath = "wallets";
 
 	private int arrrDefaultBirthday = 2000000;
+	/** Opt-in gate for the persistent Pirate Unified wallet implementation. */
+	private boolean pirateChainWalletUnified = false;
+	/** Immutable QDN transaction signature for the Unified native wallet bundle. */
+	private String pirateChainWalletQdnSignature = null;
+	/** Enables Unified native-wallet debug logging when the opt-in gate is enabled. */
+	private boolean pirateChainWalletDebugLogging = false;
 
 	// Repository related
 	/** Queries that take longer than this are logged. (milliseconds) */
@@ -1830,6 +1838,8 @@ public class Settings {
 		if (this.qdnSyncYieldBatchSize < 1 || this.qdnSyncYieldBatchSize > 100)
 			throwValidationError("qdnSyncYieldBatchSize must be between 1 and 100");
 
+		validatePirateUnifiedWalletSettings();
+
 		if (this.maxDataPeerIdleTime != null && this.maxDataPeerConnectionTime != null
 				&& !this.maxDataPeerIdleTime.equals(this.maxDataPeerConnectionTime))
 			throwValidationError("maxDataPeerIdleTime conflicts with deprecated maxDataPeerConnectionTime; configure only maxDataPeerIdleTime");
@@ -1960,6 +1970,30 @@ public class Settings {
 
 		if (this.maxStorageCapacity != null && this.maxStorageCapacity < 1)
 			throwValidationError("maxStorageCapacity must be at least 1 byte");
+	}
+
+	private void validatePirateUnifiedWalletSettings() {
+		if (this.pirateChainWalletUnified && (this.pirateChainWalletQdnSignature == null
+				|| this.pirateChainWalletQdnSignature.isBlank()))
+			throwValidationError("pirateChainWalletQdnSignature is required when pirateChainWalletUnified is enabled");
+
+		if (this.pirateChainWalletQdnSignature == null)
+			return;
+
+		if (!this.pirateChainWalletQdnSignature.equals(this.pirateChainWalletQdnSignature.trim()))
+			throwValidationError("pirateChainWalletQdnSignature must be a Base58-encoded transaction signature");
+
+		final byte[] signature;
+		try {
+			signature = Base58.decode(this.pirateChainWalletQdnSignature);
+		} catch (RuntimeException e) {
+			throwValidationError("pirateChainWalletQdnSignature must be a Base58-encoded transaction signature");
+			return;
+		}
+
+		if (signature.length != Transformer.SIGNATURE_LENGTH)
+			throwValidationError("pirateChainWalletQdnSignature must decode to "
+					+ Transformer.SIGNATURE_LENGTH + " bytes");
 	}
 
 	private static void validateOptionalPort(String settingName, Integer port) {
@@ -2669,6 +2703,18 @@ public class Settings {
 
 	public int getArrrDefaultBirthday() {
 		return this.arrrDefaultBirthday;
+	}
+
+	public boolean isPirateChainWalletUnified() {
+		return this.pirateChainWalletUnified;
+	}
+
+	public String getPirateChainWalletQdnSignature() {
+		return this.pirateChainWalletQdnSignature;
+	}
+
+	public boolean isPirateChainWalletDebugLogging() {
+		return this.pirateChainWalletDebugLogging;
 	}
 
 	public boolean isTradebotSystrayEnabled() {

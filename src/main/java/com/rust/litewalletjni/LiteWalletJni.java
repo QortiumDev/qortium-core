@@ -61,7 +61,10 @@ public class LiteWalletJni {
     public static native String execute(final String cmd, final String args);
     public static native String getseedphrase();
     public static native String getseedphrasefromentropyb64(final String entropy64);
+    public static native String getseedphrasefromentropy(final String entropy);
     public static native String checkseedphrase(final String input);
+    public static native String configurestorage(final String baseDir, final String passphrase);
+    public static native String invokeJson(final String requestJson, final boolean pretty);
 
 
     private static boolean loaded = false;

@@ -19,6 +19,12 @@ public interface ZcashFamilyNativeAdapter {
 
 	String getSeedPhraseFromEntropyB64(String entropy64);
 
+	String getSeedPhraseFromEntropy(String entropy);
+
+	String configureStorage(String baseDirectory, String passphrase);
+
+	String invokeJson(String requestJson, boolean pretty);
+
 	String initFromSeed(String serverUri, String params, String seedPhrase, String birthday,
 			String saplingOutput64, String saplingSpend64);
 
