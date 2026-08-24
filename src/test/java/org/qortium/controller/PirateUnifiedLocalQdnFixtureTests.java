@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.ArbitraryDataTransactionBuilder;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.controller.arbitrary.ArbitraryDataCacheManager;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.repository.Repository;
@@ -23,6 +24,7 @@ import java.util.Arrays;
 import java.util.HexFormat;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -82,6 +84,14 @@ public class PirateUnifiedLocalQdnFixtureTests extends Common {
 			assertNotNull(dataFile);
 			assertTrue("Relocated local QDN data is incomplete", dataFile.allFilesExist());
 			repository.saveChanges();
+			assertFalse("Fixture cache preparation requires non-lite test settings",
+					Settings.getInstance().isLite());
+			assertTrue("Fresh fixture should expose the packaged-startup cache gap",
+					ArbitraryDataCacheManager.getInstance().needsArbitraryResourcesCacheRebuild(repository));
+			assertTrue("Expected fixture QDN resource cache to be built",
+					ArbitraryDataCacheManager.getInstance().buildArbitraryResourcesCache(repository, false));
+			assertFalse("Fixture QDN resource cache remains incomplete",
+					ArbitraryDataCacheManager.getInstance().needsArbitraryResourcesCacheRebuild(repository));
 
 			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactionSignatures().stream()
 					.noneMatch(candidate -> Arrays.equals(candidate, signature)));
@@ -98,6 +108,8 @@ public class PirateUnifiedLocalQdnFixtureTests extends Common {
 			assertEquals(Service.ARBITRARY_DATA, transactionData.getService());
 			assertEquals(IDENTIFIER, transactionData.getIdentifier());
 			assertNull(transactionData.getBlockHeight());
+			assertFalse("Retained fixture QDN resource cache did not survive repository reopen",
+					ArbitraryDataCacheManager.getInstance().needsArbitraryResourcesCacheRebuild(repository));
 
 			Path resolved = ZcashFamilyWalletController
 					.resolvePinnedQdnWalletPath(signature58, transactionData, true, false);
@@ -133,7 +145,7 @@ public class PirateUnifiedLocalQdnFixtureTests extends Common {
 	}
 
 	private static byte[] syntheticSignature(ArbitraryTransactionData transactionData) {
-		byte[] domain = "qortium-pirate-unified-local-qdn-fixture-v1".getBytes(StandardCharsets.UTF_8);
+		byte[] domain = "qortium-pirate-unified-local-qdn-fixture-v2".getBytes(StandardCharsets.UTF_8);
 		byte[] data = transactionData.getData();
 		byte[] metadata = transactionData.getMetadataHash() != null
 				? transactionData.getMetadataHash() : new byte[0];
@@ -163,7 +175,7 @@ public class PirateUnifiedLocalQdnFixtureTests extends Common {
 	private static void writeFixtureProperties(Path fixture, String signature58, Path bundle) throws Exception {
 		String manifestSha256 = HexFormat.of().formatHex(
 				Crypto.digestFileStream(bundle.resolve(PirateUnifiedWalletBundle.MANIFEST_FILENAME).toFile()));
-		String properties = "format=qortium-pirate-unified-local-qdn-fixture-v1\n"
+		String properties = "format=qortium-pirate-unified-local-qdn-fixture-v2\n"
 				+ "signature=" + signature58 + "\n"
 				+ "service=ARBITRARY_DATA\n"
 				+ "name=" + NAME + "\n"
@@ -174,6 +186,7 @@ public class PirateUnifiedLocalQdnFixtureTests extends Common {
 				+ "walletsPath=wallets\n"
 				+ "bundleManifestSha256=" + manifestSha256 + "\n"
 				+ "transactionState=synthetic-direct-repository-row\n"
+				+ "arbitraryResourceCacheReady=true\n"
 				+ "unconfirmedPoolEntry=false\n"
 				+ "blockHeight=null\n";
 		Files.writeString(fixture.resolve("fixture.properties"), properties,
