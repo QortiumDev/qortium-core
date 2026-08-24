@@ -15,9 +15,9 @@ public class PirateLightClient extends ZcashFamilyLightClient {
 		}
 	}
 
-	public PirateLightClient(String netId, String genesisHash, Collection<Server> initialServerList,
+	public PirateLightClient(String netId, String expectedChainName, Collection<Server> initialServerList,
 			Map<ConnectionType, Integer> defaultPorts) {
-		super(PirateChain.WALLET_CONFIG, netId, genesisHash, initialServerList, defaultPorts,
+		super(PirateChain.WALLET_CONFIG, netId, expectedChainName, initialServerList, defaultPorts,
 				() -> Settings.getInstance().getArrrDefaultBirthday());
 	}
 

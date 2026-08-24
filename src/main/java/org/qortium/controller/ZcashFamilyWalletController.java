@@ -1,6 +1,5 @@
 package org.qortium.controller;
 
-import com.rust.litewalletjni.LiteWalletJni;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -8,12 +7,13 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.ArbitraryDataReader;
-import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.exception.MissingDataException;
+import org.qortium.arbitrary.misc.Service;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.ZcashFamilyWallet;
 import org.qortium.crosschain.ZcashFamilyWalletConfig;
-import org.qortium.data.arbitrary.ArbitraryResourceStatus;
+import org.qortium.crosschain.ZcashFamilyNativeAdapter;
+import org.qortium.crosschain.ZcashFamilyNativeCoordinator;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.network.Network;
@@ -22,10 +22,8 @@ import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
-import org.qortium.transaction.ArbitraryTransaction;
-import org.qortium.utils.ArbitraryTransactionUtils;
+import org.qortium.transform.Transformer;
 import org.qortium.utils.Base58;
-import org.qortium.utils.FilesystemUtils;
 import org.qortium.utils.NTP;
 
 import java.io.IOException;
@@ -39,20 +37,51 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private static final Logger LOGGER = LogManager.getLogger(ZcashFamilyWalletController.class);
 	private static final long SAVE_INTERVAL = 60 * 60 * 1000L;
+	private static final long SHUTDOWN_JOIN_MILLIS = 5_000L;
+	private static final ZcashFamilyNativeCoordinator NATIVE_COORDINATOR = ZcashFamilyNativeCoordinator.getInstance();
+
+	public enum LifecycleState {
+		NEW,
+		RUNNING,
+		STOPPING,
+		TERMINATED,
+		DEGRADED
+	}
 
 	protected final ZcashFamilyWalletConfig config;
 	private long lastSaveTime = 0L;
-	private boolean running;
+	private volatile boolean running;
 	private W currentWallet = null;
-	private boolean shouldLoadWallet = false;
-	private String loadStatus = null;
+	private volatile boolean shouldLoadWallet = false;
+	private volatile String loadStatus = null;
+	private volatile String cachedStatus = "Not initialized yet";
+	private volatile LifecycleState lifecycleState = LifecycleState.NEW;
 
 	protected ZcashFamilyWalletController(ZcashFamilyWalletConfig config) {
 		this.config = config;
-		this.running = Settings.getInstance().isWalletEnabled(config.getCurrencyCode());
 	}
 
 	protected abstract W createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException;
+
+	@FunctionalInterface
+	public interface WalletOperation<W extends ZcashFamilyWallet, T> {
+		T execute(W wallet, ZcashFamilyNativeAdapter nativeAdapter) throws Exception;
+	}
+
+	@Override
+	public synchronized void start() {
+		if (this.lifecycleState != LifecycleState.NEW)
+			return;
+
+		this.running = true;
+		this.lifecycleState = LifecycleState.RUNNING;
+		super.start();
+	}
+
+	public synchronized boolean startController() {
+		this.start();
+		return this.lifecycleState == LifecycleState.RUNNING;
+	}
 
 	@Override
 	public void run() {
@@ -66,10 +95,10 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				if (!shouldLoadWallet)
 					continue;
 
-				if (!LiteWalletJni.isLoaded()) {
+				if (!isLibraryLoaded()) {
 					this.loadLibrary();
 
-					if (!LiteWalletJni.isLoaded()) {
+					if (!isLibraryLoaded()) {
 						Thread.sleep(5 * 1000);
 						continue;
 					}
@@ -77,23 +106,31 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 				this.loadStatus = null;
 
-				if (this.currentWallet == null || this.currentWallet.isNullSeedWallet())
-					continue;
+				boolean syncAttempted = NATIVE_COORDINATOR.execute("synchronize " + this.config.getCurrencyCode() + " wallet",
+						ZcashFamilyNativeCoordinator.SYNC_TIMEOUT, nativeAdapter -> {
+					if (this.currentWallet == null || this.currentWallet.isNullSeedWallet())
+						return false;
 
-				LOGGER.debug("Syncing {} wallet...", this.config.getDisplayName());
-				String response = LiteWalletJni.execute("sync", "");
-				LOGGER.debug("sync response: {}", response);
+					this.cachedStatus = "Synchronizing wallet...";
+					LOGGER.debug("Syncing {} wallet...", this.config.getDisplayName());
+					String response = nativeAdapter.execute("sync", "");
+					LOGGER.debug("sync response: {}", response);
 
-				try {
-					JSONObject json = new JSONObject(response);
-					if (json.has("result")) {
-						String result = json.getString("result");
-						if (Objects.equals(result, "success"))
-							this.currentWallet.setReady(true);
+					try {
+						JSONObject json = new JSONObject(response);
+						if (json.has("result")) {
+							String result = json.getString("result");
+							if (Objects.equals(result, "success"))
+								this.currentWallet.setReady(true);
+						}
+					} catch (JSONException e) {
+						LOGGER.info("Unable to interpret JSON", e);
 					}
-				} catch (JSONException e) {
-					LOGGER.info("Unable to interpret JSON", e);
-				}
+					this.cachedStatus = this.currentWallet.isReady() ? "Synchronized" : "Initializing wallet...";
+					return true;
+				});
+				if (!syncAttempted)
+					continue;
 
 				Thread.sleep(30000);
 
@@ -103,17 +140,63 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			}
 		} catch (InterruptedException e) {
 			// Fall-through to exit.
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			this.lifecycleState = LifecycleState.DEGRADED;
+			this.cachedStatus = this.config.getDisplayName() + " native wallet is unavailable until Core restart";
+			this.loadStatus = this.cachedStatus;
+			LOGGER.error("{} wallet controller stopped because the native lane is unavailable: {}",
+					this.config.getDisplayName(), e.getMessage());
+		} finally {
+			// Consume any shutdown signal that arrived after the last interruptible wait so cleanup
+			// does not present it to the native coordinator as an interrupted native operation.
+			Thread.interrupted();
+			this.running = false;
+			if (NATIVE_COORDINATOR.isDegraded()) {
+				this.lifecycleState = LifecycleState.DEGRADED;
+				this.cachedStatus = this.config.getDisplayName() + " native wallet is unavailable until Core restart";
+			} else {
+				this.saveCurrentWallet();
+				this.lifecycleState = LifecycleState.TERMINATED;
+				this.cachedStatus = this.config.getDisplayName() + " wallet controller is stopped";
+			}
 		}
 	}
 
-	public void shutdown() {
-		try {
-			this.saveCurrentWallet();
+	public synchronized void shutdown() {
+		if (this.lifecycleState == LifecycleState.TERMINATED || this.lifecycleState == LifecycleState.DEGRADED)
+			return;
+
+		if (this.lifecycleState == LifecycleState.NEW) {
 			this.running = false;
-			this.interrupt();
-		} catch (Exception e) {
-			// Best-effort shutdown.
+			this.lifecycleState = LifecycleState.TERMINATED;
+			this.cachedStatus = this.config.getDisplayName() + " wallet controller is stopped";
+			return;
 		}
+
+		this.lifecycleState = LifecycleState.STOPPING;
+		this.cachedStatus = "Stopping " + this.config.getDisplayName() + " wallet controller...";
+		this.running = false;
+		this.interrupt();
+
+		if (Thread.currentThread() != this) {
+			try {
+				this.join(SHUTDOWN_JOIN_MILLIS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+	}
+
+	public LifecycleState getLifecycleState() {
+		return this.lifecycleState;
+	}
+
+	public boolean requiresCoreRestart() {
+		return this.lifecycleState == LifecycleState.DEGRADED || NATIVE_COORDINATOR.isDegraded();
+	}
+
+	static boolean acceptsWalletOperations(LifecycleState state) {
+		return state == LifecycleState.RUNNING;
 	}
 
 	private void loadLibrary() throws InterruptedException {
@@ -122,57 +205,49 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			if (libFileName == null) {
 				String osName = System.getProperty("os.name");
 				String osArchitecture = System.getProperty("os.arch");
-				this.loadStatus = String.format("Unsupported architecture (%s %s)", osName, osArchitecture);
+				setLoadStatus(String.format("Unsupported architecture (%s %s)", osName, osArchitecture));
 				return;
 			}
 
 			Path libDirectory = this.config.getRustLibOuterDirectory();
 			Path libPath = Paths.get(libDirectory.toString(), libFileName);
 			if (Files.exists(libPath)) {
-				LiteWalletJni.loadLibrary(libPath);
+				loadNativeLibrary(libPath);
 				return;
 			}
 
-			ArbitraryTransactionData transactionData = this.getTransactionData(repository);
-			if (transactionData == null || transactionData.getService() == null)
-				return;
+			String qdnWalletSignature = this.config.getQdnWalletSignature();
+			ArbitraryTransactionData transactionData = getPinnedTransactionData(repository, qdnWalletSignature);
 
 			List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
 			if (handshakedPeers.size() < Settings.getInstance().getMinBlockchainPeers()) {
-				this.loadStatus = "Searching for peers...";
+				setLoadStatus("Searching for peers...");
 				return;
 			}
 
-			ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(transactionData.getName(),
-					ArbitraryDataFile.ResourceIdType.NAME, transactionData.getService(), transactionData.getIdentifier());
+			Path resourcePath;
 			try {
-				arbitraryDataReader.loadSynchronously(false);
+				resourcePath = resolvePinnedQdnWalletPath(qdnWalletSignature, transactionData);
 			} catch (MissingDataException e) {
-				LOGGER.info("Missing data when loading {} wallet library", this.config.getDisplayName());
-			}
-
-			ArbitraryResourceStatus status = ArbitraryTransactionUtils.getStatus(
-					transactionData.getService(), transactionData.getName(), transactionData.getIdentifier(), false, true);
-
-			if (status.getStatus() != ArbitraryResourceStatus.Status.READY) {
-				LOGGER.info("Not ready yet: {}", status.getTitle());
-				this.loadStatus = String.format("Downloading files from QDN... (%d / %d)",
-						status.getLocalChunkCount(), status.getTotalChunkCount());
+				LOGGER.info("Missing data when loading configured {} wallet library", this.config.getDisplayName());
+				setLoadStatus(String.format("Downloading configured %s wallet library from QDN...",
+						this.config.getDisplayName()));
 				return;
 			}
 
-			Path walletsLibDirectory = this.config.getWalletsLibDirectory();
-			if (Files.exists(walletsLibDirectory))
-				FilesystemUtils.safeDeleteDirectory(walletsLibDirectory, false);
+			try {
+				validatePinnedResourcePath(resourcePath, libFileName);
+			} catch (DataException e) {
+				LOGGER.error("Invalid configured {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+				setLoadStatus(String.format("Configured %s wallet library could not be read from QDN",
+						this.config.getDisplayName()));
+				return;
+			}
 
 			Files.createDirectories(libDirectory);
-			FileUtils.copyDirectory(arbitraryDataReader.getFilePath().toFile(), libDirectory.toFile());
+			FileUtils.copyDirectory(resourcePath.toFile(), libDirectory.toFile());
 
-			ArbitraryDataResource resource = new ArbitraryDataResource(transactionData.getName(),
-					ArbitraryDataFile.ResourceIdType.NAME, transactionData.getService(), transactionData.getIdentifier());
-			resource.deleteCache();
-
-			LiteWalletJni.loadLibrary(libPath);
+			loadNativeLibrary(libPath);
 		} catch (DataException e) {
 			LOGGER.error("Repository issue when loading {} wallet library", this.config.getDisplayName(), e);
 		} catch (IOException e) {
@@ -180,24 +255,56 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private ArbitraryTransactionData getTransactionData(Repository repository) {
-		try {
-			byte[] signature = Base58.decode(this.config.getQdnWalletSignature());
-			TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
-			if (!(transactionData instanceof ArbitraryTransactionData))
-				return null;
+	static ArbitraryTransactionData getPinnedTransactionData(Repository repository, String signature58) throws DataException {
+		if (signature58 == null || signature58.isBlank())
+			throw new DataException("Configured wallet QDN transaction signature is missing");
 
-			ArbitraryTransaction arbitraryTransaction = new ArbitraryTransaction(repository, transactionData);
-			return (ArbitraryTransactionData) arbitraryTransaction.getTransactionData();
-		} catch (DataException e) {
-			return null;
+		final byte[] signature;
+		try {
+			signature = Base58.decode(signature58);
+		} catch (RuntimeException e) {
+			throw new DataException("Configured wallet QDN transaction signature is invalid");
 		}
+
+		if (signature == null || signature.length != Transformer.SIGNATURE_LENGTH)
+			throw new DataException("Configured wallet QDN transaction signature is invalid");
+
+		TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
+		if (!(transactionData instanceof ArbitraryTransactionData arbitraryTransactionData))
+			throw new DataException("Configured wallet QDN signature does not identify an ARBITRARY transaction");
+
+		if (arbitraryTransactionData.getService() != Service.ARBITRARY_DATA)
+			throw new DataException("Configured wallet QDN transaction is not an ARBITRARY_DATA publication");
+
+		return arbitraryTransactionData;
+	}
+
+	static Path resolvePinnedQdnWalletPath(String signature58, ArbitraryTransactionData transactionData)
+			throws DataException, IOException, MissingDataException {
+		if (transactionData == null)
+			throw new DataException("Configured wallet QDN transaction is missing");
+		if (transactionData.getService() != Service.ARBITRARY_DATA)
+			throw new DataException("Configured wallet QDN transaction is not an ARBITRARY_DATA publication");
+
+		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(signature58,
+				ArbitraryDataFile.ResourceIdType.TRANSACTION_DATA, transactionData.getService(), transactionData.getIdentifier());
+		arbitraryDataReader.setTransactionData(transactionData);
+		arbitraryDataReader.loadSynchronously(false);
+		return arbitraryDataReader.getFilePath();
+	}
+
+	static void validatePinnedResourcePath(Path resourcePath, String libFileName) throws DataException {
+		if (resourcePath == null || !Files.isDirectory(resourcePath))
+			throw new DataException("wallet library resource is not a directory");
+		if (libFileName == null || !Files.isRegularFile(resourcePath.resolve(libFileName)))
+			throw new DataException("wallet library resource is missing the expected platform library");
 	}
 
 	public static String resolveRustLibFilename() {
-		String osName = System.getProperty("os.name");
-		String osArchitecture = System.getProperty("os.arch");
+		return resolveRustLibFilename(System.getProperty("os.name"), System.getProperty("os.arch"));
+	}
 
+	static String resolveRustLibFilename(String osName, String osArchitecture) {
 		if (osName.equals("Mac OS X") && osArchitecture.equals("x86_64"))
 			return "librust-macos-x86_64.dylib";
 		else if ((osName.equals("Linux") || osName.equals("FreeBSD")) && osArchitecture.equals("aarch64"))
@@ -210,16 +317,9 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		return null;
 	}
 
-	public boolean initWithEntropy58(String entropy58) {
-		return this.initWithEntropy58(entropy58, false);
-	}
-
-	public boolean initNullSeedWallet() {
-		return this.initWithEntropy58(Base58.encode(new byte[32]), true);
-	}
-
-	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet) {
-		if (!LiteWalletJni.isLoaded()) {
+	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
+			ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!nativeAdapter.isLoaded()) {
 			shouldLoadWallet = true;
 			return false;
 		}
@@ -250,22 +350,21 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	private void saveCurrentWallet() {
-		if (this.currentWallet == null)
-			return;
-
 		try {
-			if (this.currentWallet.save()) {
-				Long now = NTP.getTime();
-				if (now != null)
-					this.lastSaveTime = now;
-			}
-		} catch (IOException e) {
+			NATIVE_COORDINATOR.execute("save " + this.config.getCurrencyCode() + " wallet", nativeAdapter -> {
+				if (this.currentWallet == null)
+					return null;
+
+				if (this.currentWallet.save()) {
+					Long now = NTP.getTime();
+					if (now != null)
+						this.lastSaveTime = now;
+				}
+				return null;
+			});
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
 			LOGGER.info("Unable to save wallet");
 		}
-	}
-
-	public W getCurrentWallet() {
-		return this.currentWallet;
 	}
 
 	private void closeCurrentWallet() {
@@ -273,52 +372,145 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		this.currentWallet = null;
 	}
 
-	public void ensureInitialized() throws ForeignBlockchainException {
-		if (!LiteWalletJni.isLoaded() || this.currentWallet == null || !this.currentWallet.isInitialized())
+	public String getSyncStatus() {
+		return this.getBoundedSyncStatus(null);
+	}
+
+	public String getSyncStatus(String entropy58) {
+		return this.getBoundedSyncStatus(entropy58);
+	}
+
+	public <T> T withEntropyWallet(String entropy58, boolean requireSynchronized,
+			WalletOperation<W, T> operation) throws ForeignBlockchainException {
+		return withWallet(entropy58, false, requireSynchronized, true, operation);
+	}
+
+	public <T> T withNullSeedWallet(WalletOperation<W, T> operation) throws ForeignBlockchainException {
+		return withWallet(Base58.encode(new byte[32]), true, false, false, operation);
+	}
+
+	private <T> T withWallet(String entropy58, boolean isNullSeedWallet, boolean requireSynchronized,
+			boolean requireNotNullSeed, WalletOperation<W, T> operation) throws ForeignBlockchainException {
+		return executeChecked("execute " + this.config.getCurrencyCode() + " wallet operation", nativeAdapter -> {
+			if (!acceptsWalletOperations(this.lifecycleState))
+				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
+			if (!this.initWithEntropy58(entropy58, isNullSeedWallet, nativeAdapter))
+				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet isn't initialized yet");
+			ensureInitialized(nativeAdapter);
+			if (requireSynchronized)
+				ensureSynchronized(nativeAdapter);
+			if (requireNotNullSeed)
+				ensureNotNullSeedInternal();
+			return operation.execute(this.currentWallet, nativeAdapter);
+		});
+	}
+
+	private void ensureInitialized(ZcashFamilyNativeAdapter nativeAdapter) throws ForeignBlockchainException {
+		if (!nativeAdapter.isLoaded() || this.currentWallet == null || !this.currentWallet.isInitialized())
 			throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet isn't initialized yet");
 	}
 
-	public void ensureNotNullSeed() throws ForeignBlockchainException {
+	private void ensureNotNullSeedInternal() throws ForeignBlockchainException {
 		if (this.currentWallet == null || this.currentWallet.isNullSeedWallet())
 			throw new ForeignBlockchainException("Invalid wallet");
 	}
 
-	public void ensureSynchronized() throws ForeignBlockchainException {
+	private void ensureSynchronized(ZcashFamilyNativeAdapter nativeAdapter) throws ForeignBlockchainException {
 		if (this.currentWallet == null || !this.currentWallet.isSynchronized())
 			throw new ForeignBlockchainException("Wallet isn't synchronized yet");
 
-		String response = LiteWalletJni.execute("syncStatus", "");
+		String response = nativeAdapter.execute("syncStatus", "");
 		JSONObject json = new JSONObject(response);
-		if (json.has("syncing")) {
-			boolean isSyncing = Boolean.valueOf(json.getString("syncing"));
-			if (isSyncing) {
-				long syncedBlocks = json.getLong("synced_blocks");
-				long totalBlocks = json.getLong("total_blocks");
-				throw new ForeignBlockchainException(String.format("Sync in progress (%d / %d). Please try again later.",
-						syncedBlocks, totalBlocks));
-			}
+		if (json.has("syncing") && Boolean.parseBoolean(json.getString("syncing"))) {
+			long syncedBlocks = json.getLong("synced_blocks");
+			long totalBlocks = json.getLong("total_blocks");
+			throw new ForeignBlockchainException(String.format("Sync in progress (%d / %d). Please try again later.",
+					syncedBlocks, totalBlocks));
 		}
 	}
 
-	public String getSyncStatus() {
+	private String getSyncStatus(ZcashFamilyNativeAdapter nativeAdapter) {
 		if (this.currentWallet == null || !this.currentWallet.isInitialized()) {
 			if (this.loadStatus != null)
-				return this.loadStatus;
+				return cacheStatus(this.loadStatus);
 
-			return "Not initialized yet";
+			return cacheStatus("Not initialized yet");
 		}
 
-		String syncStatusResponse = LiteWalletJni.execute("syncStatus", "");
+		String syncStatusResponse = nativeAdapter.execute("syncStatus", "");
 		JSONObject json = new JSONObject(syncStatusResponse);
-		if (json.has("syncing")) {
-			boolean isSyncing = Boolean.valueOf(json.getString("syncing"));
-			if (isSyncing) {
-				long syncedBlocks = json.getLong("synced_blocks");
-				long totalBlocks = json.getLong("total_blocks");
-				return String.format("Sync in progress (%d / %d)", syncedBlocks, totalBlocks);
-			}
+		if (json.has("syncing") && Boolean.parseBoolean(json.getString("syncing"))) {
+			long syncedBlocks = json.getLong("synced_blocks");
+			long totalBlocks = json.getLong("total_blocks");
+			return cacheStatus(String.format("Sync in progress (%d / %d)", syncedBlocks, totalBlocks));
 		}
 
-		return this.currentWallet.isSynchronized() ? "Synchronized" : "Initializing wallet...";
+		return cacheStatus(this.currentWallet.isSynchronized() ? "Synchronized" : "Initializing wallet...");
+	}
+
+	private String getBoundedSyncStatus(String entropy58) {
+		if (this.requiresCoreRestart())
+			return cacheStatus(this.config.getDisplayName() + " native wallet is unavailable until Core restart");
+
+		if (this.lifecycleState == LifecycleState.NEW)
+			return cacheStatus(this.config.getDisplayName() + " wallet controller has not started");
+		if (this.lifecycleState == LifecycleState.STOPPING)
+			return this.cachedStatus;
+		if (this.lifecycleState == LifecycleState.TERMINATED)
+			return cacheStatus(this.config.getDisplayName() + " wallet controller is stopped");
+
+		if (NATIVE_COORDINATOR.isBusy())
+			return this.cachedStatus;
+
+		try {
+			return NATIVE_COORDINATOR.execute("get wallet synchronization status",
+					ZcashFamilyNativeCoordinator.STATUS_TIMEOUT, nativeAdapter -> {
+				if (entropy58 != null)
+					this.initWithEntropy58(entropy58, false, nativeAdapter);
+				return this.getSyncStatus(nativeAdapter);
+			});
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			if (NATIVE_COORDINATOR.isDegraded()) {
+				this.lifecycleState = LifecycleState.DEGRADED;
+				return cacheStatus(this.config.getDisplayName() + " native wallet is unavailable until Core restart");
+			}
+			return this.cachedStatus;
+		}
+	}
+
+	private String cacheStatus(String status) {
+		this.cachedStatus = status;
+		return status;
+	}
+
+	private void setLoadStatus(String status) {
+		this.loadStatus = status;
+		this.cachedStatus = status;
+	}
+
+	private boolean isLibraryLoaded() {
+		return NATIVE_COORDINATOR.execute("check native wallet library", ZcashFamilyNativeAdapter::isLoaded);
+	}
+
+	private void loadNativeLibrary(Path libPath) {
+		NATIVE_COORDINATOR.execute("load native wallet library", nativeAdapter -> {
+			nativeAdapter.loadLibrary(libPath);
+			return null;
+		});
+	}
+
+	private <T> T executeChecked(String operationName,
+			ZcashFamilyNativeCoordinator.NativeOperation<T> operation) throws ForeignBlockchainException {
+		try {
+			return NATIVE_COORDINATOR.execute(operationName, operation);
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			Throwable cause = e;
+			while (cause != null) {
+				if (cause instanceof ForeignBlockchainException foreignBlockchainException)
+					throw foreignBlockchainException;
+				cause = cause.getCause();
+			}
+			throw new ForeignBlockchainException(e.getMessage());
+		}
 	}
 }

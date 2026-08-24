@@ -1,7 +1,6 @@
 package org.qortium.crosschain;
 
 import cash.z.wallet.sdk.rpc.CompactFormats;
-import com.rust.litewalletjni.LiteWalletJni;
 import org.bitcoinj.base.Base58;
 import org.bitcoinj.base.Bech32;
 import org.bitcoinj.base.Coin;
@@ -104,6 +103,11 @@ public class PirateChain extends Bitcoiny {
 			}
 
 			@Override
+			public String getLightdChainName() {
+				return "main";
+			}
+
+			@Override
 			public long getP2shFee(Long timestamp) {
 				return this.getFeeRequired();
 			}
@@ -122,6 +126,11 @@ public class PirateChain extends Bitcoiny {
 			@Override
 			public String getGenesisHash() {
 				return "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0";
+			}
+
+			@Override
+			public String getLightdChainName() {
+				return "test";
 			}
 
 			@Override
@@ -145,8 +154,13 @@ public class PirateChain extends Bitcoiny {
 
 			@Override
 			public String getGenesisHash() {
-				// This is unique to each regtest instance
+				// This is unique to each regtest instance.
 				return null;
+			}
+
+			@Override
+			public String getLightdChainName() {
+				return "regtest";
 			}
 
 			@Override
@@ -168,6 +182,7 @@ public class PirateChain extends Bitcoiny {
 		public abstract NetworkParameters getParams();
 		public abstract Collection<Server> getServers();
 		public abstract String getGenesisHash();
+		public abstract String getLightdChainName();
 		public abstract long getP2shFee(Long timestamp) throws ForeignBlockchainException;
 	}
 
@@ -193,7 +208,8 @@ public class PirateChain extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("ARRR")) {
 			PirateChainNet pirateChainNet = Settings.getInstance().getPirateChainNet();
 
-			BitcoinyBlockchainProvider pirateLightClient = new PirateLightClient("PirateChain-" + pirateChainNet.name(), pirateChainNet.getGenesisHash(), pirateChainNet.getServers(), DEFAULT_LITEWALLET_PORTS);
+			BitcoinyBlockchainProvider pirateLightClient = new PirateLightClient("PirateChain-" + pirateChainNet.name(),
+					pirateChainNet.getLightdChainName(), pirateChainNet.getServers(), DEFAULT_LITEWALLET_PORTS);
 			Context bitcoinjContext = new Context(pirateChainNet.getParams());
 
 			instance = new PirateChain(pirateChainNet, pirateLightClient, bitcoinjContext, CURRENCY_CODE);
@@ -318,23 +334,16 @@ public class PirateChain extends Bitcoiny {
 	}
 
 	public Long getWalletBalance(String entropy58) throws ForeignBlockchainException {
-
-		synchronized (this) {
-			PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-			walletController.initWithEntropy58(entropy58);
-			walletController.ensureInitialized();
-			walletController.ensureSynchronized();
-			walletController.ensureNotNullSeed();
-
-			// Get balance
-			String response = LiteWalletJni.execute("balance", "");
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
+			String response = nativeAdapter.execute("balance", "");
 			JSONObject json = new JSONObject(response);
 			if (json.has("zbalance")) {
 				return json.getLong("zbalance");
 			}
 
 			throw new ForeignBlockchainException("Unable to determine balance");
-		}
+		});
 	}
 
 	/**
@@ -360,20 +369,14 @@ public class PirateChain extends Bitcoiny {
 	}
 
 	public List<SimpleTransaction> getWalletTransactions(String entropy58) throws ForeignBlockchainException {
-
-		synchronized (this) {
-			PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-			walletController.initWithEntropy58(entropy58);
-			walletController.ensureInitialized();
-			walletController.ensureSynchronized();
-			walletController.ensureNotNullSeed();
-
-			String myAddress = getWalletAddress(entropy58);
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
+			String myAddress = wallet.getWalletAddress();
 
 			List<SimpleTransaction> transactions = new ArrayList<>();
 
 			// Get transactions list
-			String response = LiteWalletJni.execute("list", "");
+			String response = nativeAdapter.execute("list", "");
 			JSONArray transactionsJson = new JSONArray(response);
 			if (transactionsJson != null) {
 				for (int i = 0; i < transactionsJson.length(); i++) {
@@ -451,42 +454,29 @@ public class PirateChain extends Bitcoiny {
 			LOGGER.info("balance = " + (sum - fees));
 
 			return transactions;
-		}
+		});
 	}
 
 	public String getWalletAddress(String entropy58) throws ForeignBlockchainException {
-		synchronized (this) {
-			PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-			walletController.initWithEntropy58(entropy58);
-			walletController.ensureInitialized();
-			walletController.ensureNotNullSeed();
-
-			return walletController.getCurrentWallet().getWalletAddress();
-		}
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		return walletController.withEntropyWallet(entropy58, false,
+				(wallet, nativeAdapter) -> wallet.getWalletAddress());
 	}
 
 	public String getPrivateKey(String entropy58) throws ForeignBlockchainException {
-		synchronized (this) {
-			PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-			walletController.initWithEntropy58(entropy58);
-			walletController.ensureInitialized();
-			walletController.ensureNotNullSeed();
-                        walletController.getCurrentWallet().unlock();
-
-			return walletController.getCurrentWallet().getPrivateKey();
-		}
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		return walletController.withEntropyWallet(entropy58, false, (wallet, nativeAdapter) -> {
+			wallet.unlock();
+			return wallet.getPrivateKey();
+		});
 	}
 
 	public String getWalletSeed(String entropy58) throws ForeignBlockchainException {
-		synchronized (this) {
-			PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-			walletController.initWithEntropy58(entropy58);
-			walletController.ensureInitialized();
-			walletController.ensureNotNullSeed();
-                        walletController.getCurrentWallet().unlock();
-
-			return walletController.getCurrentWallet().getWalletSeed(entropy58);
-		}
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		return walletController.withEntropyWallet(entropy58, false, (wallet, nativeAdapter) -> {
+			wallet.unlock();
+			return wallet.getWalletSeed(entropy58);
+		});
 	}
 
 	public String getUnusedReceiveAddress(String key58) throws ForeignBlockchainException {
@@ -497,95 +487,68 @@ public class PirateChain extends Bitcoiny {
 
 	public String sendCoins(PirateChainSendRequest pirateChainSendRequest) throws ForeignBlockchainException {
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-		walletController.initWithEntropy58(pirateChainSendRequest.entropy58);
-		walletController.ensureInitialized();
-		walletController.ensureSynchronized();
-		walletController.ensureNotNullSeed();
+		return walletController.withEntropyWallet(pirateChainSendRequest.entropy58, true, (wallet, nativeAdapter) -> {
+			wallet.unlock();
 
-		// Unlock wallet
-		walletController.getCurrentWallet().unlock();
+			JSONObject txn = new JSONObject();
+			txn.put("input", wallet.getWalletAddress());
+			txn.put("fee", MAINNET_FEE);
 
-		// Build spend
-		JSONObject txn = new JSONObject();
-		txn.put("input", walletController.getCurrentWallet().getWalletAddress());
-		txn.put("fee", MAINNET_FEE);
+			JSONObject output = new JSONObject();
+			output.put("address", pirateChainSendRequest.receivingAddress);
+			output.put("amount", pirateChainSendRequest.arrrAmount);
+			output.put("memo", pirateChainSendRequest.memo);
 
-		JSONObject output = new JSONObject();
-		output.put("address", pirateChainSendRequest.receivingAddress);
-		output.put("amount", pirateChainSendRequest.arrrAmount);
-		output.put("memo", pirateChainSendRequest.memo);
+			JSONArray outputs = new JSONArray();
+			outputs.put(output);
+			txn.put("output", outputs);
 
-		JSONArray outputs = new JSONArray();
-		outputs.put(output);
-		txn.put("output", outputs);
-
-		String txnString = txn.toString();
-
-		// Send the coins
-		String response = LiteWalletJni.execute("send", txnString);
-		JSONObject json = new JSONObject(response);
-		try {
-			if (json.has("txid")) { // Success
-				return json.getString("txid");
+			String response = nativeAdapter.execute("send", txn.toString());
+			JSONObject json = new JSONObject(response);
+			try {
+				if (json.has("txid"))
+					return json.getString("txid");
+				if (json.has("error"))
+					throw new ForeignBlockchainException(json.getString("error"));
+			} catch (JSONException e) {
+				throw new ForeignBlockchainException(e.getMessage());
 			}
-			else if (json.has("error")) {
-				String error = json.getString("error");
-				throw new ForeignBlockchainException(error);
-			}
-
-		} catch (JSONException e) {
-			throw new ForeignBlockchainException(e.getMessage());
-		}
-
-		throw new ForeignBlockchainException("Something went wrong");
+			throw new ForeignBlockchainException("Something went wrong");
+		});
 	}
 
 	public String fundP2SH(String entropy58, String receivingAddress, long amount,
 						   String redeemScript58) throws ForeignBlockchainException {
 
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-		walletController.initWithEntropy58(entropy58);
-		walletController.ensureInitialized();
-		walletController.ensureSynchronized();
-		walletController.ensureNotNullSeed();
+		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
+			wallet.unlock();
 
-		// Unlock wallet
-		walletController.getCurrentWallet().unlock();
+			JSONObject txn = new JSONObject();
+			txn.put("input", wallet.getWalletAddress());
+			txn.put("fee", MAINNET_FEE);
 
-		// Build spend
-		JSONObject txn = new JSONObject();
-		txn.put("input", walletController.getCurrentWallet().getWalletAddress());
-		txn.put("fee", MAINNET_FEE);
+			JSONObject output = new JSONObject();
+			output.put("address", receivingAddress);
+			output.put("amount", amount);
 
-		JSONObject output = new JSONObject();
-		output.put("address", receivingAddress);
-		output.put("amount", amount);
-		//output.put("memo", memo);
+			JSONArray outputs = new JSONArray();
+			outputs.put(output);
+			txn.put("output", outputs);
+			txn.put("script", redeemScript58);
 
-		JSONArray outputs = new JSONArray();
-		outputs.put(output);
-		txn.put("output", outputs);
-		txn.put("script", redeemScript58);
-
-		String txnString = txn.toString();
-
-		// Send the coins
-		String response = LiteWalletJni.execute("sendp2sh", txnString);
-		JSONObject json = new JSONObject(response);
-		try {
-			if (json.has("txid")) { // Success
-				return json.getString("txid");
+			String response = nativeAdapter.execute("sendp2sh", txn.toString());
+			JSONObject json = new JSONObject(response);
+			try {
+				if (json.has("txid"))
+					return json.getString("txid");
+				if (json.has("error"))
+					throw new ForeignBlockchainException(json.getString("error"));
+			} catch (JSONException e) {
+				throw new ForeignBlockchainException(e.getMessage());
 			}
-			else if (json.has("error")) {
-				String error = json.getString("error");
-				throw new ForeignBlockchainException(error);
-			}
-
-		} catch (JSONException e) {
-			throw new ForeignBlockchainException(e.getMessage());
-		}
-
-		throw new ForeignBlockchainException("Something went wrong");
+			throw new ForeignBlockchainException("Something went wrong");
+		});
 	}
 
 	public String redeemP2sh(String p2shAddress, String receivingAddress, long amount, String redeemScript58,
@@ -593,50 +556,39 @@ public class PirateChain extends Bitcoiny {
 
 		// Use null seed wallet since we may not have the entropy bytes for a real wallet's seed
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-		walletController.initNullSeedWallet();
-		walletController.ensureInitialized();
+		return walletController.withNullSeedWallet((wallet, nativeAdapter) -> {
+			wallet.unlock();
 
-		walletController.getCurrentWallet().unlock();
+			JSONObject txn = new JSONObject();
+			txn.put("input", p2shAddress);
+			txn.put("fee", MAINNET_FEE);
 
-		// Build spend
-		JSONObject txn = new JSONObject();
-		txn.put("input", p2shAddress);
-		txn.put("fee", MAINNET_FEE);
+			JSONObject output = new JSONObject();
+			output.put("address", receivingAddress);
+			output.put("amount", amount);
 
-		JSONObject output = new JSONObject();
-		output.put("address", receivingAddress);
-		output.put("amount", amount);
-		// output.put("memo", ""); // Maybe useful in future to include trade details?
+			JSONArray outputs = new JSONArray();
+			outputs.put(output);
+			txn.put("output", outputs);
 
-		JSONArray outputs = new JSONArray();
-		outputs.put(output);
-		txn.put("output", outputs);
+			txn.put("script", redeemScript58);
+			txn.put("txid", fundingTxid58);
+			txn.put("locktime", 0);
+			txn.put("secret", secret58);
+			txn.put("privkey", privateKey58);
 
-		txn.put("script", redeemScript58);
-		txn.put("txid", fundingTxid58);
-		txn.put("locktime", 0); // Must be 0 when redeeming
-		txn.put("secret", secret58);
-		txn.put("privkey", privateKey58);
-
-		String txnString = txn.toString();
-
-		// Redeem the P2SH
-		String response = LiteWalletJni.execute("redeemp2sh", txnString);
-		JSONObject json = new JSONObject(response);
-		try {
-			if (json.has("txid")) { // Success
-				return json.getString("txid");
+			String response = nativeAdapter.execute("redeemp2sh", txn.toString());
+			JSONObject json = new JSONObject(response);
+			try {
+				if (json.has("txid"))
+					return json.getString("txid");
+				if (json.has("error"))
+					throw new ForeignBlockchainException(json.getString("error"));
+			} catch (JSONException e) {
+				throw new ForeignBlockchainException(e.getMessage());
 			}
-			else if (json.has("error")) {
-				String error = json.getString("error");
-				throw new ForeignBlockchainException(error);
-			}
-
-		} catch (JSONException e) {
-			throw new ForeignBlockchainException(e.getMessage());
-		}
-
-		throw new ForeignBlockchainException("Something went wrong");
+			throw new ForeignBlockchainException("Something went wrong");
+		});
 	}
 
 	public String refundP2sh(String p2shAddress, String receivingAddress, long amount, String redeemScript58,
@@ -644,59 +596,44 @@ public class PirateChain extends Bitcoiny {
 
 		// Use null seed wallet since we may not have the entropy bytes for a real wallet's seed
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-		walletController.initNullSeedWallet();
-		walletController.ensureInitialized();
+		return walletController.withNullSeedWallet((wallet, nativeAdapter) -> {
+			wallet.unlock();
 
-		walletController.getCurrentWallet().unlock();
+			JSONObject txn = new JSONObject();
+			txn.put("input", p2shAddress);
+			txn.put("fee", MAINNET_FEE);
 
-		// Build spend
-		JSONObject txn = new JSONObject();
-		txn.put("input", p2shAddress);
-		txn.put("fee", MAINNET_FEE);
+			JSONObject output = new JSONObject();
+			output.put("address", receivingAddress);
+			output.put("amount", amount);
 
-		JSONObject output = new JSONObject();
-		output.put("address", receivingAddress);
-		output.put("amount", amount);
-		// output.put("memo", ""); // Maybe useful in future to include trade details?
+			JSONArray outputs = new JSONArray();
+			outputs.put(output);
+			txn.put("output", outputs);
 
-		JSONArray outputs = new JSONArray();
-		outputs.put(output);
-		txn.put("output", outputs);
+			txn.put("script", redeemScript58);
+			txn.put("txid", fundingTxid58);
+			txn.put("locktime", lockTime);
+			txn.put("secret", "");
+			txn.put("privkey", privateKey58);
 
-		txn.put("script", redeemScript58);
-		txn.put("txid", fundingTxid58);
-		txn.put("locktime", lockTime);
-		txn.put("secret", ""); // Must be blank when refunding
-		txn.put("privkey", privateKey58);
-
-		String txnString = txn.toString();
-
-		// Redeem the P2SH
-		String response = LiteWalletJni.execute("redeemp2sh", txnString);
-		JSONObject json = new JSONObject(response);
-		try {
-			if (json.has("txid")) { // Success
-				return json.getString("txid");
+			String response = nativeAdapter.execute("redeemp2sh", txn.toString());
+			JSONObject json = new JSONObject(response);
+			try {
+				if (json.has("txid"))
+					return json.getString("txid");
+				if (json.has("error"))
+					throw new ForeignBlockchainException(json.getString("error"));
+			} catch (JSONException e) {
+				throw new ForeignBlockchainException(e.getMessage());
 			}
-			else if (json.has("error")) {
-				String error = json.getString("error");
-				throw new ForeignBlockchainException(error);
-			}
-
-		} catch (JSONException e) {
-			throw new ForeignBlockchainException(e.getMessage());
-		}
-
-		throw new ForeignBlockchainException("Something went wrong");
+			throw new ForeignBlockchainException("Something went wrong");
+		});
 	}
 
 	public String getSyncStatus(String entropy58) throws ForeignBlockchainException {
-		synchronized (this) {
-			PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-			walletController.initWithEntropy58(entropy58);
-
-			return walletController.getSyncStatus();
-		}
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		return walletController.getSyncStatus(entropy58);
 	}
 
 	public static BitcoinyTransaction deserializeRawTransaction(String rawTransactionHex) throws TransformationException {

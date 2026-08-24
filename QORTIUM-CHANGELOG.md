@@ -34,6 +34,36 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - fix(arrr): harden status lifecycle and lightwallet failover
+
+Makes the Pirate wallet controller explicitly restartable after a clean stop,
+starts it exactly once from the API, and returns cached status while a long
+native operation owns the bounded wallet lane. Disabled and degraded states no
+longer produce false start success. Lightwallet probes now verify the reported
+chain name, retain the existing failed-channel cleanup, and require two
+distinct agreeing servers before using relative height to reject stale or
+implausibly high peers.
+
+### 2026-08-24 - fix(wallet): serialize process-global native operations
+
+Routes Pirate wallet loading, switching, synchronization, status, save, export,
+send, and P2SH calls through one bounded process-wide operation lane. Complete
+wallet-selected actions now remain atomic, so another account or background
+sync cannot replace the native wallet between initialization and use. If a
+running native call times out or its caller is interrupted, Core permanently
+marks the lane unavailable until restart instead of starting a replacement
+worker against an uncertain native context.
+
+### 2026-08-24 - fix(wallet): pin QDN library loads to transaction data
+
+Prevents the native Pirate wallet library from silently following newer data
+published under the same QDN name. Core now loads the exact transaction named
+by the configured signature, validates that it is an ARBITRARY_DATA bundle,
+keeps each transaction in a full-signature cache directory, and no longer
+deletes the shared wallet-library cache when installing one version. This
+keeps reviewed native bytes immutable while leaving older local caches intact
+for manual recovery or cleanup.
+
 ### 2026-08-23 - fix(sync): recover stale short forks automatically
 
 Restores unattended synchronization when a node becomes trapped on a stale

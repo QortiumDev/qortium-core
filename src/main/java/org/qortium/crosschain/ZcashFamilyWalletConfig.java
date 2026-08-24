@@ -69,8 +69,7 @@ public class ZcashFamilyWalletConfig {
 	}
 
 	public Path getRustLibOuterDirectory() {
-		String sigPrefix = this.qdnWalletSignature.substring(0, 8);
-		return Paths.get(Settings.getInstance().getWalletsPath(), this.walletDirectoryName, "lib", sigPrefix);
+		return Paths.get(Settings.getInstance().getWalletsPath(), this.walletDirectoryName, "lib", this.qdnWalletSignature);
 	}
 
 	public Path getWalletPath(String filename) {
