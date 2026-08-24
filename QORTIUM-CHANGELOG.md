@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - fix(wallet): serialize process-global native operations
+
+Routes Pirate wallet loading, switching, synchronization, status, save, export,
+send, and P2SH calls through one bounded process-wide operation lane. Complete
+wallet-selected actions now remain atomic, so another account or background
+sync cannot replace the native wallet between initialization and use. If a
+running native call times out or its caller is interrupted, Core permanently
+marks the lane unavailable until restart instead of starting a replacement
+worker against an uncertain native context.
+
 ### 2026-08-24 - fix(wallet): pin QDN library loads to transaction data
 
 Prevents the native Pirate wallet library from silently following newer data

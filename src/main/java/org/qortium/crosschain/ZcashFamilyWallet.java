@@ -1,6 +1,5 @@
 package org.qortium.crosschain;
 
-import com.rust.litewalletjni.LiteWalletJni;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bouncycastle.util.encoders.Base64;
@@ -24,6 +23,7 @@ import java.util.Objects;
 public class ZcashFamilyWallet {
 
 	private static final Logger LOGGER = LogManager.getLogger(ZcashFamilyWallet.class);
+	private static final ZcashFamilyNativeCoordinator NATIVE_COORDINATOR = ZcashFamilyNativeCoordinator.getInstance();
 
 	private static final String COIN_PARAMS_FILENAME = "coinparams.json";
 	private static final String SAPLING_OUTPUT_FILENAME = "saplingoutput_base64";
@@ -57,7 +57,16 @@ public class ZcashFamilyWallet {
 
 	private boolean initialize() {
 		try {
-			LiteWalletJni.initlogging();
+			return NATIVE_COORDINATOR.execute("initialize wallet", this::initialize);
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			LOGGER.info("Unable to initialize {} wallet: {}", this.config.getDisplayName(), e.getMessage());
+			return false;
+		}
+	}
+
+	private boolean initialize(ZcashFamilyNativeAdapter nativeAdapter) {
+		try {
+			nativeAdapter.initLogging();
 
 			if (this.entropyBytes == null)
 				return false;
@@ -75,7 +84,7 @@ public class ZcashFamilyWallet {
 
 			String entropy64 = Base64.toBase64String(this.entropyBytes);
 
-			String inputSeedResponse = LiteWalletJni.getseedphrasefromentropyb64(entropy64);
+			String inputSeedResponse = nativeAdapter.getSeedPhraseFromEntropyB64(entropy64);
 			JSONObject inputSeedJson = new JSONObject(inputSeedResponse);
 			String inputSeedPhrase = inputSeedJson.optString("seedPhrase", null);
 
@@ -90,7 +99,7 @@ public class ZcashFamilyWallet {
 					}
 				}
 
-				String outputSeedResponse = LiteWalletJni.initfromseed(serverUri, this.params, inputSeedPhrase,
+				String outputSeedResponse = nativeAdapter.initFromSeed(serverUri, this.params, inputSeedPhrase,
 						Integer.toString(birthday), this.saplingOutput64, this.saplingSpend64);
 				JSONObject outputSeedJson = new JSONObject(outputSeedResponse);
 				String outputSeedPhrase = outputSeedJson.optString("seed", null);
@@ -102,7 +111,7 @@ public class ZcashFamilyWallet {
 
 				this.seedPhrase = outputSeedPhrase;
 			} else {
-				String response = LiteWalletJni.initfromb64(serverUri, params, wallet, saplingOutput64, saplingSpend64);
+				String response = nativeAdapter.initFromB64(serverUri, params, wallet, saplingOutput64, saplingSpend64);
 				if (response != null && !response.contains("\"initalized\":true")) {
 					LOGGER.info("Unable to initialize {} wallet at {}: {}", this.config.getDisplayName(), serverUri, response);
 					return false;
@@ -110,7 +119,7 @@ public class ZcashFamilyWallet {
 				this.seedPhrase = inputSeedPhrase;
 			}
 
-			Integer ourHeight = this.getHeight();
+			Integer ourHeight = this.getHeight(nativeAdapter);
 			return ourHeight != null && ourHeight > 0;
 		} catch (IOException | JSONException | UnsatisfiedLinkError e) {
 			LOGGER.info("Unable to initialize {} wallet: {}", this.config.getDisplayName(), e.getMessage());
@@ -131,34 +140,42 @@ public class ZcashFamilyWallet {
 		return Arrays.equals(testEntropyBytes, this.entropyBytes);
 	}
 
-	private void encrypt() {
-		if (this.isEncrypted())
+	private void encrypt(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (this.isEncrypted(nativeAdapter))
 			return;
 
 		String encryptionKey = this.getEncryptionKey();
 		if (encryptionKey != null)
-			this.doEncrypt(encryptionKey);
+			this.doEncrypt(nativeAdapter, encryptionKey);
 	}
 
-	private void decrypt() {
-		if (!this.isEncrypted())
+	private void decrypt(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.isEncrypted(nativeAdapter))
 			return;
 
 		String encryptionKey = this.getEncryptionKey();
 		if (encryptionKey != null)
-			this.doDecrypt(encryptionKey);
+			this.doDecrypt(nativeAdapter, encryptionKey);
 	}
 
 	public void unlock() {
-		if (!this.isEncrypted())
-			return;
+		NATIVE_COORDINATOR.execute("unlock wallet", nativeAdapter -> {
+			if (!this.isEncrypted(nativeAdapter)) {
+				return null;
+			}
 
-		String encryptionKey = this.getEncryptionKey();
-		if (encryptionKey != null)
-			this.doUnlock(encryptionKey);
+			String encryptionKey = this.getEncryptionKey();
+			if (encryptionKey != null)
+				this.doUnlock(nativeAdapter, encryptionKey);
+			return null;
+		});
 	}
 
 	public boolean save() throws IOException {
+		return NATIVE_COORDINATOR.execute("save wallet", this::save);
+	}
+
+	private boolean save(ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
 		if (!isInitialized()) {
 			LOGGER.info("Error: can't save wallet because no wallet is initialized");
 			return false;
@@ -167,9 +184,9 @@ public class ZcashFamilyWallet {
 		if (this.isNullSeedWallet())
 			return false;
 
-		this.encrypt();
+		this.encrypt(nativeAdapter);
 
-		String wallet64 = LiteWalletJni.save();
+		String wallet64 = nativeAdapter.save();
 		byte[] wallet;
 		try {
 			wallet = Base64.decode(wallet64);
@@ -244,23 +261,33 @@ public class ZcashFamilyWallet {
 	}
 
 	public boolean isSynchronized() {
-		Integer height = this.getHeight();
-		Integer chainTip = this.getChainTip();
+		return NATIVE_COORDINATOR.execute("check wallet synchronization", nativeAdapter -> {
+			Integer height = this.getHeight(nativeAdapter);
+			Integer chainTip = this.getChainTip(nativeAdapter);
 
-		if (height == null || chainTip == null)
-			return false;
+			if (height == null || chainTip == null)
+				return false;
 
-		return height >= chainTip - 2;
+			return height >= chainTip - 2;
+		});
 	}
 
 	public Integer getHeight() {
-		String response = LiteWalletJni.execute("height", "");
+		return NATIVE_COORDINATOR.execute("get wallet height", this::getHeight);
+	}
+
+	private Integer getHeight(ZcashFamilyNativeAdapter nativeAdapter) {
+		String response = nativeAdapter.execute("height", "");
 		JSONObject json = new JSONObject(response);
 		return json.has("height") ? json.getInt("height") : null;
 	}
 
 	public Integer getChainTip() {
-		String response = LiteWalletJni.execute("info", "");
+		return NATIVE_COORDINATOR.execute("get wallet chain tip", this::getChainTip);
+	}
+
+	private Integer getChainTip(ZcashFamilyNativeAdapter nativeAdapter) {
+		String response = nativeAdapter.execute("info", "");
 		JSONObject json = new JSONObject(response);
 		return json.has("latest_block_height") ? json.getInt("latest_block_height") : null;
 	}
@@ -270,34 +297,54 @@ public class ZcashFamilyWallet {
 	}
 
 	public Boolean isEncrypted() {
-		String response = LiteWalletJni.execute("encryptionstatus", "");
+		return NATIVE_COORDINATOR.execute("get wallet encryption status", this::isEncrypted);
+	}
+
+	private Boolean isEncrypted(ZcashFamilyNativeAdapter nativeAdapter) {
+		String response = nativeAdapter.execute("encryptionstatus", "");
 		JSONObject json = new JSONObject(response);
 		return json.has("encrypted") ? json.getBoolean("encrypted") : null;
 	}
 
 	public boolean doEncrypt(String key) {
-		String response = LiteWalletJni.execute("encrypt", key);
+		return NATIVE_COORDINATOR.execute("encrypt wallet", nativeAdapter -> this.doEncrypt(nativeAdapter, key));
+	}
+
+	private boolean doEncrypt(ZcashFamilyNativeAdapter nativeAdapter, String key) {
+		String response = nativeAdapter.execute("encrypt", key);
 		JSONObject json = new JSONObject(response);
 		String result = json.getString("result");
 		return json.has("result") && Objects.equals(result, "success");
 	}
 
 	public boolean doDecrypt(String key) {
-		String response = LiteWalletJni.execute("decrypt", key);
+		return NATIVE_COORDINATOR.execute("decrypt wallet", nativeAdapter -> this.doDecrypt(nativeAdapter, key));
+	}
+
+	private boolean doDecrypt(ZcashFamilyNativeAdapter nativeAdapter, String key) {
+		String response = nativeAdapter.execute("decrypt", key);
 		JSONObject json = new JSONObject(response);
 		String result = json.getString("result");
 		return json.has("result") && Objects.equals(result, "success");
 	}
 
 	public boolean doUnlock(String key) {
-		String response = LiteWalletJni.execute("unlock", key);
+		return NATIVE_COORDINATOR.execute("unlock wallet", nativeAdapter -> this.doUnlock(nativeAdapter, key));
+	}
+
+	private boolean doUnlock(ZcashFamilyNativeAdapter nativeAdapter, String key) {
+		String response = nativeAdapter.execute("unlock", key);
 		JSONObject json = new JSONObject(response);
 		String result = json.getString("result");
 		return json.has("result") && Objects.equals(result, "success");
 	}
 
 	public String getWalletAddress() {
-		String response = LiteWalletJni.execute("balance", "");
+		return NATIVE_COORDINATOR.execute("get wallet address", this::getWalletAddress);
+	}
+
+	private String getWalletAddress(ZcashFamilyNativeAdapter nativeAdapter) {
+		String response = nativeAdapter.execute("balance", "");
 		JSONObject json = new JSONObject(response);
 
 		if (json.has("z_addresses")) {
@@ -313,7 +360,11 @@ public class ZcashFamilyWallet {
 	}
 
 	public String getPrivateKey() {
-		String response = LiteWalletJni.execute("export", "");
+		return NATIVE_COORDINATOR.execute("export wallet key", this::getPrivateKey);
+	}
+
+	private String getPrivateKey(ZcashFamilyNativeAdapter nativeAdapter) {
+		String response = nativeAdapter.execute("export", "");
 		JSONArray addressesJson = new JSONArray(response);
 		if (!addressesJson.isEmpty()) {
 			JSONObject addressJson = addressesJson.getJSONObject(0);
@@ -324,10 +375,12 @@ public class ZcashFamilyWallet {
 	}
 
 	public String getWalletSeed(String entropy58) {
-		byte[] myEntropyBytes = Base58.decode(entropy58);
-		String myEntropy64 = Base64.toBase64String(myEntropyBytes);
-		String mySeedResponse = LiteWalletJni.getseedphrasefromentropyb64(myEntropy64);
-		JSONObject mySeedJson = new JSONObject(mySeedResponse);
-		return mySeedJson.has("seedPhrase") ? mySeedJson.getString("seedPhrase") : null;
+		return NATIVE_COORDINATOR.execute("derive wallet seed", nativeAdapter -> {
+			byte[] myEntropyBytes = Base58.decode(entropy58);
+			String myEntropy64 = Base64.toBase64String(myEntropyBytes);
+			String mySeedResponse = nativeAdapter.getSeedPhraseFromEntropyB64(myEntropy64);
+			JSONObject mySeedJson = new JSONObject(mySeedResponse);
+			return mySeedJson.has("seedPhrase") ? mySeedJson.getString("seedPhrase") : null;
+		});
 	}
 }
