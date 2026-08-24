@@ -51,13 +51,16 @@ public class CrossChainPirateChainResource {
 	)
 	public ForeignCoinStatus getPirateStatus() {
 		PirateChainWalletController pirateWallet = PirateChainWalletController.getInstance();
-		PirateChain pirate = PirateChain.getInstance();
 		boolean isEnabled = pirateWallet != null;
 		int connections = 0;
 		int known = 0;
-		if (isEnabled && pirate.getBlockchainProvider() instanceof ElectrumX) {
+		PirateChain pirate = isEnabled ? PirateChain.getInstance() : null;
+		if (pirate != null && pirate.getBlockchainProvider() instanceof ElectrumX) {
 			connections = ((ElectrumX) pirate.getBlockchainProvider()).getConnectedServerCount();
 			known = ((ElectrumX) pirate.getBlockchainProvider()).getKnownServerCount();
+		} else if (pirate != null && pirate.getBlockchainProvider() instanceof ZcashFamilyLightClient lightClient) {
+			connections = lightClient.getCurrentServer() == null ? 0 : 1;
+			known = lightClient.getServers().size();
 		}
 
 		return new ForeignCoinStatus(isEnabled, connections, known);
@@ -86,14 +89,7 @@ public class CrossChainPirateChainResource {
 		Security.checkApiCallAllowed(request);
 		Settings.getInstance().enableWallet("ARRR");
 		PirateChainWalletController pirate = PirateChainWalletController.getInstance();
-
-		try {
-			Thread.sleep(100);
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-		}
-
-		boolean started = pirate != null;
+		boolean started = pirate != null && pirate.startController();
 
 		return Boolean.toString(started);
 	}

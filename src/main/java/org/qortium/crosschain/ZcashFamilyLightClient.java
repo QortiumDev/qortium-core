@@ -40,6 +40,72 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 	private static final int MAX_INBOUND_MESSAGE_BYTES = 16 * 1024 * 1024;
 	private static final int MAX_INBOUND_METADATA_BYTES = 8 * 1024;
 	private static final int TX_CACHE_SIZE = 1000;
+	static final long SERVER_HEIGHT_AGREEMENT_TOLERANCE = 100L;
+	static final long MAX_SERVER_HEIGHT_DIVERGENCE = 100_000L;
+
+	enum HeightAssessment {
+		ACCEPTED_UNCORROBORATED,
+		ACCEPTED_TRUSTED,
+		STALE,
+		IMPLAUSIBLY_AHEAD
+	}
+
+	static final class ServerHeightTracker {
+		private final Map<ChainableServer, Long> observations = new LinkedHashMap<>();
+		private Long trustedReferenceHeight;
+
+		synchronized HeightAssessment assess(ChainableServer server, long height) {
+			if (this.trustedReferenceHeight != null) {
+				long delta = height - this.trustedReferenceHeight;
+				if (delta < -MAX_SERVER_HEIGHT_DIVERGENCE)
+					return HeightAssessment.STALE;
+				if (delta > MAX_SERVER_HEIGHT_DIVERGENCE)
+					return HeightAssessment.IMPLAUSIBLY_AHEAD;
+
+				this.observations.put(server, height);
+				if (delta <= SERVER_HEIGHT_AGREEMENT_TOLERANCE) {
+					this.trustedReferenceHeight = Math.max(this.trustedReferenceHeight, height);
+				} else {
+					boolean corroboratedAdvance = this.observations.entrySet().stream()
+							.anyMatch(observation -> !observation.getKey().equals(server)
+									&& Math.abs(observation.getValue() - height) <= SERVER_HEIGHT_AGREEMENT_TOLERANCE);
+					if (corroboratedAdvance)
+						this.trustedReferenceHeight = height;
+				}
+				return HeightAssessment.ACCEPTED_TRUSTED;
+			}
+
+			Long corroboratingHeight = null;
+			for (Map.Entry<ChainableServer, Long> observation : this.observations.entrySet()) {
+				if (!observation.getKey().equals(server)
+						&& Math.abs(observation.getValue() - height) <= SERVER_HEIGHT_AGREEMENT_TOLERANCE) {
+					corroboratingHeight = observation.getValue();
+					break;
+				}
+			}
+			if (corroboratingHeight != null) {
+				this.observations.put(server, height);
+				this.trustedReferenceHeight = Math.max(corroboratingHeight, height);
+				return HeightAssessment.ACCEPTED_TRUSTED;
+			}
+
+			this.observations.put(server, height);
+			return HeightAssessment.ACCEPTED_UNCORROBORATED;
+		}
+
+		synchronized Long getTrustedReferenceHeight() {
+			return this.trustedReferenceHeight;
+		}
+	}
+
+	static boolean matchesExpectedChainName(String expectedChainName, String actualChainName) {
+		return expectedChainName == null
+				|| (actualChainName != null && expectedChainName.equalsIgnoreCase(actualChainName));
+	}
+
+	static boolean requiresBirthdayFloor(String expectedChainName) {
+		return "main".equalsIgnoreCase(expectedChainName);
+	}
 
 	public static class Server implements ChainableServer {
 		private final String hostname;
@@ -112,8 +178,7 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 
 	private final ZcashFamilyWalletConfig config;
 	private final String netId;
-	@SuppressWarnings("unused")
-	private final String expectedGenesisHash;
+	private final String expectedChainName;
 	@SuppressWarnings("unused")
 	private final Map<ChainableServer.ConnectionType, Integer> defaultPorts = new EnumMap<>(ChainableServer.ConnectionType.class);
 	private final IntSupplier defaultBirthdaySupplier;
@@ -125,6 +190,7 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 	private final Object serverLock = new Object();
 	private ChainableServer currentServer;
 	private ManagedChannel channel;
+	private final ServerHeightTracker serverHeightTracker = new ServerHeightTracker();
 	private final ChainableServerConnectionRecorder recorder = new ChainableServerConnectionRecorder(100);
 
 	@SuppressWarnings("serial")
@@ -135,13 +201,13 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 		}
 	});
 
-	public ZcashFamilyLightClient(ZcashFamilyWalletConfig config, String netId, String genesisHash,
+	public ZcashFamilyLightClient(ZcashFamilyWalletConfig config, String netId, String expectedChainName,
 			Collection<? extends ChainableServer> initialServerList,
 			Map<ChainableServer.ConnectionType, Integer> defaultPorts,
 			IntSupplier defaultBirthdaySupplier) {
 		this.config = config;
 		this.netId = netId;
-		this.expectedGenesisHash = genesisHash;
+		this.expectedChainName = expectedChainName;
 		this.servers.addAll(initialServerList);
 		this.defaultPorts.putAll(defaultPorts);
 		this.defaultBirthdaySupplier = defaultBirthdaySupplier;
@@ -409,7 +475,8 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 	private CompactTxStreamerGrpc.CompactTxStreamerBlockingStub getCompactTxStreamerStub() throws ForeignBlockchainException {
 		synchronized (this.serverLock) {
 			if (this.remainingServers.isEmpty())
-				this.remainingServers.addAll(this.servers);
+				this.servers.stream().filter(server -> !this.uselessServers.contains(server))
+						.forEach(this.remainingServers::add);
 
 			while (haveConnection()) {
 				if (!this.remainingServers.isEmpty()) {
@@ -450,22 +517,41 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 
 		ManagedChannel tempChannel = null;
 		try {
-			ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(server.getHostName(), server.getPort());
-			channelBuilder.maxInboundMessageSize(MAX_INBOUND_MESSAGE_BYTES);
-			channelBuilder.maxInboundMetadataSize(MAX_INBOUND_METADATA_BYTES);
-			if (server.getConnectionType() == ChainableServer.ConnectionType.SSL)
-				channelBuilder.useTransportSecurity();
-			else
-				channelBuilder.usePlaintext();
-
-			tempChannel = channelBuilder.build();
-
-			CompactTxStreamerGrpc.CompactTxStreamerBlockingStub stub = CompactTxStreamerGrpc.newBlockingStub(tempChannel);
-			LightdInfo lightdInfo = stub.withDeadlineAfter(10, TimeUnit.SECONDS).getLightdInfo(Empty.newBuilder().build());
+			tempChannel = buildProbeChannel(server);
+			LightdInfo lightdInfo = fetchLightdInfo(tempChannel);
 
 			if (lightdInfo == null || lightdInfo.getBlockHeight() <= 0) {
 				shutdownChannel(tempChannel);
 				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, "lightd info issues"));
+			}
+
+			String chainName = lightdInfo.getChainName();
+			if (!matchesExpectedChainName(this.expectedChainName, chainName)) {
+				String message = String.format("unexpected chain identity '%s' (expected '%s')",
+						chainName, this.expectedChainName);
+				this.uselessServers.add(server);
+				shutdownChannel(tempChannel);
+				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, message));
+			}
+
+			long serverHeight = lightdInfo.getBlockHeight();
+			int configuredBirthday = this.defaultBirthdaySupplier.getAsInt();
+			if (requiresBirthdayFloor(this.expectedChainName)
+					&& configuredBirthday > 0 && serverHeight < configuredBirthday) {
+				String message = String.format("server height %d is below configured wallet birthday %d",
+						serverHeight, configuredBirthday);
+				this.uselessServers.add(server);
+				shutdownChannel(tempChannel);
+				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, message));
+			}
+
+			HeightAssessment heightAssessment = this.serverHeightTracker.assess(server, serverHeight);
+			if (heightAssessment == HeightAssessment.STALE || heightAssessment == HeightAssessment.IMPLAUSIBLY_AHEAD) {
+				String message = String.format("server height %d rejected against corroborated reference %d (%s)",
+						serverHeight, this.serverHeightTracker.getTrustedReferenceHeight(), heightAssessment);
+				this.uselessServers.add(server);
+				shutdownChannel(tempChannel);
+				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, message));
 			}
 
 			synchronized (this.serverLock) {
@@ -494,6 +580,22 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 			LOGGER.warn("Unable to connect to {} lightwalletd server {}: {}", this.config.getDisplayName(), server, notes);
 			return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, notes));
 		}
+	}
+
+	protected ManagedChannel buildProbeChannel(ChainableServer server) {
+		ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(server.getHostName(), server.getPort());
+		channelBuilder.maxInboundMessageSize(MAX_INBOUND_MESSAGE_BYTES);
+		channelBuilder.maxInboundMetadataSize(MAX_INBOUND_METADATA_BYTES);
+		if (server.getConnectionType() == ChainableServer.ConnectionType.SSL)
+			channelBuilder.useTransportSecurity();
+		else
+			channelBuilder.usePlaintext();
+		return channelBuilder.build();
+	}
+
+	protected LightdInfo fetchLightdInfo(ManagedChannel probeChannel) {
+		CompactTxStreamerGrpc.CompactTxStreamerBlockingStub stub = CompactTxStreamerGrpc.newBlockingStub(probeChannel);
+		return stub.withDeadlineAfter(10, TimeUnit.SECONDS).getLightdInfo(Empty.newBuilder().build());
 	}
 
 	private Optional<ChainableServerConnection> closeServer(ChainableServer server, String notes, String requestedBy) {

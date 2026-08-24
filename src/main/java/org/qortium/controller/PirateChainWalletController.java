@@ -15,14 +15,20 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
 		super(PirateChain.WALLET_CONFIG);
 	}
 
-	public static PirateChainWalletController getInstance() {
+	public static synchronized PirateChainWalletController getInstance() {
 		if (!Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE))
 			return null;
 
-		if (instance == null)
+		if (instance == null || instance.getLifecycleState() == LifecycleState.TERMINATED)
 			instance = new PirateChainWalletController();
 
 		return instance;
+	}
+
+	static synchronized void resetForTesting() {
+		if (instance != null)
+			instance.shutdown();
+		instance = null;
 	}
 
 	@Override

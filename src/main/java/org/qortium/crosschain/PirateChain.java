@@ -103,6 +103,11 @@ public class PirateChain extends Bitcoiny {
 			}
 
 			@Override
+			public String getLightdChainName() {
+				return "main";
+			}
+
+			@Override
 			public long getP2shFee(Long timestamp) {
 				return this.getFeeRequired();
 			}
@@ -121,6 +126,11 @@ public class PirateChain extends Bitcoiny {
 			@Override
 			public String getGenesisHash() {
 				return "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0";
+			}
+
+			@Override
+			public String getLightdChainName() {
+				return "test";
 			}
 
 			@Override
@@ -144,8 +154,13 @@ public class PirateChain extends Bitcoiny {
 
 			@Override
 			public String getGenesisHash() {
-				// This is unique to each regtest instance
+				// This is unique to each regtest instance.
 				return null;
+			}
+
+			@Override
+			public String getLightdChainName() {
+				return "regtest";
 			}
 
 			@Override
@@ -167,6 +182,7 @@ public class PirateChain extends Bitcoiny {
 		public abstract NetworkParameters getParams();
 		public abstract Collection<Server> getServers();
 		public abstract String getGenesisHash();
+		public abstract String getLightdChainName();
 		public abstract long getP2shFee(Long timestamp) throws ForeignBlockchainException;
 	}
 
@@ -192,7 +208,8 @@ public class PirateChain extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("ARRR")) {
 			PirateChainNet pirateChainNet = Settings.getInstance().getPirateChainNet();
 
-			BitcoinyBlockchainProvider pirateLightClient = new PirateLightClient("PirateChain-" + pirateChainNet.name(), pirateChainNet.getGenesisHash(), pirateChainNet.getServers(), DEFAULT_LITEWALLET_PORTS);
+			BitcoinyBlockchainProvider pirateLightClient = new PirateLightClient("PirateChain-" + pirateChainNet.name(),
+					pirateChainNet.getLightdChainName(), pirateChainNet.getServers(), DEFAULT_LITEWALLET_PORTS);
 			Context bitcoinjContext = new Context(pirateChainNet.getParams());
 
 			instance = new PirateChain(pirateChainNet, pirateLightClient, bitcoinjContext, CURRENCY_CODE);

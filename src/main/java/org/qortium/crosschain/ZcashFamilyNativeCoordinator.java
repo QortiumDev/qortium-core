@@ -15,6 +15,7 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 
 	public static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(2);
 	public static final Duration SYNC_TIMEOUT = Duration.ofMinutes(30);
+	public static final Duration STATUS_TIMEOUT = Duration.ofSeconds(5);
 
 	private static final ZcashFamilyNativeCoordinator INSTANCE =
 			new ZcashFamilyNativeCoordinator(new LiteWalletJniAdapter(), "Zcash Family Native Wallet");
@@ -110,6 +111,18 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 
 	public String getDegradedReason() {
 		return this.degradedReason;
+	}
+
+	public boolean isBusy() {
+		return this.executor.getActiveCount() > 0 || !this.executor.getQueue().isEmpty();
+	}
+
+	public int getQueueDepth() {
+		return this.executor.getQueue().size();
+	}
+
+	public int getWorkerCount() {
+		return this.executor.getPoolSize();
 	}
 
 	private <T> T executeDirect(String operationName, NativeOperation<T> operation) {

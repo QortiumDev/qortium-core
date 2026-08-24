@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - fix(arrr): harden status lifecycle and lightwallet failover
+
+Makes the Pirate wallet controller explicitly restartable after a clean stop,
+starts it exactly once from the API, and returns cached status while a long
+native operation owns the bounded wallet lane. Disabled and degraded states no
+longer produce false start success. Lightwallet probes now verify the reported
+chain name, retain the existing failed-channel cleanup, and require two
+distinct agreeing servers before using relative height to reject stale or
+implausibly high peers.
+
 ### 2026-08-24 - fix(wallet): serialize process-global native operations
 
 Routes Pirate wallet loading, switching, synchronization, status, save, export,
