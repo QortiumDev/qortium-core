@@ -66,6 +66,10 @@ public class ZcashFamilyWalletControllerQdnTests extends Common {
 					.resolvePinnedQdnWalletPath(pinnedSignature, resolvedTransaction);
 
 			assertArrayEquals(pinnedBytes, Files.readAllBytes(resolvedPath.resolve(LIB_FILENAME)));
+			Files.writeString(resolvedPath.resolve(LIB_FILENAME), "tampered uncompressed cache");
+			Path rebuiltPath = ZcashFamilyWalletController
+					.resolvePinnedQdnWalletPath(pinnedSignature, resolvedTransaction, true);
+			assertArrayEquals(pinnedBytes, Files.readAllBytes(rebuiltPath.resolve(LIB_FILENAME)));
 		}
 	}
 
@@ -141,6 +145,8 @@ public class ZcashFamilyWalletControllerQdnTests extends Common {
 
 		Files.writeString(directory.resolve(LIB_FILENAME), "native bytes");
 		ZcashFamilyWalletController.validatePinnedResourcePath(directory, LIB_FILENAME);
+		assertThrows(DataException.class,
+				() -> ZcashFamilyWalletController.validatePinnedResourcePath(directory, LIB_FILENAME, true));
 	}
 
 	@Test
@@ -153,7 +159,10 @@ public class ZcashFamilyWalletControllerQdnTests extends Common {
 				ZcashFamilyWalletController.resolveRustLibFilename("FreeBSD", "amd64"));
 		assertEquals("librust-windows-x86_64.dll",
 				ZcashFamilyWalletController.resolveRustLibFilename("Windows 11", "amd64"));
-		assertNull(ZcashFamilyWalletController.resolveRustLibFilename("Mac OS X", "aarch64"));
+		assertEquals("librust-macos-aarch64.dylib",
+				ZcashFamilyWalletController.resolveRustLibFilename("Mac OS X", "aarch64"));
+		assertEquals("librust-macos-aarch64.dylib",
+				ZcashFamilyWalletController.resolveRustLibFilename("Mac OS X", "arm64"));
 		assertNull(ZcashFamilyWalletController.resolveRustLibFilename("Plan 9", "amd64"));
 	}
 

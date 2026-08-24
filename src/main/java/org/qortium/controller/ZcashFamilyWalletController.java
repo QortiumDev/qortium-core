@@ -305,6 +305,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private void loadLibrary() throws InterruptedException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			String libFileName = resolveRustLibFilename();
+			boolean unifiedWalletEnabled = this.config.isUnifiedWalletEnabled();
 			if (libFileName == null) {
 				String osName = System.getProperty("os.name");
 				String osArchitecture = System.getProperty("os.arch");
@@ -314,32 +315,59 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 			Path libDirectory = this.config.getRustLibOuterDirectory();
 			Path libPath = Paths.get(libDirectory.toString(), libFileName);
-			if (Files.exists(libPath)) {
-				loadNativeLibrary(libPath);
-				return;
-			}
-
 			String qdnWalletSignature = this.config.getActiveQdnWalletSignature();
-			ArbitraryTransactionData transactionData = getPinnedTransactionData(repository, qdnWalletSignature);
+			ArbitraryTransactionData transactionData = null;
+			Path authenticatedUnifiedSource = null;
+			if (unifiedWalletEnabled) {
+				transactionData = getPinnedTransactionData(repository, qdnWalletSignature);
+				try {
+					authenticatedUnifiedSource = resolvePinnedQdnWalletPath(qdnWalletSignature, transactionData, true);
+				} catch (MissingDataException e) {
+					setMissingWalletLibraryStatus();
+					return;
+				}
+				try {
+					validatePinnedResourcePath(authenticatedUnifiedSource, libFileName, true);
+				} catch (DataException e) {
+					LOGGER.error("Invalid configured {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+					setLoadStatus(String.format("Configured %s wallet library could not be read from QDN",
+							this.config.getDisplayName()));
+					return;
+				}
+			}
 
-			List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
-			if (handshakedPeers.size() < Settings.getInstance().getMinBlockchainPeers()) {
-				setLoadStatus("Searching for peers...");
+			if (Files.exists(libPath)) {
+				try {
+					loadValidatedNativeLibrary(libDirectory, libFileName, authenticatedUnifiedSource);
+				} catch (DataException e) {
+					LOGGER.error("Invalid cached {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+					setLoadStatus(String.format("Cached %s wallet library failed integrity validation",
+							this.config.getDisplayName()));
+					return;
+				}
 				return;
 			}
 
-			Path resourcePath;
-			try {
-				resourcePath = resolvePinnedQdnWalletPath(qdnWalletSignature, transactionData);
-			} catch (MissingDataException e) {
-				LOGGER.info("Missing data when loading configured {} wallet library", this.config.getDisplayName());
-				setLoadStatus(String.format("Downloading configured %s wallet library from QDN...",
-						this.config.getDisplayName()));
-				return;
+			if (transactionData == null)
+				transactionData = getPinnedTransactionData(repository, qdnWalletSignature);
+			Path resourcePath = authenticatedUnifiedSource;
+			if (!unifiedWalletEnabled) {
+				List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
+				if (handshakedPeers.size() < Settings.getInstance().getMinBlockchainPeers()) {
+					setLoadStatus("Searching for peers...");
+					return;
+				}
+
+				try {
+					resourcePath = resolvePinnedQdnWalletPath(qdnWalletSignature, transactionData);
+				} catch (MissingDataException e) {
+					setMissingWalletLibraryStatus();
+					return;
+				}
 			}
 
 			try {
-				validatePinnedResourcePath(resourcePath, libFileName);
+				validatePinnedResourcePath(resourcePath, libFileName, unifiedWalletEnabled);
 			} catch (DataException e) {
 				LOGGER.error("Invalid configured {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
 				setLoadStatus(String.format("Configured %s wallet library could not be read from QDN",
@@ -347,15 +375,35 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				return;
 			}
 
-			Files.createDirectories(libDirectory);
-			FileUtils.copyDirectory(resourcePath.toFile(), libDirectory.toFile());
-
-			loadNativeLibrary(libPath);
+			try {
+				if (unifiedWalletEnabled) {
+					PirateUnifiedWalletBundle.install(resourcePath, libDirectory, libFileName);
+				} else {
+					Files.createDirectories(libDirectory);
+					FileUtils.copyDirectory(resourcePath.toFile(), libDirectory.toFile());
+				}
+				loadValidatedNativeLibrary(libDirectory, libFileName, authenticatedUnifiedSource);
+			} catch (DataException e) {
+				LOGGER.error("Invalid installed {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+				setLoadStatus(String.format("Installed %s wallet library failed integrity validation",
+						this.config.getDisplayName()));
+				return;
+			}
 		} catch (DataException e) {
 			LOGGER.error("Repository issue when loading {} wallet library", this.config.getDisplayName(), e);
 		} catch (IOException e) {
 			LOGGER.error("Error when loading {} wallet library", this.config.getDisplayName(), e);
 		}
+	}
+
+	private void setMissingWalletLibraryStatus() {
+		LOGGER.info("Missing data when loading configured {} wallet library", this.config.getDisplayName());
+		List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
+		if (handshakedPeers.size() < Settings.getInstance().getMinBlockchainPeers())
+			setLoadStatus("Searching for peers...");
+		else
+			setLoadStatus(String.format("Downloading configured %s wallet library from QDN...",
+					this.config.getDisplayName()));
 	}
 
 	static ArbitraryTransactionData getPinnedTransactionData(Repository repository, String signature58) throws DataException {
@@ -384,6 +432,12 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	static Path resolvePinnedQdnWalletPath(String signature58, ArbitraryTransactionData transactionData)
 			throws DataException, IOException, MissingDataException {
+		return resolvePinnedQdnWalletPath(signature58, transactionData, false);
+	}
+
+	static Path resolvePinnedQdnWalletPath(String signature58, ArbitraryTransactionData transactionData,
+			boolean overwrite)
+			throws DataException, IOException, MissingDataException {
 		if (transactionData == null)
 			throw new DataException("Configured wallet QDN transaction is missing");
 		if (transactionData.getService() != Service.ARBITRARY_DATA)
@@ -392,15 +446,22 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(signature58,
 				ArbitraryDataFile.ResourceIdType.TRANSACTION_DATA, transactionData.getService(), transactionData.getIdentifier());
 		arbitraryDataReader.setTransactionData(transactionData);
-		arbitraryDataReader.loadSynchronously(false);
+		arbitraryDataReader.loadSynchronously(overwrite);
 		return arbitraryDataReader.getFilePath();
 	}
 
 	static void validatePinnedResourcePath(Path resourcePath, String libFileName) throws DataException {
+		validatePinnedResourcePath(resourcePath, libFileName, false);
+	}
+
+	static void validatePinnedResourcePath(Path resourcePath, String libFileName, boolean unifiedWalletEnabled)
+			throws DataException {
 		if (resourcePath == null || !Files.isDirectory(resourcePath))
 			throw new DataException("wallet library resource is not a directory");
 		if (libFileName == null || !Files.isRegularFile(resourcePath.resolve(libFileName)))
 			throw new DataException("wallet library resource is missing the expected platform library");
+		if (unifiedWalletEnabled)
+			PirateUnifiedWalletBundle.validate(resourcePath, libFileName);
 	}
 
 	public static String resolveRustLibFilename() {
@@ -410,6 +471,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	static String resolveRustLibFilename(String osName, String osArchitecture) {
 		if (osName.equals("Mac OS X") && osArchitecture.equals("x86_64"))
 			return "librust-macos-x86_64.dylib";
+		else if (osName.equals("Mac OS X") && (osArchitecture.equals("aarch64") || osArchitecture.equals("arm64")))
+			return "librust-macos-aarch64.dylib";
 		else if ((osName.equals("Linux") || osName.equals("FreeBSD")) && osArchitecture.equals("aarch64"))
 			return "librust-linux-aarch64.so";
 		else if ((osName.equals("Linux") || osName.equals("FreeBSD")) && osArchitecture.equals("amd64"))
@@ -694,11 +757,34 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		return NATIVE_COORDINATOR.execute("check native wallet library", ZcashFamilyNativeAdapter::isLoaded);
 	}
 
-	private void loadNativeLibrary(Path libPath) {
-		NATIVE_COORDINATOR.execute("load native wallet library", nativeAdapter -> {
-			nativeAdapter.loadLibrary(libPath);
-			return null;
-		});
+	private void loadValidatedNativeLibrary(Path libDirectory, String libFileName, Path authenticatedUnifiedSource)
+			throws DataException {
+		final PirateUnifiedWalletBundle.FileRecord trustedRecord;
+		if (authenticatedUnifiedSource != null) {
+			trustedRecord = PirateUnifiedWalletBundle.validateAgainstTrustedSource(libDirectory,
+					authenticatedUnifiedSource, libFileName);
+		} else {
+			validatePinnedResourcePath(libDirectory, libFileName, false);
+			trustedRecord = null;
+		}
+
+		try {
+			NATIVE_COORDINATOR.execute("load native wallet library", nativeAdapter -> {
+				Path library = libDirectory.resolve(libFileName);
+				if (trustedRecord != null)
+					PirateUnifiedWalletBundle.validateSelectedLibrary(library, trustedRecord);
+				nativeAdapter.loadLibrary(library);
+				return null;
+			});
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			Throwable cause = e;
+			while (cause != null) {
+				if (cause instanceof DataException dataException)
+					throw dataException;
+				cause = cause.getCause();
+			}
+			throw e;
+		}
 	}
 
 	private <T> T executeChecked(String operationName,

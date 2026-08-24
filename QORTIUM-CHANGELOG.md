@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - test(arrr): add Unified artifact and acceptance harness
+
+Pins the five-platform Pirate Unified JNI artifact and adds portable, local-only
+staging plus explicit acceptance gates without downloading, publishing, or
+enabling it. Each staged native and supporting file receives a size and SHA-256
+record; Unified Core rebuilds the pinned QDN transaction payload, binds the
+cached manifest to that authenticated source, installs through a complete
+sibling staging directory, and rehashes the selected library inside the native
+lane immediately before loading it. Legacy bundles remain compatible. Synthetic
+tests cover
+provenance, inventory, tampering, symlinks, all twelve JNI declarations, and
+Apple Silicon mapping. Real artifact validation byte-compares the staged files
+to the pinned original ZIP; it and native smoke require separate opt-in
+properties and produce non-overwriting evidence receipts. All
+platform runtime, packaged-Core, QDN, funded, deployment, default, and Home
+steps remain unrun and separately gated.
+
 ### 2026-08-24 - feat(arrr): expose compatible Unified status and balance APIs
 
 Adds opt-in Pirate wallet API detail without changing existing callers. The
