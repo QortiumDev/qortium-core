@@ -58,6 +58,7 @@ if [ -e "$receipt" ] || [ -e "$receipt.log" ]; then
 fi
 work_directory=$(mktemp -d "$receipt_parent/.pirate-unified-acceptance.XXXXXX")
 trap 'rm -rf "$work_directory"; rmdir "$lock_directory" 2>/dev/null || true' 0 HUP INT TERM
+report_suffix=$(basename "$work_directory" | sed 's/[^A-Za-z0-9]/-/g')
 
 tests='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,PirateUnifiedArtifactAcceptanceTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests'
 native_result=NOT_RUN
@@ -74,10 +75,20 @@ set +e
 	-Dqortium.pirateUnifiedArtifactPath="$artifact" \
 	-Dqortium.pirateUnifiedBundlePath="$bundle" \
 	$native_flag \
-	-Dsurefire.reportsDirectory="$work_directory/reports" \
+	-Dsurefire.reportNameSuffix="$report_suffix" \
 	-Dtest="$tests" test) > "$receipt.log" 2>&1
 maven_status=$?
 set -e
+
+# Surefire does not expose reportsDirectory as a user property. Give this run
+# a unique supported suffix, then copy only its XML reports into the temporary
+# evidence directory so stale or concurrent report files cannot affect counts.
+mkdir "$work_directory/reports"
+for report in "$repository"/target/surefire-reports/TEST-*-"$report_suffix".xml; do
+	if [ -f "$report" ]; then
+		cp "$report" "$work_directory/reports/"
+	fi
+done
 
 result=PASS
 if [ "$maven_status" -ne 0 ]; then
