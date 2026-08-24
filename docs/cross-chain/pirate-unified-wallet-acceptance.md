@@ -68,7 +68,7 @@ Always-on tests use synthetic bytes and never load native code:
 ```sh
 /bin/sh -n tools/stage-pirate-unified-bundle.sh tools/run-pirate-unified-acceptance.sh
 mvn -DskipTests=false \
-  -Dtest='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests' \
+  -Dtest='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,PirateUnifiedLoopbackLightwalletdTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests' \
   test
 ```
 
@@ -85,15 +85,42 @@ mvn -DskipTests=false \
   test
 ```
 
-Offline native host acceptance is a second explicit gate. It loads the mapped
+Loopback native host acceptance is a second explicit gate. It loads the mapped
 host library through Qortium's serialized native coordinator and uses temporary
 storage to exercise deterministic seed derivation, fresh initialization,
 birthday height, address/nonempty-key export, zero total and verified balances,
 empty transaction listing, same-process persistent reopen, encryption-status
-compatibility, two isolated wallet namespaces, typed invocation, and
-local-loopback sync/cancel command compatibility. Returned seed, key, address,
-and raw native responses are not written to receipts or logs. The deterministic
-fixture databases are removed on normal runner exit:
+compatibility, two isolated wallet namespaces, and typed invocation.
+
+The opt-in native test also starts a test-only gRPC lightwalletd bound explicitly
+to IPv4 loopback. It exposes both service names used by this integration:
+`cash.z.wallet.sdk.rpc.CompactTxStreamer` for Core's Java client and
+`pirate.wallet.sdk.rpc.CompactTxStreamer` for the pinned native library. The
+fixture reports mainnet Sapling activation at height `152855`, a tip at `152858`,
+and streams four ordered, hash-linked empty compact blocks. Acceptance requires
+the native client to request that complete range, reach the fixture tip, stop
+reporting active synchronization, and make no transaction, `GetTreeState`, or
+other unexpected RPCs. The pinned client makes exactly one optional
+`GetSubtreeRoots` capability probe; the fixture records it separately and must
+return `UNIMPLEMENTED`. The fake also serves only the exact pre-Ironwood
+activation probe at `tip - 30`, with a pre-activation timestamp, so the fixed
+historical fixture does not become calendar-dependent near the scheduled
+upgrade. The initial asynchronous `sync` response is not acceptance.
+
+This proves real native RPC and compact-block cursor behavior against a
+synthetic empty chain. It does not prove canonical chain history, historical
+wallet restoration, balances or transactions containing funds, or production
+lightwalletd interoperability. Returned seed, key, address, and raw native
+responses are not written to receipts or retained logs. The runner sets a
+private umask, quarantines raw Maven/native output in its mode-0700 work
+directory, scans it and this run's uniquely suffixed Surefire reports for
+secret-shaped JSON and shielded addresses, retains only an allowlisted build
+summary, and deletes the raw output, deterministic fixture databases, and those
+Surefire reports. A signal handler terminates
+and reaps the complete Maven/Surefire process group before storage cleanup and
+lock release. It starts that group with `setsid`, or with Python's `os.setsid`
+as a portable fallback, and refuses to publish a receipt until process-group
+termination and secret-capable evidence deletion are both proven:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
@@ -104,7 +131,8 @@ tools/run-pirate-unified-acceptance.sh \
 ```
 
 The receipt runner performs real-bundle validation and writes a new Markdown
-receipt plus full log. Add `--native` only after native execution is approved:
+receipt plus sanitized build summary. Add `--native` only after native execution
+is approved:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
@@ -184,12 +212,12 @@ behavior. Those lifecycle claims remain G2 work.
 
 ## Acceptance matrix
 
-Artifact presence is `STAGED`, not runtime acceptance. Offline JNI and isolated
+Artifact presence is `STAGED`, not runtime acceptance. Loopback JNI and isolated
 packaged-Core results remain separate for every target. FreeBSD is not in the
 official five-target artifact; the legacy Linux filename mapping is not
 FreeBSD acceptance.
 
-| Target | Artifact | Offline JNI | Packaged Core |
+| Target | Artifact | Loopback JNI | Packaged Core |
 |---|---:|---:|---:|
 | Linux x86_64 | NOT_RUN | NOT_RUN | NOT_RUN |
 | Linux aarch64 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -206,6 +234,6 @@ controlled receive/send, and ARRR HTLC/P2SH fund/redeem/refund recovery.
 
 Receipts must include the artifact and manifest hashes, Core commit and tree
 state, a normalized command with sensitive paths redacted, test counts,
-host/platform results, logs, and any counterexamples. Never record entropy,
+host/platform results, sanitized logs, and any counterexamples. Never record entropy,
 seed phrases, keys, API keys,
 passphrases, or wallet debug responses.
