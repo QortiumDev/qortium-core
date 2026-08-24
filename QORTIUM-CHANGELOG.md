@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - fix(wallet): pin QDN library loads to transaction data
+
+Prevents the native Pirate wallet library from silently following newer data
+published under the same QDN name. Core now loads the exact transaction named
+by the configured signature, validates that it is an ARBITRARY_DATA bundle,
+keeps each transaction in a full-signature cache directory, and no longer
+deletes the shared wallet-library cache when installing one version. This
+keeps reviewed native bytes immutable while leaving older local caches intact
+for manual recovery or cleanup.
+
 ### 2026-08-23 - fix(sync): recover stale short forks automatically
 
 Restores unattended synchronization when a node becomes trapped on a stale

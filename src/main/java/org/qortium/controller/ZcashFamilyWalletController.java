@@ -8,12 +8,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.ArbitraryDataReader;
-import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.exception.MissingDataException;
+import org.qortium.arbitrary.misc.Service;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.ZcashFamilyWallet;
 import org.qortium.crosschain.ZcashFamilyWalletConfig;
-import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.network.Network;
@@ -22,10 +21,8 @@ import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
-import org.qortium.transaction.ArbitraryTransaction;
-import org.qortium.utils.ArbitraryTransactionUtils;
+import org.qortium.transform.Transformer;
 import org.qortium.utils.Base58;
-import org.qortium.utils.FilesystemUtils;
 import org.qortium.utils.NTP;
 
 import java.io.IOException;
@@ -133,9 +130,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				return;
 			}
 
-			ArbitraryTransactionData transactionData = this.getTransactionData(repository);
-			if (transactionData == null || transactionData.getService() == null)
-				return;
+			String qdnWalletSignature = this.config.getQdnWalletSignature();
+			ArbitraryTransactionData transactionData = getPinnedTransactionData(repository, qdnWalletSignature);
 
 			List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
 			if (handshakedPeers.size() < Settings.getInstance().getMinBlockchainPeers()) {
@@ -143,34 +139,27 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				return;
 			}
 
-			ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(transactionData.getName(),
-					ArbitraryDataFile.ResourceIdType.NAME, transactionData.getService(), transactionData.getIdentifier());
+			Path resourcePath;
 			try {
-				arbitraryDataReader.loadSynchronously(false);
+				resourcePath = resolvePinnedQdnWalletPath(qdnWalletSignature, transactionData);
 			} catch (MissingDataException e) {
-				LOGGER.info("Missing data when loading {} wallet library", this.config.getDisplayName());
-			}
-
-			ArbitraryResourceStatus status = ArbitraryTransactionUtils.getStatus(
-					transactionData.getService(), transactionData.getName(), transactionData.getIdentifier(), false, true);
-
-			if (status.getStatus() != ArbitraryResourceStatus.Status.READY) {
-				LOGGER.info("Not ready yet: {}", status.getTitle());
-				this.loadStatus = String.format("Downloading files from QDN... (%d / %d)",
-						status.getLocalChunkCount(), status.getTotalChunkCount());
+				LOGGER.info("Missing data when loading configured {} wallet library", this.config.getDisplayName());
+				this.loadStatus = String.format("Downloading configured %s wallet library from QDN...",
+						this.config.getDisplayName());
 				return;
 			}
 
-			Path walletsLibDirectory = this.config.getWalletsLibDirectory();
-			if (Files.exists(walletsLibDirectory))
-				FilesystemUtils.safeDeleteDirectory(walletsLibDirectory, false);
+			try {
+				validatePinnedResourcePath(resourcePath, libFileName);
+			} catch (DataException e) {
+				LOGGER.error("Invalid configured {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+				this.loadStatus = String.format("Configured %s wallet library could not be read from QDN",
+						this.config.getDisplayName());
+				return;
+			}
 
 			Files.createDirectories(libDirectory);
-			FileUtils.copyDirectory(arbitraryDataReader.getFilePath().toFile(), libDirectory.toFile());
-
-			ArbitraryDataResource resource = new ArbitraryDataResource(transactionData.getName(),
-					ArbitraryDataFile.ResourceIdType.NAME, transactionData.getService(), transactionData.getIdentifier());
-			resource.deleteCache();
+			FileUtils.copyDirectory(resourcePath.toFile(), libDirectory.toFile());
 
 			LiteWalletJni.loadLibrary(libPath);
 		} catch (DataException e) {
@@ -180,24 +169,56 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private ArbitraryTransactionData getTransactionData(Repository repository) {
-		try {
-			byte[] signature = Base58.decode(this.config.getQdnWalletSignature());
-			TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
-			if (!(transactionData instanceof ArbitraryTransactionData))
-				return null;
+	static ArbitraryTransactionData getPinnedTransactionData(Repository repository, String signature58) throws DataException {
+		if (signature58 == null || signature58.isBlank())
+			throw new DataException("Configured wallet QDN transaction signature is missing");
 
-			ArbitraryTransaction arbitraryTransaction = new ArbitraryTransaction(repository, transactionData);
-			return (ArbitraryTransactionData) arbitraryTransaction.getTransactionData();
-		} catch (DataException e) {
-			return null;
+		final byte[] signature;
+		try {
+			signature = Base58.decode(signature58);
+		} catch (RuntimeException e) {
+			throw new DataException("Configured wallet QDN transaction signature is invalid");
 		}
+
+		if (signature == null || signature.length != Transformer.SIGNATURE_LENGTH)
+			throw new DataException("Configured wallet QDN transaction signature is invalid");
+
+		TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
+		if (!(transactionData instanceof ArbitraryTransactionData arbitraryTransactionData))
+			throw new DataException("Configured wallet QDN signature does not identify an ARBITRARY transaction");
+
+		if (arbitraryTransactionData.getService() != Service.ARBITRARY_DATA)
+			throw new DataException("Configured wallet QDN transaction is not an ARBITRARY_DATA publication");
+
+		return arbitraryTransactionData;
+	}
+
+	static Path resolvePinnedQdnWalletPath(String signature58, ArbitraryTransactionData transactionData)
+			throws DataException, IOException, MissingDataException {
+		if (transactionData == null)
+			throw new DataException("Configured wallet QDN transaction is missing");
+		if (transactionData.getService() != Service.ARBITRARY_DATA)
+			throw new DataException("Configured wallet QDN transaction is not an ARBITRARY_DATA publication");
+
+		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(signature58,
+				ArbitraryDataFile.ResourceIdType.TRANSACTION_DATA, transactionData.getService(), transactionData.getIdentifier());
+		arbitraryDataReader.setTransactionData(transactionData);
+		arbitraryDataReader.loadSynchronously(false);
+		return arbitraryDataReader.getFilePath();
+	}
+
+	static void validatePinnedResourcePath(Path resourcePath, String libFileName) throws DataException {
+		if (resourcePath == null || !Files.isDirectory(resourcePath))
+			throw new DataException("wallet library resource is not a directory");
+		if (libFileName == null || !Files.isRegularFile(resourcePath.resolve(libFileName)))
+			throw new DataException("wallet library resource is missing the expected platform library");
 	}
 
 	public static String resolveRustLibFilename() {
-		String osName = System.getProperty("os.name");
-		String osArchitecture = System.getProperty("os.arch");
+		return resolveRustLibFilename(System.getProperty("os.name"), System.getProperty("os.arch"));
+	}
 
+	static String resolveRustLibFilename(String osName, String osArchitecture) {
 		if (osName.equals("Mac OS X") && osArchitecture.equals("x86_64"))
 			return "librust-macos-x86_64.dylib";
 		else if ((osName.equals("Linux") || osName.equals("FreeBSD")) && osArchitecture.equals("aarch64"))
