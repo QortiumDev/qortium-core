@@ -111,6 +111,19 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 					if (this.currentWallet == null || this.currentWallet.isNullSeedWallet())
 						return false;
 
+					if (this.currentWallet.usesPersistentNativeStorage()) {
+						if (this.currentWallet.isSynchronized()) {
+							this.currentWallet.setReady(true);
+							this.currentWallet.recordValidatedSync(nativeAdapter);
+							this.cachedStatus = "Synchronized";
+							return true;
+						}
+						if (this.currentWallet.isNativeSyncInProgress(nativeAdapter)) {
+							this.cachedStatus = "Synchronizing wallet...";
+							return true;
+						}
+					}
+
 					this.cachedStatus = "Synchronizing wallet...";
 					LOGGER.debug("Syncing {} wallet...", this.config.getDisplayName());
 					String response = nativeAdapter.execute("sync", "");
@@ -120,8 +133,11 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 						JSONObject json = new JSONObject(response);
 						if (json.has("result")) {
 							String result = json.getString("result");
-							if (Objects.equals(result, "success"))
+							if (Objects.equals(result, "success")) {
 								this.currentWallet.setReady(true);
+								if (this.currentWallet.isSynchronized())
+									this.currentWallet.recordValidatedSync(nativeAdapter);
+							}
 						}
 					} catch (JSONException e) {
 						LOGGER.info("Unable to interpret JSON", e);
@@ -155,6 +171,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				this.lifecycleState = LifecycleState.DEGRADED;
 				this.cachedStatus = this.config.getDisplayName() + " native wallet is unavailable until Core restart";
 			} else {
+				this.prepareCurrentWalletForShutdown();
 				this.saveCurrentWallet();
 				this.lifecycleState = LifecycleState.TERMINATED;
 				this.cachedStatus = this.config.getDisplayName() + " wallet controller is stopped";
@@ -216,7 +233,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				return;
 			}
 
-			String qdnWalletSignature = this.config.getQdnWalletSignature();
+			String qdnWalletSignature = this.config.getActiveQdnWalletSignature();
 			ArbitraryTransactionData transactionData = getPinnedTransactionData(repository, qdnWalletSignature);
 
 			List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
@@ -330,17 +347,28 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			return false;
 		}
 
+		W previousWallet = null;
 		if (this.currentWallet != null) {
-			if (this.currentWallet.entropyBytesEqual(entropyBytes))
+			if (this.currentWallet.matchesWallet(entropyBytes, isNullSeedWallet))
 				return true;
 
-			this.closeCurrentWallet();
+			if (!this.currentWallet.prepareForSwitch(nativeAdapter)) {
+				LOGGER.info("Unable to switch {} wallet because prior native work has not terminated",
+						this.config.getDisplayName());
+				return false;
+			}
+			previousWallet = this.currentWallet;
+			this.saveCurrentWallet();
+			this.currentWallet = null;
 		}
 
 		try {
 			this.currentWallet = this.createWallet(entropyBytes, isNullSeedWallet);
-			if (!this.currentWallet.isReady())
+			if (!this.currentWallet.isReady()) {
 				this.currentWallet = null;
+			} else if (previousWallet != null) {
+				previousWallet.cleanupAfterSwitch();
+			}
 			return true;
 		} catch (IOException e) {
 			LOGGER.info("Unable to initialize wallet: {}", e.getMessage());
@@ -367,9 +395,17 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private void closeCurrentWallet() {
-		this.saveCurrentWallet();
-		this.currentWallet = null;
+	private void prepareCurrentWalletForShutdown() {
+		try {
+			NATIVE_COORDINATOR.execute("prepare " + this.config.getCurrencyCode() + " wallet shutdown", nativeAdapter -> {
+				if (this.currentWallet != null && !this.currentWallet.prepareForShutdown(nativeAdapter))
+					LOGGER.warn("Unable to release {} transient wallet storage before shutdown",
+							this.config.getDisplayName());
+				return null;
+			});
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			LOGGER.warn("Unable to prepare {} wallet shutdown", this.config.getDisplayName());
+		}
 	}
 
 	public String getSyncStatus() {

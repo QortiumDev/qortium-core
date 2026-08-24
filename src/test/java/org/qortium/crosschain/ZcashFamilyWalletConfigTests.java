@@ -4,7 +4,6 @@ import org.junit.Test;
 
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -16,8 +15,6 @@ public class ZcashFamilyWalletConfigTests {
 	public void testDisabledUnifiedConfigDoesNotReadUnifiedInputs() {
 		AtomicInteger signatureReads = new AtomicInteger();
 		AtomicInteger debugReads = new AtomicInteger();
-		AtomicInteger qdnCalls = new AtomicInteger();
-		AtomicInteger nativeCalls = new AtomicInteger();
 		ZcashFamilyWalletConfig config = new ZcashFamilyWalletConfig(
 				"Test", "TEST", "Test", "legacy-signature", "encryption", "zs",
 				() -> 1, () -> null, () -> false,
@@ -28,45 +25,26 @@ public class ZcashFamilyWalletConfigTests {
 				() -> {
 					debugReads.incrementAndGet();
 					return true;
-				});
+				}, () -> Path.of("wallets"));
 
-		PirateUnifiedWalletBootstrap bootstrap = new PirateUnifiedWalletBootstrap(config,
-				signature -> {
-					qdnCalls.incrementAndGet();
-					return Path.of("unified-library");
-				},
-				(libraryPath, debugLogging) -> nativeCalls.incrementAndGet());
-
-		assertFalse(bootstrap.initializeIfEnabled());
 		assertEquals("legacy-signature", config.getQdnWalletSignature());
+		assertEquals("legacy-signature", config.getActiveQdnWalletSignature());
+		assertEquals("legacy-signature", config.getRustLibOuterDirectory().getFileName().toString());
+		assertFalse(config.isUnifiedDebugLoggingEnabled());
 		assertEquals(0, signatureReads.get());
 		assertEquals(0, debugReads.get());
-		assertEquals(0, qdnCalls.get());
-		assertEquals(0, nativeCalls.get());
 	}
 
 	@Test
-	public void testEnabledUnifiedConfigPassesPinnedInputsAcrossBootstrapBoundary() {
-		AtomicReference<String> resolvedSignature = new AtomicReference<>();
-		AtomicReference<Path> initializedLibrary = new AtomicReference<>();
-		AtomicReference<Boolean> initializedDebug = new AtomicReference<>();
+	public void testEnabledUnifiedConfigSelectsPinnedBundleAndIsolatedDirectory() {
 		ZcashFamilyWalletConfig config = new ZcashFamilyWalletConfig(
 				"Test", "TEST", "Test", "legacy-signature", "encryption", "zs",
-				() -> 1, () -> null, () -> true, () -> "unified-signature", () -> true);
-		Path expectedLibrary = Path.of("unified-library");
-		PirateUnifiedWalletBootstrap bootstrap = new PirateUnifiedWalletBootstrap(config,
-				signature -> {
-					resolvedSignature.set(signature);
-					return expectedLibrary;
-				},
-				(libraryPath, debugLogging) -> {
-					initializedLibrary.set(libraryPath);
-					initializedDebug.set(debugLogging);
-				});
+				() -> 1, () -> null, () -> true, () -> "unified-signature", () -> true,
+				() -> Path.of("wallets"));
 
-		assertTrue(bootstrap.initializeIfEnabled());
-		assertEquals("unified-signature", resolvedSignature.get());
-		assertEquals(expectedLibrary, initializedLibrary.get());
-		assertEquals(Boolean.TRUE, initializedDebug.get());
+		assertEquals("unified-signature", config.getActiveQdnWalletSignature());
+		assertEquals("unified-signature", config.getRustLibOuterDirectory().getFileName().toString());
+		assertEquals("legacy-signature", config.getLegacyRustLibOuterDirectory().getFileName().toString());
+		assertTrue(config.isUnifiedDebugLoggingEnabled());
 	}
 }

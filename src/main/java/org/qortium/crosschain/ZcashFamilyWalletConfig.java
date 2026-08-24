@@ -22,12 +22,14 @@ public class ZcashFamilyWalletConfig {
 	private final BooleanSupplier unifiedWalletEnabledSupplier;
 	private final Supplier<String> unifiedQdnWalletSignatureSupplier;
 	private final BooleanSupplier unifiedDebugLoggingSupplier;
+	private final Supplier<Path> walletsPathSupplier;
 
 	public ZcashFamilyWalletConfig(String displayName, String currencyCode, String walletDirectoryName,
 			String qdnWalletSignature, String walletEncryptionPrefix, String privateAddressHrp,
 			IntSupplier defaultBirthdaySupplier, Supplier<? extends Bitcoiny> blockchainSupplier) {
 		this(displayName, currencyCode, walletDirectoryName, qdnWalletSignature, walletEncryptionPrefix,
-				privateAddressHrp, defaultBirthdaySupplier, blockchainSupplier, () -> false, () -> null, () -> false);
+				privateAddressHrp, defaultBirthdaySupplier, blockchainSupplier, () -> false, () -> null, () -> false,
+				() -> Paths.get(Settings.getInstance().getWalletsPath()));
 	}
 
 	public ZcashFamilyWalletConfig(String displayName, String currencyCode, String walletDirectoryName,
@@ -35,6 +37,17 @@ public class ZcashFamilyWalletConfig {
 			IntSupplier defaultBirthdaySupplier, Supplier<? extends Bitcoiny> blockchainSupplier,
 			BooleanSupplier unifiedWalletEnabledSupplier, Supplier<String> unifiedQdnWalletSignatureSupplier,
 			BooleanSupplier unifiedDebugLoggingSupplier) {
+		this(displayName, currencyCode, walletDirectoryName, qdnWalletSignature, walletEncryptionPrefix,
+				privateAddressHrp, defaultBirthdaySupplier, blockchainSupplier, unifiedWalletEnabledSupplier,
+				unifiedQdnWalletSignatureSupplier, unifiedDebugLoggingSupplier,
+				() -> Paths.get(Settings.getInstance().getWalletsPath()));
+	}
+
+	ZcashFamilyWalletConfig(String displayName, String currencyCode, String walletDirectoryName,
+			String qdnWalletSignature, String walletEncryptionPrefix, String privateAddressHrp,
+			IntSupplier defaultBirthdaySupplier, Supplier<? extends Bitcoiny> blockchainSupplier,
+			BooleanSupplier unifiedWalletEnabledSupplier, Supplier<String> unifiedQdnWalletSignatureSupplier,
+			BooleanSupplier unifiedDebugLoggingSupplier, Supplier<Path> walletsPathSupplier) {
 		this.displayName = Objects.requireNonNull(displayName);
 		this.currencyCode = Objects.requireNonNull(currencyCode);
 		this.walletDirectoryName = Objects.requireNonNull(walletDirectoryName);
@@ -46,6 +59,7 @@ public class ZcashFamilyWalletConfig {
 		this.unifiedWalletEnabledSupplier = Objects.requireNonNull(unifiedWalletEnabledSupplier);
 		this.unifiedQdnWalletSignatureSupplier = Objects.requireNonNull(unifiedQdnWalletSignatureSupplier);
 		this.unifiedDebugLoggingSupplier = Objects.requireNonNull(unifiedDebugLoggingSupplier);
+		this.walletsPathSupplier = Objects.requireNonNull(walletsPathSupplier);
 	}
 
 	public String getDisplayName() {
@@ -97,15 +111,27 @@ public class ZcashFamilyWalletConfig {
 		return isUnifiedWalletEnabled() && this.unifiedDebugLoggingSupplier.getAsBoolean();
 	}
 
+	public String getActiveQdnWalletSignature() {
+		return isUnifiedWalletEnabled() ? getUnifiedQdnWalletSignature() : this.qdnWalletSignature;
+	}
+
 	public Path getWalletsLibDirectory() {
-		return Paths.get(Settings.getInstance().getWalletsPath(), this.walletDirectoryName, "lib");
+		return this.walletsPathSupplier.get().resolve(this.walletDirectoryName).resolve("lib");
 	}
 
 	public Path getRustLibOuterDirectory() {
-		return Paths.get(Settings.getInstance().getWalletsPath(), this.walletDirectoryName, "lib", this.qdnWalletSignature);
+		return getWalletsLibDirectory().resolve(getActiveQdnWalletSignature());
+	}
+
+	public Path getLegacyRustLibOuterDirectory() {
+		return getWalletsLibDirectory().resolve(this.qdnWalletSignature);
 	}
 
 	public Path getWalletPath(String filename) {
-		return Paths.get(Settings.getInstance().getWalletsPath(), this.walletDirectoryName, filename);
+		return this.walletsPathSupplier.get().resolve(this.walletDirectoryName).resolve(filename);
+	}
+
+	public Path getUnifiedWalletsDirectory() {
+		return this.walletsPathSupplier.get().resolve(this.walletDirectoryName).resolve("unified");
 	}
 }

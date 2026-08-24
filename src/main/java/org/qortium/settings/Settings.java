@@ -455,7 +455,11 @@ public class Settings {
 	private String walletsPath = "wallets";
 
 	private int arrrDefaultBirthday = 2000000;
-	/** Opt-in gate for the persistent Pirate Unified wallet implementation. */
+	/**
+	 * Opt-in gate for the persistent Pirate Unified wallet implementation.
+	 * Existing legacy wallets must be opened once with this disabled so Core can
+	 * record their one-way address identity before the native-library restart.
+	 */
 	private boolean pirateChainWalletUnified = false;
 	/** Immutable QDN transaction signature for the Unified native wallet bundle. */
 	private String pirateChainWalletQdnSignature = null;
