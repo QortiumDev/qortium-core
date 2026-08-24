@@ -145,6 +145,41 @@ does not load native code or start Core. A later packaged-Core runner must use a
 fail-closed no-egress sandbox and report local-QDN resolution, cache installation,
 native loading, and wallet lifecycle as separate results.
 
+## Packaged loader acceptance
+
+On Linux x86_64, a separately packaged Core JAR can exercise the production
+loader against that fixture without network egress or wallet creation:
+
+```sh
+tools/run-pirate-unified-packaged-loader-acceptance.sh \
+  /absolute/path/qortium-1.7.2.jar \
+  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-local-qdn-fixture \
+  /absolute/new/path/pirate-unified-packaged-loader-receipt.md
+```
+
+The runner refuses to overwrite its receipt or log, copies the retained
+repository/data fixture into disposable storage, and starts the JAR in a
+rootless network namespace containing only loopback. Core uses a restricted,
+loopback-only API with ephemeral request files, a lite test-chain profile,
+Pirate `TEST3` (which has no configured lightwallet servers), no seed or fixed
+peers, and all non-ARRR wallets disabled. The namespace route/interface checks
+are mandatory; the fixture's completeness is not treated as an egress control.
+
+After the API is ready, the runner sends exactly one entropy-bearing
+`POST /crosschain/arrr/syncstatus`. On an unloaded controller this only schedules
+the asynchronous native-library load. The runner never repeats the request:
+doing so after the load would initialize a wallet. Instead it waits for the
+expected QDN-signature cache pathname to appear in `/proc/<pid>/maps`, then
+requires exact staged/cache inventory and SHA-256 equality and confirms that
+`wallets/PirateChain/unified` was not created. It sends SIGTERM only after the
+mapping is observed and requires Core's graceful-shutdown confirmation.
+
+This advances local-QDN resolution, cache installation, and packaged native
+loading for Linux x86_64. It does not prove publication, retrieval from a peer,
+wallet creation or reopening, synchronization, migration, or funded-wallet
+behavior. Those lifecycle claims remain G2 work.
+
 ## Acceptance matrix
 
 Artifact presence is `STAGED`, not runtime acceptance. Offline JNI and isolated
