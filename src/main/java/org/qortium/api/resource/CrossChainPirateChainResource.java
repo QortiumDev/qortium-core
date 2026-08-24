@@ -1,6 +1,7 @@
 package org.qortium.api.resource;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,8 +14,11 @@ import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.Security;
 import org.qortium.api.model.crosschain.ForeignCoinStatus;
+import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainSendRequest;
+import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.controller.PirateChainWalletController;
+import org.qortium.controller.ZcashFamilyWalletController;
 import org.qortium.crosschain.*;
 import org.qortium.settings.Settings;
 
@@ -23,8 +27,10 @@ import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.List;
 
 @Path("/crosschain/arrr")
@@ -149,21 +155,32 @@ public class CrossChainPirateChainResource {
 	)
 	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
 	@SecurityRequirement(name = "apiKey")
-	public String getPirateChainWalletBalance(@HeaderParam(Security.API_KEY_HEADER) String apiKey, String entropy58) {
+	public String getPirateChainWalletBalance(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			@Parameter(description = "If true, return verified available balance instead of total balance")
+			@QueryParam("verified") Boolean verified, String entropy58) {
 		Security.checkApiCallAllowed(request);
 
 		PirateChain pirateChain = PirateChain.getInstance();
 
 		try {
-			Long balance = pirateChain.getWalletBalance(entropy58);
-			if (balance == null)
+			if (pirateChain == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
 
-			return balance.toString();
+			PirateChainBalance balances = pirateChain.getWalletBalances(entropy58);
+			return Long.toString(selectWalletBalance(balances, Boolean.TRUE.equals(verified)));
 
 		} catch (ForeignBlockchainException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
 		}
+	}
+
+	static long selectWalletBalance(PirateChainBalance balances, boolean verified)
+			throws ForeignBlockchainException {
+		if (balances == null)
+			throw new ForeignBlockchainException("Unable to determine balance");
+		if (!verified)
+			return balances.zbalance;
+		return balances.verified_zbalance;
 	}
 
 	@POST
@@ -264,9 +281,9 @@ public class CrossChainPirateChainResource {
 					)
 			),
 			responses = {
-					@ApiResponse(
-							content = @Content(array = @ArraySchema( schema = @Schema( implementation = SimpleTransaction.class ) ) )
-					)
+					@ApiResponse(content = @Content(
+							mediaType = MediaType.TEXT_PLAIN,
+							schema = @Schema(type = "string", description = "Pirate Chain wallet address")))
 			}
 	)
 	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
@@ -372,23 +389,45 @@ public class CrossChainPirateChainResource {
 					)
 			),
 			responses = {
-					@ApiResponse(
-							content = @Content(array = @ArraySchema( schema = @Schema( implementation = SimpleTransaction.class ) ) )
-					)
+					@ApiResponse(content = {
+							@Content(mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string", description = "legacy synchronization status")),
+							@Content(mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = PirateChainSyncStatus.class))
+					})
 			}
 	)
 	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
 	@SecurityRequirement(name = "apiKey")
-	public String getPirateChainSyncStatus(@HeaderParam(Security.API_KEY_HEADER) String apiKey, String entropy58) {
+	public Response getPirateChainSyncStatus(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			@Parameter(description = "If true, return a stable structured status")
+			@QueryParam("json") Boolean json, String entropy58) {
 		Security.checkApiCallAllowed(request);
 
-		PirateChain pirateChain = PirateChain.getInstance();
-
 		try {
-			return pirateChain.getSyncStatus(entropy58);
+			ZcashFamilyWalletController.WalletSyncStatus status;
+			if (!Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE)) {
+				status = ZcashFamilyWalletController.WalletSyncStatus.disabled("Pirate Chain wallet is disabled");
+			} else {
+				PirateChain pirateChain = PirateChain.getInstance();
+				status = pirateChain == null
+						? ZcashFamilyWalletController.WalletSyncStatus.disabled("Pirate Chain wallet is disabled")
+						: pirateChain.getSyncStatusDetails(entropy58);
+			}
+
+			if (Boolean.TRUE.equals(json)) {
+				return Response.ok(toStructuredStatus(status), MediaType.APPLICATION_JSON_TYPE).build();
+			}
+
+			return Response.ok(status.getMessage(), MediaType.TEXT_PLAIN_TYPE).build();
 		} catch (ForeignBlockchainException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
 		}
+	}
+
+	static PirateChainSyncStatus toStructuredStatus(ZcashFamilyWalletController.WalletSyncStatus status) {
+		return new PirateChainSyncStatus(PirateChainSyncStatus.State.valueOf(status.getState().name()),
+				status.getMessage(), status.getSyncedBlocks(), status.getTotalBlocks(), status.isRestartRequired());
 	}
 
 	@GET

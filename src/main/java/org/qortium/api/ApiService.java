@@ -50,6 +50,11 @@ import java.util.stream.Collectors;
 public class ApiService {
 
 	private static final Logger LOGGER = LogManager.getLogger(ApiService.class);
+	// Deliberately omit the query string and Referer so credentials and other
+	// sensitive query values cannot reach API-requests.log. API keys belong in the
+	// request header.
+	static final String API_REQUEST_LOG_FORMAT =
+			"%{client}a - %u %t \"%m %U %H\" %s %O \"%{User-Agent}i\"";
 	private static ApiService instance;
 	private static final Set<String> API_RESOURCE_PACKAGES = Set.of(
 			"org.qortium.api.resource",
@@ -265,7 +270,7 @@ public class ApiService {
 				RequestLogWriter logWriter = new RequestLogWriter("API-requests.log");
 				logWriter.setAppend(true);
 				logWriter.setTimeZone("UTC");
-				RequestLog requestLog = new CustomRequestLog(logWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT);
+				RequestLog requestLog = new CustomRequestLog(logWriter, API_REQUEST_LOG_FORMAT);
 				this.server.setRequestLog(requestLog);
 			}
 

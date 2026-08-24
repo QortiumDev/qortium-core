@@ -48,13 +48,90 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		DEGRADED
 	}
 
+	public enum WalletSyncState {
+		DISABLED,
+		LOADING,
+		SYNCHRONIZING,
+		DEGRADED,
+		READY
+	}
+
+	/** Stable status shared by the legacy text and opt-in structured API responses. */
+	public static final class WalletSyncStatus {
+		private final WalletSyncState state;
+		private final String message;
+		private final Long syncedBlocks;
+		private final Long totalBlocks;
+		private final boolean restartRequired;
+
+		private WalletSyncStatus(WalletSyncState state, String message, Long syncedBlocks, Long totalBlocks,
+				boolean restartRequired) {
+			this.state = state;
+			this.message = message;
+			this.syncedBlocks = syncedBlocks;
+			this.totalBlocks = totalBlocks;
+			this.restartRequired = restartRequired;
+		}
+
+		public static WalletSyncStatus disabled(String message) {
+			return new WalletSyncStatus(WalletSyncState.DISABLED, message, null, null, false);
+		}
+
+		public static WalletSyncStatus loading(String message) {
+			return new WalletSyncStatus(WalletSyncState.LOADING, message, null, null, false);
+		}
+
+		public static WalletSyncStatus synchronizing(String message, Long syncedBlocks, Long totalBlocks) {
+			return new WalletSyncStatus(WalletSyncState.SYNCHRONIZING, message, syncedBlocks, totalBlocks, false);
+		}
+
+		public static WalletSyncStatus degraded(String message) {
+			return new WalletSyncStatus(WalletSyncState.DEGRADED, message, null, null, true);
+		}
+
+		public static WalletSyncStatus ready(String message) {
+			return new WalletSyncStatus(WalletSyncState.READY, message, null, null, false);
+		}
+
+		public WalletSyncState getState() {
+			return this.state;
+		}
+
+		public String getMessage() {
+			return this.message;
+		}
+
+		public Long getSyncedBlocks() {
+			return this.syncedBlocks;
+		}
+
+		public Long getTotalBlocks() {
+			return this.totalBlocks;
+		}
+
+		public boolean isRestartRequired() {
+			return this.restartRequired;
+		}
+	}
+
+	private static final class CachedWalletSyncStatus {
+		private final WalletSyncStatus status;
+		private final ZcashFamilyWallet wallet;
+
+		private CachedWalletSyncStatus(WalletSyncStatus status, ZcashFamilyWallet wallet) {
+			this.status = status;
+			this.wallet = wallet;
+		}
+	}
+
 	protected final ZcashFamilyWalletConfig config;
 	private long lastSaveTime = 0L;
 	private volatile boolean running;
-	private W currentWallet = null;
+	private volatile W currentWallet = null;
 	private volatile boolean shouldLoadWallet = false;
 	private volatile String loadStatus = null;
-	private volatile String cachedStatus = "Not initialized yet";
+	private volatile CachedWalletSyncStatus cachedStatus = new CachedWalletSyncStatus(
+			WalletSyncStatus.loading("Not initialized yet"), null);
 	private volatile LifecycleState lifecycleState = LifecycleState.NEW;
 
 	protected ZcashFamilyWalletController(ZcashFamilyWalletConfig config) {
@@ -115,19 +192,21 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 						if (this.currentWallet.isSynchronized()) {
 							this.currentWallet.setReady(true);
 							this.currentWallet.recordValidatedSync(nativeAdapter);
-							this.cachedStatus = "Synchronized";
+							this.cacheCurrentWalletStatus(WalletSyncStatus.ready("Synchronized"));
 							return true;
 						}
 						if (this.currentWallet.isNativeSyncInProgress(nativeAdapter)) {
-							this.cachedStatus = "Synchronizing wallet...";
+							this.cacheCurrentWalletStatus(
+									WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
 							return true;
 						}
 					}
 
-					this.cachedStatus = "Synchronizing wallet...";
+					this.cacheCurrentWalletStatus(
+							WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
 					LOGGER.debug("Syncing {} wallet...", this.config.getDisplayName());
 					String response = nativeAdapter.execute("sync", "");
-					LOGGER.debug("sync response: {}", response);
+					LOGGER.debug("{} wallet sync returned a response", this.config.getDisplayName());
 
 					try {
 						JSONObject json = new JSONObject(response);
@@ -142,7 +221,9 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 					} catch (JSONException e) {
 						LOGGER.info("Unable to interpret JSON", e);
 					}
-					this.cachedStatus = this.currentWallet.isReady() ? "Synchronized" : "Initializing wallet...";
+					this.cacheCurrentWalletStatus(this.currentWallet.isReady()
+							? WalletSyncStatus.ready("Synchronized")
+							: WalletSyncStatus.loading("Initializing wallet..."));
 					return true;
 				});
 				if (!syncAttempted)
@@ -157,9 +238,10 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		} catch (InterruptedException e) {
 			// Fall-through to exit.
 		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			String status = this.config.getDisplayName() + " native wallet is unavailable until Core restart";
+			this.cacheStatus(WalletSyncStatus.degraded(status));
 			this.lifecycleState = LifecycleState.DEGRADED;
-			this.cachedStatus = this.config.getDisplayName() + " native wallet is unavailable until Core restart";
-			this.loadStatus = this.cachedStatus;
+			this.loadStatus = status;
 			LOGGER.error("{} wallet controller stopped because the native lane is unavailable: {}",
 					this.config.getDisplayName(), e.getMessage());
 		} finally {
@@ -168,13 +250,15 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			Thread.interrupted();
 			this.running = false;
 			if (NATIVE_COORDINATOR.isDegraded()) {
+				this.cacheStatus(WalletSyncStatus.degraded(
+						this.config.getDisplayName() + " native wallet is unavailable until Core restart"));
 				this.lifecycleState = LifecycleState.DEGRADED;
-				this.cachedStatus = this.config.getDisplayName() + " native wallet is unavailable until Core restart";
 			} else {
 				this.prepareCurrentWalletForShutdown();
 				this.saveCurrentWallet();
+				this.cacheStatus(WalletSyncStatus.loading(
+						this.config.getDisplayName() + " wallet controller is stopped"));
 				this.lifecycleState = LifecycleState.TERMINATED;
-				this.cachedStatus = this.config.getDisplayName() + " wallet controller is stopped";
 			}
 		}
 	}
@@ -186,12 +270,14 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		if (this.lifecycleState == LifecycleState.NEW) {
 			this.running = false;
 			this.lifecycleState = LifecycleState.TERMINATED;
-			this.cachedStatus = this.config.getDisplayName() + " wallet controller is stopped";
+			this.cacheStatus(WalletSyncStatus.loading(
+					this.config.getDisplayName() + " wallet controller is stopped"));
 			return;
 		}
 
+		this.cacheStatus(WalletSyncStatus.loading(
+				"Stopping " + this.config.getDisplayName() + " wallet controller..."));
 		this.lifecycleState = LifecycleState.STOPPING;
-		this.cachedStatus = "Stopping " + this.config.getDisplayName() + " wallet controller...";
 		this.running = false;
 		this.interrupt();
 
@@ -409,10 +495,18 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	public String getSyncStatus() {
-		return this.getBoundedSyncStatus(null);
+		return this.getSyncStatusDetails().getMessage();
 	}
 
 	public String getSyncStatus(String entropy58) {
+		return this.getSyncStatusDetails(entropy58).getMessage();
+	}
+
+	public WalletSyncStatus getSyncStatusDetails() {
+		return this.getBoundedSyncStatus(null);
+	}
+
+	public WalletSyncStatus getSyncStatusDetails(String entropy58) {
 		return this.getBoundedSyncStatus(entropy58);
 	}
 
@@ -457,71 +551,143 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 		String response = nativeAdapter.execute("syncStatus", "");
 		JSONObject json = new JSONObject(response);
-		if (json.has("syncing") && Boolean.parseBoolean(json.getString("syncing"))) {
-			long syncedBlocks = json.getLong("synced_blocks");
-			long totalBlocks = json.getLong("total_blocks");
-			throw new ForeignBlockchainException(String.format("Sync in progress (%d / %d). Please try again later.",
-					syncedBlocks, totalBlocks));
+		if (isSyncInProgress(json)) {
+			Long syncedBlocks = optionalLong(json, "synced_blocks");
+			Long totalBlocks = optionalLong(json, "total_blocks");
+			String progress = syncedBlocks != null && totalBlocks != null
+					? String.format("Sync in progress (%d / %d). Please try again later.", syncedBlocks, totalBlocks)
+					: "Sync in progress. Please try again later.";
+			throw new ForeignBlockchainException(progress);
 		}
 	}
 
-	private String getSyncStatus(ZcashFamilyNativeAdapter nativeAdapter) {
+	private WalletSyncStatus getSyncStatus(ZcashFamilyNativeAdapter nativeAdapter) {
 		if (this.currentWallet == null || !this.currentWallet.isInitialized()) {
 			if (this.loadStatus != null)
-				return cacheStatus(this.loadStatus);
+				return cacheStatus(WalletSyncStatus.loading(this.loadStatus));
 
-			return cacheStatus("Not initialized yet");
+			return cacheStatus(WalletSyncStatus.loading("Not initialized yet"));
 		}
 
 		String syncStatusResponse = nativeAdapter.execute("syncStatus", "");
 		JSONObject json = new JSONObject(syncStatusResponse);
-		if (json.has("syncing") && Boolean.parseBoolean(json.getString("syncing"))) {
-			long syncedBlocks = json.getLong("synced_blocks");
-			long totalBlocks = json.getLong("total_blocks");
-			return cacheStatus(String.format("Sync in progress (%d / %d)", syncedBlocks, totalBlocks));
-		}
-
-		return cacheStatus(this.currentWallet.isSynchronized() ? "Synchronized" : "Initializing wallet...");
+		return cacheCurrentWalletStatus(interpretNativeSyncStatus(json, this.currentWallet.isSynchronized()));
 	}
 
-	private String getBoundedSyncStatus(String entropy58) {
+	static WalletSyncStatus interpretNativeSyncStatus(JSONObject json, boolean walletSynchronized) {
+		if (isSyncInProgress(json)) {
+			Long syncedBlocks = optionalLong(json, "synced_blocks");
+			Long totalBlocks = optionalLong(json, "total_blocks");
+			String message = syncedBlocks != null && totalBlocks != null
+					? String.format("Sync in progress (%d / %d)", syncedBlocks, totalBlocks)
+					: "Sync in progress";
+			return WalletSyncStatus.synchronizing(message, syncedBlocks, totalBlocks);
+		}
+
+		return walletSynchronized
+				? WalletSyncStatus.ready("Synchronized")
+				: WalletSyncStatus.loading("Initializing wallet...");
+	}
+
+	static boolean isSyncInProgress(JSONObject json) {
+		return booleanValue(json, "in_progress") || booleanValue(json, "syncing");
+	}
+
+	private static boolean booleanValue(JSONObject json, String key) {
+		Object value = json.opt(key);
+		return value instanceof Boolean ? (Boolean) value
+				: value instanceof String && Boolean.parseBoolean((String) value);
+	}
+
+	private static Long optionalLong(JSONObject json, String key) {
+		if (!json.has(key) || json.isNull(key))
+			return null;
+		try {
+			return json.getLong(key);
+		} catch (JSONException e) {
+			return null;
+		}
+	}
+
+	private WalletSyncStatus getBoundedSyncStatus(String entropy58) {
 		if (this.requiresCoreRestart())
-			return cacheStatus(this.config.getDisplayName() + " native wallet is unavailable until Core restart");
+			return cacheStatus(WalletSyncStatus.degraded(
+					this.config.getDisplayName() + " native wallet is unavailable until Core restart"));
 
 		if (this.lifecycleState == LifecycleState.NEW)
-			return cacheStatus(this.config.getDisplayName() + " wallet controller has not started");
+			return cacheStatus(WalletSyncStatus.loading(
+					this.config.getDisplayName() + " wallet controller has not started"));
 		if (this.lifecycleState == LifecycleState.STOPPING)
-			return this.cachedStatus;
+			return this.cachedStatus.status;
 		if (this.lifecycleState == LifecycleState.TERMINATED)
-			return cacheStatus(this.config.getDisplayName() + " wallet controller is stopped");
+			return cacheStatus(WalletSyncStatus.loading(
+					this.config.getDisplayName() + " wallet controller is stopped"));
+		if (entropy58 != null && !isValidEntropy(entropy58))
+			return WalletSyncStatus.loading("Invalid entropy bytes");
 
-		if (NATIVE_COORDINATOR.isBusy())
-			return this.cachedStatus;
+		if (NATIVE_COORDINATOR.isBusy()) {
+			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
+			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
+				return cachedStatus.status;
+			return WalletSyncStatus.loading("Wallet status unavailable while another native operation is running");
+		}
 
 		try {
 			return NATIVE_COORDINATOR.execute("get wallet synchronization status",
 					ZcashFamilyNativeCoordinator.STATUS_TIMEOUT, nativeAdapter -> {
-				if (entropy58 != null)
-					this.initWithEntropy58(entropy58, false, nativeAdapter);
+				if (entropy58 != null && !this.initWithEntropy58(entropy58, false, nativeAdapter))
+					return WalletSyncStatus.loading(this.config.getDisplayName() + " wallet isn't initialized yet");
 				return this.getSyncStatus(nativeAdapter);
 			});
 		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
 			if (NATIVE_COORDINATOR.isDegraded()) {
+				WalletSyncStatus status = cacheStatus(WalletSyncStatus.degraded(
+						this.config.getDisplayName() + " native wallet is unavailable until Core restart"));
 				this.lifecycleState = LifecycleState.DEGRADED;
-				return cacheStatus(this.config.getDisplayName() + " native wallet is unavailable until Core restart");
+				return status;
 			}
-			return this.cachedStatus;
+			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
+			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
+				return cachedStatus.status;
+			return WalletSyncStatus.loading("Wallet status unavailable for the requested wallet");
 		}
 	}
 
-	private String cacheStatus(String status) {
-		this.cachedStatus = status;
+	private boolean matchesCachedWallet(CachedWalletSyncStatus cachedStatus, String entropy58) {
+		ZcashFamilyWallet wallet = cachedStatus.wallet;
+		if (wallet == null || entropy58 == null)
+			return false;
+		try {
+			byte[] entropyBytes = Base58.decode(entropy58);
+			return entropyBytes != null && entropyBytes.length == 32
+					&& wallet.matchesWallet(entropyBytes, false);
+		} catch (NumberFormatException e) {
+			return false;
+		}
+	}
+
+	private static boolean isValidEntropy(String entropy58) {
+		try {
+			byte[] entropyBytes = Base58.decode(entropy58);
+			return entropyBytes != null && entropyBytes.length == 32;
+		} catch (NumberFormatException e) {
+			return false;
+		}
+	}
+
+	private WalletSyncStatus cacheStatus(WalletSyncStatus status) {
+		this.cachedStatus = new CachedWalletSyncStatus(status, null);
+		return status;
+	}
+
+	WalletSyncStatus cacheCurrentWalletStatus(WalletSyncStatus status) {
+		this.cachedStatus = new CachedWalletSyncStatus(status, this.currentWallet);
 		return status;
 	}
 
 	private void setLoadStatus(String status) {
 		this.loadStatus = status;
-		this.cachedStatus = status;
+		this.cacheStatus(WalletSyncStatus.loading(status));
 	}
 
 	private boolean isLibraryLoaded() {

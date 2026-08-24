@@ -137,7 +137,7 @@ public class ZcashFamilyWallet {
 			} else {
 				String response = nativeAdapter.initFromB64(serverUri, params, wallet, saplingOutput64, saplingSpend64);
 				if (response != null && !response.contains("\"initalized\":true")) {
-					LOGGER.info("Unable to initialize {} wallet at {}: {}", this.config.getDisplayName(), serverUri, response);
+					LOGGER.info("Unable to initialize {} wallet at {}", this.config.getDisplayName(), serverUri);
 					return false;
 				}
 				this.seedPhrase = inputSeedPhrase;

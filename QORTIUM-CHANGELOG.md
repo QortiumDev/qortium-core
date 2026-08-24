@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - feat(arrr): expose compatible Unified status and balance APIs
+
+Adds opt-in Pirate wallet API detail without changing existing callers. The
+wallet-balance endpoint still returns the total zatoshi amount by default;
+`verified=true` selects the native verified/spendable amount. The sync-status
+endpoint still returns its existing plain text by default; `json=true` returns
+a sanitized stable state with optional progress and an explicit Core-restart
+flag. Legacy and Unified native progress flags share one safety check, disabled
+and failed wallet selection states cannot expose another wallet's cached
+status, raw native wallet responses are no longer logged, and API, gateway,
+domain-map, dev-proxy, and error logs omit query strings and Referer values so
+credentials cannot be written there. Unified remains disabled by default, and
+send/P2SH request contracts are unchanged.
+
 ### 2026-08-24 - feat(arrr): add opt-in persistent Unified wallet storage
 
 Adds the default-off Pirate Unified wallet's persistent storage and recovery
