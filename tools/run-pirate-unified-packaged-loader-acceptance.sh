@@ -68,9 +68,14 @@ run_inside_namespace() {
 	trap 'exit 130' HUP INT TERM
 
 	ip link set lo up
-	non_loopback_interfaces=$(ip -o link show | awk -F': ' '$2 !~ /^lo(@|$)/ { count++ } END { print count + 0 }')
-	default_routes=$(ip route show table all | awk '$1 == "default" { count++ } END { print count + 0 }')
-	non_loopback_routes=$(ip route show table all | awk '$0 !~ / dev lo( |$)/ { count++ } END { print count + 0 }')
+	ip -o link show > "$runtime/network-links.txt"
+	ip route show table all > "$runtime/network-routes.txt"
+	non_loopback_interfaces=$(awk -F': ' '$2 !~ /^lo(@|$)/ { count++ } END { print count + 0 }' \
+		"$runtime/network-links.txt")
+	default_routes=$(awk '$1 == "default" { count++ } END { print count + 0 }' \
+		"$runtime/network-routes.txt")
+	non_loopback_routes=$(awk '$0 !~ / dev lo( |$)/ { count++ } END { print count + 0 }' \
+		"$runtime/network-routes.txt")
 	if [ "$non_loopback_interfaces" -ne 0 ] || [ "$default_routes" -ne 0 ] \
 			|| [ "$non_loopback_routes" -ne 0 ]; then
 		printf '%s\n' 'Network namespace is not loopback-only' >&2
@@ -122,8 +127,19 @@ run_inside_namespace() {
 		printf '%s\n' 'Ephemeral API request files are missing' >&2
 		return 1
 	fi
-	if [ -e "$expected_cache" ] || grep -F " $expected_library" \
-			"/proc/$core_pid/maps" >/dev/null 2>&1; then
+	if [ ! -r "/proc/$core_pid/maps" ]; then
+		printf '%s\n' 'Core process mappings were not readable before the one-shot trigger' >&2
+		return 1
+	fi
+	set +e
+	grep -F " $expected_library" "/proc/$core_pid/maps" >/dev/null 2>&1
+	pre_trigger_mapping_status=$?
+	set -e
+	if [ "$pre_trigger_mapping_status" -gt 1 ]; then
+		printf '%s\n' 'Could not inspect Core process mappings before the one-shot trigger' >&2
+		return 1
+	fi
+	if [ -e "$expected_cache" ] || [ "$pre_trigger_mapping_status" -eq 0 ]; then
 		printf '%s\n' 'Native cache/library was unexpectedly present before the one-shot trigger' >&2
 		return 1
 	fi
@@ -165,11 +181,13 @@ run_inside_namespace() {
 		return 1
 	fi
 
-	if [ ! -d "$expected_cache" ] || [ ! -f "$expected_library" ]; then
+	if [ ! -d "$expected_cache" ] || [ -L "$expected_cache" ] \
+			|| [ ! -f "$expected_library" ] || [ -L "$expected_library" ]; then
 		printf '%s\n' 'The expected native cache was not installed' >&2
 		return 1
 	fi
-	library_sha256=$(sha256sum "$expected_library" | awk '{ print $1 }')
+	library_hash_line=$(sha256sum "$expected_library")
+	library_sha256=${library_hash_line%% *}
 	library_inode=$(stat -Lc '%d:%i' "$expected_library")
 	{
 		printf 'localQdnResolution=PASS\n'
@@ -178,17 +196,30 @@ run_inside_namespace() {
 		printf 'mappedLibrarySha256=%s\n' "$library_sha256"
 		printf 'mappedLibraryDeviceInode=%s\n' "$library_inode"
 	} >> "$result_file"
-	find "$bundle" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort \
-		> "$runtime/source-inventory.txt"
-	find "$expected_cache" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort \
-		> "$runtime/cache-inventory.txt"
+	find "$bundle" -mindepth 1 -maxdepth 1 ! -type f -print \
+		> "$runtime/source-invalid-entries.txt"
+	find "$expected_cache" -mindepth 1 -maxdepth 1 ! -type f -print \
+		> "$runtime/cache-invalid-entries.txt"
+	if [ -s "$runtime/source-invalid-entries.txt" ] \
+			|| [ -s "$runtime/cache-invalid-entries.txt" ]; then
+		printf '%s\n' 'Bundle/cache contains a non-regular top-level entry' >&2
+		return 1
+	fi
+	find "$bundle" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' \
+		> "$runtime/source-inventory.unsorted.txt"
+	find "$expected_cache" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' \
+		> "$runtime/cache-inventory.unsorted.txt"
+	LC_ALL=C sort "$runtime/source-inventory.unsorted.txt" > "$runtime/source-inventory.txt"
+	LC_ALL=C sort "$runtime/cache-inventory.unsorted.txt" > "$runtime/cache-inventory.txt"
 	if ! cmp -s "$runtime/source-inventory.txt" "$runtime/cache-inventory.txt"; then
 		printf '%s\n' 'Installed cache inventory differs from the staged bundle' >&2
 		return 1
 	fi
 	while IFS= read -r filename; do
-		source_hash=$(sha256sum "$bundle/$filename" | awk '{ print $1 }')
-		cache_hash=$(sha256sum "$expected_cache/$filename" | awk '{ print $1 }')
+		source_hash_line=$(sha256sum "$bundle/$filename")
+		cache_hash_line=$(sha256sum "$expected_cache/$filename")
+		source_hash=${source_hash_line%% *}
+		cache_hash=${cache_hash_line%% *}
 		if [ "$source_hash" != "$cache_hash" ]; then
 			printf 'Installed cache hash differs for %s\n' "$filename" >&2
 			return 1
@@ -250,12 +281,17 @@ esac
 for command_name in awk cat cmp cp curl find grep ip java od sed sha256sum sort stat tr unshare; do
 	require_command "$command_name"
 done
-# The command substitutions are intentionally evaluated by the isolated shell.
+# The isolated shell expands its own temporary-path variables.
 # shellcheck disable=SC2016
 if ! unshare -Urn sh -c '
 	ip link set lo up || exit 1
-	[ "$(ip -o link show | grep -Evc "^[0-9]+: lo(:|@)")" -eq 0 ] || exit 1
-	! ip route show table all | grep -Eq "^default "
+	links=$(mktemp) || exit 1
+	routes=$(mktemp) || { rm -f "$links"; exit 1; }
+	trap '\''rm -f "$links" "$routes"'\'' 0 HUP INT TERM
+	ip -o link show > "$links" || exit 1
+	ip route show table all > "$routes" || exit 1
+	[ "$(grep -Evc "^[0-9]+: lo(:|@)" "$links")" -eq 0 ] || exit 1
+	! grep -Eq "^default " "$routes"
 '; then
 	printf '%s\n' 'Rootless loopback-only network namespace preflight failed' >&2
 	exit 1
@@ -320,7 +356,8 @@ for expected_property in \
 		exit 1
 	fi
 done
-manifest_sha256=$(sha256sum "$manifest" | awk '{ print $1 }')
+manifest_hash_line=$(sha256sum "$manifest")
+manifest_sha256=${manifest_hash_line%% *}
 if [ "$manifest_sha256" != "$fixture_manifest_sha256" ]; then
 	printf '%s\n' 'Staged bundle manifest does not match fixture provenance' >&2
 	exit 1
@@ -517,8 +554,10 @@ tree_state=clean
 if [ -n "$(cd "$repository" && git status --porcelain)" ]; then
 	tree_state=dirty
 fi
-jar_sha256=$(sha256sum "$jar" | awk '{ print $1 }')
-test_chain_sha256=$(sha256sum "$test_chain" | awk '{ print $1 }')
+jar_hash_line=$(sha256sum "$jar")
+jar_sha256=${jar_hash_line%% *}
+test_chain_hash_line=$(sha256sum "$test_chain")
+test_chain_sha256=${test_chain_hash_line%% *}
 timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 host=$(uname -srm)
 temporary_receipt=$work_directory/receipt.md
@@ -538,6 +577,8 @@ temporary_receipt=$work_directory/receipt.md
 	printf '%s `%s`\n' '- Staged bundle:' "$bundle"
 	printf '%s `%s`\n' '- Bundle manifest SHA-256:' "$manifest_sha256"
 	printf '%s `%s`\n' '- Test-chain config SHA-256:' "$test_chain_sha256"
+	printf '%s `%s`\n' '- Normalized command:' 'tools/run-pirate-unified-packaged-loader-acceptance.sh <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md>'
+	printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 7 scripted boundary checks'
 	printf '%s `%s`\n' '- Full log:' "$receipt.log"
 	printf '\n## Results\n\n'
 	printf '| Boundary | Result | Evidence |\n'
