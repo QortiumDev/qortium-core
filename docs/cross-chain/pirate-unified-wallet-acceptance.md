@@ -203,7 +203,46 @@ Pirate-native gRPC service, initializes or synchronizes the Unified JNI wallet,
 or proves production endpoint cutover after Java server selection changes. The
 synthetic loopback native gate above covers the pinned ABI and deterministic
 cutover primitives, while unit tests cover Core's fail-closed composition.
-Production native interoperability remains a separate, explicitly opt-in gate.
+
+## Production native admission acceptance
+
+The first production-native gate is separately and doubly opt-in, read-only,
+wallet-free, and currently accepted only on Linux x86_64. It validates the
+pinned official artifact and staged bundle before loading the Rust/JNI library,
+selects Direct transport for that disposable native process without opening a
+wallet, while quarantining every native storage, cache, and log path below the
+disposable run directory. No wallet storage may be created or written. It then
+makes one bounded pass over every Pirate mainnet endpoint hardcoded in Core.
+Each candidate must first pass the
+existing Java TLS, chain, latest-block, and compact-history checks. The pinned
+native `test_node` path must then report
+`main`, TLS with direct transport, a positive latest height, and agreement with
+the Java-validated height. A pass requires at least two configured endpoints in
+a compatible native-height cluster; temporarily unavailable candidates remain
+visible in the receipt. This endpoint count does not establish infrastructure
+independence.
+
+Run it only from a clean committed Core tree with the retained pinned artifact,
+staged bundle, a new absolute receipt path, and the explicit `--native` marker:
+
+```sh
+tools/run-pirate-production-native-interoperability-acceptance.sh \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
+  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/new/path/pirate-production-native-receipt.md \
+  --native
+```
+
+The same run includes the deterministic endpoint-retention and bounded-fallback
+regressions, but it does not turn a live server into a failure fixture or claim
+that a particular production outage was observed. It never initializes or
+persists a wallet, derives an address, synchronizes
+history, queries a balance or transaction, mutates a wallet endpoint, signs or
+broadcasts data, moves funds, publishes to QDN, deploys Core, enables Unified by
+default, or changes Home. Raw native and Maven evidence is secret-scanned and
+deleted before the allowlisted receipt is published atomically. Production
+wallet initialization, synchronization, and cutover remain separate future
+gates.
 
 ## Fresh-install historical restore acceptance
 

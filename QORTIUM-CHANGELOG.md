@@ -34,6 +34,27 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - test(arrr): prove production native admission
+
+Adds a double-opt-in, wallet-free Linux x86_64 gate for the pinned Pirate
+Unified Rust/JNI library against every mainnet lightwallet endpoint configured
+in Core. The runner validates the retained official artifact and staged bundle,
+selects Direct transport only for the disposable native process without
+opening a wallet, quarantines every native storage, cache, and log path below
+the disposable run directory, proves no wallet storage was created or written,
+and makes one bounded configured-server pass. At least two candidates must
+pass both the
+existing Java TLS/chain/tip/history admission and native
+`test_node` chain, TLS, direct-transport, and height agreement in one compatible
+cluster. Temporarily unavailable endpoints remain visible rather than being
+treated as healthy, while the same run includes the deterministic transient
+retention and bounded wrong-chain fallback regressions. Raw native and Maven
+evidence is secret-scanned and deleted before an allowlisted receipt is
+published atomically. The gate does not initialize, persist, synchronize, or
+mutate a wallet; derive an address; query balances or transactions; sign,
+broadcast, or move funds; prove independent infrastructure; publish to QDN;
+deploy; enable Unified by default; or change Home.
+
 ### 2026-08-25 - fix(arrr): retain transient endpoint selection
 
 Prevents one transient native reconciliation failure from silently discarding
