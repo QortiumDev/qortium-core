@@ -1,5 +1,6 @@
 package org.qortium.crosschain;
 
+import cash.z.wallet.sdk.rpc.Service.BlockID;
 import cash.z.wallet.sdk.rpc.Service.LightdInfo;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -115,6 +116,46 @@ public class ZcashFamilyLightClientTrustTests {
 		assertFailedProbeClosed(new IllegalStateException("probe failed"));
 	}
 
+	@Test
+	public void testProbeRejectsUnavailableOrDivergentLatestBlock() throws Exception {
+		LightdInfo info = LightdInfo.newBuilder().setChainName("main").setBlockHeight(2_100_000).build();
+
+		FakeManagedChannel unavailableChannel = new FakeManagedChannel();
+		ProbeLightClient unavailable = new ProbeLightClient(unavailableChannel, info, "main", 1,
+				new IllegalStateException("cache unavailable"));
+		Optional<ChainableServerConnection> unavailableConnection =
+				unavailable.setCurrentServer(server("unavailable.example"), "test");
+		assertTrue(unavailableConnection.isPresent());
+		assertFalse(unavailableConnection.get().isSuccess());
+		assertTrue(unavailableChannel.isTerminated());
+		assertFalse(unavailable.getUselessServers().contains(server("unavailable.example")));
+
+		FakeManagedChannel divergentChannel = new FakeManagedChannel();
+		ProbeLightClient divergent = new ProbeLightClient(divergentChannel, info, "main", 1, 2_300_000L);
+		Optional<ChainableServerConnection> divergentConnection =
+				divergent.setCurrentServer(server("divergent.example"), "test");
+		assertTrue(divergentConnection.isPresent());
+		assertFalse(divergentConnection.get().isSuccess());
+		assertTrue(divergentChannel.isTerminated());
+		assertFalse(divergent.getUselessServers().contains(server("divergent.example")));
+	}
+
+	@Test
+	public void testClosingClientClosesActiveChannel() throws Exception {
+		FakeManagedChannel channel = new FakeManagedChannel();
+		LightdInfo info = LightdInfo.newBuilder().setChainName("regtest").setBlockHeight(1).build();
+		ProbeLightClient client = new ProbeLightClient(channel, info, "regtest", 1);
+
+		Optional<ChainableServerConnection> connection = client.setCurrentServer(server("close.example"), "test");
+		assertTrue(connection.isPresent());
+		assertTrue(connection.get().isSuccess());
+		assertFalse(channel.isShutdown());
+
+		client.close();
+		assertTrue(channel.isTerminated());
+		assertNull(client.getCurrentServer());
+	}
+
 	private static void assertFailedProbeClosed(Object outcome) throws Exception {
 		FakeManagedChannel channel = new FakeManagedChannel();
 		ProbeLightClient client = new ProbeLightClient(channel, outcome, "main", 1);
@@ -134,12 +175,20 @@ public class ZcashFamilyLightClientTrustTests {
 	private static final class ProbeLightClient extends ZcashFamilyLightClient {
 		private final ManagedChannel channel;
 		private final Object outcome;
+		private final Object latestOutcome;
 
 		private ProbeLightClient(ManagedChannel channel, Object outcome, String expectedChainName, int birthday) {
+			this(channel, outcome, expectedChainName, birthday,
+					outcome instanceof LightdInfo ? ((LightdInfo) outcome).getBlockHeight() : null);
+		}
+
+		private ProbeLightClient(ManagedChannel channel, Object outcome, String expectedChainName, int birthday,
+				Object latestOutcome) {
 			super(new ZcashFamilyWalletConfig("Test", "TEST", "Test", "signature", "encryption", "zs",
 					() -> birthday, () -> null), "test", expectedChainName, Collections.emptyList(), ports(), () -> birthday);
 			this.channel = channel;
 			this.outcome = outcome;
+			this.latestOutcome = latestOutcome;
 		}
 
 		@Override
@@ -152,6 +201,15 @@ public class ZcashFamilyLightClientTrustTests {
 			if (this.outcome instanceof RuntimeException runtimeException)
 				throw runtimeException;
 			return (LightdInfo) this.outcome;
+		}
+
+		@Override
+		protected BlockID fetchLatestBlock(ManagedChannel probeChannel) {
+			if (this.latestOutcome instanceof RuntimeException runtimeException)
+				throw runtimeException;
+			if (this.latestOutcome == null)
+				return null;
+			return BlockID.newBuilder().setHeight((Long) this.latestOutcome).build();
 		}
 
 		private static Map<ChainableServer.ConnectionType, Integer> ports() {

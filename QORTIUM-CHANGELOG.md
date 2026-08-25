@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - fix(arrr): validate production lightwallet readiness
+
+Strengthens Pirate lightwallet server admission so a server must do more than
+advertise a positive height. Before Core selects it, the endpoint must also
+answer `GetLatestBlock` with a positive height within a short deadline, and
+that height must agree with `GetLightdInfo`. This rejects the observed
+partially initialized server whose latest-block cache was still unavailable.
+These readiness failures remain retryable rather than permanently excluding
+an endpoint for the lifetime of the Core process. An explicitly opt-in,
+read-only production gate
+checks every configured endpoint and requires at least two distinct configured
+endpoints to expose compatible mainnet tips and two nonempty, hash-linked
+compact blocks. It does not claim that those endpoints use independent
+infrastructure, initialize a wallet, or show that an already initialized Unified
+native wallet follows Java server changes; native endpoint cutover remains a
+separate fail-closed tranche.
+
 ### 2026-08-24 - test(arrr): prove fresh-install historical recovery
 
 Adds an unfunded, opt-in recovery gate for the second-computer case. A

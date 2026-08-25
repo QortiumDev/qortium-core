@@ -143,6 +143,40 @@ tools/run-pirate-unified-acceptance.sh \
   /absolute/new/path/pirate-unified-receipt.md
 ```
 
+## Production lightwallet admission acceptance
+
+The production-network gate is separately opt-in and read-only. It uses Core's
+Java Pirate lightwallet client without initializing a wallet, deriving an
+address, querying balances or transactions, or broadcasting data. For every
+configured mainnet endpoint it checks TLS and chain-name admission, compares
+the `GetLightdInfo` and `GetLatestBlock` heights, and requests the final two
+compact blocks to prove both hashes are nonempty and the reported history is
+hash-linked. A pass requires at
+least two distinct configured READY endpoints within the configured height
+tolerance; this does not establish independent infrastructure. Fully validated
+endpoint heights are clustered only after their compact-range checks pass;
+temporarily unavailable candidates are recorded rather than silently treated
+as healthy.
+
+Run it only from a clean committed Core tree and provide a new absolute receipt
+path:
+
+```sh
+tools/run-pirate-production-lightwallet-acceptance.sh \
+  /absolute/new/path/pirate-production-lightwallet-receipt.md
+```
+
+Runtime admission closes the observed shallow-probe case where a server
+advertises a height through `GetLightdInfo` but cannot answer `GetLatestBlock`.
+That bounded tip check does not itself request compact-block contents; the
+separate production acceptance run adds the two-block content and linkage
+check described above. Temporary latest-block failures or height disagreement
+reject the current attempt but do not permanently exclude that endpoint for
+the lifetime of the Core process. Neither check probes the separate
+Pirate-native gRPC service, initializes or synchronizes the Unified JNI wallet,
+or proves endpoint cutover after Java server selection changes. Those native
+interoperability and failover claims require a separate bounded tranche.
+
 ## Fresh-install historical restore acceptance
 
 The same loopback fixture has a separate, explicitly selected historical mode.
