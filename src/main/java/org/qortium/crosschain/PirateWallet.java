@@ -11,18 +11,27 @@ import org.qortium.settings.Settings;
 import org.qortium.utils.Base58;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Random;
+import java.util.Set;
 
 public class PirateWallet extends ZcashFamilyWallet {
 	private static final Logger LOGGER = LogManager.getLogger(PirateWallet.class);
+	private static final String UNIFIED_NATIVE_CHAIN = "main";
 
 	private final boolean unifiedWallet;
 	private final PirateUnifiedWalletStorage unifiedStorage;
+	private ZcashFamilyLightClient.ValidatedServerSelection appliedServerSelection;
+	private volatile boolean freshSynchronizationRequired;
+	private long synchronizationAcceptedGeneration = -1L;
+	private String synchronizationAcceptedWalletId;
 
 	public PirateWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
 		this(PirateChain.WALLET_CONFIG, entropyBytes, isNullSeedWallet, true);
@@ -55,24 +64,31 @@ public class PirateWallet extends ZcashFamilyWallet {
 				return false;
 
 			BitcoinyBlockchainProvider provider = blockchain.getBlockchainProvider();
-			ChainableServer server = provider.getCurrentServer();
-			if (server == null)
+			if (!(provider instanceof ZcashFamilyLightClient lightClient))
 				return false;
+			return lightClient.withValidatedServerSelectionLease(() -> {
+				if (!this.selectPersistedServer(lightClient))
+					return false;
+				ChainableServer server = provider.getCurrentServer();
+				ZcashFamilyLightClient.ValidatedServerSelection selection = lightClient.getValidatedServerSelection();
+				if (server == null || selection == null || !server.equals(selection.getServer()))
+					return false;
 
-			String scheme = server.getConnectionType() == ChainableServer.ConnectionType.SSL ? "https" : "http";
-			String serverUri = String.format("%s://%s:%d/", scheme, server.getHostName(), server.getPort());
-			Integer currentHeight = null;
-			if (this.isNullSeedWallet()) {
-				try {
-					currentHeight = provider.getCurrentHeight();
-				} catch (ForeignBlockchainException e) {
-					// A transient wallet may fall back to the conservative birthday.
+				String serverUri = selection.getEndpointUri();
+				Integer currentHeight = null;
+				if (this.isNullSeedWallet()) {
+					try {
+						currentHeight = provider.getCurrentHeight();
+					} catch (ForeignBlockchainException e) {
+						// A transient wallet may fall back to the conservative birthday.
+					}
 				}
-			}
-			int birthday = chooseUnifiedBirthday(this.config.getDefaultBirthday(), this.isNullSeedWallet(), currentHeight);
+				int birthday = chooseUnifiedBirthday(
+						this.config.getDefaultBirthday(), this.isNullSeedWallet(), currentHeight);
 
-			return this.initializeUnified(nativeAdapter, serverUri, birthday);
-		} catch (UnsatisfiedLinkError e) {
+				return this.initializeUnified(nativeAdapter, serverUri, birthday);
+			});
+		} catch (Exception | UnsatisfiedLinkError e) {
 			return false;
 		}
 	}
@@ -250,6 +266,321 @@ public class PirateWallet extends ZcashFamilyWallet {
 	}
 
 	@Override
+	public boolean prepareForSynchronization(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.unifiedWallet)
+			return true;
+
+		Bitcoiny blockchain = this.config.getBlockchain();
+		if (blockchain == null || !(blockchain.getBlockchainProvider() instanceof ZcashFamilyLightClient lightClient))
+			return false;
+
+		int remainingCandidates = Math.max(1, lightClient.getServers().size() + 1);
+		Set<ChainableServer> rejectedServers = new HashSet<>();
+		while (remainingCandidates-- > 0) {
+			ZcashFamilyLightClient.ValidatedServerSelection selection = lightClient.getValidatedServerSelection();
+			if (selection == null) {
+				try {
+					selection = lightClient.selectAnyValidatedServer();
+				} catch (ForeignBlockchainException e) {
+					return false;
+				}
+				if (selection == null)
+					return false;
+			}
+			if (this.applyValidatedServerSelection(nativeAdapter, selection))
+				return true;
+			rejectedServers.add(selection.getServer());
+
+			try {
+				if (lightClient.selectAnotherAfterNativeFailure(selection, rejectedServers,
+						this.getClass().getSimpleName(), "Native Pirate-service validation failed") == null)
+					return false;
+			} catch (ForeignBlockchainException e) {
+				return false;
+			}
+		}
+
+		return false;
+	}
+
+	@Override
+	public <T> T withValidatedServerSelectionLease(ZcashFamilyNativeAdapter nativeAdapter,
+			ZcashFamilyNativeCoordinator.NativeOperation<T> operation) throws Exception {
+		if (!this.unifiedWallet)
+			return super.withValidatedServerSelectionLease(nativeAdapter, operation);
+
+		Bitcoiny blockchain = this.config.getBlockchain();
+		if (blockchain == null || !(blockchain.getBlockchainProvider() instanceof ZcashFamilyLightClient lightClient))
+			throw new ForeignBlockchainException("Pirate Chain lightwalletd endpoint is unavailable");
+
+		return lightClient.withValidatedServerSelectionLease(() -> operation.execute(nativeAdapter));
+	}
+
+	boolean applyValidatedServerSelection(ZcashFamilyNativeAdapter nativeAdapter,
+			ZcashFamilyLightClient.ValidatedServerSelection selection) {
+		if (!this.unifiedWallet || selection == null)
+			return !this.unifiedWallet;
+
+		if (this.appliedServerSelection != null
+				&& this.appliedServerSelection.getGeneration() == selection.getGeneration()
+				&& Objects.equals(this.appliedServerSelection.getEndpointUri(), selection.getEndpointUri())) {
+			this.observeFreshSynchronization(nativeAdapter);
+			return true;
+		}
+
+		try {
+			String walletId = this.getActiveWalletId(nativeAdapter);
+			if (walletId == null || !this.testNativeServer(nativeAdapter, selection))
+				return false;
+			if (!this.isSelectionCurrent(selection) || !this.cancelNativeSync(nativeAdapter, walletId)
+					|| !this.isSelectionCurrent(selection))
+				return false;
+
+			JSONObject setRequest = new JSONObject().put("method", "set_lightd_endpoint")
+					.put("wallet_id", walletId)
+					.put("url", selection.getEndpointUri())
+					.put("tls_pin_opt", JSONObject.NULL);
+			JSONObject setResponse = new JSONObject(nativeAdapter.invokeJson(setRequest.toString(), false));
+			if (!isAcknowledged(setResponse))
+				return false;
+
+			JSONObject getRequest = new JSONObject().put("method", "get_lightd_endpoint")
+					.put("wallet_id", walletId);
+			JSONObject getResponse = new JSONObject(nativeAdapter.invokeJson(getRequest.toString(), false));
+			String appliedUri = getResponse.optBoolean("ok", false) && !getResponse.isNull("result")
+					? getResponse.optString("result", null) : null;
+			if (!Objects.equals(normalizeServerUri(selection.getEndpointUri()), normalizeServerUri(appliedUri)))
+				return false;
+
+			JSONObject consensusRequest = new JSONObject().put("method", "validate_consensus_branch")
+					.put("wallet_id", walletId);
+			JSONObject consensusResponse = new JSONObject(
+					nativeAdapter.invokeJson(consensusRequest.toString(), false));
+			JSONObject consensusResult = consensusResponse.optBoolean("ok", false)
+					? consensusResponse.optJSONObject("result") : null;
+			if (consensusResult == null || !consensusResult.optBoolean("is_valid", false)
+					|| !Objects.equals(walletId, this.getActiveWalletId(nativeAdapter))
+					|| !this.isSelectionCurrent(selection))
+				return false;
+
+			if (!this.persistSelectedServer(selection.getEndpointUri()))
+				return false;
+			this.appliedServerSelection = selection;
+			this.freshSynchronizationRequired = true;
+			this.synchronizationAcceptedGeneration = -1L;
+			this.synchronizationAcceptedWalletId = null;
+			return true;
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			return false;
+		}
+	}
+
+	private boolean testNativeServer(ZcashFamilyNativeAdapter nativeAdapter,
+			ZcashFamilyLightClient.ValidatedServerSelection selection) {
+		return this.probeNativeServer(nativeAdapter, selection, true) != null;
+	}
+
+	private Long probeNativeServer(ZcashFamilyNativeAdapter nativeAdapter,
+			ZcashFamilyLightClient.ValidatedServerSelection selection, boolean requireJavaHeightAgreement) {
+		JSONObject request = new JSONObject().put("method", "test_node")
+				.put("url", selection.getEndpointUri())
+				.put("tls_pin", JSONObject.NULL);
+		JSONObject response = new JSONObject(nativeAdapter.invokeJson(request.toString(), false));
+		if (!response.optBoolean("ok", false) || response.isNull("result"))
+			return null;
+		JSONObject result = response.optJSONObject("result");
+		if (result == null || !result.optBoolean("success", false) || result.isNull("latest_block_height"))
+			return null;
+
+		long nativeHeight = result.optLong("latest_block_height", -1L);
+		if (nativeHeight <= 0 || (requireJavaHeightAgreement && Math.abs(nativeHeight - selection.getHeight())
+				> ZcashFamilyLightClient.SERVER_HEIGHT_AGREEMENT_TOLERANCE))
+			return null;
+		if (!ZcashFamilyLightClient.matchesExpectedChainName(UNIFIED_NATIVE_CHAIN,
+				result.optString("chain_name", null)))
+			return null;
+
+		boolean expectedTls = selection.getEndpointUri().startsWith("https://");
+		return result.has("tls_enabled") && result.optBoolean("tls_enabled") == expectedTls
+				? nativeHeight : null;
+	}
+
+	private boolean isSelectionCurrent(ZcashFamilyLightClient.ValidatedServerSelection selection) {
+		Bitcoiny blockchain = this.config.getBlockchain();
+		if (blockchain == null)
+			return true;
+		if (!(blockchain.getBlockchainProvider() instanceof ZcashFamilyLightClient lightClient))
+			return false;
+		ZcashFamilyLightClient.ValidatedServerSelection current = lightClient.getValidatedServerSelection();
+		return current != null && current.getGeneration() == selection.getGeneration()
+				&& Objects.equals(current.getEndpointUri(), selection.getEndpointUri());
+	}
+
+	private boolean cancelNativeSync(ZcashFamilyNativeAdapter nativeAdapter, String walletId) {
+		JSONObject cancelRequest = new JSONObject().put("method", "cancel_sync").put("wallet_id", walletId);
+		JSONObject cancelResponse = new JSONObject(nativeAdapter.invokeJson(cancelRequest.toString(), false));
+		return isAcknowledged(cancelResponse);
+	}
+
+	private boolean selectPersistedServer(ZcashFamilyLightClient lightClient) {
+		if (this.unifiedStorage == null || this.unifiedStorage.isTransientWallet())
+			return true;
+
+		String selectedServerUri = this.unifiedStorage.read().getSelectedServerUri();
+		if (selectedServerUri == null)
+			return true;
+
+		try {
+			URI uri = new URI(selectedServerUri);
+			String scheme = uri.getScheme();
+			String host = uri.getHost();
+			int port = uri.getPort();
+			String path = uri.getPath();
+			if (host == null || port <= 0 || uri.getUserInfo() != null || uri.getQuery() != null
+					|| uri.getFragment() != null || !(path == null || path.isEmpty() || "/".equals(path))
+					|| !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)))
+				return false;
+
+			ChainableServer.ConnectionType connectionType = "https".equalsIgnoreCase(scheme)
+					? ChainableServer.ConnectionType.SSL : ChainableServer.ConnectionType.TCP;
+			ChainableServer storedServer = lightClient.getServer(host, connectionType, port);
+			ChainableServer selectedServer = lightClient.getServers().stream()
+					.filter(storedServer::equals)
+					.findFirst()
+					.orElse(null);
+			if (selectedServer == null)
+				return true;
+			if (!selectedServer.equals(lightClient.getCurrentServer()))
+				lightClient.setCurrentServer(selectedServer, this.getClass().getSimpleName());
+			return lightClient.getValidatedServerSelection() != null;
+		} catch (ForeignBlockchainException | URISyntaxException | RuntimeException e) {
+			return false;
+		}
+	}
+
+	private boolean persistSelectedServer(String serverUri) {
+		if (this.unifiedStorage == null || this.unifiedStorage.isTransientWallet())
+			return true;
+		try {
+			PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+			if (snapshot.isCorrupt())
+				return false;
+			this.unifiedStorage.write(snapshot.getState(), snapshot.isSyncValidated(), snapshot.getIdentityHash(),
+					normalizeServerUri(serverUri));
+			return true;
+		} catch (IOException | RuntimeException e) {
+			return false;
+		}
+	}
+
+	private static String getResultString(JSONObject response) {
+		return response.optBoolean("ok", false) && !response.isNull("result")
+				? response.optString("result", null) : null;
+	}
+
+	private String getActiveWalletId(ZcashFamilyNativeAdapter nativeAdapter) {
+		JSONObject response = new JSONObject(nativeAdapter.invokeJson("{\"method\":\"get_active_wallet\"}", false));
+		String walletId = getResultString(response);
+		return walletId == null || walletId.isBlank() ? null : walletId;
+	}
+
+	private static boolean isAcknowledged(JSONObject response) {
+		JSONObject result = response.optJSONObject("result");
+		return response.optBoolean("ok", false) && result != null && result.optBoolean("acknowledged", false);
+	}
+
+	@Override
+	public void recordSynchronizationAccepted(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.unifiedWallet || this.appliedServerSelection == null)
+			return;
+		try {
+			String walletId = this.getActiveWalletId(nativeAdapter);
+			if (walletId == null)
+				return;
+			this.synchronizationAcceptedGeneration = this.appliedServerSelection.getGeneration();
+			this.synchronizationAcceptedWalletId = walletId;
+			this.observeFreshSynchronization(nativeAdapter);
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			// Keep the fresh-sync requirement until an accepted sync can be bound to this selection.
+		}
+	}
+
+	private void observeFreshSynchronization(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.freshSynchronizationRequired || this.appliedServerSelection == null)
+			return;
+		if (this.synchronizationAcceptedGeneration != this.appliedServerSelection.getGeneration()
+				|| this.synchronizationAcceptedWalletId == null)
+			return;
+		try {
+			String walletId = this.getActiveWalletId(nativeAdapter);
+			if (!Objects.equals(this.synchronizationAcceptedWalletId, walletId))
+				return;
+			JSONObject request = new JSONObject().put("method", "sync_status").put("wallet_id", walletId);
+			JSONObject response = new JSONObject(nativeAdapter.invokeJson(request.toString(), false));
+			JSONObject result = response.optBoolean("ok", false) ? response.optJSONObject("result") : null;
+			long targetHeight = result == null ? 0L : result.optLong("target_height", 0L);
+			if (targetHeight > 0 && Math.abs(targetHeight - this.appliedServerSelection.getHeight())
+					<= ZcashFamilyLightClient.SERVER_HEIGHT_AGREEMENT_TOLERANCE)
+				this.freshSynchronizationRequired = false;
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			// Keep the fresh-sync requirement until the wallet-bound target can be observed.
+		}
+	}
+
+	@Override
+	public boolean isSynchronized() {
+		if (!this.unifiedWallet)
+			return super.isSynchronized();
+		return !this.freshSynchronizationRequired && this.appliedServerSelection != null
+				&& this.isSelectionCurrent(this.appliedServerSelection) && super.isSynchronized();
+	}
+
+	boolean requiresFreshSynchronization() {
+		return this.freshSynchronizationRequired;
+	}
+
+	@Override
+	protected Integer getChainTip(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.unifiedWallet)
+			return super.getChainTip(nativeAdapter);
+
+		try {
+			String walletId = this.getActiveWalletId(nativeAdapter);
+			if (walletId != null) {
+				JSONObject request = new JSONObject().put("method", "sync_status").put("wallet_id", walletId);
+				JSONObject response = new JSONObject(nativeAdapter.invokeJson(request.toString(), false));
+				JSONObject result = response.optBoolean("ok", false) ? response.optJSONObject("result") : null;
+				long targetHeight = result == null ? 0L : result.optLong("target_height", 0L);
+				if (targetHeight > 0 && targetHeight <= Integer.MAX_VALUE)
+					return (int) targetHeight;
+			}
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			// Fall through to an exact typed probe instead of the JNI adapter's stale URI cache.
+		}
+
+		if (this.appliedServerSelection == null)
+			return null;
+		Long nativeHeight = this.probeNativeServer(nativeAdapter, this.appliedServerSelection, false);
+		return nativeHeight != null && nativeHeight <= Integer.MAX_VALUE ? nativeHeight.intValue() : null;
+	}
+
+	static String normalizeServerUri(String serverUri) {
+		if (serverUri == null || serverUri.isBlank())
+			return null;
+		try {
+			URI uri = new URI(serverUri.trim());
+			String scheme = uri.getScheme();
+			String host = uri.getHost();
+			int port = uri.getPort();
+			if (scheme == null || host == null || port <= 0)
+				return null;
+			return new URI(scheme.toLowerCase(), null, host.toLowerCase(), port, null, null, null).toString();
+		} catch (URISyntaxException e) {
+			return null;
+		}
+	}
+
+	@Override
 	public boolean prepareForSwitch(ZcashFamilyNativeAdapter nativeAdapter) {
 		if (!this.unifiedWallet)
 			return true;
@@ -258,25 +589,13 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 	private boolean stopNativeSync(ZcashFamilyNativeAdapter nativeAdapter) {
 		try {
-			if (!this.isNativeSyncInProgress(nativeAdapter))
-				return true;
-
-			JSONObject activeWallet = new JSONObject(nativeAdapter.invokeJson("{\"method\":\"get_active_wallet\"}", false));
-			if (!activeWallet.optBoolean("ok", false) || activeWallet.isNull("result"))
-				return false;
-
-			String walletId = activeWallet.optString("result", null);
-			if (walletId == null || walletId.isBlank())
-				return false;
-
-			JSONObject cancelRequest = new JSONObject().put("method", "cancel_sync").put("wallet_id", walletId);
-			JSONObject cancelResponse = new JSONObject(nativeAdapter.invokeJson(cancelRequest.toString(), false));
-			if (!cancelResponse.optBoolean("ok", false))
+			String walletId = this.getActiveWalletId(nativeAdapter);
+			if (walletId == null)
 				return false;
 
 			// The Unified cancel call owns the wallet lifecycle lock and acknowledges only
 			// after its native task has stopped. Its cached progress can remain incomplete.
-			return true;
+			return this.cancelNativeSync(nativeAdapter, walletId);
 		} catch (UnsatisfiedLinkError | RuntimeException e) {
 			return false;
 		}

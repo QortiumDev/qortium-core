@@ -221,6 +221,21 @@ public class ZcashFamilyWallet {
 	public void recordValidatedSync(ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
 	}
 
+	/** Native-family hook used immediately before readiness checks or a new synchronization attempt. */
+	public boolean prepareForSynchronization(ZcashFamilyNativeAdapter nativeAdapter) {
+		return true;
+	}
+
+	/** Holds any wallet-specific endpoint-selection lease across preparation and the matching native operation. */
+	public <T> T withValidatedServerSelectionLease(ZcashFamilyNativeAdapter nativeAdapter,
+			ZcashFamilyNativeCoordinator.NativeOperation<T> operation) throws Exception {
+		return operation.execute(nativeAdapter);
+	}
+
+	/** Native-family hook used after the native layer accepts a new synchronization request. */
+	public void recordSynchronizationAccepted(ZcashFamilyNativeAdapter nativeAdapter) {
+	}
+
 	public boolean usesPersistentNativeStorage() {
 		return false;
 	}

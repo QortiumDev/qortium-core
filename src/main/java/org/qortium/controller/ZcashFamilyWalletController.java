@@ -186,49 +186,11 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 				boolean syncAttempted = NATIVE_COORDINATOR.execute("synchronize " + this.config.getCurrencyCode() + " wallet",
 						ZcashFamilyNativeCoordinator.SYNC_TIMEOUT, nativeAdapter -> {
-					if (this.currentWallet == null || this.currentWallet.isNullSeedWallet())
+					W wallet = this.currentWallet;
+					if (wallet == null || wallet.isNullSeedWallet())
 						return false;
-
-					if (this.currentWallet.usesPersistentNativeStorage()) {
-						if (this.currentWallet.isSynchronized()) {
-							this.currentWallet.setReady(true);
-							this.currentWallet.recordValidatedSync(nativeAdapter);
-							this.cacheCurrentWalletStatus(WalletSyncStatus.ready("Synchronized"));
-							return true;
-						}
-						if (this.currentWallet.isNativeSyncInProgress(nativeAdapter)) {
-							this.cacheCurrentWalletStatus(
-									WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
-							return true;
-						}
-					}
-
-					this.cacheCurrentWalletStatus(
-							WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
-					LOGGER.debug("Syncing {} wallet...", this.config.getDisplayName());
-					String response = nativeAdapter.execute("sync", "");
-					LOGGER.debug("{} wallet sync returned a response", this.config.getDisplayName());
-
-					boolean syncAccepted = false;
-					boolean synchronizedAtTip = false;
-					try {
-						JSONObject json = new JSONObject(response);
-						if (json.has("result")) {
-							String result = json.getString("result");
-							if (Objects.equals(result, "success")) {
-								syncAccepted = true;
-								this.currentWallet.setReady(true);
-								synchronizedAtTip = this.currentWallet.isSynchronized();
-								if (synchronizedAtTip)
-									this.currentWallet.recordValidatedSync(nativeAdapter);
-							}
-						}
-					} catch (JSONException e) {
-						LOGGER.info("Unable to interpret JSON", e);
-					}
-					this.cacheCurrentWalletStatus(statusAfterSyncAttempt(this.currentWallet.isReady(),
-							this.currentWallet.usesPersistentNativeStorage(), syncAccepted, synchronizedAtTip));
-					return true;
+					return wallet.withValidatedServerSelectionLease(nativeAdapter,
+							leasedAdapter -> this.synchronizeCurrentWallet(wallet, leasedAdapter));
 				});
 				if (!syncAttempted)
 					continue;
@@ -265,6 +227,55 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				this.lifecycleState = LifecycleState.TERMINATED;
 			}
 		}
+	}
+
+	private boolean synchronizeCurrentWallet(W wallet, ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
+		if (!wallet.prepareForSynchronization(nativeAdapter)) {
+			this.cacheCurrentWalletStatus(WalletSyncStatus.loading(
+					"Waiting for a validated " + this.config.getDisplayName() + " lightwalletd endpoint..."));
+			return true;
+		}
+
+		if (wallet.usesPersistentNativeStorage()) {
+			if (wallet.isSynchronized()) {
+				wallet.setReady(true);
+				wallet.recordValidatedSync(nativeAdapter);
+				this.cacheCurrentWalletStatus(WalletSyncStatus.ready("Synchronized"));
+				return true;
+			}
+			if (wallet.isNativeSyncInProgress(nativeAdapter)) {
+				this.cacheCurrentWalletStatus(
+						WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
+				return true;
+			}
+		}
+
+		this.cacheCurrentWalletStatus(WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
+		LOGGER.debug("Syncing {} wallet...", this.config.getDisplayName());
+		String response = nativeAdapter.execute("sync", "");
+		LOGGER.debug("{} wallet sync returned a response", this.config.getDisplayName());
+
+		boolean syncAccepted = false;
+		boolean synchronizedAtTip = false;
+		try {
+			JSONObject json = new JSONObject(response);
+			if (json.has("result")) {
+				String result = json.getString("result");
+				if (Objects.equals(result, "success")) {
+					syncAccepted = true;
+					wallet.recordSynchronizationAccepted(nativeAdapter);
+					wallet.setReady(true);
+					synchronizedAtTip = wallet.isSynchronized();
+					if (synchronizedAtTip)
+						wallet.recordValidatedSync(nativeAdapter);
+				}
+			}
+		} catch (JSONException e) {
+			LOGGER.info("Unable to interpret JSON", e);
+		}
+		this.cacheCurrentWalletStatus(statusAfterSyncAttempt(wallet.isReady(),
+				wallet.usesPersistentNativeStorage(), syncAccepted, synchronizedAtTip));
+		return true;
 	}
 
 	public synchronized void shutdown() {
@@ -601,11 +612,17 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			if (!this.initWithEntropy58(entropy58, isNullSeedWallet, nativeAdapter))
 				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet isn't initialized yet");
 			ensureInitialized(nativeAdapter);
-			if (requireSynchronized)
-				ensureSynchronized(nativeAdapter);
-			if (requireNotNullSeed)
-				ensureNotNullSeedInternal();
-			return operation.execute(this.currentWallet, nativeAdapter);
+			W wallet = this.currentWallet;
+			return wallet.withValidatedServerSelectionLease(nativeAdapter, leasedAdapter -> {
+				if (!wallet.prepareForSynchronization(leasedAdapter))
+					throw new ForeignBlockchainException(
+							this.config.getDisplayName() + " wallet endpoint is not validated yet");
+				if (requireSynchronized)
+					ensureSynchronized(leasedAdapter);
+				if (requireNotNullSeed)
+					ensureNotNullSeedInternal();
+				return operation.execute(wallet, leasedAdapter);
+			});
 		});
 	}
 

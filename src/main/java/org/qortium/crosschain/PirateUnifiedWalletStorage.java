@@ -34,12 +34,15 @@ final class PirateUnifiedWalletStorage {
 		private final State state;
 		private final boolean syncValidated;
 		private final String identityHash;
+		private final String selectedServerUri;
 		private final boolean corrupt;
 
-		private Snapshot(State state, boolean syncValidated, String identityHash, boolean corrupt) {
+		private Snapshot(State state, boolean syncValidated, String identityHash, String selectedServerUri,
+				boolean corrupt) {
 			this.state = state;
 			this.syncValidated = syncValidated;
 			this.identityHash = identityHash;
+			this.selectedServerUri = selectedServerUri;
 			this.corrupt = corrupt;
 		}
 
@@ -53,6 +56,10 @@ final class PirateUnifiedWalletStorage {
 
 		String getIdentityHash() {
 			return this.identityHash;
+		}
+
+		String getSelectedServerUri() {
+			return this.selectedServerUri;
 		}
 
 		boolean isCorrupt() {
@@ -154,11 +161,11 @@ final class PirateUnifiedWalletStorage {
 
 	Snapshot read() {
 		if (this.transientWallet)
-			return new Snapshot(State.LEGACY, false, null, false);
+			return new Snapshot(State.LEGACY, false, null, null, false);
 
 		Path statePath = this.storageDirectory.resolve(STATE_FILENAME);
 		if (!Files.isRegularFile(statePath))
-			return new Snapshot(State.LEGACY, false, null, false);
+			return new Snapshot(State.LEGACY, false, null, null, false);
 
 		try {
 			JSONObject json = new JSONObject(Files.readString(statePath, StandardCharsets.UTF_8));
@@ -169,19 +176,26 @@ final class PirateUnifiedWalletStorage {
 			String identityHash = json.optString("identityHash", null);
 			if (identityHash != null && identityHash.isBlank())
 				identityHash = null;
+			String selectedServerUri = json.optString("selectedServerUri", null);
+			if (selectedServerUri != null && selectedServerUri.isBlank())
+				selectedServerUri = null;
 			boolean syncValidated = json.optBoolean("syncValidated", false);
 			if ((syncValidated && identityHash == null)
 					|| (state == State.UNIFIED_READY && !syncValidated)
 					|| (state == State.LEGACY && syncValidated))
 				throw new JSONException("Invalid wallet migration state");
 
-			return new Snapshot(state, syncValidated, identityHash, false);
+			return new Snapshot(state, syncValidated, identityHash, selectedServerUri, false);
 		} catch (IOException | JSONException | IllegalArgumentException e) {
-			return new Snapshot(State.FAILED_RECOVERABLE, false, null, true);
+			return new Snapshot(State.FAILED_RECOVERABLE, false, null, null, true);
 		}
 	}
 
 	void write(State state, boolean syncValidated, String identityHash) throws IOException {
+		this.write(state, syncValidated, identityHash, this.read().getSelectedServerUri());
+	}
+
+	void write(State state, boolean syncValidated, String identityHash, String selectedServerUri) throws IOException {
 		if (this.transientWallet)
 			return;
 
@@ -199,6 +213,8 @@ final class PirateUnifiedWalletStorage {
 		json.put("legacyCachePresent", this.hasLegacyWallet());
 		if (identityHash != null)
 			json.put("identityHash", identityHash);
+		if (selectedServerUri != null)
+			json.put("selectedServerUri", selectedServerUri);
 
 		Path temporaryPath = Files.createTempFile(this.storageDirectory, ".qortium-wallet-state-", ".tmp");
 		try {

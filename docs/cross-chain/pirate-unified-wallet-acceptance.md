@@ -94,23 +94,38 @@ birthday height, address/nonempty-key export, zero total and verified balances,
 empty transaction listing, same-process persistent reopen, encryption-status
 compatibility, two isolated wallet namespaces, and typed invocation.
 
-The opt-in native test also starts a test-only gRPC lightwalletd bound explicitly
-to IPv4 loopback. It exposes both service names used by this integration:
+The opt-in native test also starts test-only gRPC lightwalletd servers bound explicitly
+to IPv4 loopback. Each exposes both service names used by this integration:
 `cash.z.wallet.sdk.rpc.CompactTxStreamer` for Core's Java client and
 `pirate.wallet.sdk.rpc.CompactTxStreamer` for the pinned native library. The
-fixture reports mainnet Sapling activation at height `152855`, a tip at `152858`,
-and by default streams four ordered, hash-linked empty compact blocks. Acceptance requires
+default fixture reports mainnet Sapling activation at height `152855`, a tip at
+`152858`, and streams four ordered, hash-linked empty compact blocks. Acceptance requires
 the native client to request that complete range, reach the fixture tip, stop
 reporting active synchronization, and make no transaction, `GetTreeState`, or
-other unexpected RPCs. The pinned client makes exactly one optional
-`GetSubtreeRoots` capability probe; the fixture records it separately and must
+other unexpected RPCs. The pinned client can make an optional
+`GetSubtreeRoots` capability probe; each fixture records it separately and must
 return `UNIMPLEMENTED`. The fake also serves only the exact pre-Ironwood
 activation probe at `tip - 30`, with a pre-activation timestamp, so the fixed
 historical fixture does not become calendar-dependent near the scheduled
-upgrade. The initial asynchronous `sync` response is not acceptance.
+upgrade. The initial asynchronous `sync` response is not acceptance. After
+synchronizing the first endpoint, the test probes a Java-compatible endpoint
+whose Pirate service deliberately reports the wrong chain and confirms that it
+receives no sync traffic; the Core fake-adapter contract separately requires
+this result to fail closed. It then probes a valid second endpoint whose tip is
+four blocks newer,
+requires an acknowledged cancellation, typed endpoint mutation, normalized
+readback, and consensus-branch validation, starts a fresh sync, and proves the
+first server's native RPC counters do not advance after the cutover barrier.
+Core holds the Java endpoint selection stable from native preparation through
+the corresponding sync or wallet operation, so an API-requested or automatic
+Java failover cannot race the process-global native context onto an older endpoint.
+Reconfiguring the same encrypted registry within that host process must retain
+the second endpoint, wallet ID, and address. Cold Core restart is not claimed by
+this host-level test.
 
-This default mode proves real native RPC and compact-block cursor behavior
-against a synthetic empty chain. It does not prove canonical chain history,
+This default mode proves real native RPC, compact-block cursor behavior, and
+same-wallet A-to-B endpoint mutation/persistence against synthetic empty chains.
+It does not prove canonical chain history,
 historical wallet restoration, balances or transactions containing funds, or
 production lightwalletd interoperability. Returned seed, key, address, and raw native
 responses are not written to receipts or retained logs. The runner sets a
@@ -172,10 +187,12 @@ That bounded tip check does not itself request compact-block contents; the
 separate production acceptance run adds the two-block content and linkage
 check described above. Temporary latest-block failures or height disagreement
 reject the current attempt but do not permanently exclude that endpoint for
-the lifetime of the Core process. Neither check probes the separate
+the lifetime of the Core process. Neither production check probes the separate
 Pirate-native gRPC service, initializes or synchronizes the Unified JNI wallet,
-or proves endpoint cutover after Java server selection changes. Those native
-interoperability and failover claims require a separate bounded tranche.
+or proves production endpoint cutover after Java server selection changes. The
+synthetic loopback native gate above covers the pinned ABI and deterministic
+cutover primitives, while unit tests cover Core's fail-closed composition.
+Production native interoperability remains a separate, explicitly opt-in gate.
 
 ## Fresh-install historical restore acceptance
 

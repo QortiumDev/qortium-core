@@ -52,7 +52,11 @@ public class PirateUnifiedNativeSmokeTests {
 				PirateUnifiedWalletBundle.validateArtifact(artifact, bundle, libraryFilename);
 		Path library = bundle.resolve(libraryFilename);
 
-		try (PirateUnifiedLoopbackLightwalletd lightwalletd = new PirateUnifiedLoopbackLightwalletd()) {
+		try (PirateUnifiedLoopbackLightwalletd serverA = new PirateUnifiedLoopbackLightwalletd();
+				PirateUnifiedLoopbackLightwalletd serverB = new PirateUnifiedLoopbackLightwalletd(0, "main", "main",
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT + 4L);
+				PirateUnifiedLoopbackLightwalletd nativeBad =
+						new PirateUnifiedLoopbackLightwalletd(0, "main", "test")) {
 			ZcashFamilyNativeCoordinator.getInstance().execute("Pirate Unified loopback JNI acceptance", adapter -> {
 				PirateUnifiedWalletBundle.validateSelectedLibrary(library, trustedRecord);
 				adapter.loadLibrary(library);
@@ -70,7 +74,7 @@ public class PirateUnifiedNativeSmokeTests {
 				assertTrue("First native storage was not initialized", firstConfigured.optBoolean("initialized"));
 
 				JSONObject firstInitialized = object(adapter.initFromSeed(
-						lightwalletd.endpoint(), "", firstSeed,
+						serverA.endpoint(), "", firstSeed,
 						Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT), "", ""),
 						"first wallet initialization");
 				assertTrue("First wallet initialization omitted its seed marker", firstInitialized.has("seed"));
@@ -107,7 +111,7 @@ public class PirateUnifiedNativeSmokeTests {
 						array(adapter.execute("list", ""), "fresh transaction list").length());
 
 				JSONObject firstReopened = object(adapter.initFromSeed(
-						lightwalletd.endpoint(), "", firstSeed,
+						serverA.endpoint(), "", firstSeed,
 						Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT), "", ""),
 						"first wallet reopen");
 				assertTrue("Existing wallet reopen omitted its seed marker", firstReopened.has("seed"));
@@ -115,7 +119,7 @@ public class PirateUnifiedNativeSmokeTests {
 				assertEquals("Seed restore created a duplicate native wallet", 1,
 						occurrences(wallets, "\"name\":\"Qortal "));
 				JSONObject migratedReopen = object(adapter.initFromB64(
-						lightwalletd.endpoint(), "", "ignored-after-migration", "", ""), "migrated database reopen");
+						serverA.endpoint(), "", "ignored-after-migration", "", ""), "migrated database reopen");
 				assertTrue("Migrated database reopen did not initialize", migratedReopen.optBoolean("initalized"));
 				assertEquals("Migrated database reopen returned an error", "none", migratedReopen.getString("error"));
 				String saveMarker = new String(Base64.getDecoder().decode(adapter.save()), StandardCharsets.UTF_8);
@@ -131,7 +135,7 @@ public class PirateUnifiedNativeSmokeTests {
 						"second storage configuration");
 				assertTrue("Second native storage was not initialized", secondConfigured.optBoolean("initialized"));
 				JSONObject secondInitialized = object(adapter.initFromSeed(
-						lightwalletd.endpoint(), "", secondSeed,
+						serverA.endpoint(), "", secondSeed,
 						Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT), "", ""),
 						"second wallet initialization");
 				assertEquals("Second wallet birthday changed",
@@ -156,59 +160,128 @@ public class PirateUnifiedNativeSmokeTests {
 						"first storage reconfiguration");
 				assertTrue("First native storage did not reopen", firstReconfigured.optBoolean("initialized"));
 				JSONObject originalReopened = object(adapter.initFromSeed(
-						lightwalletd.endpoint(), "", firstSeed,
+						serverA.endpoint(), "", firstSeed,
 						Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT), "", ""),
 						"original wallet reopen");
 				String reopenedWalletId = originalReopened.getString("wallet_id");
 				assertTrue("Original namespace did not reopen after wallet switch",
 						adapter.execute("export", "").contains(FIRST_ADDRESS));
 
-				JSONObject buildInfo = object(adapter.invokeJson("{\"method\":\"get_build_info\"}", false),
-						"build information");
-				assertTrue("Typed native service invocation failed", buildInfo.optBoolean("ok"));
-				JSONObject cancelRequest = new JSONObject().put("method", "cancel_sync")
-						.put("wallet_id", reopenedWalletId.isBlank() ? firstWalletId : reopenedWalletId);
-				try {
-					JSONObject syncStarted = object(adapter.execute("sync", ""), "sync start");
-					assertEquals("Loopback sync command was not accepted", "success", syncStarted.getString("result"));
-					awaitNativeSync(adapter);
-				} finally {
-					JSONObject cancelResponse = object(adapter.invokeJson(cancelRequest.toString(), false),
-							"sync cancellation request");
-					assertTrue("Loopback sync cancellation request failed", cancelResponse.optBoolean("ok"));
-				}
-				return null;
+					JSONObject buildInfo = object(adapter.invokeJson("{\"method\":\"get_build_info\"}", false),
+							"build information");
+					assertTrue("Typed native service invocation failed", buildInfo.optBoolean("ok"));
+					JSONObject cancelRequest = new JSONObject().put("method", "cancel_sync")
+							.put("wallet_id", reopenedWalletId.isBlank() ? firstWalletId : reopenedWalletId);
+					int serverABarrier = -1;
+					try {
+						JSONObject syncStarted = object(adapter.execute("sync", ""), "sync start");
+						assertEquals("Loopback sync command was not accepted", "success", syncStarted.getString("result"));
+						awaitNativeSync(adapter);
+
+						JSONObject rejectedNode = envelopeResult(adapter, new JSONObject().put("method", "test_node")
+								.put("url", nativeBad.endpoint()).put("tls_pin", JSONObject.NULL),
+								"native-bad node test");
+						assertTrue("Native-bad fixture was not reachable", rejectedNode.optBoolean("success"));
+						assertEquals("Native-bad fixture did not expose its wrong chain", "test",
+								rejectedNode.optString("chain_name"));
+						assertEquals("Native-bad fixture received synchronization traffic", 0,
+								nativeBad.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetBlock")
+										+ nativeBad.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetBlockRange"));
+
+						JSONObject nodeTest = envelopeResult(adapter, new JSONObject().put("method", "test_node")
+								.put("url", serverB.endpoint()).put("tls_pin", JSONObject.NULL), "server B node test");
+						assertTrue("Server B native node test failed", nodeTest.optBoolean("success"));
+						assertEquals("Server B native chain changed", "main", nodeTest.optString("chain_name"));
+						assertEquals("Server B native height changed", serverB.tipHeight(),
+								nodeTest.getLong("latest_block_height"));
+
+						JSONObject cancelResponse = object(adapter.invokeJson(cancelRequest.toString(), false),
+								"pre-cutover sync cancellation request");
+						assertAcknowledged(cancelResponse, "Pre-cutover cancellation");
+						serverABarrier = nativeRpcCount(serverA);
+
+						JSONObject setRequest = new JSONObject().put("method", "set_lightd_endpoint")
+								.put("wallet_id", reopenedWalletId).put("url", serverB.endpoint())
+								.put("tls_pin_opt", JSONObject.NULL);
+						assertAcknowledged(object(adapter.invokeJson(setRequest.toString(), false),
+								"server B endpoint mutation"), "Server B endpoint mutation");
+						JSONObject getRequest = new JSONObject().put("method", "get_lightd_endpoint")
+								.put("wallet_id", reopenedWalletId);
+						String selectedEndpoint = envelopeResultValue(adapter, getRequest, "server B endpoint readback");
+						assertEquals("Server B endpoint readback changed", withoutTrailingSlash(serverB.endpoint()),
+								withoutTrailingSlash(selectedEndpoint));
+						JSONObject consensus = envelopeResult(adapter,
+								new JSONObject().put("method", "validate_consensus_branch")
+										.put("wallet_id", reopenedWalletId), "server B consensus validation");
+						assertTrue("Server B consensus branch was rejected", consensus.optBoolean("is_valid"));
+
+						int serverBTipRangesBeforeSync = serverB.pirateTipRangeCount();
+						JSONObject bSyncStarted = object(adapter.execute("sync", ""), "server B sync start");
+						assertEquals("Server B sync command was not accepted", "success",
+								bSyncStarted.getString("result"));
+						awaitNativeSync(adapter, serverB.tipHeight());
+						assertTrue("Server B sync never requested a range ending at its newer tip",
+								serverB.pirateTipRangeCount() > serverBTipRangesBeforeSync);
+						assertTrue("Native client never reached server B", nativeRpcCount(serverB) > 0);
+
+						JSONObject persistedReopen = object(adapter.configureStorage(
+								storageRoot.resolve("wallet-a").toString(), "qortium-offline-wallet-a"),
+								"cutover storage reopen");
+						assertTrue("Cutover storage did not reopen", persistedReopen.optBoolean("initialized"));
+						assertEquals("Persisted endpoint did not remain on server B",
+								withoutTrailingSlash(serverB.endpoint()), withoutTrailingSlash(
+										envelopeResultValue(adapter, getRequest, "persisted server B endpoint")));
+						JSONObject cutoverReopened = object(adapter.initFromSeed(serverB.endpoint(), "", firstSeed,
+								Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT), "", ""),
+								"cutover wallet reopen");
+						assertEquals("Cutover reopen changed wallet identity", reopenedWalletId,
+								cutoverReopened.getString("wallet_id"));
+						assertTrue("Cutover reopen changed wallet address",
+								adapter.execute("export", "").contains(FIRST_ADDRESS));
+					} finally {
+						JSONObject cancelResponse = object(adapter.invokeJson(cancelRequest.toString(), false),
+								"sync cancellation request");
+						assertAcknowledged(cancelResponse, "Loopback sync cancellation");
+					}
+					assertTrue("Native cutover barrier was not established", serverABarrier >= 0);
+					assertEquals("Native traffic returned to server A after endpoint commit", serverABarrier,
+							nativeRpcCount(serverA));
+					return null;
 			});
 
 			assertTrue("Native sync never requested the complete deterministic compact-block range; observed "
-					+ lightwalletd.observedRanges(),
-					lightwalletd.completeRangeCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE) > 0);
+					+ serverA.observedRanges(),
+					serverA.completeRangeCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE) > 0);
 			assertTrue("Native client never requested the Pirate lightwalletd tip",
-					lightwalletd.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE,
+					serverA.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE,
 							"GetLatestBlock") > 0);
 			assertEquals("Native acceptance attempted a forbidden transaction RPC", 0,
-					lightwalletd.forbiddenRpcCount());
-			assertEquals("Native acceptance changed its optional subtree capability probe count", 1,
-					lightwalletd.subtreeProbeCount());
+					serverA.forbiddenRpcCount() + serverB.forbiddenRpcCount() + nativeBad.forbiddenRpcCount());
+			assertTrue("Native acceptance omitted its optional subtree capability probe",
+					serverA.subtreeProbeCount() + serverB.subtreeProbeCount() >= 1);
 			assertEquals("Native acceptance attempted an RPC outside the deterministic fixture", 0,
-					lightwalletd.unexpectedRpcCount());
+					serverA.unexpectedRpcCount() + serverB.unexpectedRpcCount() + nativeBad.unexpectedRpcCount());
 		}
 	}
 
 	private static void awaitNativeSync(ZcashFamilyNativeAdapter adapter) throws Exception {
+		awaitNativeSync(adapter, PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT);
+	}
+
+	private static void awaitNativeSync(ZcashFamilyNativeAdapter adapter, long expectedTip) throws Exception {
 		long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
 		JSONObject status = null;
 		long height = Long.MIN_VALUE;
 		do {
 			status = object(adapter.execute("syncStatus", ""), "active sync status");
 			height = object(adapter.execute("height", ""), "active wallet height").getLong("height");
-			if (height >= PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT && !isSyncInProgress(status))
+			if (height >= expectedTip && !isSyncInProgress(status))
 				break;
 			Thread.sleep(100L);
 		} while (System.nanoTime() < deadline);
 
 		assertTrue("Native sync did not reach the deterministic tip",
-				height >= PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT);
+			height >= expectedTip);
 		assertFalse("Native sync remained active after reaching the deterministic tip",
 				status != null && isSyncInProgress(status));
 	}
@@ -229,6 +302,42 @@ public class PirateUnifiedNativeSmokeTests {
 				&& ("true".equalsIgnoreCase(stringValue) || "false".equalsIgnoreCase(stringValue)))
 			return Boolean.parseBoolean(stringValue);
 		throw new AssertionError("Native sync status returned a non-boolean activity field");
+	}
+
+	private static JSONObject envelopeResult(ZcashFamilyNativeAdapter adapter, JSONObject request, String operation) {
+		JSONObject envelope = object(adapter.invokeJson(request.toString(), false), operation);
+		assertTrue(operation + " failed", envelope.optBoolean("ok"));
+		JSONObject result = envelope.optJSONObject("result");
+		assertTrue(operation + " returned no object result", result != null);
+		return result;
+	}
+
+	private static String envelopeResultValue(ZcashFamilyNativeAdapter adapter, JSONObject request,
+			String operation) {
+		JSONObject envelope = object(adapter.invokeJson(request.toString(), false), operation);
+		assertTrue(operation + " failed", envelope.optBoolean("ok"));
+		String result = envelope.optString("result", null);
+		assertTrue(operation + " returned no string result", result != null && !result.isBlank());
+		return result;
+	}
+
+	private static void assertAcknowledged(JSONObject envelope, String operation) {
+		assertTrue(operation + " failed", envelope.optBoolean("ok"));
+		JSONObject result = envelope.optJSONObject("result");
+		assertTrue(operation + " was not acknowledged",
+				result != null && result.optBoolean("acknowledged", false));
+	}
+
+	private static String withoutTrailingSlash(String endpoint) {
+		return endpoint != null && endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
+	}
+
+	private static int nativeRpcCount(PirateUnifiedLoopbackLightwalletd lightwalletd) {
+		int count = 0;
+		for (String method : new String[] {"GetLatestBlock", "GetLightdInfo", "GetBlock", "GetBlockRange",
+				"GetTreeState", "GetSubtreeRoots"})
+			count += lightwalletd.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, method);
+		return count;
 	}
 
 	private static JSONObject object(String response, String operation) {
