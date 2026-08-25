@@ -23,10 +23,12 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
@@ -176,6 +178,44 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 		}
 	}
 
+	/** Immutable endpoint identity and height accepted by the Java lightwalletd admission checks. */
+	public static final class ValidatedServerSelection {
+		private final ChainableServer server;
+		private final String endpointUri;
+		private final String expectedChainName;
+		private final long height;
+		private final long generation;
+
+		ValidatedServerSelection(ChainableServer server, String endpointUri, String expectedChainName,
+				long height, long generation) {
+			this.server = server;
+			this.endpointUri = endpointUri;
+			this.expectedChainName = expectedChainName;
+			this.height = height;
+			this.generation = generation;
+		}
+
+		public ChainableServer getServer() {
+			return this.server;
+		}
+
+		public String getEndpointUri() {
+			return this.endpointUri;
+		}
+
+		public String getExpectedChainName() {
+			return this.expectedChainName;
+		}
+
+		public long getHeight() {
+			return this.height;
+		}
+
+		public long getGeneration() {
+			return this.generation;
+		}
+	}
+
 	private final ZcashFamilyWalletConfig config;
 	private final String netId;
 	private final String expectedChainName;
@@ -190,6 +230,8 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 	private final Object serverLock = new Object();
 	private ChainableServer currentServer;
 	private ManagedChannel channel;
+	private ValidatedServerSelection validatedServerSelection;
+	private long serverSelectionGeneration;
 	private final ServerHeightTracker serverHeightTracker = new ServerHeightTracker();
 	private final ChainableServerConnectionRecorder recorder = new ChainableServerConnectionRecorder(100);
 
@@ -426,7 +468,9 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 
 	@Override
 	public Set<ChainableServer> getServers() {
-		return this.servers;
+		synchronized (this.serverLock) {
+			return new HashSet<>(this.servers);
+		}
 	}
 
 	@Override
@@ -436,30 +480,86 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 
 	@Override
 	public ChainableServer getCurrentServer() {
-		return this.currentServer;
+		synchronized (this.serverLock) {
+			return this.currentServer;
+		}
+	}
+
+	public ValidatedServerSelection getValidatedServerSelection() {
+		synchronized (this.serverLock) {
+			return this.validatedServerSelection;
+		}
+	}
+
+	/**
+	 * Keeps an admitted Java endpoint stable while its matching process-global native wallet context is used.
+	 * Server selection changes take the same monitor, including explicit API changes and automatic failover.
+	 */
+	<T> T withValidatedServerSelectionLease(Callable<T> operation) throws Exception {
+		synchronized (this.serverLock) {
+			return operation.call();
+		}
+	}
+
+	/**
+	 * Rotates away from the active endpoint after a native Pirate-service validation failure and performs one bounded pass
+	 * through the remaining Java candidates.
+	 */
+	public ValidatedServerSelection selectAnotherAfterNativeFailure(ValidatedServerSelection rejectedSelection,
+			Set<ChainableServer> rejectedServers, String requestedBy, String notes)
+			throws ForeignBlockchainException {
+		synchronized (this.serverLock) {
+			if (rejectedSelection == null || this.validatedServerSelection == null
+					|| this.validatedServerSelection.getGeneration() != rejectedSelection.getGeneration()
+					|| !Objects.equals(this.validatedServerSelection.getEndpointUri(), rejectedSelection.getEndpointUri()))
+				return this.validatedServerSelection;
+			this.closeServer(this.currentServer, notes, requestedBy);
+			this.remainingServers.clear();
+			this.servers.stream().filter(server -> !this.uselessServers.contains(server)
+					&& (rejectedServers == null || !rejectedServers.contains(server)))
+					.forEach(this.remainingServers::add);
+			return this.haveConnection() ? this.validatedServerSelection : null;
+		}
+	}
+
+	public ValidatedServerSelection selectAnyValidatedServer() throws ForeignBlockchainException {
+		synchronized (this.serverLock) {
+			if (this.validatedServerSelection != null)
+				return this.validatedServerSelection;
+			this.remainingServers.clear();
+			this.servers.stream().filter(server -> !this.uselessServers.contains(server))
+					.forEach(this.remainingServers::add);
+			return this.haveConnection() ? this.validatedServerSelection : null;
+		}
 	}
 
 	@Override
 	public boolean addServer(ChainableServer server) {
-		return this.servers.add(server);
+		synchronized (this.serverLock) {
+			return this.servers.add(server);
+		}
 	}
 
 	@Override
 	public boolean removeServer(ChainableServer server) {
-		boolean removedServer = this.servers.remove(server);
-		boolean removedRemaining = this.remainingServers.remove(server);
-		return removedServer || removedRemaining;
+		synchronized (this.serverLock) {
+			boolean removedServer = this.servers.remove(server);
+			boolean removedRemaining = this.remainingServers.remove(server);
+			return removedServer || removedRemaining;
+		}
 	}
 
 	@Override
 	public Optional<ChainableServerConnection> setCurrentServer(ChainableServer server, String requestedBy) throws ForeignBlockchainException {
-		closeServer(requestedBy, "Connecting to different server by request.");
-		Optional<ChainableServerConnection> connection = makeConnection(server, requestedBy);
+		synchronized (this.serverLock) {
+			closeServer(requestedBy, "Connecting to different server by request.");
+			Optional<ChainableServerConnection> connection = makeConnection(server, requestedBy);
 
-		if (!connection.isPresent() || !connection.get().isSuccess())
-			haveConnection();
+			if (!connection.isPresent() || !connection.get().isSuccess())
+				haveConnection();
 
-		return connection;
+			return connection;
+		}
 	}
 
 	@Override
@@ -579,6 +679,9 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 			synchronized (this.serverLock) {
 				this.channel = tempChannel;
 				this.currentServer = server;
+				this.serverSelectionGeneration++;
+				this.validatedServerSelection = new ValidatedServerSelection(server, endpointUri(server),
+						this.expectedChainName, serverHeight, this.serverSelectionGeneration);
 			}
 
 			LOGGER.info(() -> String.format("Connected to %s", server));
@@ -656,6 +759,7 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 
 			this.channel = null;
 			this.currentServer = null;
+			this.validatedServerSelection = null;
 		}
 
 		return Optional.of(connection);
@@ -701,5 +805,10 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implement
 				LOGGER.debug("Exception during forceful channel shutdown: {}", e.getMessage());
 			}
 		}
+	}
+
+	private static String endpointUri(ChainableServer server) {
+		String scheme = server.getConnectionType() == ChainableServer.ConnectionType.SSL ? "https" : "http";
+		return String.format("%s://%s:%d", scheme, server.getHostName(), server.getPort());
 	}
 }

@@ -10,13 +10,20 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ZcashFamilyLightClientTrustTests {
@@ -156,6 +163,108 @@ public class ZcashFamilyLightClientTrustTests {
 		assertNull(client.getCurrentServer());
 	}
 
+	@Test
+	public void testValidatedSelectionGenerationFollowsBoundedServerRotation() throws Exception {
+		SequencedProbeLightClient client = new SequencedProbeLightClient();
+		ChainableServer first = server("first.example");
+		ChainableServer second = server("second.example");
+		client.addServer(first);
+		client.addServer(second);
+
+		assertTrue(client.setCurrentServer(first, "test").orElseThrow().isSuccess());
+		ZcashFamilyLightClient.ValidatedServerSelection firstSelection = client.getValidatedServerSelection();
+		assertEquals(1L, firstSelection.getGeneration());
+		assertEquals("https://first.example:443", firstSelection.getEndpointUri());
+		assertEquals("main", firstSelection.getExpectedChainName());
+		assertEquals(2_100_000L, firstSelection.getHeight());
+
+		ZcashFamilyLightClient.ValidatedServerSelection secondSelection =
+				client.selectAnotherAfterNativeFailure(firstSelection, new HashSet<>(Collections.singleton(first)),
+						"test", "native probe failed");
+		assertEquals(2L, secondSelection.getGeneration());
+		assertEquals("https://second.example:443", secondSelection.getEndpointUri());
+		assertFalse(client.getUselessServers().contains(first));
+
+		client.close();
+		assertNull(client.getValidatedServerSelection());
+	}
+
+	@Test
+	public void testStaleNativeFailureCannotRejectNewerJavaSelection() throws Exception {
+		SequencedProbeLightClient client = new SequencedProbeLightClient();
+		ChainableServer first = server("first.example");
+		ChainableServer second = server("second.example");
+		client.addServer(first);
+		client.addServer(second);
+		assertTrue(client.setCurrentServer(first, "test").orElseThrow().isSuccess());
+		ZcashFamilyLightClient.ValidatedServerSelection stale = client.getValidatedServerSelection();
+		assertTrue(client.setCurrentServer(second, "test").orElseThrow().isSuccess());
+		ZcashFamilyLightClient.ValidatedServerSelection current = client.getValidatedServerSelection();
+
+		ZcashFamilyLightClient.ValidatedServerSelection retained = client.selectAnotherAfterNativeFailure(stale,
+				new HashSet<>(Collections.singleton(first)), "test", "stale failure");
+		assertEquals(current.getGeneration(), retained.getGeneration());
+		assertEquals(second, client.getCurrentServer());
+		assertFalse(client.getUselessServers().contains(second));
+	}
+
+	@Test
+	public void testTransientNativeFailureCanRetryOnlyConfiguredServer() throws Exception {
+		SequencedProbeLightClient client = new SequencedProbeLightClient();
+		ChainableServer onlyServer = server("only.example");
+		client.addServer(onlyServer);
+		assertTrue(client.setCurrentServer(onlyServer, "test").orElseThrow().isSuccess());
+		ZcashFamilyLightClient.ValidatedServerSelection rejected = client.getValidatedServerSelection();
+
+		assertNull(client.selectAnotherAfterNativeFailure(rejected,
+				new HashSet<>(Collections.singleton(onlyServer)), "test", "transient native failure"));
+		ZcashFamilyLightClient.ValidatedServerSelection retried = client.selectAnyValidatedServer();
+		assertEquals(onlyServer, retried.getServer());
+		assertTrue(retried.getGeneration() > rejected.getGeneration());
+		assertFalse(client.getUselessServers().contains(onlyServer));
+	}
+
+	@Test
+	public void testValidatedSelectionLeaseDefersGenerationChangeUntilNativeUseCompletes() throws Exception {
+		SequencedProbeLightClient client = new SequencedProbeLightClient();
+		ChainableServer first = server("first.example");
+		ChainableServer second = server("second.example");
+		client.addServer(first);
+		client.addServer(second);
+		assertTrue(client.setCurrentServer(first, "test").orElseThrow().isSuccess());
+		long firstGeneration = client.getValidatedServerSelection().getGeneration();
+
+		CountDownLatch leaseEntered = new CountDownLatch(1);
+		CountDownLatch releaseLease = new CountDownLatch(1);
+		CountDownLatch mutationStarted = new CountDownLatch(1);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			Future<Void> nativeUse = executor.submit(() -> client.withValidatedServerSelectionLease(() -> {
+				leaseEntered.countDown();
+				releaseLease.await();
+				return null;
+			}));
+			assertTrue(leaseEntered.await(2, TimeUnit.SECONDS));
+
+			Future<Optional<ChainableServerConnection>> mutation = executor.submit(() -> {
+				mutationStarted.countDown();
+				return client.setCurrentServer(second, "test");
+			});
+			assertTrue(mutationStarted.await(2, TimeUnit.SECONDS));
+			assertThrows(TimeoutException.class, () -> mutation.get(200, TimeUnit.MILLISECONDS));
+
+			releaseLease.countDown();
+			nativeUse.get(2, TimeUnit.SECONDS);
+			assertTrue(mutation.get(2, TimeUnit.SECONDS).orElseThrow().isSuccess());
+			assertTrue(client.getValidatedServerSelection().getGeneration() > firstGeneration);
+			assertEquals(second, client.getCurrentServer());
+		} finally {
+			releaseLease.countDown();
+			executor.shutdownNow();
+			client.close();
+		}
+	}
+
 	private static void assertFailedProbeClosed(Object outcome) throws Exception {
 		FakeManagedChannel channel = new FakeManagedChannel();
 		ProbeLightClient client = new ProbeLightClient(channel, outcome, "main", 1);
@@ -216,6 +325,28 @@ public class ZcashFamilyLightClientTrustTests {
 			Map<ChainableServer.ConnectionType, Integer> ports = new EnumMap<>(ChainableServer.ConnectionType.class);
 			ports.put(ChainableServer.ConnectionType.SSL, 443);
 			return ports;
+		}
+	}
+
+	private static final class SequencedProbeLightClient extends ZcashFamilyLightClient {
+		private SequencedProbeLightClient() {
+			super(new ZcashFamilyWalletConfig("Test", "TEST", "Test", "signature", "encryption", "zs",
+					() -> 1, () -> null), "test", "main", Collections.emptyList(), ProbeLightClient.ports(), () -> 1);
+		}
+
+		@Override
+		protected ManagedChannel buildProbeChannel(ChainableServer server) {
+			return new FakeManagedChannel();
+		}
+
+		@Override
+		protected LightdInfo fetchLightdInfo(ManagedChannel probeChannel) {
+			return LightdInfo.newBuilder().setChainName("main").setBlockHeight(2_100_000L).build();
+		}
+
+		@Override
+		protected BlockID fetchLatestBlock(ManagedChannel probeChannel) {
+			return BlockID.newBuilder().setHeight(2_100_000L).build();
 		}
 	}
 

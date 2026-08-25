@@ -34,6 +34,30 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - fix(arrr): coordinate native endpoint cutover
+
+Keeps an initialized Pirate Unified wallet on the same validated lightwalletd
+server as Core's Java client. Every new Java server selection receives a
+monotonic identity and must also pass the native Pirate service's chain, height,
+transport, endpoint-readback, and consensus checks. Core explicitly waits for
+native synchronization to stop before changing the endpoint, requires a fresh
+sync afterward, and holds the Java server selection stable through native
+preparation and use. It falls through a bounded set of remaining servers when
+the native service rejects a Java-compatible candidate. The selected endpoint is
+stored per Qortium account and attempted before native wallet initialization;
+if it is unavailable, the same bounded admission and cutover rules apply to a
+fallback. A separate packaged two-process gate remains required to validate the
+complete cold-restart path.
+Readiness uses wallet-bound native sync state with the Java-validated height as
+its idle fallback, avoiding the pinned library's stale legacy `info` URI cache.
+Deterministic host acceptance now switches an unfunded wallet from loopback A
+to a newer loopback B tip, requires B to serve the new compact range, freezes
+A's post-cutover native RPC count, confirms the real artifact exposes a
+wrong-chain candidate that Core's unit contract rejects, and reuses the same
+encrypted registry, wallet ID, and address on B within the host process.
+Unified remains disabled by default; cold packaged restart, production native servers,
+funds, QDN publication, deployment, and Home are unchanged.
+
 ### 2026-08-25 - fix(arrr): validate production lightwallet readiness
 
 Strengthens Pirate lightwallet server admission so a server must do more than

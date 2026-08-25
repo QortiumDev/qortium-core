@@ -73,34 +73,45 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	private final String cashChainName;
 	private final String pirateChainName;
 	private final boolean includeHistoricalNote;
+	private final long tipHeight;
+	private final long ironwoodProbeHeight;
 
 	PirateUnifiedLoopbackLightwalletd() throws IOException {
-		this(0, "main", "main", false);
+		this(0, "main", "main", false, TIP_HEIGHT);
 	}
 
 	PirateUnifiedLoopbackLightwalletd(boolean includeHistoricalNote) throws IOException {
-		this(0, "main", "main", includeHistoricalNote);
+		this(0, "main", "main", includeHistoricalNote, TIP_HEIGHT);
 	}
 
 	PirateUnifiedLoopbackLightwalletd(int port, String chainName) throws IOException {
-		this(port, chainName, chainName, false);
+		this(port, chainName, chainName, false, TIP_HEIGHT);
 	}
 
 	PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName) throws IOException {
-		this(port, cashChainName, pirateChainName, false);
+		this(port, cashChainName, pirateChainName, false, TIP_HEIGHT);
+	}
+
+	PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName, long tipHeight)
+			throws IOException {
+		this(port, cashChainName, pirateChainName, false, tipHeight);
 	}
 
 	private PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName,
-			boolean includeHistoricalNote) throws IOException {
+			boolean includeHistoricalNote, long tipHeight) throws IOException {
 		if (port < 0 || port > 65_535)
 			throw new IllegalArgumentException("Invalid fixture port");
 		if (cashChainName == null || cashChainName.isBlank()
 				|| pirateChainName == null || pirateChainName.isBlank())
 			throw new IllegalArgumentException("Missing fixture chain name");
+		if (tipHeight < SAPLING_ACTIVATION_HEIGHT)
+			throw new IllegalArgumentException("Fixture tip is below Sapling activation");
 
 		this.cashChainName = cashChainName;
 		this.pirateChainName = pirateChainName;
 		this.includeHistoricalNote = includeHistoricalNote;
+		this.tipHeight = tipHeight;
+		this.ironwoodProbeHeight = tipHeight - 30L;
 		FixtureService fixtureService = new FixtureService();
 		ServerInterceptor auditInterceptor = this::auditCall;
 		this.server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", port))
@@ -113,6 +124,10 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 	String endpoint() {
 		return "http://127.0.0.1:" + this.server.getPort() + "/";
+	}
+
+	long tipHeight() {
+		return this.tipHeight;
 	}
 
 	int rpcCount(String service, String method) {
@@ -234,8 +249,8 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		public void getLatestBlock(Service.ChainSpec request, StreamObserver<Service.BlockID> observer) {
 			respond(observer,
 					Service.BlockID.newBuilder()
-							.setHeight(TIP_HEIGHT)
-							.setHash(ByteString.copyFrom(blockHash(TIP_HEIGHT)))
+							.setHeight(tipHeight)
+							.setHash(ByteString.copyFrom(blockHash(tipHeight)))
 							.build());
 		}
 
@@ -252,12 +267,12 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		private void getBlock(boolean pirateService, Service.BlockID request,
 				StreamObserver<CompactFormats.CompactBlock> observer) {
 			long height = request.getHeight();
-			if (height == IRONWOOD_PROBE_HEIGHT) {
+			if (height == ironwoodProbeHeight) {
 				activationProbeCount.incrementAndGet();
 				respond(observer, block(height));
 				return;
 			}
-			if (height < SAPLING_ACTIVATION_HEIGHT || height > TIP_HEIGHT) {
+			if (height < SAPLING_ACTIVATION_HEIGHT || height > tipHeight) {
 				fail(observer, Status.INVALID_ARGUMENT.withDescription("Block is outside the deterministic fixture"));
 				return;
 			}
@@ -276,18 +291,18 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 			long start = request.getStart().getHeight();
 			long end = request.getEnd().getHeight();
 			observedRanges.add(service + ":" + start + "-" + end);
-			if (start < SAPLING_ACTIVATION_HEIGHT || end > TIP_HEIGHT || start > end) {
+			if (start < SAPLING_ACTIVATION_HEIGHT || end > tipHeight || start > end) {
 				fail(observer, Status.INVALID_ARGUMENT.withDescription("Range is outside the deterministic fixture"));
 				return;
 			}
 			for (long height = start; height <= end; height++)
 				observer.onNext(block(height));
-			if (start == SAPLING_ACTIVATION_HEIGHT && end == TIP_HEIGHT) {
+			if (start == SAPLING_ACTIVATION_HEIGHT && end == tipHeight) {
 				AtomicInteger counter = PIRATE_SERVICE.equals(service)
 						? pirateCompleteRangeCount : cashCompleteRangeCount;
 				counter.incrementAndGet();
 			}
-			if (PIRATE_SERVICE.equals(service) && end == TIP_HEIGHT)
+			if (PIRATE_SERVICE.equals(service) && end == tipHeight)
 				pirateTipRangeCount.incrementAndGet();
 			observer.onCompleted();
 		}
@@ -309,8 +324,8 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 							.setChainName(chainName)
 							.setSaplingActivationHeight(SAPLING_ACTIVATION_HEIGHT)
 							.setConsensusBranchId("76b809bb")
-							.setBlockHeight(TIP_HEIGHT)
-							.setEstimatedHeight(TIP_HEIGHT)
+							.setBlockHeight(tipHeight)
+							.setEstimatedHeight(tipHeight)
 							.build());
 		}
 
