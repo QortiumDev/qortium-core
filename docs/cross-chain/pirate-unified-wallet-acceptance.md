@@ -99,7 +99,7 @@ to IPv4 loopback. It exposes both service names used by this integration:
 `cash.z.wallet.sdk.rpc.CompactTxStreamer` for Core's Java client and
 `pirate.wallet.sdk.rpc.CompactTxStreamer` for the pinned native library. The
 fixture reports mainnet Sapling activation at height `152855`, a tip at `152858`,
-and streams four ordered, hash-linked empty compact blocks. Acceptance requires
+and by default streams four ordered, hash-linked empty compact blocks. Acceptance requires
 the native client to request that complete range, reach the fixture tip, stop
 reporting active synchronization, and make no transaction, `GetTreeState`, or
 other unexpected RPCs. The pinned client makes exactly one optional
@@ -109,10 +109,10 @@ activation probe at `tip - 30`, with a pre-activation timestamp, so the fixed
 historical fixture does not become calendar-dependent near the scheduled
 upgrade. The initial asynchronous `sync` response is not acceptance.
 
-This proves real native RPC and compact-block cursor behavior against a
-synthetic empty chain. It does not prove canonical chain history, historical
-wallet restoration, balances or transactions containing funds, or production
-lightwalletd interoperability. Returned seed, key, address, and raw native
+This default mode proves real native RPC and compact-block cursor behavior
+against a synthetic empty chain. It does not prove canonical chain history,
+historical wallet restoration, balances or transactions containing funds, or
+production lightwalletd interoperability. Returned seed, key, address, and raw native
 responses are not written to receipts or retained logs. The runner sets a
 private umask, quarantines raw Maven/native output in its mode-0700 work
 directory, scans it and this run's uniquely suffixed Surefire reports for
@@ -142,6 +142,75 @@ tools/run-pirate-unified-acceptance.sh \
   /absolute/path/pirate-unified-v1.1.7 \
   /absolute/new/path/pirate-unified-receipt.md
 ```
+
+## Fresh-install historical restore acceptance
+
+The same loopback fixture has a separate, explicitly selected historical mode.
+At height `152856`, after the conservative birthday `152855` and before tip
+`152858`, it serves one deterministic compact Sapling note worth `123456789`
+arrrtoshis to the public entropy-7 JNI test address. The compact commitment,
+ephemeral key, and 52-byte ciphertext were generated offline from the pinned
+Pirate Unified `v1.1.7` Rust sources with fixed test randomness. They are test
+vectors, not production wallet material. The normal empty-chain fixture remains
+unchanged unless historical mode is selected.
+
+Vector provenance is reproducible: tag `v1.1.7` resolves to
+`d9f76262c12e2836ab697c20f778761cde65de1a`; its workspace pins
+`sapling-crypto` at `62fcf59a4d933244ee6280182c6cd3e5290e8a90`. The generator decodes the
+fixture address with `pirate_core::keys::PaymentAddress`, creates a pre-ZIP-212
+note appropriate for height `152856` with value `123456789`,
+`Rseed::BeforeZip212(jubjub::Fr::from(0x4242))`, an all-zero 512-byte memo, and
+`StdRng::seed_from_u64(0x51525449554d)`, then records `note.cmu()`, the
+`SaplingDomain` ephemeral key, and the first `COMPACT_NOTE_SIZE` ciphertext
+bytes. It was executed with Rust 1.90 in container image digest
+`sha256:3f6e6f8d8725a65a2db964bb828850f888d430c68784d661f753144e5d787207`.
+The synthetic transaction ID is SHA-256 of
+`qortium-pirate-historical-note-v1`.
+
+Run the historical gate only from a clean Core commit:
+
+```sh
+tools/run-pirate-unified-historical-restore-acceptance.sh \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
+  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/new/path/pirate-unified-historical-restore-receipt.md
+```
+
+The runner currently accepts only Linux x86_64 and hashes the exact mapped JNI
+library for that host. Each Maven process starts from an allowlisted environment:
+HOME and XDG roots are fresh, the native block cache and debug log are pinned
+inside that process's temporary root, and inherited Pirate wallet/cache/log
+overrides are absent.
+
+The runner invokes the opt-in test twice in sequence. Each invocation is a new
+JVM/native process with distinct, initially empty HOME, XDG data/cache/config,
+temporary, and wallet-storage roots. Both derive the same address from
+the same deterministic account entropy, report zero history before scanning,
+request the complete conservative-birthday-to-tip compact range, and recover
+exactly one confirmed transaction plus the expected total and verified balance.
+The test also checks the recovered height, address, and value metadata. A range
+request alone is not a pass, and an in-process storage switch is not used as a
+second-computer substitute because the native block cache can survive that
+switch.
+
+Two development counterexamples define the gate's boundary. A post-ZIP-212
+test note at the pre-ZIP-212 fixture height was not valid evidence and was
+replaced by the era-correct vector above. A non-isolated run also appeared to
+pass after reusing native cache state; clean HOME/XDG process roots reproduced
+the zero-balance failure and invalidated that result. Neither failed run is a
+success receipt.
+
+Maven runs offline against the already installed local repository. Each process
+uses a unique Surefire report suffix; the runner moves only those reports from
+the shared build directory into its mode-0700 temporary root. Raw Maven, native,
+and quarantined Surefire evidence is scanned for secret-shaped wallet material
+and shielded addresses, then deletion is verified before a receipt is written.
+This gate is deterministic and unfunded. It
+proves fresh-install recognition and balance reporting for a valid synthetic
+Sapling note using the pinned JNI library. It does not prove canonical Pirate
+mainnet history, production lightwalletd interoperability, witness usability or
+spending against a real chain, funded behavior, QDN publication, deployment,
+default enablement, or Home behavior.
 
 ## Disposable local-QDN fixture
 
@@ -253,8 +322,9 @@ API key, seed/key/address-shaped JSON, and shielded addresses, then deletes that
 evidence and retains only a sanitized receipt and log.
 
 This proves fresh creation, exact-tip synchronization, persistence, and clean
-restart/reopen on unfunded Linux x86_64 local fixtures. It does not prove a
-historical restore from earlier than the configured birthday, real legacy
+restart/reopen on unfunded Linux x86_64 local fixtures. Historical recovery is
+covered by the separate fresh-install gate above, not by this transaction-free
+packaged run. This packaged gate does not prove real legacy
 migration, A/B switching during an active sync, disable/re-enable, production
 lightwalletd interoperability, funds, QDN publication, deployment, default
 enablement, or Home behavior.
@@ -274,10 +344,9 @@ FreeBSD acceptance.
 | macOS aarch64 | NOT_RUN | NOT_RUN | NOT_RUN |
 | Windows x86_64 | NOT_RUN | NOT_RUN | NOT_RUN |
 
-G2 must later cover historical restore, real legacy migration, A/B account
-switching during sync, failover and bad-height servers, disable/re-enable,
-total and verified balances, address/key/seed/transaction listing, and other
-platforms. G3 separately covers publication by an approved QDN
+G2 must later cover real legacy migration, A/B account switching during sync,
+failover and bad-height servers, disable/re-enable, production-network recovery,
+funded balance/spend behavior, and other platforms. G3 separately covers publication by an approved QDN
 identity, retrieval by immutable transaction signature, byte comparison,
 controlled receive/send, and ARRR HTLC/P2SH fund/redeem/refund recovery.
 

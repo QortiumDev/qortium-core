@@ -1,5 +1,6 @@
 package org.qortium.controller;
 
+import cash.z.wallet.sdk.rpc.CompactFormats;
 import cash.z.wallet.sdk.rpc.CompactTxStreamerGrpc;
 import cash.z.wallet.sdk.rpc.Service;
 import io.grpc.ManagedChannel;
@@ -20,6 +21,31 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class PirateUnifiedLoopbackLightwalletdTests {
+
+	@Test
+	public void testHistoricalModeServesOneWellFormedCompactNote() throws Exception {
+		try (PirateUnifiedLoopbackLightwalletd fixture = new PirateUnifiedLoopbackLightwalletd(true)) {
+			URI endpoint = URI.create(fixture.endpoint());
+			ManagedChannel channel =
+					ManagedChannelBuilder.forAddress(endpoint.getHost(), endpoint.getPort()).usePlaintext().build();
+			try {
+				CompactFormats.CompactBlock block = CompactTxStreamerGrpc.newBlockingStub(channel)
+						.getBlock(Service.BlockID.newBuilder()
+								.setHeight(PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_HEIGHT)
+								.build());
+				assertEquals(PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_HEIGHT, block.getHeight());
+				assertEquals(1, block.getVtxCount());
+				assertEquals(32, block.getVtx(0).getHash().size());
+				assertEquals(1, block.getVtx(0).getOutputsCount());
+				assertEquals(32, block.getVtx(0).getOutputs(0).getCmu().size());
+				assertEquals(32, block.getVtx(0).getOutputs(0).getEpk().size());
+				assertEquals(52, block.getVtx(0).getOutputs(0).getCiphertext().size());
+			} finally {
+				channel.shutdownNow();
+				channel.awaitTermination(10, TimeUnit.SECONDS);
+			}
+		}
+	}
 
 	@Test
 	public void testBothServiceNamesExposeDeterministicFixture() throws Exception {

@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - test(arrr): prove fresh-install historical recovery
+
+Adds an unfunded, opt-in recovery gate for the second-computer case. A
+deterministic compact Sapling note addressed to the public entropy-7 test wallet
+appears after the conservative birthday but before startup. Two separate
+JVM/native processes, each with fresh and distinct HOME, XDG, temporary, and
+wallet-storage roots, derive the same account address, begin with zero local
+history, scan the complete birthday-to-tip range, and independently recover the
+same confirmed transaction and reported total/verified balance. The pinned
+native library must decrypt and validate the note; simple range requests are not
+accepted as recovery evidence. Raw wallet-capable evidence is scanned and
+deleted. This does not prove production lightwalletd history, real-chain witness
+usability, a funded send, publication, deployment, default enablement, or Home
+behavior.
+
 ### 2026-08-24 - fix(arrr): validate packaged Unified wallet readiness
 
 Adds an unfunded Linux x86_64 acceptance gate that starts a separately packaged
