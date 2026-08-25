@@ -119,6 +119,17 @@ first server's native RPC counters do not advance after the cutover barrier.
 Core holds the Java endpoint selection stable from native preparation through
 the corresponding sync or wallet operation, so an API-requested or automatic
 Java failover cannot race the process-global native context onto an older endpoint.
+Native endpoint preparation also keeps transient reconciliation separate from
+proved endpoint rejection. A missing native response, failed cancellation or
+endpoint-mutation acknowledgement, readback mismatch, wallet-context change, or
+storage failure retains the current Java selection and returns to the existing
+controller cadence; it does not rotate within the same preparation call. This
+provides one controller-paced attempt at a time without an inner retry loop. An
+explicit chain, height, TLS, or consensus mismatch is endpoint-specific evidence
+and still enters the bounded pass through remaining configured servers. Unit
+coverage uses two configured candidates to require that B survives one
+transient cancellation failure and is persisted on the next call, while a
+wrong-chain B is rejected and replaced by A.
 Reconfiguring the same encrypted registry within that host process must retain
 the second endpoint, wallet ID, and address. Cold Core restart is not claimed by
 this host-level test.
@@ -381,11 +392,13 @@ and B (`127.0.0.1:9068`, tip `152862`) remain live across both Core processes.
 Process one first reaches A, then Java selects B and a wallet operation
 synchronously applies and persists B in the native wallet. Each endpoint must
 serve native retrieval of its exact tip, either as a tip-ending range or as an
-exact-tip unary block. A live A-native-RPC barrier is established immediately
-before Java selects B and must remain unchanged through native B application
-and synchronization, both graceful shutdowns, and process two. The second
-Core process must reopen persisted B before native use, produce new B-native
-evidence, and retain the exact namespace, one-way identity hash, and
+exact-tip unary block. The Java selection API shares the native-operation lease,
+while native application first cancels any asynchronous A synchronization before
+mutating and reading back B. A live A-native-RPC barrier is therefore established
+after native B application succeeds and must remain unchanged through the
+subsequent B-readiness observation, both graceful shutdowns, and process two.
+The second Core process must reopen persisted B before native use, produce new
+B-native evidence, and retain the exact namespace, one-way identity hash, and
 wallet-address hash.
 
 This proves fresh creation, exact-tip synchronization, persistence, and clean

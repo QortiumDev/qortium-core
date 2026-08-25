@@ -353,12 +353,6 @@ run_inside_namespace() {
 					printf 'First packaged start did not synchronize on server A: %s\n' "$selected_server_uri" >&2
 					return 1
 				fi
-				# Flush every native A RPC preceding the explicit Java B-selection boundary.
-				sleep 1
-				server_a_barrier=$(property nativeRpcCount "$runtime/lightwalletd-a.audit" 2>/dev/null || true)
-				case $server_a_barrier in
-					''|*[!0-9]*) printf '%s\n' 'Live server A cutover audit counter is invalid' >&2; return 1 ;;
-				esac
 				if ! set_current_server 9068 "$runtime/set-server-b.json"; then
 					printf '%s\n' 'Packaged Core did not accept the Java selection of server B' >&2
 					return 1
@@ -373,10 +367,15 @@ run_inside_namespace() {
 					return 1
 				fi
 				applied_address_sha256=
-				if ! assert_a_barrier; then
-					printf '%s\n' 'Server A received native traffic during native server B application' >&2
-					return 1
-				fi
+				# The B-application path first cancels any asynchronous A sync, then mutates and
+				# reads back the native endpoint under the Java selection lease. Its successful
+				# return is the first defensible no-more-A boundary. Let the fixture's audit
+				# snapshot settle before capturing the counter used for later observations.
+				sleep 1
+				server_a_barrier=$(property nativeRpcCount "$runtime/lightwalletd-a.audit" 2>/dev/null || true)
+				case $server_a_barrier in
+					''|*[!0-9]*) printf '%s\n' 'Live server A cutover audit counter is invalid' >&2; return 1 ;;
+				esac
 
 				cutover_ready=false
 				wait_count=0
@@ -949,7 +948,7 @@ temporary_log=$work_directory/sanitized.log
 		printf '| Endpoint cutover | %s | process 1 moved from A `152858` to B `152862`; each served tip-ending native compact-block retrieval |\n' "$endpoint_cutover"
 		printf '| Cold-restart endpoint | %s | process 2 restored configured persisted B before native use |\n' "$cold_restart_endpoint"
 		printf '| Address continuity | %s | wallet address hash remained exact before/after cutover and across restart |\n' "$address_continuity"
-		printf '| No native server A traffic after B-selection barrier | %s | barrier established immediately before Java selected B remained exact through native B application and sync, both shutdowns, and process 2 |\n' "$no_native_server_a_after_selection_barrier"
+		printf '| No native server A traffic after B-application barrier | %s | post-application barrier remained exact through the subsequent B-readiness observation, both shutdowns, and process 2 |\n' "$no_native_server_a_after_selection_barrier"
 		printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; process 1 reached A `152858` then B `152862` before durable validation |\n' "$birthday_result"
 	else
 		printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; Pirate compact-block data reached exact tip `152858` before durable validation |\n' "$birthday_result"

@@ -26,6 +26,26 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private static final Logger LOGGER = LogManager.getLogger(PirateWallet.class);
 	private static final String UNIFIED_NATIVE_CHAIN = "main";
 
+	enum EndpointSelectionOutcome {
+		APPLIED,
+		RETRYABLE_FAILURE,
+		ENDPOINT_REJECTED
+	}
+
+	private record NativeServerProbe(EndpointSelectionOutcome outcome, Long height) {
+		private static NativeServerProbe applied(long height) {
+			return new NativeServerProbe(EndpointSelectionOutcome.APPLIED, height);
+		}
+
+		private static NativeServerProbe retryableFailure() {
+			return new NativeServerProbe(EndpointSelectionOutcome.RETRYABLE_FAILURE, null);
+		}
+
+		private static NativeServerProbe endpointRejected() {
+			return new NativeServerProbe(EndpointSelectionOutcome.ENDPOINT_REJECTED, null);
+		}
+	}
+
 	private final boolean unifiedWallet;
 	private final PirateUnifiedWalletStorage unifiedStorage;
 	private ZcashFamilyLightClient.ValidatedServerSelection appliedServerSelection;
@@ -273,7 +293,10 @@ public class PirateWallet extends ZcashFamilyWallet {
 		Bitcoiny blockchain = this.config.getBlockchain();
 		if (blockchain == null || !(blockchain.getBlockchainProvider() instanceof ZcashFamilyLightClient lightClient))
 			return false;
+		return this.prepareForSynchronization(nativeAdapter, lightClient);
+	}
 
+	boolean prepareForSynchronization(ZcashFamilyNativeAdapter nativeAdapter, ZcashFamilyLightClient lightClient) {
 		int remainingCandidates = Math.max(1, lightClient.getServers().size() + 1);
 		Set<ChainableServer> rejectedServers = new HashSet<>();
 		while (remainingCandidates-- > 0) {
@@ -287,8 +310,14 @@ public class PirateWallet extends ZcashFamilyWallet {
 				if (selection == null)
 					return false;
 			}
-			if (this.applyValidatedServerSelection(nativeAdapter, selection))
+			EndpointSelectionOutcome outcome = this.applyValidatedServerSelection(nativeAdapter, selection);
+			if (outcome == EndpointSelectionOutcome.APPLIED)
 				return true;
+			if (outcome == EndpointSelectionOutcome.RETRYABLE_FAILURE) {
+				LOGGER.debug("Retaining Pirate endpoint {} after retryable native reconciliation failure",
+						selection.getEndpointUri());
+				return false;
+			}
 			rejectedServers.add(selection.getServer());
 
 			try {
@@ -316,25 +345,29 @@ public class PirateWallet extends ZcashFamilyWallet {
 		return lightClient.withValidatedServerSelectionLease(() -> operation.execute(nativeAdapter));
 	}
 
-	boolean applyValidatedServerSelection(ZcashFamilyNativeAdapter nativeAdapter,
+	EndpointSelectionOutcome applyValidatedServerSelection(ZcashFamilyNativeAdapter nativeAdapter,
 			ZcashFamilyLightClient.ValidatedServerSelection selection) {
 		if (!this.unifiedWallet || selection == null)
-			return !this.unifiedWallet;
+			return !this.unifiedWallet ? EndpointSelectionOutcome.APPLIED
+					: EndpointSelectionOutcome.RETRYABLE_FAILURE;
 
 		if (this.appliedServerSelection != null
 				&& this.appliedServerSelection.getGeneration() == selection.getGeneration()
 				&& Objects.equals(this.appliedServerSelection.getEndpointUri(), selection.getEndpointUri())) {
 			this.observeFreshSynchronization(nativeAdapter);
-			return true;
+			return EndpointSelectionOutcome.APPLIED;
 		}
 
 		try {
 			String walletId = this.getActiveWalletId(nativeAdapter);
-			if (walletId == null || !this.testNativeServer(nativeAdapter, selection))
-				return false;
+			if (walletId == null)
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
+			NativeServerProbe probe = this.probeNativeServer(nativeAdapter, selection, true);
+			if (probe.outcome() != EndpointSelectionOutcome.APPLIED)
+				return probe.outcome();
 			if (!this.isSelectionCurrent(selection) || !this.cancelNativeSync(nativeAdapter, walletId)
 					|| !this.isSelectionCurrent(selection))
-				return false;
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
 
 			JSONObject setRequest = new JSONObject().put("method", "set_lightd_endpoint")
 					.put("wallet_id", walletId)
@@ -342,7 +375,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 					.put("tls_pin_opt", JSONObject.NULL);
 			JSONObject setResponse = new JSONObject(nativeAdapter.invokeJson(setRequest.toString(), false));
 			if (!isAcknowledged(setResponse))
-				return false;
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
 
 			JSONObject getRequest = new JSONObject().put("method", "get_lightd_endpoint")
 					.put("wallet_id", walletId);
@@ -350,7 +383,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 			String appliedUri = getResponse.optBoolean("ok", false) && !getResponse.isNull("result")
 					? getResponse.optString("result", null) : null;
 			if (!Objects.equals(normalizeServerUri(selection.getEndpointUri()), normalizeServerUri(appliedUri)))
-				return false;
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
 
 			JSONObject consensusRequest = new JSONObject().put("method", "validate_consensus_branch")
 					.put("wallet_id", walletId);
@@ -358,51 +391,51 @@ public class PirateWallet extends ZcashFamilyWallet {
 					nativeAdapter.invokeJson(consensusRequest.toString(), false));
 			JSONObject consensusResult = consensusResponse.optBoolean("ok", false)
 					? consensusResponse.optJSONObject("result") : null;
-			if (consensusResult == null || !consensusResult.optBoolean("is_valid", false)
-					|| !Objects.equals(walletId, this.getActiveWalletId(nativeAdapter))
+			if (consensusResult == null || !consensusResult.has("is_valid"))
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
+			if (!consensusResult.optBoolean("is_valid", false))
+				return EndpointSelectionOutcome.ENDPOINT_REJECTED;
+			if (!Objects.equals(walletId, this.getActiveWalletId(nativeAdapter))
 					|| !this.isSelectionCurrent(selection))
-				return false;
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
 
 			if (!this.persistSelectedServer(selection.getEndpointUri()))
-				return false;
+				return EndpointSelectionOutcome.RETRYABLE_FAILURE;
 			this.appliedServerSelection = selection;
 			this.freshSynchronizationRequired = true;
 			this.synchronizationAcceptedGeneration = -1L;
 			this.synchronizationAcceptedWalletId = null;
-			return true;
+			return EndpointSelectionOutcome.APPLIED;
 		} catch (UnsatisfiedLinkError | RuntimeException e) {
-			return false;
+			return EndpointSelectionOutcome.RETRYABLE_FAILURE;
 		}
 	}
 
-	private boolean testNativeServer(ZcashFamilyNativeAdapter nativeAdapter,
-			ZcashFamilyLightClient.ValidatedServerSelection selection) {
-		return this.probeNativeServer(nativeAdapter, selection, true) != null;
-	}
-
-	private Long probeNativeServer(ZcashFamilyNativeAdapter nativeAdapter,
+	private NativeServerProbe probeNativeServer(ZcashFamilyNativeAdapter nativeAdapter,
 			ZcashFamilyLightClient.ValidatedServerSelection selection, boolean requireJavaHeightAgreement) {
 		JSONObject request = new JSONObject().put("method", "test_node")
 				.put("url", selection.getEndpointUri())
 				.put("tls_pin", JSONObject.NULL);
 		JSONObject response = new JSONObject(nativeAdapter.invokeJson(request.toString(), false));
 		if (!response.optBoolean("ok", false) || response.isNull("result"))
-			return null;
+			return NativeServerProbe.retryableFailure();
 		JSONObject result = response.optJSONObject("result");
-		if (result == null || !result.optBoolean("success", false) || result.isNull("latest_block_height"))
-			return null;
+		if (result == null || !result.optBoolean("success", false))
+			return NativeServerProbe.retryableFailure();
+		if (result.isNull("latest_block_height"))
+			return NativeServerProbe.endpointRejected();
 
 		long nativeHeight = result.optLong("latest_block_height", -1L);
 		if (nativeHeight <= 0 || (requireJavaHeightAgreement && Math.abs(nativeHeight - selection.getHeight())
 				> ZcashFamilyLightClient.SERVER_HEIGHT_AGREEMENT_TOLERANCE))
-			return null;
+			return NativeServerProbe.endpointRejected();
 		if (!ZcashFamilyLightClient.matchesExpectedChainName(UNIFIED_NATIVE_CHAIN,
 				result.optString("chain_name", null)))
-			return null;
+			return NativeServerProbe.endpointRejected();
 
 		boolean expectedTls = selection.getEndpointUri().startsWith("https://");
 		return result.has("tls_enabled") && result.optBoolean("tls_enabled") == expectedTls
-				? nativeHeight : null;
+				? NativeServerProbe.applied(nativeHeight) : NativeServerProbe.endpointRejected();
 	}
 
 	private boolean isSelectionCurrent(ZcashFamilyLightClient.ValidatedServerSelection selection) {
@@ -560,8 +593,10 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 		if (this.appliedServerSelection == null)
 			return null;
-		Long nativeHeight = this.probeNativeServer(nativeAdapter, this.appliedServerSelection, false);
-		return nativeHeight != null && nativeHeight <= Integer.MAX_VALUE ? nativeHeight.intValue() : null;
+		NativeServerProbe probe = this.probeNativeServer(nativeAdapter, this.appliedServerSelection, false);
+		Long nativeHeight = probe.height();
+		return probe.outcome() == EndpointSelectionOutcome.APPLIED && nativeHeight != null
+				&& nativeHeight <= Integer.MAX_VALUE ? nativeHeight.intValue() : null;
 	}
 
 	static String normalizeServerUri(String serverUri) {

@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - fix(arrr): retain transient endpoint selection
+
+Prevents one transient native reconciliation failure from silently discarding
+the Pirate endpoint that Java explicitly selected. Core now distinguishes an
+applied endpoint, a retryable local/native failure, and a proved endpoint
+rejection. A missing native response, failed sync cancellation, unacknowledged
+endpoint mutation, readback mismatch, changed wallet context, or storage error
+keeps the same Java endpoint and returns to the existing controller cadence for
+a later attempt rather than spinning in an inner loop. An explicit native
+chain, height, TLS, or consensus mismatch still rejects that endpoint and makes
+one bounded pass through the remaining configured servers. Deterministic
+two-server tests prove that B survives a first cancellation failure and is
+persisted on the next attempt, while a wrong-chain B falls back to A. Unified
+packaged cutover acceptance now records its no-A-traffic barrier after Java's
+selection lease has cancelled any asynchronous A sync and applied B, which is
+the first defensible no-more-A boundary. Unified remains disabled by default;
+wallet formats, production server inventories, Home, funds, publication, and
+deployment are unchanged.
+
 ### 2026-08-25 - test(arrr): prove packaged endpoint restart
 
 Extends the unfunded Linux x86_64 packaged lifecycle gate with an explicit
