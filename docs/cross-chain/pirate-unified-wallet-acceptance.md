@@ -66,7 +66,9 @@ to `System.load`.
 Always-on tests use synthetic bytes and never load native code:
 
 ```sh
-/bin/sh -n tools/stage-pirate-unified-bundle.sh tools/run-pirate-unified-acceptance.sh
+/bin/sh -n tools/stage-pirate-unified-bundle.sh tools/run-pirate-unified-acceptance.sh \
+  tools/run-pirate-unified-packaged-loader-acceptance.sh \
+  tools/run-pirate-unified-packaged-lifecycle-acceptance.sh
 mvn -DskipTests=false \
   -Dtest='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,PirateUnifiedLoopbackLightwalletdTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests' \
   test
@@ -210,6 +212,53 @@ loading for Linux x86_64. It does not prove publication, retrieval from a peer,
 wallet creation or reopening, synchronization, migration, or funded-wallet
 behavior. Those lifecycle claims remain G2 work.
 
+## Packaged lifecycle acceptance
+
+After the loader-only gate passes, the same packaged JAR can run the first
+bounded wallet-lifecycle gate:
+
+```sh
+tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
+  /absolute/path/qortium-1.7.2.jar \
+  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-local-qdn-fixture \
+  /absolute/new/path/pirate-unified-packaged-lifecycle-receipt.md
+```
+
+This runner starts packaged Core exactly twice in one rootless, loopback-only
+network namespace. A standalone form of the test lightwalletd stays up across
+both starts on explicit IPv4 loopback. Its Java-compatible service identifies
+as `regtest`, while its Pirate native service identifies as `main`; both serve
+the same four ordered, empty compact blocks. Pirate regtest server entries use
+`127.0.0.1`, not hostname resolution, so the native URI cannot drift to IPv6.
+
+The first start resolves and maps the QDN-derived native library, creates one
+unfunded entropy namespace from configured birthday `152855`, reaches the exact
+fixture tip, and durably records `MIGRATING` with validated synchronization.
+After a graceful shutdown, the second packaged start uses the same disposable
+repository and wallet storage, reopens the same namespace and one-way identity,
+reaches `READY`, promotes the state to `UNIFIED_READY`, and shuts down
+gracefully. Persistent Unified status cannot report ready merely because a sync
+command was accepted, and its durable validation requires the exact tip rather
+than the legacy two-block lag tolerance. A first wallet selection receives the
+normal initialization timeout; steady-state status calls retain the short
+bounded timeout.
+
+The fixture must observe Pirate tip and compact-block activity, its optional
+subtree capability probe, zero transaction read/send RPCs, and zero unexpected
+RPCs. The runner validates the exact start/shutdown count, storage continuity,
+network routes and interfaces, and QDN library mapping. It scans raw Core,
+native, fixture, API-status, and wallet-state evidence for the request entropy,
+API key, seed/key/address-shaped JSON, and shielded addresses, then deletes that
+evidence and retains only a sanitized receipt and log.
+
+This proves fresh creation, exact-tip synchronization, persistence, and clean
+restart/reopen on unfunded Linux x86_64 local fixtures. It does not prove a
+historical restore from earlier than the configured birthday, real legacy
+migration, A/B switching during an active sync, disable/re-enable, production
+lightwalletd interoperability, funds, QDN publication, deployment, default
+enablement, or Home behavior.
+
 ## Acceptance matrix
 
 Artifact presence is `STAGED`, not runtime acceptance. Loopback JNI and isolated
@@ -225,10 +274,10 @@ FreeBSD acceptance.
 | macOS aarch64 | NOT_RUN | NOT_RUN | NOT_RUN |
 | Windows x86_64 | NOT_RUN | NOT_RUN | NOT_RUN |
 
-G2 must later cover fresh wallet, historical restore, migration and restart,
-A/B account switching during sync, failover and bad-height servers,
-disable/re-enable, total and verified balances, address/key/seed/transaction
-listing, and packaged Core. G3 separately covers publication by an approved QDN
+G2 must later cover historical restore, real legacy migration, A/B account
+switching during sync, failover and bad-height servers, disable/re-enable,
+total and verified balances, address/key/seed/transaction listing, and other
+platforms. G3 separately covers publication by an approved QDN
 identity, retrieval by immutable transaction signature, byte comparison,
 controlled receive/send, and ARRR HTLC/P2SH fund/redeem/refund recovery.
 

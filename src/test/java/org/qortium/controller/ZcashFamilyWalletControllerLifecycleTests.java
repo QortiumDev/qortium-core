@@ -183,6 +183,42 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	}
 
 	@Test
+	public void testPersistentSyncAcceptanceDoesNotReportReadyBeforeValidatedTip() {
+		ZcashFamilyWalletController.WalletSyncStatus pending =
+				ZcashFamilyWalletController.statusAfterSyncAttempt(true, true, true, false);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, pending.getState());
+
+		ZcashFamilyWalletController.WalletSyncStatus validated =
+				ZcashFamilyWalletController.statusAfterSyncAttempt(true, true, true, true);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, validated.getState());
+
+		ZcashFamilyWalletController.WalletSyncStatus rejected =
+				ZcashFamilyWalletController.statusAfterSyncAttempt(true, true, false, false);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, rejected.getState());
+
+		ZcashFamilyWalletController.WalletSyncStatus legacy =
+				ZcashFamilyWalletController.statusAfterSyncAttempt(true, false, false, false);
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, legacy.getState());
+	}
+
+	@Test
+	public void testWalletSelectionUsesInitializationTimeoutButSteadyStatusStaysBounded() throws Exception {
+		TestController controller = new TestController();
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+
+		assertEquals(ZcashFamilyNativeCoordinator.STATUS_TIMEOUT, controller.statusTimeoutFor(null));
+		assertEquals(ZcashFamilyNativeCoordinator.DEFAULT_TIMEOUT,
+				controller.statusTimeoutFor(Base58.encode(entropyA)));
+
+		setControllerField(controller, "currentWallet", new TestWallet(entropyA));
+		assertEquals(ZcashFamilyNativeCoordinator.STATUS_TIMEOUT,
+				controller.statusTimeoutFor(Base58.encode(entropyA)));
+		assertEquals(ZcashFamilyNativeCoordinator.DEFAULT_TIMEOUT,
+				controller.statusTimeoutFor(Base58.encode(entropyB)));
+	}
+
+	@Test
 	public void testBusyStatusNeverReturnsAnotherWalletsCachedReadyState() throws Exception {
 		TestController controller = new TestController();
 		assertTrue(controller.startController());

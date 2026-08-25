@@ -155,8 +155,8 @@ public class PirateChain extends Bitcoiny {
 			@Override
 			public Collection<Server> getServers() {
 				return Arrays.asList(
-					new Server("localhost", Server.ConnectionType.TCP, 9067),
-					new Server("localhost", Server.ConnectionType.SSL, 443)
+					new Server("127.0.0.1", Server.ConnectionType.TCP, 9067),
+					new Server("127.0.0.1", Server.ConnectionType.SSL, 443)
 				);
 			}
 

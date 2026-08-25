@@ -342,11 +342,16 @@ public class ZcashFamilyWallet {
 			Integer height = this.getHeight(nativeAdapter);
 			Integer chainTip = this.getChainTip(nativeAdapter);
 
-			if (height == null || chainTip == null)
-				return false;
-
-			return height >= chainTip - 2;
+			return isHeightSynchronized(height, chainTip, this.synchronizationLagTolerance());
 		});
+	}
+
+	protected int synchronizationLagTolerance() {
+		return 2;
+	}
+
+	static boolean isHeightSynchronized(Integer height, Integer chainTip, int lagTolerance) {
+		return height != null && chainTip != null && lagTolerance >= 0 && height >= chainTip - lagTolerance;
 	}
 
 	public Integer getHeight() {

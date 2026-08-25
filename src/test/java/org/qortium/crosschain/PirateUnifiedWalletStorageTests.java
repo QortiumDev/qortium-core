@@ -168,6 +168,17 @@ public class PirateUnifiedWalletStorageTests {
 	}
 
 	@Test
+	public void testPersistentUnifiedWalletRequiresExactTipBeforeValidation() throws Exception {
+		ZcashFamilyWalletConfig config = this.config();
+		PirateWallet wallet = new PirateWallet(config, entropy(6), false, false);
+
+		assertEquals(0, wallet.synchronizationLagTolerance());
+		assertFalse(ZcashFamilyWallet.isHeightSynchronized(152_857, 152_858, wallet.synchronizationLagTolerance()));
+		assertTrue(ZcashFamilyWallet.isHeightSynchronized(152_858, 152_858, wallet.synchronizationLagTolerance()));
+		assertTrue(ZcashFamilyWallet.isHeightSynchronized(152_856, 152_858, 2));
+	}
+
+	@Test
 	public void testPartialMigrationRecoversIdempotentlyButMissingReadyDatabaseFailsClosed() throws Exception {
 		ZcashFamilyWalletConfig config = this.config();
 		PirateWallet partial = new PirateWallet(config, entropy(9), false, false);

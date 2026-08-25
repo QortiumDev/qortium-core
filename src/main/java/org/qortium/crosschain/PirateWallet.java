@@ -322,6 +322,11 @@ public class PirateWallet extends ZcashFamilyWallet {
 	}
 
 	@Override
+	protected int synchronizationLagTolerance() {
+		return this.usesPersistentUnifiedStorage() ? 0 : super.synchronizationLagTolerance();
+	}
+
+	@Override
 	public boolean isNativeSyncInProgress(ZcashFamilyNativeAdapter nativeAdapter) {
 		if (!this.unifiedWallet)
 			return false;
