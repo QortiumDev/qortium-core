@@ -11,7 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -20,6 +24,9 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.qortium.crosschain.PirateWallet.EndpointSelectionOutcome.APPLIED;
+import static org.qortium.crosschain.PirateWallet.EndpointSelectionOutcome.ENDPOINT_REJECTED;
+import static org.qortium.crosschain.PirateWallet.EndpointSelectionOutcome.RETRYABLE_FAILURE;
 
 public class PirateUnifiedWalletStorageTests {
 
@@ -156,7 +163,7 @@ public class PirateUnifiedWalletStorageTests {
 		PirateWallet first = new PirateWallet(config, entropy, false, false);
 
 		assertTrue(first.initializeUnified(adapter, "https://light.example:443/", DEFAULT_BIRTHDAY));
-		assertTrue(first.applyValidatedServerSelection(
+		assertEquals(APPLIED, first.applyValidatedServerSelection(
 				adapter, selection("light.example", DEFAULT_BIRTHDAY, 1)));
 		adapter.syncTargetHeight = DEFAULT_BIRTHDAY;
 		first.recordSynchronizationAccepted(adapter);
@@ -342,7 +349,7 @@ public class PirateUnifiedWalletStorageTests {
 		FakeAdapter adapter = new FakeAdapter();
 		ZcashFamilyLightClient.ValidatedServerSelection first = selection("a.example", DEFAULT_BIRTHDAY, 1);
 
-		assertTrue(wallet.applyValidatedServerSelection(adapter, first));
+		assertEquals(APPLIED, wallet.applyValidatedServerSelection(adapter, first));
 		assertEquals(List.of("get_active_wallet", "test_node", "cancel_sync", "set_lightd_endpoint",
 				"get_lightd_endpoint", "validate_consensus_branch", "get_active_wallet"), adapter.calls);
 		assertEquals("https://a.example:443",
@@ -352,7 +359,7 @@ public class PirateUnifiedWalletStorageTests {
 		adapter.syncTargetHeight = DEFAULT_BIRTHDAY; // Persisted pre-cutover target must not count as fresh evidence.
 		int callsAfterFirstCutover = adapter.invokeCalls;
 		long endpointMutations = adapter.calls.stream().filter("set_lightd_endpoint"::equals).count();
-		assertTrue(wallet.applyValidatedServerSelection(adapter, first));
+		assertEquals(APPLIED, wallet.applyValidatedServerSelection(adapter, first));
 		assertEquals(callsAfterFirstCutover, adapter.invokeCalls);
 		assertEquals(endpointMutations,
 				adapter.calls.stream().filter("set_lightd_endpoint"::equals).count());
@@ -368,15 +375,15 @@ public class PirateUnifiedWalletStorageTests {
 		assertFalse(adapter.calls.contains("execute:info"));
 
 		ZcashFamilyLightClient.ValidatedServerSelection second = selection("b.example", DEFAULT_BIRTHDAY, 2);
-		assertTrue(wallet.applyValidatedServerSelection(adapter, second));
+		assertEquals(APPLIED, wallet.applyValidatedServerSelection(adapter, second));
 		assertEquals("https://b.example:443",
 				wallet.getUnifiedStorage().read().getSelectedServerUri());
 		assertTrue(wallet.requiresFreshSynchronization());
 	}
 
 	@Test
-	public void testEveryNativeEndpointCutoverFailureFailsClosed() throws Exception {
-		for (String failure : List.of("node", "chain", "height", "cancel", "set", "readback", "consensus")) {
+	public void testEveryNativeEndpointCutoverFailureIsClassifiedAndFailsClosed() throws Exception {
+		for (String failure : List.of("node", "chain", "height", "tls", "cancel", "set", "readback", "consensus")) {
 			PirateWallet wallet = new PirateWallet(
 					this.config(this.temporaryDirectory.resolve("cutover-failure-" + failure)),
 					entropy(failure.hashCode()), false, false);
@@ -385,6 +392,7 @@ public class PirateUnifiedWalletStorageTests {
 				case "node" -> adapter.nativeNodeSuccess = false;
 				case "chain" -> adapter.nativeChainName = "test";
 				case "height" -> adapter.nativeNodeHeight = DEFAULT_BIRTHDAY + 101L;
+				case "tls" -> adapter.nativeTlsEnabledOverride = false;
 				case "cancel" -> adapter.cancelAcknowledged = false;
 				case "set" -> adapter.setAcknowledged = false;
 				case "readback" -> adapter.readbackOverride = "https://other.example:443";
@@ -392,7 +400,12 @@ public class PirateUnifiedWalletStorageTests {
 				default -> throw new AssertionError("Unhandled failure");
 			}
 
-			assertFalse("Expected fail-closed cutover at " + failure,
+			PirateWallet.EndpointSelectionOutcome expected = switch (failure) {
+				case "chain", "height", "tls", "consensus" -> ENDPOINT_REJECTED;
+				case "node", "cancel", "set", "readback" -> RETRYABLE_FAILURE;
+				default -> throw new AssertionError("Unhandled failure");
+			};
+			assertEquals("Unexpected cutover classification at " + failure, expected,
 					wallet.applyValidatedServerSelection(adapter, selection("candidate.example", DEFAULT_BIRTHDAY, 1)));
 			assertNull(wallet.getUnifiedStorage().read().getSelectedServerUri());
 			assertFalse(adapter.calls.contains("execute:sync"));
@@ -400,19 +413,66 @@ public class PirateUnifiedWalletStorageTests {
 	}
 
 	@Test
+	public void testTransientCutoverFailureRetainsExplicitServerForControllerPacedRetry() throws Exception {
+		PirateWallet wallet = new PirateWallet(this.config(this.temporaryDirectory.resolve("cutover-retry")),
+				entropy(25), false, false);
+		FakeAdapter adapter = new FakeAdapter();
+		ZcashFamilyLightClient.ValidatedServerSelection serverB =
+				selection("b.example", DEFAULT_BIRTHDAY, 1);
+		ZcashFamilyLightClient.ValidatedServerSelection serverA =
+				selection("a.example", DEFAULT_BIRTHDAY, 2);
+		SelectionLightClient lightClient = new SelectionLightClient(serverB, serverA);
+
+		adapter.cancelAcknowledged = false;
+		assertFalse(wallet.prepareForSynchronization(adapter, lightClient));
+		assertEquals(serverB, lightClient.getValidatedServerSelection());
+		assertEquals(0, lightClient.rotationCount);
+		assertNull(wallet.getUnifiedStorage().read().getSelectedServerUri());
+
+		adapter.cancelAcknowledged = true;
+		assertTrue(wallet.prepareForSynchronization(adapter, lightClient));
+		assertEquals(serverB, lightClient.getValidatedServerSelection());
+		assertEquals(0, lightClient.rotationCount);
+		assertEquals(serverB.getEndpointUri(), wallet.getUnifiedStorage().read().getSelectedServerUri());
+		assertEquals(serverB.getEndpointUri(), adapter.endpointReadback);
+	}
+
+	@Test
+	public void testPermanentWrongChainServerFallsBackToConfiguredAlternative() throws Exception {
+		PirateWallet wallet = new PirateWallet(this.config(this.temporaryDirectory.resolve("cutover-reject")),
+				entropy(26), false, false);
+		FakeAdapter adapter = new FakeAdapter();
+		ZcashFamilyLightClient.ValidatedServerSelection serverB =
+				selection("b.example", DEFAULT_BIRTHDAY, 1);
+		ZcashFamilyLightClient.ValidatedServerSelection serverA =
+				selection("a.example", DEFAULT_BIRTHDAY, 2);
+		SelectionLightClient lightClient = new SelectionLightClient(serverB, serverA);
+		adapter.nativeChainNamesByEndpoint.put(serverB.getEndpointUri(), "test");
+
+		assertTrue(wallet.prepareForSynchronization(adapter, lightClient));
+		assertEquals(serverA, lightClient.getValidatedServerSelection());
+		assertEquals(1, lightClient.rotationCount);
+		assertEquals(serverA.getEndpointUri(), wallet.getUnifiedStorage().read().getSelectedServerUri());
+		assertEquals(serverA.getEndpointUri(), adapter.endpointReadback);
+	}
+
+	@Test
 	public void testLateCutoverFailureRequiresNativeRollbackBeforeReusingPriorEndpoint() throws Exception {
 		PirateWallet wallet = new PirateWallet(this.config(this.temporaryDirectory.resolve("cutover-rollback")),
 				entropy(22), false, false);
 		FakeAdapter adapter = new FakeAdapter();
-		assertTrue(wallet.applyValidatedServerSelection(adapter, selection("a.example", DEFAULT_BIRTHDAY, 1)));
+		assertEquals(APPLIED,
+				wallet.applyValidatedServerSelection(adapter, selection("a.example", DEFAULT_BIRTHDAY, 1)));
 
 		adapter.consensusValid = false;
-		assertFalse(wallet.applyValidatedServerSelection(adapter, selection("b.example", DEFAULT_BIRTHDAY, 2)));
+		assertEquals(ENDPOINT_REJECTED,
+				wallet.applyValidatedServerSelection(adapter, selection("b.example", DEFAULT_BIRTHDAY, 2)));
 		assertEquals("https://b.example:443", adapter.endpointReadback);
 
 		adapter.consensusValid = true;
 		int callsBeforeRollback = adapter.invokeCalls;
-		assertTrue(wallet.applyValidatedServerSelection(adapter, selection("a.example", DEFAULT_BIRTHDAY, 3)));
+		assertEquals(APPLIED,
+				wallet.applyValidatedServerSelection(adapter, selection("a.example", DEFAULT_BIRTHDAY, 3)));
 		assertTrue(adapter.invokeCalls > callsBeforeRollback);
 		assertEquals("https://a.example:443", adapter.endpointReadback);
 		assertEquals("https://a.example:443", wallet.getUnifiedStorage().read().getSelectedServerUri());
@@ -423,7 +483,8 @@ public class PirateUnifiedWalletStorageTests {
 		PirateWallet wallet = new PirateWallet(
 				this.config(this.temporaryDirectory.resolve("cutover-disabled"), false), entropy(21), false, false);
 		FakeAdapter adapter = new FakeAdapter();
-		assertTrue(wallet.applyValidatedServerSelection(adapter, selection("disabled.example", DEFAULT_BIRTHDAY, 1)));
+		assertEquals(APPLIED,
+				wallet.applyValidatedServerSelection(adapter, selection("disabled.example", DEFAULT_BIRTHDAY, 1)));
 		assertEquals(0, adapter.invokeCalls);
 	}
 
@@ -437,7 +498,7 @@ public class PirateUnifiedWalletStorageTests {
 		ZcashFamilyLightClient.ValidatedServerSelection selection =
 				new ZcashFamilyLightClient.ValidatedServerSelection(server, "http://127.0.0.1:9067",
 						"regtest", DEFAULT_BIRTHDAY, 1);
-		assertTrue(wallet.applyValidatedServerSelection(adapter, selection));
+		assertEquals(APPLIED, wallet.applyValidatedServerSelection(adapter, selection));
 	}
 
 	private static ZcashFamilyLightClient.ValidatedServerSelection selection(String host, long height,
@@ -468,6 +529,50 @@ public class PirateUnifiedWalletStorageTests {
 		return entropy;
 	}
 
+	private static final class SelectionLightClient extends ZcashFamilyLightClient {
+		private final List<ValidatedServerSelection> selections;
+		private ValidatedServerSelection currentSelection;
+		private int rotationCount;
+
+		private SelectionLightClient(ValidatedServerSelection... selections) {
+			super(new ZcashFamilyWalletConfig("Test", "TEST", "Test", "signature", "encryption", "zs",
+					() -> DEFAULT_BIRTHDAY, () -> null), "test", "main",
+					servers(selections), Map.of(ChainableServer.ConnectionType.SSL, 443), () -> DEFAULT_BIRTHDAY);
+			this.selections = List.of(selections);
+			this.currentSelection = this.selections.get(0);
+		}
+
+		@Override
+		public ValidatedServerSelection getValidatedServerSelection() {
+			return this.currentSelection;
+		}
+
+		@Override
+		public ValidatedServerSelection selectAnyValidatedServer() {
+			return this.currentSelection;
+		}
+
+		@Override
+		public ValidatedServerSelection selectAnotherAfterNativeFailure(ValidatedServerSelection rejectedSelection,
+				Set<ChainableServer> rejectedServers, String requestedBy, String notes) {
+			if (this.currentSelection != rejectedSelection)
+				return this.currentSelection;
+			this.rotationCount++;
+			this.currentSelection = this.selections.stream()
+					.filter(selection -> rejectedServers == null || !rejectedServers.contains(selection.getServer()))
+					.findFirst()
+					.orElse(null);
+			return this.currentSelection;
+		}
+
+		private static Set<ChainableServer> servers(ValidatedServerSelection[] selections) {
+			Set<ChainableServer> servers = new HashSet<>();
+			for (ValidatedServerSelection selection : selections)
+				servers.add(selection.getServer());
+			return servers;
+		}
+	}
+
 	private static void writeLegacyInputs(ZcashFamilyWalletConfig config, PirateWallet wallet, byte[] walletBytes)
 			throws IOException {
 		Path legacyLib = config.getLegacyRustLibOuterDirectory();
@@ -492,7 +597,9 @@ public class PirateUnifiedWalletStorageTests {
 		private boolean consensusValid = true;
 		private boolean nativeNodeSuccess = true;
 		private String nativeChainName = "main";
+		private final Map<String, String> nativeChainNamesByEndpoint = new HashMap<>();
 		private long nativeNodeHeight = DEFAULT_BIRTHDAY;
+		private Boolean nativeTlsEnabledOverride;
 		private long syncTargetHeight;
 		private String endpointReadback;
 		private String readbackOverride;
@@ -554,8 +661,11 @@ public class PirateUnifiedWalletStorageTests {
 				return new JSONObject().put("ok", true).put("result", new JSONObject()
 						.put("success", this.nativeNodeSuccess)
 						.put("latest_block_height", this.nativeNodeHeight)
-						.put("chain_name", this.nativeChainName)
-						.put("tls_enabled", request.optString("url").startsWith("https://"))).toString();
+						.put("chain_name", this.nativeChainNamesByEndpoint.getOrDefault(
+								request.optString("url"), this.nativeChainName))
+						.put("tls_enabled", this.nativeTlsEnabledOverride == null
+								? request.optString("url").startsWith("https://")
+								: this.nativeTlsEnabledOverride)).toString();
 			if ("cancel_sync".equals(method))
 				return acknowledgement(this.cancelAcknowledged);
 			if ("set_lightd_endpoint".equals(method)) {
