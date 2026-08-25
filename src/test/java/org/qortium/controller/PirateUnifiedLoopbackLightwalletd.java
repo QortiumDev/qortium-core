@@ -3,6 +3,7 @@ package org.qortium.controller;
 import cash.z.wallet.sdk.rpc.CompactFormats;
 import cash.z.wallet.sdk.rpc.CompactTxStreamerGrpc;
 import cash.z.wallet.sdk.rpc.Service;
+import com.google.common.hash.HashCode;
 import com.google.protobuf.ByteString;
 import io.grpc.HandlerRegistry;
 import io.grpc.MethodDescriptor;
@@ -37,6 +38,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 	static final long SAPLING_ACTIVATION_HEIGHT = 152_855L;
+	static final long HISTORICAL_NOTE_HEIGHT = SAPLING_ACTIVATION_HEIGHT + 1L;
+	static final long HISTORICAL_NOTE_VALUE = 123_456_789L;
 	static final long TIP_HEIGHT = 152_858L;
 	static final long IRONWOOD_PROBE_HEIGHT = TIP_HEIGHT - 30L;
 
@@ -44,6 +47,17 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	static final String PIRATE_SERVICE = "pirate.wallet.sdk.rpc.CompactTxStreamer";
 
 	private static final int FIRST_BLOCK_TIME = 1_534_262_400;
+	// Generated offline from the deterministic entropy-7 Qortal JNI wallet with the pinned
+	// Pirate Unified v1.1.7 Rust sources. These public test-vector bytes carry no production key.
+	private static final String HISTORICAL_TX_HASH =
+			"5dfe16939ede32a097e28d225880e8b6a661bdaf64f5cb17c559bd2a57bb7a19";
+	private static final String HISTORICAL_CMU =
+			"0bf391fbcf3c9e16a2f7d3840120c884b6663d41fcba373b7cf9c49069a5501f";
+	private static final String HISTORICAL_EPK =
+			"29e7d3811a94f4df4c025ed50d79df089a160b229c60c407b2bea018aa3bd185";
+	private static final String HISTORICAL_CIPHERTEXT =
+			"0b8fcb16806b6ef2161e09569f608883c0a83b956796324b227082e5046cb646"
+					+ "5a6bc8f55f5ea675ce790dff7d9927a0f74d2d4b";
 
 	private final Map<String, AtomicInteger> rpcCounts = new ConcurrentHashMap<>();
 	private final List<String> observedRanges = Collections.synchronizedList(new ArrayList<>());
@@ -58,16 +72,26 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	private final Server server;
 	private final String cashChainName;
 	private final String pirateChainName;
+	private final boolean includeHistoricalNote;
 
 	PirateUnifiedLoopbackLightwalletd() throws IOException {
-		this(0, "main", "main");
+		this(0, "main", "main", false);
+	}
+
+	PirateUnifiedLoopbackLightwalletd(boolean includeHistoricalNote) throws IOException {
+		this(0, "main", "main", includeHistoricalNote);
 	}
 
 	PirateUnifiedLoopbackLightwalletd(int port, String chainName) throws IOException {
-		this(port, chainName, chainName);
+		this(port, chainName, chainName, false);
 	}
 
 	PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName) throws IOException {
+		this(port, cashChainName, pirateChainName, false);
+	}
+
+	private PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName,
+			boolean includeHistoricalNote) throws IOException {
 		if (port < 0 || port > 65_535)
 			throw new IllegalArgumentException("Invalid fixture port");
 		if (cashChainName == null || cashChainName.isBlank()
@@ -76,6 +100,7 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 		this.cashChainName = cashChainName;
 		this.pirateChainName = pirateChainName;
+		this.includeHistoricalNote = includeHistoricalNote;
 		FixtureService fixtureService = new FixtureService();
 		ServerInterceptor auditInterceptor = this::auditCall;
 		this.server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", port))
@@ -320,14 +345,22 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		}
 	}
 
-	private static CompactFormats.CompactBlock block(long height) {
-		return CompactFormats.CompactBlock.newBuilder()
+	private CompactFormats.CompactBlock block(long height) {
+		CompactFormats.CompactBlock.Builder block = CompactFormats.CompactBlock.newBuilder()
 				.setProtoVersion(4)
 				.setHeight(height)
 				.setHash(ByteString.copyFrom(blockHash(height)))
 				.setPrevHash(ByteString.copyFrom(blockHash(height - 1)))
-				.setTime(FIRST_BLOCK_TIME + Math.toIntExact((height - SAPLING_ACTIVATION_HEIGHT) * 60L))
-				.build();
+				.setTime(FIRST_BLOCK_TIME + Math.toIntExact((height - SAPLING_ACTIVATION_HEIGHT) * 60L));
+		if (this.includeHistoricalNote && height == HISTORICAL_NOTE_HEIGHT)
+			block.addVtx(CompactFormats.CompactTx.newBuilder()
+					.setIndex(0)
+					.setHash(ByteString.copyFrom(HashCode.fromString(HISTORICAL_TX_HASH).asBytes()))
+					.addOutputs(CompactFormats.CompactOutput.newBuilder()
+							.setCmu(ByteString.copyFrom(HashCode.fromString(HISTORICAL_CMU).asBytes()))
+							.setEpk(ByteString.copyFrom(HashCode.fromString(HISTORICAL_EPK).asBytes()))
+							.setCiphertext(ByteString.copyFrom(HashCode.fromString(HISTORICAL_CIPHERTEXT).asBytes()))));
+		return block.build();
 	}
 
 	private static byte[] blockHash(long height) {
