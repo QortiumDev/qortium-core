@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
-public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
+public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider implements AutoCloseable {
 
 	private static final Logger LOGGER = LogManager.getLogger(ZcashFamilyLightClient.class);
 	private static final Random RANDOM = new Random();
@@ -472,7 +472,7 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 		return new ZcashFamilyLightClient.Server(hostName, type, port);
 	}
 
-	private CompactTxStreamerGrpc.CompactTxStreamerBlockingStub getCompactTxStreamerStub() throws ForeignBlockchainException {
+	protected CompactTxStreamerGrpc.CompactTxStreamerBlockingStub getCompactTxStreamerStub() throws ForeignBlockchainException {
 		synchronized (this.serverLock) {
 			if (this.remainingServers.isEmpty())
 				this.servers.stream().filter(server -> !this.uselessServers.contains(server))
@@ -534,7 +534,29 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, message));
 			}
 
-			long serverHeight = lightdInfo.getBlockHeight();
+			BlockID latestBlock;
+			try {
+				latestBlock = fetchLatestBlock(tempChannel);
+			} catch (RuntimeException e) {
+				String message = "latest block probe failed: " + CrossChainUtils.getNotes(e);
+				shutdownChannel(tempChannel);
+				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, message));
+			}
+			if (latestBlock == null || latestBlock.getHeight() <= 0) {
+				shutdownChannel(tempChannel);
+				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false,
+						"latest block is unavailable"));
+			}
+
+			long reportedHeight = lightdInfo.getBlockHeight();
+			long serverHeight = latestBlock.getHeight();
+			if (Math.abs(reportedHeight - serverHeight) > SERVER_HEIGHT_AGREEMENT_TOLERANCE) {
+				String message = String.format("lightd info height %d disagrees with latest block height %d",
+						reportedHeight, serverHeight);
+				shutdownChannel(tempChannel);
+				return Optional.of(this.recorder.recordConnection(server, requestedBy, true, false, message));
+			}
+
 			int configuredBirthday = this.defaultBirthdaySupplier.getAsInt();
 			if (requiresBirthdayFloor(this.expectedChainName)
 					&& configuredBirthday > 0 && serverHeight < configuredBirthday) {
@@ -598,6 +620,11 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 		return stub.withDeadlineAfter(10, TimeUnit.SECONDS).getLightdInfo(Empty.newBuilder().build());
 	}
 
+	protected BlockID fetchLatestBlock(ManagedChannel probeChannel) {
+		CompactTxStreamerGrpc.CompactTxStreamerBlockingStub stub = CompactTxStreamerGrpc.newBlockingStub(probeChannel);
+		return stub.withDeadlineAfter(10, TimeUnit.SECONDS).getLatestBlock(null);
+	}
+
 	private Optional<ChainableServerConnection> closeServer(ChainableServer server, String notes, String requestedBy) {
 		final ChainableServerConnection connection;
 
@@ -638,6 +665,11 @@ public class ZcashFamilyLightClient extends BitcoinyBlockchainProvider {
 		synchronized (this.serverLock) {
 			return this.closeServer(this.currentServer, notes, requestedBy);
 		}
+	}
+
+	@Override
+	public void close() {
+		this.closeServer(this.getClass().getSimpleName(), "Closing lightwalletd client.");
 	}
 
 	private void shutdownChannel(ManagedChannel channel) {
