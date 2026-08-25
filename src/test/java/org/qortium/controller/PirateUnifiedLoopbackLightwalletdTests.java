@@ -80,6 +80,17 @@ public class PirateUnifiedLoopbackLightwalletdTests {
 								.blockingUnaryCall(channel, pirateLatest, io.grpc.CallOptions.DEFAULT,
 										Service.ChainSpec.getDefaultInstance())
 								.getHeight());
+				MethodDescriptor<Service.BlockID, CompactFormats.CompactBlock> pirateBlock =
+						CompactTxStreamerGrpc.getGetBlockMethod().toBuilder()
+								.setFullMethodName(MethodDescriptor.generateFullMethodName(
+										PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetBlock"))
+								.setSchemaDescriptor(null)
+								.build();
+				assertEquals(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT,
+						ClientCalls.blockingUnaryCall(channel, pirateBlock, io.grpc.CallOptions.DEFAULT,
+								Service.BlockID.newBuilder()
+										.setHeight(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT)
+										.build()).getHeight());
 
 				Service.BlockRange fullRange =
 						Service.BlockRange.newBuilder()
@@ -151,7 +162,8 @@ public class PirateUnifiedLoopbackLightwalletdTests {
 				assertEquals(1, fixture.completeRangeCount(PirateUnifiedLoopbackLightwalletd.CASH_SERVICE));
 				assertEquals(1, fixture.completeRangeCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE));
 				assertEquals(1, fixture.pirateTipRangeCount());
-				assertEquals(0, fixture.pirateScannedBlockCount());
+				assertEquals(1, fixture.pirateScannedBlockCount());
+				assertEquals(1, fixture.pirateTipBlockCount());
 				assertEquals(1, fixture.activationProbeCount());
 				assertEquals(1, fixture.subtreeProbeCount());
 				assertEquals(2, fixture.forbiddenRpcCount());
@@ -188,8 +200,13 @@ public class PirateUnifiedLoopbackLightwalletdTests {
 
 			String audit = PirateUnifiedLoopbackLightwalletdMain.audit(fixture);
 			assertTrue(audit.contains("result=PASS\n"));
+			assertTrue(audit.contains("tipHeight=" + PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT + "\n"));
+			assertTrue(audit.contains("nativeRpcCount=1\n"));
 			assertTrue(audit.contains("forbiddenRpcs=0\n"));
 			assertFalse(audit.contains("127.0.0.1"));
+			String runningAudit = PirateUnifiedLoopbackLightwalletdMain.audit(fixture, "RUNNING");
+			assertTrue(runningAudit.startsWith("result=RUNNING\n"));
+			assertFalse(runningAudit.contains("result=PASS"));
 		}
 	}
 

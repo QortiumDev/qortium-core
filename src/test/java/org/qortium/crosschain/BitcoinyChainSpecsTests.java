@@ -866,9 +866,11 @@ public class BitcoinyChainSpecsTests {
 	public void testPirateRegtestServersUseExplicitIpv4Loopback() {
 		List<PirateLightClient.Server> servers =
 				List.copyOf(PirateChain.PirateChainNet.REGTEST.getServers());
-		assertEquals(2, servers.size());
+		assertEquals(3, servers.size());
 		assertTrue(servers.stream().allMatch(server -> "127.0.0.1".equals(server.getHostName())));
 		assertTrue(servers.stream().anyMatch(server -> server.getPort() == 9067
+				&& server.getConnectionType() == ChainableServer.ConnectionType.TCP));
+		assertTrue(servers.stream().anyMatch(server -> server.getPort() == 9068
 				&& server.getConnectionType() == ChainableServer.ConnectionType.TCP));
 	}
 
