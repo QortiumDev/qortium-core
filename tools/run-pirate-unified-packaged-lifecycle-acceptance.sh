@@ -7,7 +7,7 @@ umask 077
 # transaction, publishes nothing, and runs without a non-loopback route.
 
 usage() {
-	printf '%s\n' "Usage: $0 <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md>" >&2
+	printf '%s\n' "Usage: $0 <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md> [--cutover]" >&2
 }
 
 property() {
@@ -77,6 +77,14 @@ run_inside_namespace() {
 	helper_classes=$3
 	signature=$4
 	result_file=$5
+	mode=$6
+	cutover_mode=false
+	if [ "$mode" = '--cutover' ]; then
+		cutover_mode=true
+	elif [ -n "$mode" ]; then
+		printf 'Unsupported packaged lifecycle mode: %s\n' "$mode" >&2
+		return 2
+	fi
 	core_pid=
 	fixture_pid=
 	start_count=0
@@ -131,9 +139,16 @@ run_inside_namespace() {
 	# Keep any library-default relative files inside disposable runtime storage.
 	# The isolated shell expands its own positional parameters.
 	# shellcheck disable=SC2016
-	setsid sh -c 'cd "$1" && exec java -Djava.awt.headless=true -cp "$2:$3" org.qortium.controller.PirateUnifiedLoopbackLightwalletdMain "$4" "$5"' \
-		sh "$runtime" "$helper_classes" "$jar" "$runtime/lightwalletd.ready" "$runtime/lightwalletd.audit" \
-		> "$runtime/lightwalletd.log" 2>&1 &
+	if [ "$cutover_mode" = true ]; then
+		setsid sh -c 'cd "$1" && exec java -Djava.awt.headless=true -cp "$2:$3" org.qortium.controller.PirateUnifiedLoopbackLightwalletdMain "$4" "$5" "$6" cutover' \
+			sh "$runtime" "$helper_classes" "$jar" "$runtime/lightwalletd.ready" \
+			"$runtime/lightwalletd-a.audit" "$runtime/lightwalletd-b.audit" \
+			> "$runtime/lightwalletd.log" 2>&1 &
+	else
+		setsid sh -c 'cd "$1" && exec java -Djava.awt.headless=true -cp "$2:$3" org.qortium.controller.PirateUnifiedLoopbackLightwalletdMain "$4" "$5"' \
+			sh "$runtime" "$helper_classes" "$jar" "$runtime/lightwalletd.ready" "$runtime/lightwalletd.audit" \
+			> "$runtime/lightwalletd.log" 2>&1 &
+	fi
 	fixture_pid=$!
 	fixture_ready=false
 	wait_count=0
@@ -150,13 +165,62 @@ run_inside_namespace() {
 		wait_count=$((wait_count + 1))
 	done
 	if [ "$fixture_ready" != true ] \
-			|| [ "$(property port "$runtime/lightwalletd.ready" 2>/dev/null || true)" != 9067 ] \
 			|| [ "$(property javaChainName "$runtime/lightwalletd.ready" 2>/dev/null || true)" != regtest ] \
 			|| [ "$(property nativeChainName "$runtime/lightwalletd.ready" 2>/dev/null || true)" != main ]; then
 		printf '%s\n' 'Loopback lightwalletd did not prove its fixed dual-service endpoint' >&2
 		return 1
 	fi
+	if [ "$cutover_mode" = true ]; then
+		if [ "$(property mode "$runtime/lightwalletd.ready" 2>/dev/null || true)" != cutover ] \
+				|| [ "$(property portA "$runtime/lightwalletd.ready" 2>/dev/null || true)" != 9067 ] \
+				|| [ "$(property tipA "$runtime/lightwalletd.ready" 2>/dev/null || true)" != 152858 ] \
+				|| [ "$(property portB "$runtime/lightwalletd.ready" 2>/dev/null || true)" != 9068 ] \
+				|| [ "$(property tipB "$runtime/lightwalletd.ready" 2>/dev/null || true)" != 152862 ]; then
+			printf '%s\n' 'Loopback fixture pair did not prove the fixed A/B cutover contract' >&2
+			return 1
+		fi
+	elif [ "$(property port "$runtime/lightwalletd.ready" 2>/dev/null || true)" != 9067 ]; then
+		printf '%s\n' 'Loopback lightwalletd did not prove its fixed single endpoint' >&2
+		return 1
+	fi
 	printf 'loopbackFixture=PASS\n' >> "$result_file"
+
+	set_current_server() {
+		server_port=$1
+		response_file=$2
+		payload_file=$runtime/server-$server_port.json
+		printf '{"hostName":"127.0.0.1","port":%s,"connectionType":"TCP"}\n' \
+			"$server_port" > "$payload_file"
+		curl --fail --silent --show-error --max-time 30 \
+				--config "$runtime/curl-json-api.conf" \
+				--data-binary "@$payload_file" \
+				"http://127.0.0.1:$api_port/crosschain/arrr/setcurrentserver" \
+				> "$response_file" 2>/dev/null \
+			&& grep -Eq '"success"[[:space:]]*:[[:space:]]*true' "$response_file" \
+			&& grep -Eq '"port"[[:space:]]*:[[:space:]]*'"$server_port" "$response_file"
+	}
+
+	wallet_address_sha256() {
+		wallet_address=$(curl --fail --silent --show-error --max-time 30 \
+				--config "$runtime/curl-api.conf" \
+				--data-binary "@$runtime/entropy.txt" \
+				"http://127.0.0.1:$api_port/crosschain/arrr/walletaddress" 2>/dev/null) || return 1
+		case $wallet_address in
+			zs[1-9A-HJ-NP-Za-km-z]*) ;;
+			*) wallet_address=; return 1 ;;
+		esac
+		wallet_address_hash_line=$(printf '%s' "$wallet_address" | sha256sum)
+		wallet_address=
+		printf '%s\n' "${wallet_address_hash_line%% *}"
+	}
+
+	assert_a_barrier() {
+		observed_a_count=$(property nativeRpcCount "$runtime/lightwalletd-a.audit" 2>/dev/null || true)
+		case $observed_a_count in
+			''|*[!0-9]*) return 1 ;;
+		esac
+		[ -n "$server_a_barrier" ] && [ "$observed_a_count" -eq "$server_a_barrier" ]
+	}
 
 	run_core_start() {
 		start_number=$1
@@ -188,6 +252,12 @@ run_inside_namespace() {
 		if [ "$api_ready" != true ]; then
 			printf 'Timed out waiting for packaged Core start %s API\n' "$start_number" >&2
 			return 1
+		fi
+		if [ "$cutover_mode" = true ] && [ "$start_number" -eq 1 ]; then
+			if ! set_current_server 9067 "$runtime/set-server-a.json"; then
+				printf '%s\n' 'Packaged Core did not select server A before first wallet initialization' >&2
+				return 1
+			fi
 		fi
 
 		ready=false
@@ -259,13 +329,133 @@ run_inside_namespace() {
 			printf 'Packaged Core start %s state identity could not be parsed\n' "$start_number" >&2
 			return 1
 		fi
+		address_sha256=$(wallet_address_sha256) || {
+			printf 'Packaged Core start %s did not expose a valid wallet address\n' "$start_number" >&2
+			return 1
+		}
 		if [ "$start_number" -eq 1 ]; then
 			first_namespace=$namespace
 			first_identity_hash=$identity_hash
+			first_address_sha256=$address_sha256
 		else
-			if [ "$namespace" != "$first_namespace" ] || [ "$identity_hash" != "$first_identity_hash" ]; then
+			if [ "$namespace" != "$first_namespace" ] || [ "$identity_hash" != "$first_identity_hash" ] \
+					|| [ "$address_sha256" != "$first_address_sha256" ]; then
 				printf '%s\n' 'Wallet namespace or identity changed across packaged restart' >&2
 				return 1
+			fi
+		fi
+		address_sha256=
+
+		if [ "$cutover_mode" = true ]; then
+			selected_server_uri=$(state_field selectedServerUri "$state_path")
+			if [ "$start_number" -eq 1 ]; then
+				if [ "$selected_server_uri" != 'http://127.0.0.1:9067' ]; then
+					printf 'First packaged start did not synchronize on server A: %s\n' "$selected_server_uri" >&2
+					return 1
+				fi
+				# Flush every native A RPC preceding the explicit Java B-selection boundary.
+				sleep 1
+				server_a_barrier=$(property nativeRpcCount "$runtime/lightwalletd-a.audit" 2>/dev/null || true)
+				case $server_a_barrier in
+					''|*[!0-9]*) printf '%s\n' 'Live server A cutover audit counter is invalid' >&2; return 1 ;;
+				esac
+				if ! set_current_server 9068 "$runtime/set-server-b.json"; then
+					printf '%s\n' 'Packaged Core did not accept the Java selection of server B' >&2
+					return 1
+				fi
+				applied_address_sha256=$(wallet_address_sha256) || {
+					printf '%s\n' 'Packaged Core did not apply server B through a wallet operation' >&2
+					return 1
+				}
+				if [ "$applied_address_sha256" != "$first_address_sha256" ] \
+						|| [ "$(state_field selectedServerUri "$state_path")" != 'http://127.0.0.1:9068' ]; then
+					printf '%s\n' 'Wallet identity or persisted endpoint changed during native server B application' >&2
+					return 1
+				fi
+				applied_address_sha256=
+				if ! assert_a_barrier; then
+					printf '%s\n' 'Server A received native traffic during native server B application' >&2
+					return 1
+				fi
+
+				cutover_ready=false
+				wait_count=0
+				while [ "$wait_count" -lt 300 ]; do
+					if ! kill -0 "$core_pid" 2>/dev/null; then
+						printf '%s\n' 'First packaged Core exited during endpoint cutover' >&2
+						return 1
+					fi
+					b_tip_ranges=$(property pirateTipRanges "$runtime/lightwalletd-b.audit" 2>/dev/null || true)
+					b_tip_blocks=$(property pirateTipBlocks "$runtime/lightwalletd-b.audit" 2>/dev/null || true)
+					b_native_count=$(property nativeRpcCount "$runtime/lightwalletd-b.audit" 2>/dev/null || true)
+					case $b_tip_ranges:$b_tip_blocks:$b_native_count in
+						*[!0-9:]*|*::*|:*) b_tip_evidence=false ;;
+						*)
+							b_tip_evidence=false
+							if [ "$b_tip_ranges" -gt 0 ] || [ "$b_tip_blocks" -gt 0 ]; then
+								b_tip_evidence=true
+							fi
+							;;
+					esac
+					if ! assert_a_barrier; then
+						printf '%s\n' 'Server A received native traffic after the confirmed B barrier' >&2
+						return 1
+					fi
+					if curl --fail --silent --show-error --max-time 15 \
+							--config "$runtime/curl-api.conf" \
+							--data-binary "@$runtime/entropy.txt" \
+							"http://127.0.0.1:$api_port/crosschain/arrr/syncstatus?json=true" \
+							> "$runtime/status-cutover.json" 2>/dev/null \
+							&& grep -Eq '"state"[[:space:]]*:[[:space:]]*"READY"' "$runtime/status-cutover.json" \
+							&& grep -Eq '"restartRequired"[[:space:]]*:[[:space:]]*false' "$runtime/status-cutover.json" \
+							&& [ "$(state_field selectedServerUri "$state_path")" = 'http://127.0.0.1:9068' ] \
+							&& [ "$(state_field identityHash "$state_path")" = "$first_identity_hash" ] \
+							&& [ "$b_tip_evidence" = true ] && [ "$b_native_count" -gt 0 ]; then
+						cutover_ready=true
+						break
+					fi
+					sleep 1
+					wait_count=$((wait_count + 1))
+				done
+				if [ "$cutover_ready" != true ]; then
+					cutover_state=$(state_field state "$runtime/status-cutover.json" 2>/dev/null || true)
+					cutover_restart=$(state_field restartRequired "$runtime/status-cutover.json" 2>/dev/null || true)
+					cutover_selected=$(state_field selectedServerUri "$state_path" 2>/dev/null || true)
+					cutover_identity=$(state_field identityHash "$state_path" 2>/dev/null || true)
+					identity_continuity=FAIL
+					[ "$cutover_identity" = "$first_identity_hash" ] && identity_continuity=PASS
+					printf 'First packaged Core did not complete server B sync: state=%s restart=%s selected=%s identity=%s B-ranges=%s B-tip-blocks=%s B-native=%s\n' \
+						"${cutover_state:-UNKNOWN}" "${cutover_restart:-UNKNOWN}" \
+						"${cutover_selected:-UNKNOWN}" "$identity_continuity" \
+						"${b_tip_ranges:-UNKNOWN}" "${b_tip_blocks:-UNKNOWN}" \
+						"${b_native_count:-UNKNOWN}" >&2
+					return 1
+				fi
+				post_cutover_address_sha256=$(wallet_address_sha256) || return 1
+				if [ "$post_cutover_address_sha256" != "$first_address_sha256" ]; then
+					printf '%s\n' 'Wallet address changed during packaged endpoint cutover' >&2
+					return 1
+				fi
+				post_cutover_address_sha256=
+				first_b_native_rpc_count=$(property nativeRpcCount "$runtime/lightwalletd-b.audit" 2>/dev/null || true)
+				case $first_b_native_rpc_count in
+					''|*[!0-9]*) printf '%s\n' 'Live server B cutover audit counter is invalid' >&2; return 1 ;;
+				esac
+				printf 'endpointCutover=PASS\n' >> "$result_file"
+			else
+				if [ "$selected_server_uri" != 'http://127.0.0.1:9068' ] || ! assert_a_barrier; then
+					printf '%s\n' 'Restarted packaged Core did not reopen server B without server A traffic' >&2
+					return 1
+				fi
+				second_b_native_rpc_count=$(property nativeRpcCount "$runtime/lightwalletd-b.audit" 2>/dev/null || true)
+				case $second_b_native_rpc_count in
+					''|*[!0-9]*) printf '%s\n' 'Restarted server B audit count is invalid' >&2; return 1 ;;
+				esac
+				if [ "$second_b_native_rpc_count" -le "$first_b_native_rpc_count" ]; then
+					printf '%s\n' 'Restarted packaged Core produced no new native server B evidence' >&2
+					return 1
+				fi
+				printf 'coldRestartEndpoint=PASS\naddressContinuity=PASS\n' >> "$result_file"
 			fi
 		fi
 
@@ -289,11 +479,18 @@ run_inside_namespace() {
 			printf 'Packaged Core start %s changed persisted state during shutdown\n' "$start_number" >&2
 			return 1
 		fi
+		if [ "$cutover_mode" = true ] && ! assert_a_barrier; then
+			printf 'Packaged Core start %s contacted server A after the cutover barrier\n' "$start_number" >&2
+			return 1
+		fi
 		printf 'start%s=PASS\n' "$start_number" >> "$result_file"
 	}
 
 	first_namespace=
 	first_identity_hash=
+	first_address_sha256=
+	server_a_barrier=
+	first_b_native_rpc_count=
 	run_core_start 1 MIGRATING
 	run_core_start 2 UNIFIED_READY
 	if [ "$start_count" -ne 2 ]; then
@@ -307,27 +504,75 @@ run_inside_namespace() {
 		return 1
 	fi
 	fixture_pid=
-	if [ ! -f "$runtime/lightwalletd.audit" ] \
-			|| [ "$(property result "$runtime/lightwalletd.audit" 2>/dev/null || true)" != PASS ]; then
-		printf '%s\n' 'Loopback lightwalletd did not write a complete audit' >&2
-		return 1
+	if [ "$cutover_mode" = true ]; then
+		if [ ! -f "$runtime/lightwalletd-a.audit" ] || [ ! -f "$runtime/lightwalletd-b.audit" ] \
+				|| [ "$(property result "$runtime/lightwalletd-a.audit" 2>/dev/null || true)" != PASS ] \
+				|| [ "$(property result "$runtime/lightwalletd-b.audit" 2>/dev/null || true)" != PASS ] \
+				|| ! assert_a_barrier; then
+			printf '%s\n' 'Loopback fixture pair did not retain a complete cutover audit' >&2
+			return 1
+		fi
+		a_tip_ranges=$(property pirateTipRanges "$runtime/lightwalletd-a.audit")
+		b_tip_ranges=$(property pirateTipRanges "$runtime/lightwalletd-b.audit")
+		a_tip_blocks=$(property pirateTipBlocks "$runtime/lightwalletd-a.audit")
+		b_tip_blocks=$(property pirateTipBlocks "$runtime/lightwalletd-b.audit")
+		a_tip_height=$(property tipHeight "$runtime/lightwalletd-a.audit")
+		b_tip_height=$(property tipHeight "$runtime/lightwalletd-b.audit")
+		a_tip_requests=$(property pirateTipRequests "$runtime/lightwalletd-a.audit")
+		b_tip_requests=$(property pirateTipRequests "$runtime/lightwalletd-b.audit")
+		a_scanned_blocks=$(property pirateScannedBlocks "$runtime/lightwalletd-a.audit")
+		b_scanned_blocks=$(property pirateScannedBlocks "$runtime/lightwalletd-b.audit")
+		a_forbidden_rpcs=$(property forbiddenRpcs "$runtime/lightwalletd-a.audit")
+		b_forbidden_rpcs=$(property forbiddenRpcs "$runtime/lightwalletd-b.audit")
+		a_unexpected_rpcs=$(property unexpectedRpcs "$runtime/lightwalletd-a.audit")
+		b_unexpected_rpcs=$(property unexpectedRpcs "$runtime/lightwalletd-b.audit")
+		a_subtree_probes=$(property subtreeProbes "$runtime/lightwalletd-a.audit")
+		b_subtree_probes=$(property subtreeProbes "$runtime/lightwalletd-b.audit")
+		dual_audit_counts=$a_tip_ranges:$b_tip_ranges:$a_tip_blocks:$b_tip_blocks:$a_tip_height:$b_tip_height:$a_tip_requests:$b_tip_requests:$a_scanned_blocks:$b_scanned_blocks:$a_forbidden_rpcs:$b_forbidden_rpcs:$a_unexpected_rpcs:$b_unexpected_rpcs:$a_subtree_probes:$b_subtree_probes
+		case $dual_audit_counts in
+			*[!0-9:]*|*::*|:*) printf '%s\n' 'Loopback cutover audit contains invalid counts' >&2; return 1 ;;
+		esac
+		pirate_tip_requests=$((a_tip_requests + b_tip_requests))
+		pirate_tip_ranges=$((a_tip_ranges + b_tip_ranges))
+		pirate_tip_blocks=$((a_tip_blocks + b_tip_blocks))
+		pirate_scanned_blocks=$((a_scanned_blocks + b_scanned_blocks))
+		forbidden_rpcs=$((a_forbidden_rpcs + b_forbidden_rpcs))
+		unexpected_rpcs=$((a_unexpected_rpcs + b_unexpected_rpcs))
+		subtree_probes=$((a_subtree_probes + b_subtree_probes))
+		if { [ "$a_tip_ranges" -lt 1 ] && [ "$a_tip_blocks" -lt 1 ]; } \
+				|| { [ "$b_tip_ranges" -lt 1 ] && [ "$b_tip_blocks" -lt 1 ]; } \
+				|| [ "$a_tip_height" -ne 152858 ] \
+				|| [ "$b_tip_height" -ne 152862 ]; then
+			printf 'Loopback cutover sync evidence is incomplete: A-ranges=%s A-tip-blocks=%s A-tip=%s B-ranges=%s B-tip-blocks=%s B-tip=%s\n' \
+				"$a_tip_ranges" "$a_tip_blocks" "$a_tip_height" "$b_tip_ranges" \
+				"$b_tip_blocks" "$b_tip_height" >&2
+			return 1
+		fi
+		printf 'noNativeServerAAfterSelectionBarrier=PASS\n' >> "$result_file"
+	else
+		if [ ! -f "$runtime/lightwalletd.audit" ] \
+				|| [ "$(property result "$runtime/lightwalletd.audit" 2>/dev/null || true)" != PASS ]; then
+			printf '%s\n' 'Loopback lightwalletd did not write a complete audit' >&2
+			return 1
+		fi
+		pirate_tip_requests=$(property pirateTipRequests "$runtime/lightwalletd.audit")
+		pirate_tip_ranges=$(property pirateTipRanges "$runtime/lightwalletd.audit")
+		pirate_tip_blocks=$(property pirateTipBlocks "$runtime/lightwalletd.audit")
+		pirate_scanned_blocks=$(property pirateScannedBlocks "$runtime/lightwalletd.audit")
+		forbidden_rpcs=$(property forbiddenRpcs "$runtime/lightwalletd.audit")
+		unexpected_rpcs=$(property unexpectedRpcs "$runtime/lightwalletd.audit")
+		subtree_probes=$(property subtreeProbes "$runtime/lightwalletd.audit")
 	fi
-	pirate_tip_requests=$(property pirateTipRequests "$runtime/lightwalletd.audit")
-	pirate_tip_ranges=$(property pirateTipRanges "$runtime/lightwalletd.audit")
-	pirate_scanned_blocks=$(property pirateScannedBlocks "$runtime/lightwalletd.audit")
-	forbidden_rpcs=$(property forbiddenRpcs "$runtime/lightwalletd.audit")
-	unexpected_rpcs=$(property unexpectedRpcs "$runtime/lightwalletd.audit")
-	subtree_probes=$(property subtreeProbes "$runtime/lightwalletd.audit")
-	case $pirate_tip_requests:$pirate_tip_ranges:$pirate_scanned_blocks:$forbidden_rpcs:$unexpected_rpcs:$subtree_probes in
+	case $pirate_tip_requests:$pirate_tip_ranges:$pirate_tip_blocks:$pirate_scanned_blocks:$forbidden_rpcs:$unexpected_rpcs:$subtree_probes in
 		*[!0-9:]*|*::*|:*) printf '%s\n' 'Loopback lightwalletd audit contains invalid counts' >&2; return 1 ;;
 	esac
 	if [ "$pirate_tip_requests" -lt 1 ] \
-			|| { [ "$pirate_tip_ranges" -lt 1 ] && [ "$pirate_scanned_blocks" -lt 1 ]; } \
+			|| { [ "$pirate_tip_ranges" -lt 1 ] && [ "$pirate_tip_blocks" -lt 1 ]; } \
 			|| [ "$forbidden_rpcs" -ne 0 ] || [ "$unexpected_rpcs" -ne 0 ] \
 			|| [ "$subtree_probes" -lt 1 ]; then
-		printf 'Loopback lightwalletd audit mismatch: tip=%s ranges=%s blocks=%s forbidden=%s unexpected=%s subtree=%s\n' \
-			"$pirate_tip_requests" "$pirate_tip_ranges" "$pirate_scanned_blocks" "$forbidden_rpcs" \
-			"$unexpected_rpcs" "$subtree_probes" >&2
+		printf 'Loopback lightwalletd audit mismatch: tip=%s ranges=%s tip-blocks=%s blocks=%s forbidden=%s unexpected=%s subtree=%s\n' \
+			"$pirate_tip_requests" "$pirate_tip_ranges" "$pirate_tip_blocks" "$pirate_scanned_blocks" \
+			"$forbidden_rpcs" "$unexpected_rpcs" "$subtree_probes" >&2
 		return 1
 	fi
 	{
@@ -342,13 +587,13 @@ run_inside_namespace() {
 }
 
 if [ "${1:-}" = '--inside-network-namespace' ]; then
-	[ "$#" -eq 6 ] || exit 2
+	[ "$#" -eq 7 ] || exit 2
 	shift
 	run_inside_namespace "$@"
 	exit $?
 fi
 
-if [ "$#" -ne 4 ]; then
+if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
 	usage
 	exit 2
 fi
@@ -357,6 +602,11 @@ jar=$1
 bundle=$2
 fixture=$3
 receipt=$4
+mode=${5:-}
+if [ -n "$mode" ] && [ "$mode" != '--cutover' ]; then
+	usage
+	exit 2
+fi
 require_absolute 'Packaged JAR' "$jar"
 require_absolute 'Bundle' "$bundle"
 require_absolute 'Fixture' "$fixture"
@@ -461,8 +711,11 @@ entropy='5oSXF53qENtdUyKhqSxYzP57m6RhVFP9BJKRr9E5kRGV'
 printf '%s' "$api_key" > "$runtime/api/apikey.txt"
 printf '%s\n' "header = \"X-API-KEY: $api_key\"" \
 	'header = "Content-Type: text/plain"' > "$runtime/curl-api.conf"
+printf '%s\n' "header = \"X-API-KEY: $api_key\"" \
+	'header = "Content-Type: application/json"' > "$runtime/curl-json-api.conf"
 printf '%s' "$entropy" > "$runtime/entropy.txt"
-chmod 600 "$runtime/api/apikey.txt" "$runtime/curl-api.conf" "$runtime/entropy.txt"
+chmod 600 "$runtime/api/apikey.txt" "$runtime/curl-api.conf" "$runtime/curl-json-api.conf" \
+	"$runtime/entropy.txt"
 
 cat > "$runtime/log4j2-acceptance.properties" <<'EOF'
 rootLogger.level = info
@@ -556,7 +809,7 @@ result_file=$work_directory/result.properties
 harness_log=$work_directory/harness.log
 set +e
 unshare -Urn "$script_directory/$(basename "$0")" --inside-network-namespace \
-	"$runtime" "$jar" "$helper_classes" "$signature" "$result_file" \
+	"$runtime" "$jar" "$helper_classes" "$signature" "$result_file" "$mode" \
 	> "$harness_log" 2>&1
 acceptance_status=$?
 set -e
@@ -564,7 +817,8 @@ set -e
 secret_scan=PASS
 for scan_file in "$work_directory/javac.log" "$harness_log" \
 		"$runtime"/core-start-*.log "$runtime/lightwalletd.log" \
-		"$runtime"/status-start-*.json "$runtime"/wallets/PirateChain/unified/*/qortium-wallet-state.json; do
+		"$runtime"/status-*.json "$runtime"/set-server-*.json "$runtime"/lightwalletd*.audit \
+		"$runtime"/wallets/PirateChain/unified/*/qortium-wallet-state.json; do
 	[ -f "$scan_file" ] || continue
 	set +e
 	grep -E '"(seedPhrase|private_key|seed|address)"[[:space:]]*:|zs1[[:alnum:]]{60,}' \
@@ -598,6 +852,10 @@ shutdowns=UNKNOWN
 non_loopback_interfaces=UNKNOWN
 default_routes=UNKNOWN
 non_loopback_routes=UNKNOWN
+endpoint_cutover=NOT_APPLICABLE
+cold_restart_endpoint=NOT_APPLICABLE
+address_continuity=NOT_APPLICABLE
+no_native_server_a_after_selection_barrier=NOT_APPLICABLE
 if [ -f "$result_file" ]; then
 	network_result=$(property networkEgress "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 	fixture_result=$(property loopbackFixture "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
@@ -612,7 +870,19 @@ if [ -f "$result_file" ]; then
 	non_loopback_interfaces=$(property nonLoopbackInterfaces "$result_file" 2>/dev/null || printf 'UNKNOWN')
 	default_routes=$(property defaultRoutes "$result_file" 2>/dev/null || printf 'UNKNOWN')
 	non_loopback_routes=$(property nonLoopbackRoutes "$result_file" 2>/dev/null || printf 'UNKNOWN')
-	if [ "$acceptance_status" -eq 0 ] && [ "$secret_scan" = PASS ] \
+	if [ "$mode" = '--cutover' ]; then
+		endpoint_cutover=$(property endpointCutover "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+		cold_restart_endpoint=$(property coldRestartEndpoint "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+		address_continuity=$(property addressContinuity "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+		no_native_server_a_after_selection_barrier=$(property noNativeServerAAfterSelectionBarrier "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+	fi
+	cutover_contract=PASS
+	if [ "$mode" = '--cutover' ] && { [ "$endpoint_cutover" != PASS ] \
+			|| [ "$cold_restart_endpoint" != PASS ] || [ "$address_continuity" != PASS ] \
+			|| [ "$no_native_server_a_after_selection_barrier" != PASS ]; }; then
+		cutover_contract=FAIL
+	fi
+	if [ "$acceptance_status" -eq 0 ] && [ "$secret_scan" = PASS ] && [ "$cutover_contract" = PASS ] \
 			&& [ "$(property result "$result_file" 2>/dev/null || true)" = PASS ]; then
 		result=PASS
 	fi
@@ -639,7 +909,11 @@ temporary_log=$work_directory/sanitized.log
 	sed -n '1,120p' "$harness_log"
 } > "$temporary_log"
 {
-	printf '# Pirate Unified packaged lifecycle acceptance receipt\n\n'
+	if [ "$mode" = '--cutover' ]; then
+		printf '# Pirate Unified packaged cold-restart cutover acceptance receipt\n\n'
+	else
+		printf '# Pirate Unified packaged lifecycle acceptance receipt\n\n'
+	fi
 	printf '%s `%s`\n' '- Timestamp:' "$timestamp"
 	printf '%s `%s`\n' '- Result:' "$result"
 	printf '%s `%s`\n' '- Core source commit:' "$core_commit"
@@ -649,23 +923,45 @@ temporary_log=$work_directory/sanitized.log
 	printf '%s `%s`\n' '- Packaged Core JAR SHA-256:' "$jar_sha256"
 	printf '%s `%s`\n' '- Local-QDN fixture:' "$fixture"
 	printf '%s `%s`\n' '- Bundle manifest SHA-256:' "$manifest_sha256"
-	printf '%s `%s`\n' '- Normalized command:' 'tools/run-pirate-unified-packaged-lifecycle-acceptance.sh <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md>'
-	printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 8 scripted lifecycle boundaries'
+	printf '%s `%s`\n' '- Normalized command:' "tools/run-pirate-unified-packaged-lifecycle-acceptance.sh <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md>${mode:+ $mode}"
+	if [ "$mode" = '--cutover' ]; then
+		printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 12 scripted lifecycle/cutover boundaries'
+	else
+		printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 8 scripted lifecycle boundaries'
+	fi
 	printf '%s `%s`\n' '- Sanitized log:' "$receipt.log"
 	printf '\n## Results\n\n'
 	printf '| Boundary | Result | Evidence |\n'
 	printf '|---|---:|---|\n'
 	printf '| Network egress | %s | rootless namespace; non-loopback interfaces `%s`; default routes `%s`; non-loopback routes `%s` |\n' "$network_result" "$non_loopback_interfaces" "$default_routes" "$non_loopback_routes"
-	printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext endpoint; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
-	printf '| Fresh packaged start | %s | created, synchronized, and persisted `MIGRATING` with validated sync |\n' "$first_start"
-	printf '| Packaged restart | %s | reopened the same namespace and promoted it to `UNIFIED_READY` |\n' "$second_start"
+	if [ "$mode" = '--cutover' ]; then
+		printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext A/B pair; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
+		printf '| Fresh packaged start | %s | created on A, cut over and freshly synchronized to newer B, persisted `MIGRATING` |\n' "$first_start"
+		printf '| Packaged restart | %s | reopened B in a clean second Core process and promoted the same namespace to `UNIFIED_READY` |\n' "$second_start"
+	else
+		printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext endpoint; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
+		printf '| Fresh packaged start | %s | created, synchronized, and persisted `MIGRATING` with validated sync |\n' "$first_start"
+		printf '| Packaged restart | %s | reopened the same namespace and promoted it to `UNIFIED_READY` |\n' "$second_start"
+	fi
 	printf '| Exact start count | %s | required exactly `2` packaged Core starts |\n' "$packaged_starts"
-	printf '| Namespace and identity continuity | %s | one namespace and one one-way identity hash across both starts |\n' "$namespace_result"
-	printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; Pirate compact-block data reached exact tip `152858` before durable validation |\n' "$birthday_result"
+	printf '| Namespace and identity continuity | %s | one namespace, one one-way identity hash, and one wallet-address hash across both starts |\n' "$namespace_result"
+	if [ "$mode" = '--cutover' ]; then
+		printf '| Endpoint cutover | %s | process 1 moved from A `152858` to B `152862`; each served tip-ending native compact-block retrieval |\n' "$endpoint_cutover"
+		printf '| Cold-restart endpoint | %s | process 2 restored configured persisted B before native use |\n' "$cold_restart_endpoint"
+		printf '| Address continuity | %s | wallet address hash remained exact before/after cutover and across restart |\n' "$address_continuity"
+		printf '| No native server A traffic after B-selection barrier | %s | barrier established immediately before Java selected B remained exact through native B application and sync, both shutdowns, and process 2 |\n' "$no_native_server_a_after_selection_barrier"
+		printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; process 1 reached A `152858` then B `152862` before durable validation |\n' "$birthday_result"
+	else
+		printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; Pirate compact-block data reached exact tip `152858` before durable validation |\n' "$birthday_result"
+	fi
 	printf '| Unfunded/no transaction RPCs | %s | forbidden transaction read/send RPC count `%s`; unexpected RPC count `%s` |\n' "$( [ "$forbidden_rpcs" = 0 ] && printf PASS || printf NOT_PROVEN )" "$forbidden_rpcs" "$unexpected_rpcs"
 	printf '| Graceful shutdowns | %s | required `2` packaged Core shutdown confirmations |\n' "$shutdowns"
 	printf '| Secret scan | %s | raw outputs checked before deletion; none retained |\n' "$secret_scan"
-	printf '\nThis receipt proves one unfunded Linux x86_64 packaged lifecycle against deterministic local fixtures. '
+	if [ "$mode" = '--cutover' ]; then
+		printf '\nThis receipt proves one unfunded Linux x86_64 packaged two-process cold-restart endpoint cutover against deterministic local fixtures. '
+	else
+		printf '\nThis receipt proves one unfunded Linux x86_64 packaged lifecycle against deterministic local fixtures. '
+	fi
 	printf 'It does not prove historical restore before the configured birthday, legacy migration, real-network interoperability, funded behavior, QDN publication, deployment, default enablement, or Home behavior.\n'
 } > "$temporary_receipt"
 

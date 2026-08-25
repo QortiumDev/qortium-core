@@ -345,6 +345,10 @@ tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
   /absolute/new/path/pirate-unified-packaged-lifecycle-receipt.md
 ```
 
+After that single-endpoint lifecycle passes, the same command accepts an
+explicit cold-restart endpoint gate by adding `--cutover` after the new receipt
+path. The option does not change the original invocation.
+
 This runner starts packaged Core exactly twice in one rootless, loopback-only
 network namespace. A standalone form of the test lightwalletd stays up across
 both starts on explicit IPv4 loopback. Its Java-compatible service identifies
@@ -372,11 +376,24 @@ native, fixture, API-status, and wallet-state evidence for the request entropy,
 API key, seed/key/address-shaped JSON, and shielded addresses, then deletes that
 evidence and retains only a sanitized receipt and log.
 
+In `--cutover` mode, fixed regtest endpoints A (`127.0.0.1:9067`, tip `152858`)
+and B (`127.0.0.1:9068`, tip `152862`) remain live across both Core processes.
+Process one first reaches A, then Java selects B and a wallet operation
+synchronously applies and persists B in the native wallet. Each endpoint must
+serve native retrieval of its exact tip, either as a tip-ending range or as an
+exact-tip unary block. A live A-native-RPC barrier is established immediately
+before Java selects B and must remain unchanged through native B application
+and synchronization, both graceful shutdowns, and process two. The second
+Core process must reopen persisted B before native use, produce new B-native
+evidence, and retain the exact namespace, one-way identity hash, and
+wallet-address hash.
+
 This proves fresh creation, exact-tip synchronization, persistence, and clean
 restart/reopen on unfunded Linux x86_64 local fixtures. Historical recovery is
 covered by the separate fresh-install gate above, not by this transaction-free
 packaged run. This packaged gate does not prove real legacy
-migration, A/B switching during an active sync, disable/re-enable, production
+migration, transient endpoint-failure recovery, switching during an active
+sync, disable/re-enable, production
 lightwalletd interoperability, funds, QDN publication, deployment, default
 enablement, or Home behavior.
 

@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - test(arrr): prove packaged endpoint restart
+
+Extends the unfunded Linux x86_64 packaged lifecycle gate with an explicit
+`--cutover` mode. Two deterministic Pirate regtest endpoints stay live while
+Core starts exactly twice: the first process creates and synchronizes one wallet
+on A, applies Java's selection of the newer B endpoint through the native wallet,
+reaches B's exact tip, and persists B; the second process reopens the same wallet
+namespace, identity, address, and configured B endpoint without native-wallet
+contact with A.
+The fixture accepts either native range retrieval or unary block retrieval but
+requires exact-tip evidence, freezes A's native RPC count immediately before
+Java selects B, and requires the barrier to remain unchanged through native B
+application and sync, both shutdowns, and the second process. The original
+single-endpoint invocation is unchanged. This local, transaction-free proof
+does not cover transient cutover failure recovery, active-sync mutation,
+production servers, funds, publication, deployment, default enablement, or Home
+behavior; Unified remains disabled by default and the extra fixed endpoint
+exists only in the regtest inventory.
+
 ### 2026-08-25 - fix(arrr): coordinate native endpoint cutover
 
 Keeps an initialized Pirate Unified wallet on the same validated lightwalletd

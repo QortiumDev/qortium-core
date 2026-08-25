@@ -69,6 +69,7 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	private final AtomicInteger pirateCompleteRangeCount = new AtomicInteger();
 	private final AtomicInteger pirateTipRangeCount = new AtomicInteger();
 	private final AtomicInteger pirateScannedBlockCount = new AtomicInteger();
+	private final AtomicInteger pirateTipBlockCount = new AtomicInteger();
 	private final Server server;
 	private final String cashChainName;
 	private final String pirateChainName;
@@ -135,6 +136,14 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		return count == null ? 0 : count.get();
 	}
 
+	int rpcCount(String service) {
+		String prefix = service + "/";
+		return this.rpcCounts.entrySet().stream()
+				.filter(entry -> entry.getKey().startsWith(prefix))
+				.mapToInt(entry -> entry.getValue().get())
+				.sum();
+	}
+
 	int completeRangeCount(String service) {
 		return PIRATE_SERVICE.equals(service)
 				? this.pirateCompleteRangeCount.get()
@@ -147,6 +156,10 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 	int pirateScannedBlockCount() {
 		return this.pirateScannedBlockCount.get();
+	}
+
+	int pirateTipBlockCount() {
+		return this.pirateTipBlockCount.get();
 	}
 
 	List<String> observedRanges() {
@@ -276,8 +289,11 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 				fail(observer, Status.INVALID_ARGUMENT.withDescription("Block is outside the deterministic fixture"));
 				return;
 			}
-			if (pirateService)
+			if (pirateService) {
 				pirateScannedBlockCount.incrementAndGet();
+				if (height == tipHeight)
+					pirateTipBlockCount.incrementAndGet();
+			}
 			respond(observer, block(height));
 		}
 
