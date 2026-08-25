@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 
@@ -208,22 +209,25 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 					String response = nativeAdapter.execute("sync", "");
 					LOGGER.debug("{} wallet sync returned a response", this.config.getDisplayName());
 
+					boolean syncAccepted = false;
+					boolean synchronizedAtTip = false;
 					try {
 						JSONObject json = new JSONObject(response);
 						if (json.has("result")) {
 							String result = json.getString("result");
 							if (Objects.equals(result, "success")) {
+								syncAccepted = true;
 								this.currentWallet.setReady(true);
-								if (this.currentWallet.isSynchronized())
+								synchronizedAtTip = this.currentWallet.isSynchronized();
+								if (synchronizedAtTip)
 									this.currentWallet.recordValidatedSync(nativeAdapter);
 							}
 						}
 					} catch (JSONException e) {
 						LOGGER.info("Unable to interpret JSON", e);
 					}
-					this.cacheCurrentWalletStatus(this.currentWallet.isReady()
-							? WalletSyncStatus.ready("Synchronized")
-							: WalletSyncStatus.loading("Initializing wallet..."));
+					this.cacheCurrentWalletStatus(statusAfterSyncAttempt(this.currentWallet.isReady(),
+							this.currentWallet.usesPersistentNativeStorage(), syncAccepted, synchronizedAtTip));
 					return true;
 				});
 				if (!syncAttempted)
@@ -659,6 +663,17 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				: WalletSyncStatus.loading("Initializing wallet...");
 	}
 
+	static WalletSyncStatus statusAfterSyncAttempt(boolean walletReady, boolean persistentStorage,
+			boolean syncAccepted, boolean synchronizedAtTip) {
+		if (persistentStorage && !synchronizedAtTip)
+			return syncAccepted
+					? WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null)
+					: WalletSyncStatus.loading("Initializing wallet...");
+		return walletReady
+				? WalletSyncStatus.ready("Synchronized")
+				: WalletSyncStatus.loading("Initializing wallet...");
+	}
+
 	static boolean isSyncInProgress(JSONObject json) {
 		return booleanValue(json, "in_progress") || booleanValue(json, "syncing");
 	}
@@ -703,8 +718,9 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 
 		try {
+			Duration timeout = this.statusTimeoutFor(entropy58);
 			return NATIVE_COORDINATOR.execute("get wallet synchronization status",
-					ZcashFamilyNativeCoordinator.STATUS_TIMEOUT, nativeAdapter -> {
+					timeout, nativeAdapter -> {
 				if (entropy58 != null && !this.initWithEntropy58(entropy58, false, nativeAdapter))
 					return WalletSyncStatus.loading(this.config.getDisplayName() + " wallet isn't initialized yet");
 				return this.getSyncStatus(nativeAdapter);
@@ -723,8 +739,17 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
+	Duration statusTimeoutFor(String entropy58) {
+		if (entropy58 != null && !this.matchesWallet(this.currentWallet, entropy58))
+			return ZcashFamilyNativeCoordinator.DEFAULT_TIMEOUT;
+		return ZcashFamilyNativeCoordinator.STATUS_TIMEOUT;
+	}
+
 	private boolean matchesCachedWallet(CachedWalletSyncStatus cachedStatus, String entropy58) {
-		ZcashFamilyWallet wallet = cachedStatus.wallet;
+		return this.matchesWallet(cachedStatus.wallet, entropy58);
+	}
+
+	private boolean matchesWallet(ZcashFamilyWallet wallet, String entropy58) {
 		if (wallet == null || entropy58 == null)
 			return false;
 		try {

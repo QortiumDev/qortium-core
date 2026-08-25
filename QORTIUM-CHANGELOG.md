@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-24 - fix(arrr): validate packaged Unified wallet readiness
+
+Adds an unfunded Linux x86_64 acceptance gate that starts a separately packaged
+Core exactly twice inside a loopback-only network namespace. The first start
+loads the retained local-QDN native bundle, creates one wallet from the
+conservative birthday, reaches the exact deterministic tip, and persists a
+validated migrating state; the second reopens the same namespace and identity
+and promotes it to ready. The gate exposed and fixes three readiness hazards:
+initial wallet selection now receives enough bounded time to initialize,
+accepted sync work no longer reports ready before tip validation, and persistent
+Unified storage requires the exact tip rather than the legacy two-block lag
+tolerance. Pirate regtest uses explicit IPv4 loopback, the dual-service fixture
+reports the chain name each client expects, and retained evidence contains no
+wallet secrets. Historical restore, real legacy migration, production servers,
+funds, publication, deployment, default enablement, and Home remain separate.
+
 ### 2026-08-24 - test(arrr): expand offline native acceptance evidence
 
 Expands the explicitly opt-in Pirate Unified native acceptance from library

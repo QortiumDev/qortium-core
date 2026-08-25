@@ -53,12 +53,32 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	private final AtomicInteger subtreeProbeCount = new AtomicInteger();
 	private final AtomicInteger cashCompleteRangeCount = new AtomicInteger();
 	private final AtomicInteger pirateCompleteRangeCount = new AtomicInteger();
+	private final AtomicInteger pirateTipRangeCount = new AtomicInteger();
+	private final AtomicInteger pirateScannedBlockCount = new AtomicInteger();
 	private final Server server;
+	private final String cashChainName;
+	private final String pirateChainName;
 
 	PirateUnifiedLoopbackLightwalletd() throws IOException {
+		this(0, "main", "main");
+	}
+
+	PirateUnifiedLoopbackLightwalletd(int port, String chainName) throws IOException {
+		this(port, chainName, chainName);
+	}
+
+	PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName) throws IOException {
+		if (port < 0 || port > 65_535)
+			throw new IllegalArgumentException("Invalid fixture port");
+		if (cashChainName == null || cashChainName.isBlank()
+				|| pirateChainName == null || pirateChainName.isBlank())
+			throw new IllegalArgumentException("Missing fixture chain name");
+
+		this.cashChainName = cashChainName;
+		this.pirateChainName = pirateChainName;
 		FixtureService fixtureService = new FixtureService();
 		ServerInterceptor auditInterceptor = this::auditCall;
-		this.server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
+		this.server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", port))
 							  .addService(ServerInterceptors.intercept(fixtureService, auditInterceptor))
 							  .addService(ServerInterceptors.intercept(pirateService(fixtureService), auditInterceptor))
 							  .fallbackHandlerRegistry(new UnknownMethodRegistry())
@@ -79,6 +99,14 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		return PIRATE_SERVICE.equals(service)
 				? this.pirateCompleteRangeCount.get()
 				: this.cashCompleteRangeCount.get();
+	}
+
+	int pirateTipRangeCount() {
+		return this.pirateTipRangeCount.get();
+	}
+
+	int pirateScannedBlockCount() {
+		return this.pirateScannedBlockCount.get();
 	}
 
 	List<String> observedRanges() {
@@ -157,10 +185,10 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 		return ServerServiceDefinition.builder(PIRATE_SERVICE)
 				.addMethod(latest, ServerCalls.asyncUnaryCall(fixtureService::getLatestBlock))
-				.addMethod(block, ServerCalls.asyncUnaryCall(fixtureService::getBlock))
+				.addMethod(block, ServerCalls.asyncUnaryCall(fixtureService::getPirateBlock))
 				.addMethod(range, ServerCalls.asyncServerStreamingCall(
 						(request, observer) -> fixtureService.getBlockRange(PIRATE_SERVICE, request, observer)))
-				.addMethod(info, ServerCalls.asyncUnaryCall(fixtureService::getLightdInfo))
+				.addMethod(info, ServerCalls.asyncUnaryCall(fixtureService::getPirateLightdInfo))
 				.addMethod(transaction, ServerCalls.asyncUnaryCall(fixtureService::getTransaction))
 				.addMethod(send, ServerCalls.asyncUnaryCall(fixtureService::sendTransaction))
 				.addMethod(tree, ServerCalls.asyncUnaryCall(fixtureService::getTreeState))
@@ -188,6 +216,16 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 		@Override
 		public void getBlock(Service.BlockID request, StreamObserver<CompactFormats.CompactBlock> observer) {
+			getBlock(false, request, observer);
+		}
+
+		private void getPirateBlock(Service.BlockID request,
+				StreamObserver<CompactFormats.CompactBlock> observer) {
+			getBlock(true, request, observer);
+		}
+
+		private void getBlock(boolean pirateService, Service.BlockID request,
+				StreamObserver<CompactFormats.CompactBlock> observer) {
 			long height = request.getHeight();
 			if (height == IRONWOOD_PROBE_HEIGHT) {
 				activationProbeCount.incrementAndGet();
@@ -198,6 +236,8 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 				fail(observer, Status.INVALID_ARGUMENT.withDescription("Block is outside the deterministic fixture"));
 				return;
 			}
+			if (pirateService)
+				pirateScannedBlockCount.incrementAndGet();
 			respond(observer, block(height));
 		}
 
@@ -222,16 +262,26 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 						? pirateCompleteRangeCount : cashCompleteRangeCount;
 				counter.incrementAndGet();
 			}
+			if (PIRATE_SERVICE.equals(service) && end == TIP_HEIGHT)
+				pirateTipRangeCount.incrementAndGet();
 			observer.onCompleted();
 		}
 
 		@Override
 		public void getLightdInfo(Service.Empty request, StreamObserver<Service.LightdInfo> observer) {
+			getLightdInfo(cashChainName, observer);
+		}
+
+		private void getPirateLightdInfo(Service.Empty request, StreamObserver<Service.LightdInfo> observer) {
+			getLightdInfo(pirateChainName, observer);
+		}
+
+		private void getLightdInfo(String chainName, StreamObserver<Service.LightdInfo> observer) {
 			respond(observer,
 					Service.LightdInfo.newBuilder()
 							.setVersion("qortium-loopback-fixture")
 							.setVendor("Qortium test fixture")
-							.setChainName("main")
+							.setChainName(chainName)
 							.setSaplingActivationHeight(SAPLING_ACTIVATION_HEIGHT)
 							.setConsensusBranchId("76b809bb")
 							.setBlockHeight(TIP_HEIGHT)

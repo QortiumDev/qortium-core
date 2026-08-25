@@ -15,7 +15,9 @@ import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class PirateUnifiedLoopbackLightwalletdTests {
 
@@ -122,6 +124,8 @@ public class PirateUnifiedLoopbackLightwalletdTests {
 
 				assertEquals(1, fixture.completeRangeCount(PirateUnifiedLoopbackLightwalletd.CASH_SERVICE));
 				assertEquals(1, fixture.completeRangeCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE));
+				assertEquals(1, fixture.pirateTipRangeCount());
+				assertEquals(0, fixture.pirateScannedBlockCount());
 				assertEquals(1, fixture.activationProbeCount());
 				assertEquals(1, fixture.subtreeProbeCount());
 				assertEquals(2, fixture.forbiddenRpcCount());
@@ -130,6 +134,36 @@ public class PirateUnifiedLoopbackLightwalletdTests {
 				channel.shutdownNow();
 				channel.awaitTermination(10, TimeUnit.SECONDS);
 			}
+		}
+	}
+
+	@Test
+	public void testFixedPortChainNameAndStandaloneAuditAreSanitized() throws Exception {
+		try (PirateUnifiedLoopbackLightwalletd fixture =
+				new PirateUnifiedLoopbackLightwalletd(0, "regtest", "main")) {
+			URI endpoint = URI.create(fixture.endpoint());
+			ManagedChannel channel =
+					ManagedChannelBuilder.forAddress(endpoint.getHost(), endpoint.getPort()).usePlaintext().build();
+			try {
+				assertEquals("regtest", CompactTxStreamerGrpc.newBlockingStub(channel)
+						.getLightdInfo(Service.Empty.getDefaultInstance()).getChainName());
+				MethodDescriptor<Service.Empty, Service.LightdInfo> pirateInfo =
+						CompactTxStreamerGrpc.getGetLightdInfoMethod().toBuilder()
+								.setFullMethodName(MethodDescriptor.generateFullMethodName(
+										PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetLightdInfo"))
+								.setSchemaDescriptor(null)
+								.build();
+				assertEquals("main", ClientCalls.blockingUnaryCall(channel, pirateInfo,
+						io.grpc.CallOptions.DEFAULT, Service.Empty.getDefaultInstance()).getChainName());
+			} finally {
+				channel.shutdownNow();
+				channel.awaitTermination(10, TimeUnit.SECONDS);
+			}
+
+			String audit = PirateUnifiedLoopbackLightwalletdMain.audit(fixture);
+			assertTrue(audit.contains("result=PASS\n"));
+			assertTrue(audit.contains("forbiddenRpcs=0\n"));
+			assertFalse(audit.contains("127.0.0.1"));
 		}
 	}
 
