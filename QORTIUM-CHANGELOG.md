@@ -34,6 +34,28 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - chore(release): prepare Core 1.7.3
+
+Marks the Core 1.7.3 Preview prerelease. Nodes can now recover automatically
+from stale short forks, prune obsolete AT states with bounded set-based
+database work, and perform binary-parameter and signature-list repository
+queries safely in bounded batches. The release also includes the reviewed
+Jackson `2.22.2`, Swagger API `2.2.54`, Swagger UI `5.32.14`, Guava
+`33.7.1-jre`, OSV Scanner action `2.5.1`, and CodeQL action `4.37.8` updates.
+
+This release contains the guarded Core foundation and acceptance coverage for
+the Pirate Unified wallet, including pinned native artifacts, persistent local
+wallet storage, status and balance APIs, historical recovery fixtures, and
+validated lightwallet endpoint selection and restart behavior. Pirate remains
+disabled in every bundled Preview and test settings profile, Home does not
+enable or expose the new path, and no wallet migration, QDN publication,
+deployment, or funds movement is part of this release. Compatibility with
+existing Pirate wallet files still depends on the upstream verified recovery
+import work before Qortium can safely enable the integration.
+
+None of these changes alter Qortium consensus rules, Preview chain
+configuration, or activation schedules.
+
 ### 2026-08-25 - fix(repository): bind binary params and batch signature lookups
 
 Makes binary database parameters explicit and predictable for primitive byte
