@@ -122,6 +122,38 @@ public class PruneTests extends Common {
     }
 
     @Test
+    public void testPruningSharedHeightPreservesOnlyLatestStates() throws DataException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+            byte[] creationBytes = AtUtils.buildSimpleAT();
+
+            String firstAtAddress = AtUtils.doDeployAT(repository, deployer, creationBytes, 1_00000000L)
+                    .getATAccount().getAddress();
+            String secondAtAddress = AtUtils.doDeployAT(repository, deployer, creationBytes, 1_00000000L)
+                    .getATAccount().getAddress();
+
+            BlockUtils.mintBlocks(repository, 3);
+            int latestHeight = repository.getBlockRepository().getBlockchainHeight();
+            int sharedHeight = latestHeight - 1;
+
+            assertNotNull(repository.getATRepository().getATStateAtHeight(firstAtAddress, sharedHeight));
+            assertNotNull(repository.getATRepository().getATStateAtHeight(secondAtAddress, sharedHeight));
+
+            // Make the first AT's state at sharedHeight its latest retained state, while the
+            // second AT still has a newer state at latestHeight.
+            repository.getATRepository().delete(firstAtAddress, latestHeight);
+            repository.getATRepository().rebuildLatestAtStates(latestHeight);
+            repository.saveChanges();
+
+            int numATStatesPruned = repository.getATRepository().pruneAtStates(sharedHeight, sharedHeight);
+
+            assertEquals(1, numATStatesPruned);
+            assertNotNull(repository.getATRepository().getATStateAtHeight(firstAtAddress, sharedHeight));
+            assertNull(repository.getATRepository().getATStateAtHeight(secondAtAddress, sharedHeight));
+        }
+    }
+
+    @Test
     public void testPruneSleepingAt() throws DataException {
         try (final Repository repository = RepositoryManager.getRepository()) {
             PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");

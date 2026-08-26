@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - fix(repository): prune AT states with set-based deletion
+
+Makes AT-state pruning ask the database to remove all obsolete states at one
+block height in a single operation while preserving every state recorded as
+the latest for its AT. This avoids loading complete AT-state objects and
+issuing one delete per obsolete row, reducing database work without changing
+the schema, persisted data format, pruning boundary, or states that must remain
+available for orphaning.
+
 ### 2026-08-25 - test(arrr): prove production native admission
 
 Adds a double-opt-in, wallet-free Linux x86_64 gate for the pinned Pirate
