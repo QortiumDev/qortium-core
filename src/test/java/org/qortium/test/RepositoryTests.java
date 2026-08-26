@@ -22,6 +22,7 @@ import org.qortium.test.common.BlockUtils;
 import org.qortium.test.common.Common;
 
 import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -49,6 +50,66 @@ public class RepositoryTests extends Common {
 	public void testGetRepository() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			assertNotNull(repository);
+		}
+	}
+
+	@Test
+	public void testBinaryParameterBinding() throws DataException, SQLException {
+		byte[] expectedBytes = new byte[] { 1, 2, 3, 4 };
+		ByteBuffer heapBuffer = ByteBuffer.wrap(new byte[] { 9, 1, 2, 3, 4, 9 });
+		heapBuffer.position(1);
+		heapBuffer.limit(5);
+
+		ByteBuffer directBuffer = ByteBuffer.allocateDirect(6);
+		directBuffer.put(new byte[] { 9, 1, 2, 3, 4, 9 });
+		directBuffer.flip();
+		directBuffer.position(1);
+		directBuffer.limit(5);
+
+		ByteBuffer readOnlyBuffer = ByteBuffer.wrap(new byte[] { 9, 1, 2, 3, 4, 9 }).asReadOnlyBuffer();
+		readOnlyBuffer.position(1);
+		readOnlyBuffer.limit(5);
+
+		try (final HSQLDBRepository hsqldb = (HSQLDBRepository) RepositoryManager.getRepository()) {
+			hsqldb.prepareStatement("DROP TABLE IF EXISTS BinaryParameterBindingTest").execute();
+			hsqldb.prepareStatement("CREATE TABLE BinaryParameterBindingTest (id INT PRIMARY KEY, binary_value VARBINARY(64))").execute();
+			try (PreparedStatement insert = hsqldb.prepareStatement(
+					"INSERT INTO BinaryParameterBindingTest VALUES (?, ?)")) {
+				insert.setInt(1, 1);
+				insert.setBytes(2, expectedBytes);
+				insert.executeUpdate();
+			}
+
+			assertBinaryParameterMatches(hsqldb, expectedBytes);
+			assertBinaryParameterMatches(hsqldb, heapBuffer);
+			assertBinaryParameterMatches(hsqldb, directBuffer);
+			assertBinaryParameterMatches(hsqldb, readOnlyBuffer);
+			assertBinaryParameterMatches(hsqldb, (Object) new Byte[] { 1, 2, 3, 4 });
+
+			assertEquals(1, heapBuffer.position());
+			assertEquals(5, heapBuffer.limit());
+			assertEquals(1, directBuffer.position());
+			assertEquals(5, directBuffer.limit());
+			assertEquals(1, readOnlyBuffer.position());
+			assertEquals(5, readOnlyBuffer.limit());
+
+			try {
+				hsqldb.checkedExecute("SELECT id FROM BinaryParameterBindingTest WHERE binary_value = ?",
+						(Object) new Byte[] { 1, null, 3 });
+				fail("Expected a null boxed byte to be rejected");
+			} catch (SQLException e) {
+				assertTrue(e.getMessage().contains("parameter 1"));
+				assertTrue(e.getMessage().contains("index 1"));
+			}
+		}
+	}
+
+	private static void assertBinaryParameterMatches(HSQLDBRepository repository, Object parameter)
+			throws SQLException {
+		try (ResultSet resultSet = repository.checkedExecute(
+				"SELECT id FROM BinaryParameterBindingTest WHERE binary_value = ?", parameter)) {
+			assertNotNull(resultSet);
+			assertEquals(1, resultSet.getInt(1));
 		}
 	}
 

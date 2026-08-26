@@ -14,6 +14,7 @@ import org.qortium.settings.Settings;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -892,13 +893,34 @@ public class HSQLDBRepository implements Repository {
 	 * @throws SQLException
 	 */
 	private void bindStatementParams(PreparedStatement preparedStatement, Object... objects) throws SQLException {
-		for (int i = 0; i < objects.length; ++i)
+		for (int i = 0; i < objects.length; ++i) {
 			// Special treatment for BigDecimals so that they retain their "scale",
 			// which would otherwise be assumed as 0.
-			if (objects[i] instanceof BigDecimal)
+			if (objects[i] instanceof BigDecimal) {
 				preparedStatement.setBigDecimal(i + 1, (BigDecimal) objects[i]);
-			else
+			} else if (objects[i] instanceof byte[]) {
+				preparedStatement.setBytes(i + 1, (byte[]) objects[i]);
+			} else if (objects[i] instanceof ByteBuffer) {
+				ByteBuffer buffer = ((ByteBuffer) objects[i]).slice();
+				byte[] bytes = new byte[buffer.remaining()];
+				buffer.get(bytes);
+				preparedStatement.setBytes(i + 1, bytes);
+			} else if (objects[i] instanceof Byte[]) {
+				Byte[] boxedBytes = (Byte[]) objects[i];
+				byte[] bytes = new byte[boxedBytes.length];
+				for (int j = 0; j < boxedBytes.length; ++j) {
+					if (boxedBytes[j] == null)
+						throw new SQLException(String.format(
+								"Unable to bind parameter %d: boxed binary value contains null at index %d",
+								i + 1, j));
+
+					bytes[j] = boxedBytes[j];
+				}
+				preparedStatement.setBytes(i + 1, bytes);
+			} else {
 				preparedStatement.setObject(i + 1, objects[i]);
+			}
+		}
 	}
 
 	/**
