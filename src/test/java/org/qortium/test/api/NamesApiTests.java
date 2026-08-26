@@ -362,6 +362,53 @@ public class NamesApiTests extends ApiCommon {
 		}
 	}
 
+	@Test
+	public void testJsonBuiltRegistrationDerivesReducedNameAndRefusesTakenName() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			String name = "json-reduced-name";
+
+			RegisterNameTransactionData minted = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), name, "{}");
+			minted.setFee(new RegisterNameTransaction(null, null).getUnitFee(minted.getTimestamp()));
+			TransactionUtils.signAndMint(repository, minted, alice);
+
+			// Simulate the JAXB path: a JSON-built DTO arrives with
+			// reducedName unset, and afterUnmarshal must derive it — without
+			// that, the duplicate check queries reduced_name = NULL and a
+			// registration of an ALREADY-TAKEN name builds successfully.
+			RegisterNameTransactionData jsonShaped = new RegisterNameTransactionData(
+					TestTransaction.generateBase(bob), name, "{}");
+			FieldUtils.writeField(jsonShaped, "reducedName", null, true);
+			jsonShaped.afterUnmarshal(null, null);
+			assertEquals(org.qortium.utils.Unicode.sanitize(name), jsonShaped.getReducedName());
+
+			assertApiError(ApiError.TRANSACTION_INVALID,
+					() -> this.namesResource.buildPublicRegisterName(jsonShaped));
+		}
+	}
+
+	@Test
+	public void testBuildersClearCallerSuppliedSignatures() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			RegisterNameTransactionData unsignedData = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), "sig-clearing-name", "{}");
+			String unsigned = this.namesResource.buildPublicRegisterName(unsignedData);
+
+			// A caller-supplied signature must not survive into the "unsigned"
+			// bytes: the transformer would otherwise append it and hand back
+			// what looks like a signed transaction the node never signed.
+			RegisterNameTransactionData signedData = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), "sig-clearing-name", "{}");
+			signedData.setTimestamp(unsignedData.getTimestamp());
+			signedData.setSignature(new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+			assertEquals(unsigned, this.namesResource.buildPublicRegisterName(signedData));
+		}
+	}
+
 	private static BaseTransactionData zeroFeeBase(PrivateKeyAccount account) {
 		return new BaseTransactionData(System.currentTimeMillis(), 0, account.getPublicKey(), 0L, 0, null);
 	}

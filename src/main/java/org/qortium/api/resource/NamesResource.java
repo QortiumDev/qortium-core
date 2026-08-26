@@ -381,6 +381,11 @@ public class NamesResource {
 	}
 
 	private String buildRegisterName(RegisterNameTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -442,6 +447,11 @@ public class NamesResource {
 	}
 
 	private String buildUpdateName(UpdateNameTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -503,6 +513,11 @@ public class NamesResource {
 	}
 
 	private String buildSellName(SellNameTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -564,6 +579,11 @@ public class NamesResource {
 	}
 
 	private String buildCancelSellName(CancelSellNameTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -625,6 +645,11 @@ public class NamesResource {
 	}
 
 	private String buildBuyName(BuyNameTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
