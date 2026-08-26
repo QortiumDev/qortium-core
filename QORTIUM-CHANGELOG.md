@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-25 - fix(repository): bind binary params and batch signature lookups
+
+Makes binary database parameters explicit and predictable for primitive byte
+arrays, boxed byte arrays, and the remaining portion of byte buffers without
+moving a caller's buffer position. Repository lookups for transaction, block,
+and stored-chat signatures now ignore unusable values, collapse repeated
+signatures by their bytes, and split large requests into bounded batches while
+retaining Qortium's complete transaction metadata. This prevents invalid empty
+queries and oversized requests without changing schemas, stored records, or
+the set of matching results.
+
 ### 2026-08-25 - fix(repository): prune AT states with set-based deletion
 
 Makes AT-state pruning ask the database to remove all obsolete states at one

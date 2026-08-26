@@ -123,9 +123,21 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 	@Override
 	public List<ChatTransactionData> fromSignatures(List<byte[]> signatures) throws DataException {
-		List<ChatTransactionData> chatTransactionData = new ArrayList<>();
-		if (signatures == null || signatures.isEmpty())
-			return chatTransactionData;
+		List<byte[]> preparedSignatures = HSQLDBSignatureLookup.prepare(signatures);
+		if (preparedSignatures.isEmpty())
+			return new ArrayList<>(0);
+
+		List<ChatTransactionData> chatTransactions = new ArrayList<>(preparedSignatures.size());
+		for (int offset = 0; offset < preparedSignatures.size(); offset += HSQLDBSignatureLookup.MAX_BATCH_SIZE) {
+			int end = Math.min(offset + HSQLDBSignatureLookup.MAX_BATCH_SIZE, preparedSignatures.size());
+			chatTransactions.addAll(this.fromSignaturesBatch(preparedSignatures.subList(offset, end)));
+		}
+
+		return chatTransactions;
+	}
+
+	private List<ChatTransactionData> fromSignaturesBatch(List<byte[]> signatures) throws DataException {
+		List<ChatTransactionData> chatTransactionData = new ArrayList<>(signatures.size());
 
 		StringBuilder sql = new StringBuilder(1024);
 		sql.append("SELECT created_when, tx_group_id, sender_public_key, sender, nonce, fee, recipient, ");

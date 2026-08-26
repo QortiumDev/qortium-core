@@ -19,6 +19,7 @@ import org.qortium.repository.DataException;
 import org.qortium.repository.TransactionRepository;
 import org.qortium.repository.hsqldb.HSQLDBRepository;
 import org.qortium.repository.hsqldb.HSQLDBSaver;
+import org.qortium.repository.hsqldb.HSQLDBSignatureLookup;
 import org.qortium.transaction.Transaction.ApprovalStatus;
 import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.utils.Base58;
@@ -168,6 +169,20 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 
 	@Override
 	public List<TransactionData> fromSignatures(List<byte[]> signatures) throws DataException {
+		List<byte[]> preparedSignatures = HSQLDBSignatureLookup.prepare(signatures);
+		if (preparedSignatures.isEmpty())
+			return new ArrayList<>(0);
+
+		List<TransactionData> transactions = new ArrayList<>(preparedSignatures.size());
+		for (int offset = 0; offset < preparedSignatures.size(); offset += HSQLDBSignatureLookup.MAX_BATCH_SIZE) {
+			int end = Math.min(offset + HSQLDBSignatureLookup.MAX_BATCH_SIZE, preparedSignatures.size());
+			transactions.addAll(this.fromSignaturesBatch(preparedSignatures.subList(offset, end)));
+		}
+
+		return transactions;
+	}
+
+	private List<TransactionData> fromSignaturesBatch(List<byte[]> signatures) throws DataException {
 		StringBuffer sql = new StringBuffer();
 
 		sql.append("SELECT type, creator, created_when, fee, tx_group_id, block_height, approval_status, approval_height, nonce, signature ");

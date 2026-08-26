@@ -76,6 +76,20 @@ public class HSQLDBBlockRepository implements BlockRepository {
 
 	@Override
 	public List<BlockData> fromSignatures(List<byte[]> signatures) throws DataException {
+		List<byte[]> preparedSignatures = HSQLDBSignatureLookup.prepare(signatures);
+		if (preparedSignatures.isEmpty())
+			return new ArrayList<>(0);
+
+		List<BlockData> blocks = new ArrayList<>(preparedSignatures.size());
+		for (int offset = 0; offset < preparedSignatures.size(); offset += HSQLDBSignatureLookup.MAX_BATCH_SIZE) {
+			int end = Math.min(offset + HSQLDBSignatureLookup.MAX_BATCH_SIZE, preparedSignatures.size());
+			blocks.addAll(this.fromSignaturesBatch(preparedSignatures.subList(offset, end)));
+		}
+
+		return blocks;
+	}
+
+	private List<BlockData> fromSignaturesBatch(List<byte[]> signatures) throws DataException {
 		StringBuffer sql = new StringBuffer();
 		sql.append("SELECT " + BLOCK_DB_COLUMNS + " ");
 		sql.append("FROM Blocks WHERE signature IN (");
