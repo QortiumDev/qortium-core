@@ -13,6 +13,8 @@ import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiException;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.model.NameSummary;
+import org.qortium.api.model.PublicNameCapabilities;
+import org.qortium.block.BlockChain;
 import org.qortium.controller.LiteNode;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.naming.NameData;
@@ -319,6 +321,21 @@ public class NamesResource {
 	}
 
 
+	private static final int PUBLIC_NAME_PROTOCOL_VERSION = 1;
+	private static final List<String> PUBLIC_NAME_ACTIONS = List.of(
+			"REGISTER_NAME", "UPDATE_NAME", "SELL_NAME", "CANCEL_SELL_NAME", "BUY_NAME");
+
+	@GET
+	@Path("/public/capabilities")
+	@Operation(
+		summary = "Describe the public unsigned name-builder protocol",
+		description = "Advertises the name actions that can be built without an API key and the MemoryPoW difficulty required for zero-fee submissions."
+	)
+	public PublicNameCapabilities getPublicNameCapabilities() {
+		return new PublicNameCapabilities(PUBLIC_NAME_PROTOCOL_VERSION, PUBLIC_NAME_ACTIONS,
+				BlockChain.getInstance().getMempowFeeAlternativeDifficulty());
+	}
+
 	@POST
 	@Path("/register")
 	@Operation(
@@ -349,6 +366,21 @@ public class NamesResource {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+		return buildRegisterName(transactionData);
+	}
+
+	@POST
+	@Path("/public/register")
+	@Operation(
+		summary = "Build raw, unsigned, REGISTER_NAME transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicRegisterName(RegisterNameTransactionData transactionData) {
+		return buildRegisterName(transactionData);
+	}
+
+	private String buildRegisterName(RegisterNameTransactionData transactionData) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -395,6 +427,21 @@ public class NamesResource {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+		return buildUpdateName(transactionData);
+	}
+
+	@POST
+	@Path("/public/update")
+	@Operation(
+		summary = "Build raw, unsigned, UPDATE_NAME transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicUpdateName(UpdateNameTransactionData transactionData) {
+		return buildUpdateName(transactionData);
+	}
+
+	private String buildUpdateName(UpdateNameTransactionData transactionData) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -441,6 +488,21 @@ public class NamesResource {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+		return buildSellName(transactionData);
+	}
+
+	@POST
+	@Path("/public/sell")
+	@Operation(
+		summary = "Build raw, unsigned, SELL_NAME transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicSellName(SellNameTransactionData transactionData) {
+		return buildSellName(transactionData);
+	}
+
+	private String buildSellName(SellNameTransactionData transactionData) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -487,6 +549,21 @@ public class NamesResource {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+		return buildCancelSellName(transactionData);
+	}
+
+	@POST
+	@Path("/public/sell/cancel")
+	@Operation(
+		summary = "Build raw, unsigned, CANCEL_SELL_NAME transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicCancelSellName(CancelSellNameTransactionData transactionData) {
+		return buildCancelSellName(transactionData);
+	}
+
+	private String buildCancelSellName(CancelSellNameTransactionData transactionData) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -533,6 +610,21 @@ public class NamesResource {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
+		return buildBuyName(transactionData);
+	}
+
+	@POST
+	@Path("/public/buy")
+	@Operation(
+		summary = "Build raw, unsigned, BUY_NAME transaction (public, no API key)",
+		description = "Returns unsigned bytes only. The caller computes MemoryPoW, signs locally, and submits via POST /transactions/process."
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicBuyName(BuyNameTransactionData transactionData) {
+		return buildBuyName(transactionData);
+	}
+
+	private String buildBuyName(BuyNameTransactionData transactionData) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
