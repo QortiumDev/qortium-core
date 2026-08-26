@@ -356,6 +356,34 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPublicBuildClearsCallerSuppliedSignature() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			bob.ensureAccount();
+			repository.saveChanges();
+			byte[] encryptedPayload = DirectPrivateChatCrypto.encryptMessage(alice.getPrivateKey(), bob.getPublicKey(),
+					"signature-clearing".getBytes(StandardCharsets.UTF_8));
+			long timestamp = now();
+
+			BaseTransactionData unsignedBase = new BaseTransactionData(timestamp, Group.NO_GROUP,
+					alice.getPublicKey(), 0L, 0, null);
+			ChatTransactionData unsignedRequest = new ChatTransactionData(unsignedBase, alice.getAddress(), 0,
+					bob.getAddress(), null, encryptedPayload, true, true);
+			String unsigned = this.chatResource.buildPublicChat(unsignedRequest);
+
+			// A caller-supplied signature must not survive into the "unsigned"
+			// bytes: the transformer would otherwise append it and hand back
+			// what looks like a signed transaction the node never signed.
+			BaseTransactionData signedBase = new BaseTransactionData(timestamp, Group.NO_GROUP,
+					alice.getPublicKey(), 0L, 0, signature(1));
+			ChatTransactionData signedRequest = new ChatTransactionData(signedBase, alice.getAddress(), 0,
+					bob.getAddress(), null, encryptedPayload, true, true);
+			assertEquals(unsigned, this.chatResource.buildPublicChat(signedRequest));
+		}
+	}
+
+	@Test
 	public void testPublicBuildPreservesEncryptedDirectMessageReference() throws Exception {
 		ChatTransactionData request;
 		byte[] reference = signature(58);

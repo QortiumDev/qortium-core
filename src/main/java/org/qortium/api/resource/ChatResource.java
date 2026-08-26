@@ -1272,6 +1272,11 @@ public class ChatResource {
 	}
 
 	private String buildChatBytes(ChatTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ValidationResult result = ChatService.getInstance().validateForBuild(repository, transactionData);
 			if (result != ValidationResult.OK)
