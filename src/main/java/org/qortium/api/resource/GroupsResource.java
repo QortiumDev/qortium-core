@@ -1033,6 +1033,11 @@ public class GroupsResource {
 	}
 
 	private String buildJoinGroup(JoinGroupTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		transactionData.setSignature(null);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -1096,6 +1101,11 @@ public class GroupsResource {
 	}
 
 	private String buildLeaveGroup(LeaveGroupTransactionData transactionData) {
+		// These builders return UNSIGNED bytes by contract, but the JAXB DTO
+		// binds a caller-supplied `signature` field and the transformer would
+		// append it — handing back what looks like a signed transaction the
+		// node never signed. Clear it before validation and serialization.
+		transactionData.setSignature(null);
 		transactionData.setSignature(null);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {

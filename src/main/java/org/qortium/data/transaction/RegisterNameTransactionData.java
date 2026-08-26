@@ -42,6 +42,13 @@ public class RegisterNameTransactionData extends TransactionData {
 
 	public void afterUnmarshal(Unmarshaller u, Object parent) {
 		this.creatorPublicKey = this.registrantPublicKey;
+		// Derive the reduced name exactly as the network constructor does —
+		// UpdateNameTransactionData already derives reducedNewName here. A
+		// JSON-built registration otherwise carries reducedName == null, and
+		// the duplicate-name check queries reduced_name = NULL, which matches
+		// nothing: an API-built REGISTER_NAME for an already-taken name would
+		// validate and only fail later at the wire decoder.
+		this.reducedName = this.name != null ? Unicode.sanitize(this.name) : null;
 	}
 
 	/** From repository */

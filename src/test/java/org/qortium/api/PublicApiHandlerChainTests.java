@@ -29,6 +29,7 @@ public class PublicApiHandlerChainTests extends Common {
 		FieldUtils.writeField(settings, "publicQdnPublishMaxSize", 16L, true);
 		FieldUtils.writeField(settings, "publicApiPaths", new String[] {
 				"POST /polls/public/vote",
+				"POST /names/public/*",
 				"POST /transactions/process",
 				"POST /arbitrary/public/*",
 				"POST /future/*"
@@ -45,6 +46,14 @@ public class PublicApiHandlerChainTests extends Common {
 
 			assertStatus(server, request("POST", "/polls/public/vote", 0), 204);
 			assertStatus(server, request("POST", "/arbitrary/public", 0), 204);
+			// The names wildcard covers the flat and the nested builder paths,
+			// is body-bounded like every builder, and grants nothing outside
+			// its prefix or method.
+			assertStatus(server, request("POST", "/names/public/register", 0), 204);
+			assertStatus(server, request("POST", "/names/public/sell/cancel", 0), 204);
+			assertStatus(server, request("POST", "/names/public/register", 17), 413);
+			assertStatus(server, request("POST", "/names/publicity/register", 0), 403);
+			assertStatus(server, request("GET", "/names/public/capabilities", 0), 403);
 			assertStatus(server, request("POST", "/polls/public/vote/", 0), 403);
 			// Jetty rejects ambiguous repeated separators before the route reaches either handler.
 			assertStatus(server, request("POST", "/polls/public//vote", 17), 400);

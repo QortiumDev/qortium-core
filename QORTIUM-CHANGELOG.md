@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-26 - feat(api): public keyless builders for every name transaction
+
+Adds the name family to the public unsigned-builder surface that polls and
+group membership already have. A client with no API key can now ask the node
+to build (but never sign) a register, update, sell, cancel-sell, or buy-name
+transaction, compute the proof-of-work fee alternative itself, sign locally,
+and submit — so registering or trading a name never requires handing a node
+any key material. A new `/names/public/capabilities` route advertises the
+supported actions and the current proof-of-work difficulty, exactly like the
+polls capabilities route. The existing key-gated builders behave as before;
+the public forms share the same validation, and operators expose them by
+adding the routes to their public API path allowlist. Tests cover parity with
+the protected builders, restricted-mode availability, and a full zero-fee
+register→update→sell→cancel→sell→buy lifecycle through the public forms.
+
 ### 2026-08-25 - chore(release): prepare Core 1.7.3
 
 Marks the Core 1.7.3 Preview prerelease. Nodes can now recover automatically

@@ -348,6 +348,11 @@ public class PollsResource {
     }
 
     private String buildCreatePoll(CreatePollTransactionData transactionData) {
+        // These builders return UNSIGNED bytes by contract, but the JAXB DTO
+        // binds a caller-supplied `signature` field and the transformer would
+        // append it — handing back what looks like a signed transaction the
+        // node never signed. Clear it before validation and serialization.
+        transactionData.setSignature(null);
         try (final Repository repository = RepositoryManager.getRepository()) {
             Transaction transaction = Transaction.fromData(repository, transactionData);
 
@@ -410,6 +415,11 @@ public class PollsResource {
     }
 
     private String buildVoteOnPoll(VoteOnPollTransactionData transactionData) {
+        // These builders return UNSIGNED bytes by contract, but the JAXB DTO
+        // binds a caller-supplied `signature` field and the transformer would
+        // append it — handing back what looks like a signed transaction the
+        // node never signed. Clear it before validation and serialization.
+        transactionData.setSignature(null);
         // Normalize multi-option selections to the canonical ascending order before
         // building, so clients sign bytes that survive Core's re-serialization.
         transactionData.normalizeOptionIndexOrder();
@@ -476,6 +486,11 @@ public class PollsResource {
     }
 
     private String buildUpdatePoll(UpdatePollTransactionData transactionData) {
+        // These builders return UNSIGNED bytes by contract, but the JAXB DTO
+        // binds a caller-supplied `signature` field and the transformer would
+        // append it — handing back what looks like a signed transaction the
+        // node never signed. Clear it before validation and serialization.
+        transactionData.setSignature(null);
         try (final Repository repository = RepositoryManager.getRepository()) {
             Transaction transaction = Transaction.fromData(repository, transactionData);
 
