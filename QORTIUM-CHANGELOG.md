@@ -34,6 +34,26 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-27 - chore(arrr): pin the v1.1.8-qortium.1 Unified artifact
+
+Moves the pinned Pirate Unified native artifact from the official `v1.1.7`
+release to `v1.1.8-qortium.1`, a build produced by the QortiumDev fork's CI
+from upstream code. The new artifact matters because it is the first one
+containing the verified spending-key import that upstream merged from our
+PR #43 — the request the upcoming external-wallet recovery work depends on.
+The fork tag points at the exact upstream `main` commit of that merge with
+no source changes, and was built by the upstream project's own unmodified
+release workflow; the distinct version string exists so this build can never
+be mistaken for an official Pirate release. Only the pinned tag, filename,
+size, hash, and download URL change — in the bundle validator, the pin
+properties file, one provenance test literal, and the acceptance runbook.
+The wallet remains default-off and no behavior changes. The re-pin was
+verified on Linux x86_64 against the actual downloaded artifact: staging
+validation, the opt-in real-artifact and host-native smoke tests, the full
+test suite, and the re-run external acceptance receipts recorded in the
+pull request. The runbook's per-platform runtime matrix intentionally
+stays `NOT_RUN` until each target is exercised under the new artifact.
+
 ### 2026-08-26 - feat(api): public keyless builders for every name transaction
 
 Adds the name family to the public unsigned-builder surface that polls and

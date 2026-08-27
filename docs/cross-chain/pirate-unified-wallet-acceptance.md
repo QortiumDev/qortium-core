@@ -1,21 +1,30 @@
 # Pirate Unified wallet artifact acceptance
 
 This is the reproducible C7 harness for the default-off Pirate Unified wallet.
-It validates an official local artifact without adding an arbitrary production
+It validates the pinned local artifact without adding an arbitrary production
 library path. Downloads, native execution, QDN publication, signing, funded
 transactions, deployment, and default enablement remain separate decisions.
 
-## Pinned official artifact
+## Pinned artifact
 
-- Release tag: `v1.1.7`
-- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip`
-- Size: `353764001` bytes
-- SHA-256: `27773b37510ac5f6e9a594e1ae8a98e8b3b0dc9069506776314ba6719341f299`
-- URL: `https://github.com/PirateNetwork/Pirate-Unified-Light-Wallet/releases/download/v1.1.7/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip`
+- Release tag: `v1.1.8-qortium.1`
+- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip`
+- Size: `362642330` bytes
+- SHA-256: `3824ea8535fae411d1a20381051aaa6867e89071e3cb2bd49a8264ec3cebe357`
+- URL: `https://github.com/QortiumDev/Pirate-Unified-Light-Wallet/releases/download/v1.1.8-qortium.1/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip`
 
-The `v1.1.7` release tag and `v1.1.6` asset filename intentionally differ. The
-official release reused the unchanged Qortal JNI developer artifact, retaining
-its source-version filename. The pin file is
+Provenance: this artifact is built by the QortiumDev fork's GitHub Actions
+(the upstream repository's own unmodified `ci.yml` release workflow; fork CI
+run `33035109928`) from upstream `main` commit
+`683141e1280e8e1514dcfe10e09dc556bc2144b7` — the merge of upstream
+[PR #43](https://github.com/PirateNetwork/Pirate-Unified-Light-Wallet/pull/43)
+(verified spending-key import) and the newest green-CI upstream commit at
+pin time. The tagged source is byte-identical to upstream `main` at that
+commit; the fork tag exists so the artifact version is never confusable with
+an official PirateNetwork release. The previously pinned official
+`v1.1.7`/`v1.1.6` artifact (size `353764001`, SHA-256
+`27773b37510ac5f6e9a594e1ae8a98e8b3b0dc9069506776314ba6719341f299`)
+predates the verified spending-key import and is superseded. The pin file is
 `tools/pirate-unified-artifact.properties`.
 
 ## Staged bundle contract
@@ -25,8 +34,8 @@ archive:
 
 ```sh
 tools/stage-pirate-unified-bundle.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  /absolute/new/path/pirate-unified-v1.1.7
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
+  /absolute/new/path/pirate-unified-v1.1.8-qortium.1
 ```
 
 The script verifies the archive size and SHA-256, refuses to overwrite output,
@@ -43,7 +52,7 @@ and extracts exactly these seven payloads:
 The upstream `LiteWalletJni.java` is deliberately not copied into the runtime
 bundle because Qortium carries its adapted declaration surface in source; an
 always-on reflection test pins all twelve native declarations. The whole ZIP
-hash still authenticates that official source file as part of the release
+hash still authenticates that upstream source file as part of the release
 artifact.
 
 It then creates `QORTIUM-MANIFEST.txt` with the exact release provenance and a
@@ -81,8 +90,8 @@ and byte-compares every staged payload to the matching archive entry:
 ```sh
 mvn -DskipTests=false \
   -Dqortium.runPirateUnifiedArtifactAcceptanceTests=true \
-  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.1.7 \
+  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
+  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.1.8-qortium.1 \
   -Dtest=PirateUnifiedArtifactAcceptanceTests \
   test
 ```
@@ -152,8 +161,8 @@ termination and secret-capable evidence deletion are both proven:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/new/path/pirate-unified-native-receipt.md \
   --native
 ```
@@ -164,8 +173,8 @@ is approved:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/new/path/pirate-unified-receipt.md
 ```
 
@@ -208,7 +217,7 @@ cutover primitives, while unit tests cover Core's fail-closed composition.
 
 The first production-native gate is separately and doubly opt-in, read-only,
 wallet-free, and currently accepted only on Linux x86_64. It validates the
-pinned official artifact and staged bundle before loading the Rust/JNI library,
+pinned artifact and staged bundle before loading the Rust/JNI library,
 selects Direct transport for that disposable native process without opening a
 wallet, while quarantining every native storage, cache, and log path below the
 disposable run directory. No wallet storage may be created or written. It then
@@ -227,8 +236,8 @@ staged bundle, a new absolute receipt path, and the explicit `--native` marker:
 
 ```sh
 tools/run-pirate-production-native-interoperability-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/new/path/pirate-production-native-receipt.md \
   --native
 ```
@@ -272,8 +281,8 @@ Run the historical gate only from a clean Core commit:
 
 ```sh
 tools/run-pirate-unified-historical-restore-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.6.zip \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/new/path/pirate-unified-historical-restore-receipt.md
 ```
 
@@ -321,7 +330,7 @@ anything. Prepare that fixture from an already validated staged bundle:
 
 ```sh
 tools/prepare-pirate-unified-local-qdn-fixture.sh \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/new/path/pirate-unified-local-qdn-fixture
 ```
 
@@ -355,7 +364,7 @@ loader against that fixture without network egress or wallet creation:
 ```sh
 tools/run-pirate-unified-packaged-loader-acceptance.sh \
   /absolute/path/qortium-1.7.2.jar \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-loader-receipt.md
 ```
@@ -390,7 +399,7 @@ bounded wallet-lifecycle gate:
 ```sh
 tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
   /absolute/path/qortium-1.7.2.jar \
-  /absolute/path/pirate-unified-v1.1.7 \
+  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-lifecycle-receipt.md
 ```
@@ -453,7 +462,7 @@ enablement, or Home behavior.
 
 Artifact presence is `STAGED`, not runtime acceptance. Loopback JNI and isolated
 packaged-Core results remain separate for every target. FreeBSD is not in the
-official five-target artifact; the legacy Linux filename mapping is not
+pinned five-target artifact; the legacy Linux filename mapping is not
 FreeBSD acceptance.
 
 | Target | Artifact | Loopback JNI | Packaged Core |
