@@ -70,6 +70,30 @@ public abstract class Security {
 		}
 	}
 
+	/**
+	 * Require the request to originate from a loopback address.
+	 * <p>
+	 * This is the inverse of {@link #disallowLoopbackRequests(HttpServletRequest)} and has no
+	 * settings exemption: endpoints gated by this helper are local-operator surfaces and must
+	 * never be reachable from a non-loopback remote address, regardless of configuration.
+	 */
+	public static void requireLoopbackRequest(HttpServletRequest request) {
+		// InetAddress.getByName(null) and getByName("") both resolve to a loopback address,
+		// so a missing remote address must be rejected before resolution or this fails open.
+		String remoteAddrString = request.getRemoteAddr();
+		if (remoteAddrString == null || remoteAddrString.isBlank()) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.UNAUTHORIZED, "Only local requests are allowed");
+		}
+		try {
+			InetAddress remoteAddr = InetAddress.getByName(remoteAddrString);
+			if (!remoteAddr.isLoopbackAddress()) {
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.UNAUTHORIZED, "Only local requests are allowed");
+			}
+		} catch (UnknownHostException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.UNAUTHORIZED);
+		}
+	}
+
 	public static void requirePriorAuthorization(HttpServletRequest request, String resourceId, Service service, String identifier) {
 		ArbitraryDataResource resource = new ArbitraryDataResource(resourceId, null, service, identifier);
 		if (!ArbitraryDataRenderManager.getInstance().isAuthorized(resource)) {

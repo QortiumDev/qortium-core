@@ -6,6 +6,8 @@ import org.bouncycastle.util.encoders.Base64;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
+import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
 import org.qortium.crypto.Crypto;
 import org.qortium.settings.Settings;
 import org.qortium.utils.Base58;
@@ -520,6 +522,125 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private static boolean isAcknowledged(JSONObject response) {
 		JSONObject result = response.optJSONObject("result");
 		return response.optBoolean("ok", false) && result != null && result.optBoolean("acknowledged", false);
+	}
+
+	/**
+	 * Imports one externally derived spending key through the upstream verified request.
+	 * <p>
+	 * The native response is authoritative for every ownership, network, and birthday rule.
+	 * The spending key exists only in the request payload; it is never logged, and error
+	 * messages are redacted defensively before they can reach a caller.
+	 */
+	PirateChainVerifiedRecoveryResult importVerifiedSpendingKey(ZcashFamilyNativeAdapter nativeAdapter,
+			PirateChainVerifiedRecoveryRequest recoveryRequest) throws ForeignBlockchainException {
+		if (!this.unifiedWallet)
+			throw new ForeignBlockchainException("Verified recovery requires the Unified Pirate wallet");
+
+		final String walletId;
+		try {
+			walletId = this.getActiveWalletId(nativeAdapter);
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			throw new ForeignBlockchainException("Unified wallet identity is unavailable");
+		}
+		if (walletId == null)
+			throw new ForeignBlockchainException("Unified wallet identity is unavailable");
+
+		JSONObject importRequest = buildVerifiedImportPayload(walletId, recoveryRequest);
+		final String responseText;
+		try {
+			responseText = nativeAdapter.invokeJson(importRequest.toString(), false);
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			throw new ForeignBlockchainException("Verified key import failed");
+		}
+		return parseVerifiedImportResult(responseText, recoveryRequest.spendingKey);
+	}
+
+	static JSONObject buildVerifiedImportPayload(String walletId, PirateChainVerifiedRecoveryRequest recoveryRequest) {
+		JSONObject payload = new JSONObject()
+				.put("method", "import_spending_key_verified")
+				.put("wallet_id", walletId)
+				.put("pool", recoveryRequest.pool)
+				.put("spending_key", recoveryRequest.spendingKey)
+				.put("expected_address", recoveryRequest.expectedAddress)
+				.put("address_index", recoveryRequest.addressIndex.intValue())
+				.put("birthday_height", recoveryRequest.birthdayHeight.intValue());
+		if (recoveryRequest.label != null)
+			payload.put("label", recoveryRequest.label);
+		return payload;
+	}
+
+	static PirateChainVerifiedRecoveryResult parseVerifiedImportResult(String responseText, String spendingKey)
+			throws ForeignBlockchainException {
+		final JSONObject response;
+		try {
+			response = new JSONObject(responseText == null ? "" : responseText);
+		} catch (JSONException e) {
+			throw new ForeignBlockchainException("Verified key import failed");
+		}
+
+		// The envelope's ok flag must be an actual JSON boolean; coerced strings fail closed.
+		if (!(response.opt("ok") instanceof Boolean ok) || !ok)
+			throw new ForeignBlockchainException(
+					sanitizeVerifiedImportError(response.optString("error", null), spendingKey));
+
+		JSONObject result = response.optJSONObject("result");
+		if (result == null || !result.has("required_rescan_from_height"))
+			throw new ForeignBlockchainException("Verified key import returned an incomplete result");
+
+		Long requiredRescanFromHeight = result.isNull("required_rescan_from_height")
+				? null : requireIntegral(result, "required_rescan_from_height", 0L, 0xFFFFFFFFL);
+		return new PirateChainVerifiedRecoveryResult(
+				requireIntegral(result, "key_id", Long.MIN_VALUE, Long.MAX_VALUE),
+				requireString(result, "pool"),
+				requireString(result, "address"),
+				(int) requireIntegral(result, "address_index", 0L, 4096L),
+				// The model stores this as a signed int, so the accepted range must stop at
+				// Integer.MAX_VALUE or a u32-range height would wrap negative through the cast.
+				(int) requireIntegral(result, "birthday_height", 1L, Integer.MAX_VALUE),
+				requireBoolean(result, "already_imported"),
+				requireBoolean(result, "rescan_required"),
+				requiredRescanFromHeight);
+	}
+
+	/** Exact JSON type checks: org.json's coercing getters would accept strings and decimals. */
+	private static long requireIntegral(JSONObject result, String key, long min, long max)
+			throws ForeignBlockchainException {
+		Object value = result.opt(key);
+		if (!(value instanceof Integer) && !(value instanceof Long) && !(value instanceof java.math.BigInteger))
+			throw new ForeignBlockchainException("Verified key import returned an incomplete result");
+		long longValue;
+		try {
+			longValue = value instanceof java.math.BigInteger bigInteger
+					? bigInteger.longValueExact() : ((Number) value).longValue();
+		} catch (ArithmeticException e) {
+			throw new ForeignBlockchainException("Verified key import returned an incomplete result");
+		}
+		if (longValue < min || longValue > max)
+			throw new ForeignBlockchainException("Verified key import returned an incomplete result");
+		return longValue;
+	}
+
+	private static boolean requireBoolean(JSONObject result, String key) throws ForeignBlockchainException {
+		Object value = result.opt(key);
+		if (!(value instanceof Boolean booleanValue))
+			throw new ForeignBlockchainException("Verified key import returned an incomplete result");
+		return booleanValue;
+	}
+
+	private static String requireString(JSONObject result, String key) throws ForeignBlockchainException {
+		Object value = result.opt(key);
+		if (!(value instanceof String stringValue) || stringValue.isBlank())
+			throw new ForeignBlockchainException("Verified key import returned an incomplete result");
+		return stringValue;
+	}
+
+	static String sanitizeVerifiedImportError(String error, String spendingKey) {
+		if (error == null || error.isBlank())
+			return "Verified key import failed";
+		if (spendingKey != null && !spendingKey.isBlank()
+				&& error.toLowerCase(java.util.Locale.ROOT).contains(spendingKey.toLowerCase(java.util.Locale.ROOT)))
+			return "Verified key import failed";
+		return error;
 	}
 
 	@Override

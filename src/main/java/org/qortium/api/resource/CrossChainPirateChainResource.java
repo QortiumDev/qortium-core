@@ -17,6 +17,9 @@ import org.qortium.api.model.crosschain.ForeignCoinStatus;
 import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainSendRequest;
 import org.qortium.api.model.crosschain.PirateChainSyncStatus;
+import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
+import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
+import org.qortium.utils.Base58;
 import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.ZcashFamilyWalletController;
 import org.qortium.crosschain.*;
@@ -428,6 +431,120 @@ public class CrossChainPirateChainResource {
 	static PirateChainSyncStatus toStructuredStatus(ZcashFamilyWalletController.WalletSyncStatus status) {
 		return new PirateChainSyncStatus(PirateChainSyncStatus.State.valueOf(status.getState().name()),
 				status.getMessage(), status.getSyncedBlocks(), status.getTotalBlocks(), status.isRestartRequired());
+	}
+
+	@POST
+	@Path("/recovery/import")
+	@Operation(
+			summary = "Imports one verified external spending key into the Unified ARRR wallet",
+			description = "Local-operator endpoint: requires the API key AND a loopback remote address AND the "
+					+ "opt-in Unified Pirate wallet. Exactly one pool spending key is imported per call, proven "
+					+ "against its canonical expected address and sequential index before any mutation. The native "
+					+ "wallet is authoritative for every ownership, network, case, and birthday rule; an exact "
+					+ "retry of the same request is safe and reports alreadyImported. The response never contains "
+					+ "key material. A present requiredRescanFromHeight means a historical rescan is still owed "
+					+ "before recovered funds are visible and spendable; the field is omitted when none is pending.",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = PirateChainVerifiedRecoveryRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = PirateChainVerifiedRecoveryResult.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@javax.ws.rs.Consumes(MediaType.APPLICATION_JSON)
+	@javax.ws.rs.Produces(MediaType.APPLICATION_JSON)
+	public PirateChainVerifiedRecoveryResult importVerifiedRecoveryKey(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PirateChainVerifiedRecoveryRequest recoveryRequest) {
+		Security.checkApiCallAllowed(request);
+		Security.requireLoopbackRequest(request);
+
+		if (!Settings.getInstance().isPirateChainWalletUnified())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					"Verified recovery requires the opt-in Unified Pirate wallet");
+
+		String validationError = validateVerifiedRecoveryRequest(recoveryRequest);
+		if (validationError != null)
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					validationError);
+
+		PirateChain pirateChain = PirateChain.getInstance();
+		if (pirateChain == null)
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request,
+					ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, "Pirate Chain wallet is disabled");
+
+		try {
+			return pirateChain.importVerifiedSpendingKey(recoveryRequest);
+		} catch (ForeignBlockchainException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request,
+					ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
+		}
+	}
+
+	/**
+	 * Fast-fail pre-checks mirroring the upstream request contract. Returns a stable message,
+	 * or null when the request may be forwarded. The native wallet remains authoritative;
+	 * nothing here may accept what upstream rejects. Messages never include request content.
+	 */
+	static String validateVerifiedRecoveryRequest(PirateChainVerifiedRecoveryRequest recoveryRequest) {
+		if (recoveryRequest == null)
+			return "Missing request body";
+
+		byte[] entropyBytes;
+		try {
+			entropyBytes = recoveryRequest.entropy58 == null ? null : Base58.decode(recoveryRequest.entropy58);
+		} catch (RuntimeException e) {
+			entropyBytes = null;
+		}
+		if (entropyBytes == null || entropyBytes.length != 32)
+			return "Invalid entropy bytes";
+
+		if (!"sapling".equals(recoveryRequest.pool) && !"ironwood".equals(recoveryRequest.pool))
+			return "Pool must be sapling or ironwood";
+
+		if (recoveryRequest.spendingKey == null || recoveryRequest.spendingKey.isBlank()
+				|| isMixedCase(recoveryRequest.spendingKey))
+			return "Invalid spending key encoding";
+
+		if (recoveryRequest.expectedAddress == null || recoveryRequest.expectedAddress.isBlank()
+				|| isMixedCase(recoveryRequest.expectedAddress))
+			return "Invalid expected address encoding";
+
+		if (recoveryRequest.addressIndex == null || recoveryRequest.addressIndex < 0
+				|| recoveryRequest.addressIndex > 4096)
+			return "Address index must be between 0 and 4096";
+
+		if (recoveryRequest.birthdayHeight == null || recoveryRequest.birthdayHeight < 1)
+			return "Birthday height must be greater than zero";
+
+		// The label is deliberately NOT pre-validated: upstream's Unicode-aware trim and
+		// 100-byte limit are authoritative, and a divergent Java pre-check could reject
+		// labels the native wallet accepts. The label passes through verbatim.
+
+		return null;
+	}
+
+	/** Bech32 rejects mixed-case strings; failing fast avoids a pointless native round trip. */
+	static boolean isMixedCase(String value) {
+		boolean hasUpper = false;
+		boolean hasLower = false;
+		for (int i = 0; i < value.length(); i++) {
+			char c = value.charAt(i);
+			hasUpper |= Character.isUpperCase(c);
+			hasLower |= Character.isLowerCase(c);
+		}
+		return hasUpper && hasLower;
 	}
 
 	@GET

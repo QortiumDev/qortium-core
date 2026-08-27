@@ -34,6 +34,38 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-27 - feat(arrr): add the authenticated loopback verified-recovery endpoint
+
+Adds `POST /crosschain/arrr/recovery/import`, a local-operator endpoint that
+imports one externally derived Pirate spending key into the opt-in Unified
+wallet using the upstream verified request: the key must prove ownership of
+its canonical expected address at a stated sequential index before anything
+is stored, and an exact retry of the same request is always safe. The
+endpoint is deliberately hard to reach: it requires the API key AND a
+loopback remote address (a new `Security.requireLoopbackRequest` helper with
+no configuration exemption) AND the Unified wallet setting AND a running,
+synchronized wallet — the synchronized requirement both gives the native
+side the known chain tip its birthday validation needs and guarantees no
+Core-driven sync is interrupted by the import. The whole native call runs
+as one coordinator-owned operation bound to the requested account, so a
+wallet switch can never race it. The spending key exists only in the
+request and the native call: it is never logged, never echoed, and error
+messages are defensively redacted if they ever contained it. The response
+reports the canonical address, retained birthday, and whether a historical
+rescan is still owed (`requiredRescanFromHeight`, omitted when none is
+pending); driving that rescan and exposing its durable progress is the next
+change, so recovered funds are not yet visible after this one. Fast-fail
+request validation mirrors the upstream contract (pool names, inclusive
+0–4096 index, Bech32 case rules) while the native wallet stays
+authoritative — labels deliberately pass through untouched because
+upstream's Unicode-aware trim and byte limit are the authority. The native
+response parser is strict: coerced string booleans, decimal indexes,
+out-of-range values, and a missing rescan-floor property all fail closed.
+Tests cover the loopback helper (including the missing-remote-address
+fail-open case it must reject), the full precondition and validation
+matrix, the exact native request/response contract, and the key-material
+redaction.
+
 ### 2026-08-27 - chore(arrr): pin the v1.1.8-qortium.1 Unified artifact
 
 Moves the pinned Pirate Unified native artifact from the official `v1.1.7`
