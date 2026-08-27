@@ -100,7 +100,7 @@ public class ApiCommon extends Common {
 		return buildResource(resourceClass, buildRequest("127.0.0.1", apiKey));
 	}
 
-	private static Object buildResource(Class<?> resourceClass, HttpServletRequest request) {
+	public static Object buildResource(Class<?> resourceClass, HttpServletRequest request) {
 		try {
 			Object resource = resourceClass.getDeclaredConstructor().newInstance();
 

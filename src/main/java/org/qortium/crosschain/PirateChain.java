@@ -12,6 +12,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainSendRequest;
+import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
+import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
 import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.ZcashFamilyWalletController;
 import org.qortium.crosschain.PirateLightClient.Server;
@@ -354,6 +356,28 @@ public class PirateChain extends Bitcoiny {
 		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
 			String response = nativeAdapter.execute("balance", "");
 			return parseWalletBalances(response);
+		});
+	}
+
+	/**
+	 * Imports one externally derived spending key through the upstream verified recovery request.
+	 * <p>
+	 * The operation runs as a single coordinator-owned wallet operation bound to the requested
+	 * entropy wallet, requires that wallet to be synchronized (so the native side has a
+	 * persisted known chain tip for birthday validation, and no Core-driven sync is in flight
+	 * when the native import takes the wallet's sync lock), and requires the persistent Unified
+	 * storage backend.
+	 */
+	public PirateChainVerifiedRecoveryResult importVerifiedSpendingKey(
+			PirateChainVerifiedRecoveryRequest recoveryRequest) throws ForeignBlockchainException {
+		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
+		if (walletController == null)
+			throw new ForeignBlockchainException("Pirate Chain wallet is disabled");
+
+		return walletController.withEntropyWallet(recoveryRequest.entropy58, true, (wallet, nativeAdapter) -> {
+			if (!wallet.usesPersistentUnifiedStorage())
+				throw new ForeignBlockchainException("Verified recovery requires the persistent Unified Pirate wallet");
+			return wallet.importVerifiedSpendingKey(nativeAdapter, recoveryRequest);
 		});
 	}
 
