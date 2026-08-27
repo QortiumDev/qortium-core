@@ -35,14 +35,16 @@ final class PirateUnifiedWalletStorage {
 		private final boolean syncValidated;
 		private final String identityHash;
 		private final String selectedServerUri;
+		private final Long recoveryRescanFromHeight;
 		private final boolean corrupt;
 
 		private Snapshot(State state, boolean syncValidated, String identityHash, String selectedServerUri,
-				boolean corrupt) {
+				Long recoveryRescanFromHeight, boolean corrupt) {
 			this.state = state;
 			this.syncValidated = syncValidated;
 			this.identityHash = identityHash;
 			this.selectedServerUri = selectedServerUri;
+			this.recoveryRescanFromHeight = recoveryRescanFromHeight;
 			this.corrupt = corrupt;
 		}
 
@@ -60,6 +62,16 @@ final class PirateUnifiedWalletStorage {
 
 		String getSelectedServerUri() {
 			return this.selectedServerUri;
+		}
+
+		/**
+		 * Durable driver intent: a verified-import rescan is still owed from this height.
+		 * Null when no recovery replay is pending. The native wallet's own gate is
+		 * authoritative; this record only tells a restarted controller to drive the
+		 * native rescan again, because upstream never resumes it on its own.
+		 */
+		Long getRecoveryRescanFromHeight() {
+			return this.recoveryRescanFromHeight;
 		}
 
 		boolean isCorrupt() {
@@ -161,11 +173,11 @@ final class PirateUnifiedWalletStorage {
 
 	Snapshot read() {
 		if (this.transientWallet)
-			return new Snapshot(State.LEGACY, false, null, null, false);
+			return new Snapshot(State.LEGACY, false, null, null, null, false);
 
 		Path statePath = this.storageDirectory.resolve(STATE_FILENAME);
 		if (!Files.isRegularFile(statePath))
-			return new Snapshot(State.LEGACY, false, null, null, false);
+			return new Snapshot(State.LEGACY, false, null, null, null, false);
 
 		try {
 			JSONObject json = new JSONObject(Files.readString(statePath, StandardCharsets.UTF_8));
@@ -185,17 +197,33 @@ final class PirateUnifiedWalletStorage {
 					|| (state == State.LEGACY && syncValidated))
 				throw new JSONException("Invalid wallet migration state");
 
-			return new Snapshot(state, syncValidated, identityHash, selectedServerUri, false);
+			Long recoveryRescanFromHeight = null;
+			if (json.has("recoveryRescanFromHeight") && !json.isNull("recoveryRescanFromHeight")) {
+				recoveryRescanFromHeight = json.getLong("recoveryRescanFromHeight");
+				if (recoveryRescanFromHeight < 1)
+					throw new JSONException("Invalid recovery rescan height");
+			}
+
+			return new Snapshot(state, syncValidated, identityHash, selectedServerUri,
+					recoveryRescanFromHeight, false);
 		} catch (IOException | JSONException | IllegalArgumentException e) {
-			return new Snapshot(State.FAILED_RECOVERABLE, false, null, null, true);
+			return new Snapshot(State.FAILED_RECOVERABLE, false, null, null, null, true);
 		}
 	}
 
 	void write(State state, boolean syncValidated, String identityHash) throws IOException {
-		this.write(state, syncValidated, identityHash, this.read().getSelectedServerUri());
+		Snapshot current = this.read();
+		this.write(state, syncValidated, identityHash, current.getSelectedServerUri(),
+				current.getRecoveryRescanFromHeight());
 	}
 
 	void write(State state, boolean syncValidated, String identityHash, String selectedServerUri) throws IOException {
+		this.write(state, syncValidated, identityHash, selectedServerUri,
+				this.read().getRecoveryRescanFromHeight());
+	}
+
+	void write(State state, boolean syncValidated, String identityHash, String selectedServerUri,
+			Long recoveryRescanFromHeight) throws IOException {
 		if (this.transientWallet)
 			return;
 
@@ -215,6 +243,11 @@ final class PirateUnifiedWalletStorage {
 			json.put("identityHash", identityHash);
 		if (selectedServerUri != null)
 			json.put("selectedServerUri", selectedServerUri);
+		if (recoveryRescanFromHeight != null) {
+			if (recoveryRescanFromHeight < 1)
+				throw new IOException("Invalid recovery rescan height");
+			json.put("recoveryRescanFromHeight", recoveryRescanFromHeight.longValue());
+		}
 
 		Path temporaryPath = Files.createTempFile(this.storageDirectory, ".qortium-wallet-state-", ".tmp");
 		try {

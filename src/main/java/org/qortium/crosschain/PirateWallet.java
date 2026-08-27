@@ -54,6 +54,9 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private volatile boolean freshSynchronizationRequired;
 	private long synchronizationAcceptedGeneration = -1L;
 	private String synchronizationAcceptedWalletId;
+	private volatile ZcashFamilyWallet.RecoveryProgress lastObservedRecoveryProgress =
+			ZcashFamilyWallet.RecoveryProgress.NONE;
+	private volatile boolean recoveryCompletedInLifetime;
 
 	public PirateWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
 		this(PirateChain.WALLET_CONFIG, entropyBytes, isNullSeedWallet, true);
@@ -552,7 +555,12 @@ public class PirateWallet extends ZcashFamilyWallet {
 		} catch (UnsatisfiedLinkError | RuntimeException e) {
 			throw new ForeignBlockchainException("Verified key import failed");
 		}
-		return parseVerifiedImportResult(responseText, recoveryRequest.spendingKey);
+		PirateChainVerifiedRecoveryResult result =
+				parseVerifiedImportResult(responseText, recoveryRequest.spendingKey);
+		// The durable driver record must reflect the native verdict before the caller is
+		// answered, so a restarted Core knows to drive (or stop driving) the replay.
+		this.reconcileRecoveryRecord(result.requiredRescanFromHeight);
+		return result;
 	}
 
 	static JSONObject buildVerifiedImportPayload(String walletId, PirateChainVerifiedRecoveryRequest recoveryRequest) {
@@ -643,6 +651,140 @@ public class PirateWallet extends ZcashFamilyWallet {
 		return error;
 	}
 
+	/**
+	 * Persists or clears the durable recovery driver record so it always reflects the
+	 * native import verdict. Called after a successful verified import; failing to
+	 * persist fails the whole call because the exact import retry is idempotent.
+	 */
+	private void reconcileRecoveryRecord(Long requiredRescanFromHeight) throws ForeignBlockchainException {
+		if (!this.usesPersistentUnifiedStorage())
+			return;
+
+		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+		if (Objects.equals(snapshot.getRecoveryRescanFromHeight(), requiredRescanFromHeight))
+			return;
+
+		try {
+			this.unifiedStorage.write(snapshot.getState(), snapshot.isSyncValidated(), snapshot.getIdentityHash(),
+					snapshot.getSelectedServerUri(), requiredRescanFromHeight);
+		} catch (IOException e) {
+			throw new ForeignBlockchainException("The verified import was applied natively but its recovery "
+					+ "record could not be stored; retry the exact same request");
+		}
+		if (requiredRescanFromHeight != null)
+			this.lastObservedRecoveryProgress = ZcashFamilyWallet.RecoveryProgress.PENDING;
+	}
+
+	/** Native spendability authority; unknown means a malformed response and never clears state. */
+	record SpendabilityStatus(boolean known, boolean spendable, boolean rescanRequired, boolean repairQueued) {
+		static SpendabilityStatus unknown() {
+			return new SpendabilityStatus(false, false, true, true);
+		}
+
+		boolean isTerminalSafe() {
+			return this.known && this.spendable && !this.rescanRequired && !this.repairQueued;
+		}
+	}
+
+	static JSONObject buildSpendabilityPayload(String walletId) {
+		return new JSONObject().put("method", "get_spendability_status").put("wallet_id", walletId);
+	}
+
+	static JSONObject buildRecoveryRescanPayload(String walletId, long fromHeight) {
+		return new JSONObject().put("method", "rescan").put("wallet_id", walletId).put("from_height", fromHeight);
+	}
+
+	static SpendabilityStatus parseSpendabilityStatus(String responseText) {
+		try {
+			JSONObject response = new JSONObject(responseText == null ? "" : responseText);
+			if (!(response.opt("ok") instanceof Boolean ok) || !ok)
+				return SpendabilityStatus.unknown();
+			JSONObject result = response.optJSONObject("result");
+			if (result == null
+					|| !(result.opt("spendable") instanceof Boolean spendable)
+					|| !(result.opt("rescan_required") instanceof Boolean rescanRequired)
+					|| !(result.opt("repair_queued") instanceof Boolean repairQueued))
+				return SpendabilityStatus.unknown();
+			return new SpendabilityStatus(true, spendable, rescanRequired, repairQueued);
+		} catch (JSONException e) {
+			return SpendabilityStatus.unknown();
+		}
+	}
+
+	boolean hasPendingRecovery() {
+		return this.usesPersistentUnifiedStorage()
+				&& this.unifiedStorage.read().getRecoveryRescanFromHeight() != null;
+	}
+
+	/**
+	 * Cheap recovery marker for status reporting: no native calls, storage read only.
+	 * Returns null when recovery has never been involved in this wallet's lifetime.
+	 */
+	@Override
+	public ZcashFamilyWallet.RecoveryProgress peekRecoveryProgress() {
+		if (!this.usesPersistentUnifiedStorage())
+			return null;
+		if (this.unifiedStorage.read().getRecoveryRescanFromHeight() != null) {
+			ZcashFamilyWallet.RecoveryProgress observed = this.lastObservedRecoveryProgress;
+			return observed == ZcashFamilyWallet.RecoveryProgress.RECOVERING
+					? observed : ZcashFamilyWallet.RecoveryProgress.PENDING;
+		}
+		return this.recoveryCompletedInLifetime ? ZcashFamilyWallet.RecoveryProgress.RECOVERED : null;
+	}
+
+	@Override
+	public ZcashFamilyWallet.RecoveryProgress progressRecovery(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.usesPersistentUnifiedStorage())
+			return ZcashFamilyWallet.RecoveryProgress.NONE;
+
+		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+		Long recoveryFloor = snapshot.getRecoveryRescanFromHeight();
+		if (recoveryFloor == null) {
+			this.lastObservedRecoveryProgress = ZcashFamilyWallet.RecoveryProgress.NONE;
+			return this.recoveryCompletedInLifetime
+					? ZcashFamilyWallet.RecoveryProgress.RECOVERED : ZcashFamilyWallet.RecoveryProgress.NONE;
+		}
+
+		try {
+			String walletId = this.getActiveWalletId(nativeAdapter);
+			if (walletId == null)
+				return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.PENDING);
+
+			SpendabilityStatus spendability = parseSpendabilityStatus(
+					nativeAdapter.invokeJson(buildSpendabilityPayload(walletId).toString(), false));
+			if (spendability.isTerminalSafe()) {
+				// The native authority says the replay completed; clear the driver record atomically.
+				this.unifiedStorage.write(snapshot.getState(), snapshot.isSyncValidated(),
+						snapshot.getIdentityHash(), snapshot.getSelectedServerUri(), null);
+				this.recoveryCompletedInLifetime = true;
+				this.lastObservedRecoveryProgress = ZcashFamilyWallet.RecoveryProgress.RECOVERED;
+				return ZcashFamilyWallet.RecoveryProgress.RECOVERED;
+			}
+
+			// Reissuing rescan is NOT idempotent: it cancels and restarts active work.
+			// While the native task is running, only observe.
+			if (this.isNativeSyncInProgress(nativeAdapter))
+				return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.RECOVERING);
+
+			// The gate is set and nothing is running: issue (or reissue after restart) the
+			// replay. A later from_height is clamped down to the durable native floor, so a
+			// controller-paced retry is always safe here.
+			JSONObject rescanResponse = new JSONObject(nativeAdapter.invokeJson(
+					buildRecoveryRescanPayload(walletId, recoveryFloor).toString(), false));
+			return this.observeRecovery(isAcknowledged(rescanResponse)
+					? ZcashFamilyWallet.RecoveryProgress.RECOVERING
+					: ZcashFamilyWallet.RecoveryProgress.PENDING);
+		} catch (IOException | UnsatisfiedLinkError | RuntimeException e) {
+			// Retryable: the durable record survives and the next controller pass retries.
+			return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.PENDING);
+		}
+	}
+
+	private ZcashFamilyWallet.RecoveryProgress observeRecovery(ZcashFamilyWallet.RecoveryProgress progress) {
+		this.lastObservedRecoveryProgress = progress;
+		return progress;
+	}
+
 	@Override
 	public void recordSynchronizationAccepted(ZcashFamilyNativeAdapter nativeAdapter) {
 		if (!this.unifiedWallet || this.appliedServerSelection == null)
@@ -685,7 +827,11 @@ public class PirateWallet extends ZcashFamilyWallet {
 	public boolean isSynchronized() {
 		if (!this.unifiedWallet)
 			return super.isSynchronized();
-		return !this.freshSynchronizationRequired && this.appliedServerSelection != null
+		// A pending verified-import recovery replay means balances and histories are not
+		// final yet, so the wallet must not present itself as synchronized: this blocks
+		// balance/history/send (and further imports) until the replay completes.
+		return !this.freshSynchronizationRequired && !this.hasPendingRecovery()
+				&& this.appliedServerSelection != null
 				&& this.isSelectionCurrent(this.appliedServerSelection) && super.isSynchronized();
 	}
 

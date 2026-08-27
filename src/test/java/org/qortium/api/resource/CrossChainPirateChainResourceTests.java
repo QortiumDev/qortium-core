@@ -174,6 +174,25 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testStructuredStatusCarriesRecoveryMarker() {
+		PirateChainSyncStatus recovering = CrossChainPirateChainResource.toStructuredStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.recovering(
+						"Recovering imported keys...", "RECOVERING"));
+		assertEquals(PirateChainSyncStatus.State.SYNCHRONIZING, recovering.state);
+		assertEquals("RECOVERING", recovering.recoveryState);
+
+		PirateChainSyncStatus readyRecovered = CrossChainPirateChainResource.toStructuredStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized")
+						.withRecoveryMarker("RECOVERED"));
+		assertEquals(PirateChainSyncStatus.State.READY, readyRecovered.state);
+		assertEquals("RECOVERED", readyRecovered.recoveryState);
+
+		PirateChainSyncStatus plain = CrossChainPirateChainResource.toStructuredStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+		assertNull(plain.recoveryState);
+	}
+
+	@Test
 	public void testMixedCaseDetection() {
 		assertFalse(CrossChainPirateChainResource.isMixedCase("zs1alllower"));
 		assertFalse(CrossChainPirateChainResource.isMixedCase("ZS1ALLUPPER"));

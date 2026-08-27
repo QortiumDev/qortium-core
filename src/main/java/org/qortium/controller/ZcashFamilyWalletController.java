@@ -64,34 +64,49 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		private final Long syncedBlocks;
 		private final Long totalBlocks;
 		private final boolean restartRequired;
+		private final String recoveryState;
 
 		private WalletSyncStatus(WalletSyncState state, String message, Long syncedBlocks, Long totalBlocks,
-				boolean restartRequired) {
+				boolean restartRequired, String recoveryState) {
 			this.state = state;
 			this.message = message;
 			this.syncedBlocks = syncedBlocks;
 			this.totalBlocks = totalBlocks;
 			this.restartRequired = restartRequired;
+			this.recoveryState = recoveryState;
 		}
 
 		public static WalletSyncStatus disabled(String message) {
-			return new WalletSyncStatus(WalletSyncState.DISABLED, message, null, null, false);
+			return new WalletSyncStatus(WalletSyncState.DISABLED, message, null, null, false, null);
 		}
 
 		public static WalletSyncStatus loading(String message) {
-			return new WalletSyncStatus(WalletSyncState.LOADING, message, null, null, false);
+			return new WalletSyncStatus(WalletSyncState.LOADING, message, null, null, false, null);
 		}
 
 		public static WalletSyncStatus synchronizing(String message, Long syncedBlocks, Long totalBlocks) {
-			return new WalletSyncStatus(WalletSyncState.SYNCHRONIZING, message, syncedBlocks, totalBlocks, false);
+			return new WalletSyncStatus(WalletSyncState.SYNCHRONIZING, message, syncedBlocks, totalBlocks, false, null);
+		}
+
+		/** A verified-import recovery replay owns the wallet: reported as synchronizing plus a marker. */
+		public static WalletSyncStatus recovering(String message, String recoveryState) {
+			return new WalletSyncStatus(WalletSyncState.SYNCHRONIZING, message, null, null, false, recoveryState);
 		}
 
 		public static WalletSyncStatus degraded(String message) {
-			return new WalletSyncStatus(WalletSyncState.DEGRADED, message, null, null, true);
+			return new WalletSyncStatus(WalletSyncState.DEGRADED, message, null, null, true, null);
 		}
 
 		public static WalletSyncStatus ready(String message) {
-			return new WalletSyncStatus(WalletSyncState.READY, message, null, null, false);
+			return new WalletSyncStatus(WalletSyncState.READY, message, null, null, false, null);
+		}
+
+		/** Same status with the given recovery marker (null clears it). */
+		public WalletSyncStatus withRecoveryMarker(String recoveryState) {
+			if (Objects.equals(this.recoveryState, recoveryState))
+				return this;
+			return new WalletSyncStatus(this.state, this.message, this.syncedBlocks, this.totalBlocks,
+					this.restartRequired, recoveryState);
 		}
 
 		public WalletSyncState getState() {
@@ -112,6 +127,11 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 		public boolean isRestartRequired() {
 			return this.restartRequired;
+		}
+
+		/** RecoveryProgress name (PENDING/RECOVERING/RECOVERED), or null when recovery is not involved. */
+		public String getRecoveryState() {
+			return this.recoveryState;
 		}
 	}
 
@@ -237,10 +257,27 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 
 		if (wallet.usesPersistentNativeStorage()) {
+			// A pending verified-import recovery must be driven through the dedicated native
+			// rescan path BEFORE any normal sync handling: a plain sync never clears the
+			// native replay gate, and isSynchronized() reports false while the durable
+			// recovery record exists.
+			ZcashFamilyWallet.RecoveryProgress recovery = wallet.progressRecovery(nativeAdapter);
+			if (recovery == ZcashFamilyWallet.RecoveryProgress.PENDING
+					|| recovery == ZcashFamilyWallet.RecoveryProgress.RECOVERING) {
+				this.cacheCurrentWalletStatus(WalletSyncStatus.recovering(
+						recovery == ZcashFamilyWallet.RecoveryProgress.RECOVERING
+								? "Recovering imported keys..."
+								: "Recovery rescan pending...",
+						recovery.name()));
+				return true;
+			}
+
 			if (wallet.isSynchronized()) {
 				wallet.setReady(true);
 				wallet.recordValidatedSync(nativeAdapter);
-				this.cacheCurrentWalletStatus(WalletSyncStatus.ready("Synchronized"));
+				this.cacheCurrentWalletStatus(WalletSyncStatus.ready("Synchronized")
+						.withRecoveryMarker(recovery == ZcashFamilyWallet.RecoveryProgress.RECOVERED
+								? recovery.name() : null));
 				return true;
 			}
 			if (wallet.isNativeSyncInProgress(nativeAdapter)) {
@@ -662,7 +699,11 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 		String syncStatusResponse = nativeAdapter.execute("syncStatus", "");
 		JSONObject json = new JSONObject(syncStatusResponse);
-		return cacheCurrentWalletStatus(interpretNativeSyncStatus(json, this.currentWallet.isSynchronized()));
+		WalletSyncStatus status = interpretNativeSyncStatus(json, this.currentWallet.isSynchronized());
+		ZcashFamilyWallet.RecoveryProgress recoveryMarker = this.currentWallet.peekRecoveryProgress();
+		if (recoveryMarker != null)
+			status = status.withRecoveryMarker(recoveryMarker.name());
+		return cacheCurrentWalletStatus(status);
 	}
 
 	static WalletSyncStatus interpretNativeSyncStatus(JSONObject json, boolean walletSynchronized) {
@@ -730,7 +771,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		if (NATIVE_COORDINATOR.isBusy()) {
 			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
 			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
-				return cachedStatus.status;
+				return withPeekedRecoveryMarker(cachedStatus);
 			return WalletSyncStatus.loading("Wallet status unavailable while another native operation is running");
 		}
 
@@ -751,9 +792,22 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			}
 			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
 			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
-				return cachedStatus.status;
+				return withPeekedRecoveryMarker(cachedStatus);
 			return WalletSyncStatus.loading("Wallet status unavailable for the requested wallet");
 		}
+	}
+
+	/**
+	 * Decorates a cached status with the wallet's current recovery marker. The peek makes
+	 * no native call (an atomic metadata-file read only), so a cached status returned while
+	 * the native lane is busy still reflects a recovery record written just before.
+	 */
+	private static WalletSyncStatus withPeekedRecoveryMarker(CachedWalletSyncStatus cachedStatus) {
+		ZcashFamilyWallet wallet = cachedStatus.wallet;
+		if (wallet == null)
+			return cachedStatus.status;
+		ZcashFamilyWallet.RecoveryProgress peeked = wallet.peekRecoveryProgress();
+		return peeked != null ? cachedStatus.status.withRecoveryMarker(peeked.name()) : cachedStatus.status;
 	}
 
 	Duration statusTimeoutFor(String entropy58) {
