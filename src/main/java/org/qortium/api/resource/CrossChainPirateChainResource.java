@@ -430,7 +430,8 @@ public class CrossChainPirateChainResource {
 
 	static PirateChainSyncStatus toStructuredStatus(ZcashFamilyWalletController.WalletSyncStatus status) {
 		return new PirateChainSyncStatus(PirateChainSyncStatus.State.valueOf(status.getState().name()),
-				status.getMessage(), status.getSyncedBlocks(), status.getTotalBlocks(), status.isRestartRequired());
+				status.getMessage(), status.getSyncedBlocks(), status.getTotalBlocks(), status.isRestartRequired(),
+				status.getRecoveryState());
 	}
 
 	@POST

@@ -31,15 +31,27 @@ public class PirateChainSyncStatus {
 	@Schema(description = "Whether Core must restart before native wallet operations can resume")
 	public boolean restartRequired;
 
+	@Schema(description = "Verified-import recovery marker: PENDING (durable rescan owed, not running), "
+			+ "RECOVERING (native replay active), or RECOVERED (completed this runtime). OMITTED when "
+			+ "recovery is not involved. While PENDING or RECOVERING, balances and histories are not "
+			+ "final and the wallet reports itself unsynchronized.", nullable = true)
+	public String recoveryState;
+
 	public PirateChainSyncStatus() {
 	}
 
 	public PirateChainSyncStatus(State state, String message, Long syncedBlocks, Long totalBlocks,
 			boolean restartRequired) {
+		this(state, message, syncedBlocks, totalBlocks, restartRequired, null);
+	}
+
+	public PirateChainSyncStatus(State state, String message, Long syncedBlocks, Long totalBlocks,
+			boolean restartRequired, String recoveryState) {
 		this.state = state;
 		this.message = message;
 		this.syncedBlocks = syncedBlocks;
 		this.totalBlocks = totalBlocks;
 		this.restartRequired = restartRequired;
+		this.recoveryState = recoveryState;
 	}
 }

@@ -240,6 +240,35 @@ public class ZcashFamilyWallet {
 		return false;
 	}
 
+	/** Progress of a durable verified-import recovery replay owned by this wallet. */
+	public enum RecoveryProgress {
+		/** No recovery record exists and none completed in this wallet's lifetime. */
+		NONE,
+		/** A durable recovery record exists but no native replay is currently active. */
+		PENDING,
+		/** A durable recovery record exists and the native replay is being driven. */
+		RECOVERING,
+		/** The record was cleared after the native spendability authority reached its terminal-safe state. */
+		RECOVERED
+	}
+
+	/**
+	 * Drives any pending verified-import recovery replay one step and reports its progress.
+	 * Wallets without durable recovery state report {@link RecoveryProgress#NONE}.
+	 * Must be called from within the native coordinator lane.
+	 */
+	public RecoveryProgress progressRecovery(ZcashFamilyNativeAdapter nativeAdapter) {
+		return RecoveryProgress.NONE;
+	}
+
+	/**
+	 * Cheap recovery marker for status reporting: never makes a native call.
+	 * Null when recovery has never been involved in this wallet's lifetime.
+	 */
+	public RecoveryProgress peekRecoveryProgress() {
+		return null;
+	}
+
 	public boolean isNativeSyncInProgress(ZcashFamilyNativeAdapter nativeAdapter) {
 		return false;
 	}

@@ -34,6 +34,35 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-27 - feat(arrr): drive the verified-import rescan with durable recovery state
+
+Makes the historical rescan owed after a verified spending-key import a
+first-class, restart-survivable process instead of something a caller must
+babysit. When an import reports a pending replay height, Core now stores a
+durable recovery record in the wallet's namespace before answering the
+caller, and the wallet controller drives the dedicated native rescan from
+that exact height — a plain sync deliberately never satisfies it, because
+only the native rescan path clears the wallet's own replay gate. The driver
+is single-flight: while the native replay runs it only observes (reissuing
+a rescan cancels active work), and completion is judged solely by the
+native spendability authority (spendable, no rescan required, no repair
+queued) — never by sync progress reaching 100%. A Core restart mid-replay
+resumes automatically: the record survives, upstream clamps a reissued
+height down to its own durable floor, and a failed reissue simply retries
+on the next controller pass. While recovery is pending and Unified mode
+remains enabled, the wallet truthfully reports itself unsynchronized,
+which blocks balance, history, send, and further imports until recovered
+funds are actually final. (Disabling Unified mode falls back to the
+separate legacy wallet backend; the dormant Unified recovery record is
+neither cleared nor damaged and resumes when Unified is re-enabled.) The
+sync-status API (plain and structured) gains a recovery marker — PENDING,
+RECOVERING, or RECOVERED — omitted entirely when recovery is not involved,
+so existing callers see no change. Tests cover the durable record's
+round-trip and corruption handling, the full driver decision table with a
+scripted native fake (issue, observe-without-reissue, clear-on-terminal,
+never-clear-on-malformed, retry-on-unacknowledged), import-response
+reconciliation, and the status marker mapping.
+
 ### 2026-08-27 - feat(arrr): add the authenticated loopback verified-recovery endpoint
 
 Adds `POST /crosschain/arrr/recovery/import`, a local-operator endpoint that
