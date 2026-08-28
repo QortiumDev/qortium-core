@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortium.api.ApiError;
 import org.qortium.api.ApiException;
 import org.qortium.api.ApiRequest;
+import org.qortium.api.model.NodeStatus;
 import org.qortium.api.restricted.resource.AdminResource;
 import org.qortium.controller.RestartNode;
 import org.qortium.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
@@ -57,6 +58,22 @@ public class AdminApiTests extends ApiCommon {
 	@Test
 	public void testSummary() {
 		assertNotNull(this.adminResource.summary());
+	}
+
+	@Test
+	public void testStatusJsonIncludesI2PHealthDiagnostics() throws Exception {
+		StringWriter writer = new StringWriter();
+		ApiRequest.marshall(writer, this.adminResource.status());
+		String statusJson = writer.toString();
+
+		assertTrue(statusJson.contains("\"isI2PChainSessionUp\""));
+		assertTrue(statusJson.contains("\"i2pChainLeaseSetLookupStatus\""));
+		assertEquals(Long.class, NodeStatus.class.getField("i2pChainLeaseSetLookupTimestamp").getType());
+		assertEquals(Long.class, NodeStatus.class.getField("i2pChainLastInboundHandshakeTimestamp").getType());
+		assertTrue(statusJson.contains("\"isI2PDataSessionUp\""));
+		assertTrue(statusJson.contains("\"i2pDataLeaseSetLookupStatus\""));
+		assertEquals(Long.class, NodeStatus.class.getField("i2pDataLeaseSetLookupTimestamp").getType());
+		assertEquals(Long.class, NodeStatus.class.getField("i2pDataLastInboundHandshakeTimestamp").getType());
 	}
 
 	@Test

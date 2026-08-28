@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - feat(i2p): expose transport health diagnostics
+
+Adds separate chain and QDN/data I2P health signals to the existing node status
+API and status WebSocket. Operators can now see whether each SAM session is up,
+whether the local router's last LeaseSet self-lookup resolved, when that lookup
+finished, and when Core last completed a real inbound I2P peer handshake. The
+lookup result is kept honest and distinguishes resolved, not resolved, and
+inconclusive checks; it survives automatic session replacement for the life of
+the Core process. Existing inbound-reachability fields are now documented as
+direct-IP signals so an I2P-only node is not misdiagnosed from those values.
+
 ### 2026-08-28 - fix(i2p): release rejected connection tasks
 
 Prevents an I2P peer from remaining falsely marked as connecting when Core is
