@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - feat(core): diagnose live blockchain lock stalls
+
+Adds live diagnostics for unusually long blockchain-lock holds instead of only
+reporting after the node becomes responsive again. If block minting or chain
+synchronization keeps the lock for 30 seconds, Core now records the active
+operation, owning thread and Java stack, elapsed time, and number of waiting
+threads. Further reports are best-effort and rate-limited to no more than one
+every 30 seconds until the work finishes; the waiting-thread count is an
+estimate.
+Lock and repository-pool timing now use a monotonic clock, and slow repository
+connection warnings identify the requesting thread. This is observational only:
+it does not force the lock open, interrupt consensus work, or restart the node.
+
 ### 2026-08-28 - fix(preview): prevent test jobs from starving the node
 
 Stops the preview launcher from putting Core at the operating system's lowest
