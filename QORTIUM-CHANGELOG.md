@@ -34,6 +34,49 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-27 - test(arrr): prove verified recovery end to end and read balances typed
+
+Proves verified import, the dedicated rescan, Core's recovery driver, and
+in-process storage reopen against the real Pirate native library, and fixes
+what that proof exposed. Core's Unified initialization path is not yet covered;
+see the known limitation in the acceptance document.
+
+Balance reads for Unified wallets now use the typed `get_balance` request
+instead of the legacy `balance` command. The legacy command additionally
+builds a per-address breakdown that Core discards, and building it walks the
+wallet's own key looking for every address holding a balance - which an
+imported key's address can never satisfy, so it ran to its 4096-address limit
+and blew past the native lane's timeout on the first balance read after a
+recovery. The typed request returns exactly the two amounts Core uses. Its
+amounts arrive as decimal strings, so the parser accepts strings and integers
+as the wallet's own decoder does and fails closed on anything else. Legacy
+wallets keep the previous path. A fix for the underlying scan is offered
+upstream as PirateNetwork/Pirate-Unified-Light-Wallet#45 and is not yet
+merged, so the pinned artifact still contains the slow scan; Core's other
+callers of the legacy address path are covered by the known limitation
+recorded in the acceptance document.
+
+Two recovery-driver defects surfaced only under real native execution. The
+driver reissued its rescan during the windows where the native side reports
+idle while the replay is still starting or finishing its bookkeeping, and each
+reissue truncated the replay that had already recovered the note; an issued
+rescan is now left alone for a minimum interval before any idle retry. The
+driver also left the completed rescan session running, and live balance and
+transaction reads are suppressed while such a session exists, so completion
+now ends the session with a clean cancel before clearing the durable record -
+and keeps the record if that cancel is not acknowledged.
+
+Two opt-in acceptance tests exercise the real library on loopback fixtures: a
+donor account's spending key imported into a different wallet, recovered
+through the dedicated rescan, with fail-closed counterexamples for a wrong
+address, wrong index, mixed-case key and an above-tip birthday, Bech32
+uppercase idempotency, a null-floor retry after completion, and survival of
+the imported key group across a storage reopen; plus a driver test that drives
+the same recovery through Core's own code path. A receipt runner publishes
+their evidence. The pinned native artifact moves to v1.1.8-qortium.3, which
+carries the upstream cancelled-sync fix merged as
+PirateNetwork/Pirate-Unified-Light-Wallet#44. Unified remains default-off.
+
 ### 2026-08-27 - feat(arrr): drive the verified-import rescan with durable recovery state
 
 Makes the historical rescan owed after a verified spending-key import a

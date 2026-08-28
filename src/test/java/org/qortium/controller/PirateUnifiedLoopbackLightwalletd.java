@@ -35,12 +35,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * and the Pirate Unified native library. The two clients use wire-compatible
  * messages but different gRPC service names, so both names are registered.
  */
-final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
+public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
-	static final long SAPLING_ACTIVATION_HEIGHT = 152_855L;
-	static final long HISTORICAL_NOTE_HEIGHT = SAPLING_ACTIVATION_HEIGHT + 1L;
-	static final long HISTORICAL_NOTE_VALUE = 123_456_789L;
-	static final long TIP_HEIGHT = 152_858L;
+	public static final long SAPLING_ACTIVATION_HEIGHT = 152_855L;
+	public static final long HISTORICAL_NOTE_HEIGHT = SAPLING_ACTIVATION_HEIGHT + 1L;
+	public static final long HISTORICAL_NOTE_VALUE = 123_456_789L;
+	public static final long TIP_HEIGHT = 152_858L;
 	static final long IRONWOOD_PROBE_HEIGHT = TIP_HEIGHT - 30L;
 
 	static final String CASH_SERVICE = CompactTxStreamerGrpc.SERVICE_NAME;
@@ -81,7 +81,7 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		this(0, "main", "main", false, TIP_HEIGHT);
 	}
 
-	PirateUnifiedLoopbackLightwalletd(boolean includeHistoricalNote) throws IOException {
+	public PirateUnifiedLoopbackLightwalletd(boolean includeHistoricalNote) throws IOException {
 		this(0, "main", "main", includeHistoricalNote, TIP_HEIGHT);
 	}
 
@@ -123,7 +123,7 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 							  .start();
 	}
 
-	String endpoint() {
+	public String endpoint() {
 		return "http://127.0.0.1:" + this.server.getPort() + "/";
 	}
 
@@ -168,11 +168,11 @@ final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		}
 	}
 
-	int forbiddenRpcCount() {
+	public int forbiddenRpcCount() {
 		return this.forbiddenRpcCount.get();
 	}
 
-	int unexpectedRpcCount() {
+	public int unexpectedRpcCount() {
 		return this.unexpectedRpcCount.get();
 	}
 

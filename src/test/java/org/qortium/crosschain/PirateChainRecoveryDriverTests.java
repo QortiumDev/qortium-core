@@ -223,13 +223,17 @@ public class PirateChainRecoveryDriverTests {
 	}
 
 	@Test
-	public void testTerminalSpendabilityClearsRecordAndReportsRecovered() throws Exception {
+	public void testTerminalSpendabilityCancelsSessionThenClearsRecord() throws Exception {
 		PirateWallet wallet = this.walletWithRecord(1_999_000L);
 		ScriptedAdapter adapter = new ScriptedAdapter()
 				.respond("get_active_wallet", WALLET_ID_OK)
-				.respond("get_spendability_status", SPENDABILITY_TERMINAL);
+				.respond("get_spendability_status", SPENDABILITY_TERMINAL)
+				.respond("cancel_sync", ACKNOWLEDGED);
 
 		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERED, wallet.progressRecovery(adapter));
+		// The still-alive rescan session must be cancelled before the record clears,
+		// because live reads block while a rescan session exists.
+		assertEquals(1, adapter.payloadsFor("cancel_sync").size());
 		assertNull(wallet.getUnifiedStorage().read().getRecoveryRescanFromHeight());
 		assertTrue(adapter.payloadsFor("rescan").isEmpty());
 		assertFalse(wallet.hasPendingRecovery());
@@ -237,6 +241,19 @@ public class PirateChainRecoveryDriverTests {
 		// After completion the marker persists for this wallet's lifetime
 		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERED, wallet.peekRecoveryProgress());
 		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERED, wallet.progressRecovery(adapter));
+	}
+
+	@Test
+	public void testUnacknowledgedCompletionCancelRetainsTheRecord() throws Exception {
+		PirateWallet wallet = this.walletWithRecord(1_999_000L);
+		ScriptedAdapter adapter = new ScriptedAdapter()
+				.respond("get_active_wallet", WALLET_ID_OK)
+				.respond("get_spendability_status", SPENDABILITY_TERMINAL)
+				.respond("cancel_sync", NOT_ACKNOWLEDGED);
+
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals(Long.valueOf(1_999_000L),
+				wallet.getUnifiedStorage().read().getRecoveryRescanFromHeight());
 	}
 
 	@Test
@@ -257,6 +274,66 @@ public class PirateChainRecoveryDriverTests {
 			assertEquals("record must survive: " + malformed, Long.valueOf(1_999_000L),
 					wallet.getUnifiedStorage().read().getRecoveryRescanFromHeight());
 		}
+	}
+
+	@Test
+	public void testIssuedRescanIsNotReissuedInsideTheIdleGrace() throws Exception {
+		// After an acknowledged issue, idle-while-gated passes inside the grace period
+		// must observe rather than reissue: the native replay starts and completes its
+		// gate bookkeeping asynchronously, and a reissue truncates the recovering state.
+		PirateWallet wallet = this.walletWithRecord(1_999_000L);
+		ScriptedAdapter adapter = new ScriptedAdapter()
+				.respond("get_active_wallet", WALLET_ID_OK)
+				.respond("get_spendability_status", SPENDABILITY_GATED)
+				.respond("rescan", ACKNOWLEDGED);
+
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals("A rescan was reissued inside the idle grace", 1,
+				adapter.payloadsFor("rescan").size());
+	}
+
+	@Test
+	public void testStalledRescanIsReissuedAfterTheIdleGrace() throws Exception {
+		PirateWallet wallet = this.walletWithRecord(1_999_000L);
+		wallet.setRecoveryIdleGraceForTesting(0L);
+		ScriptedAdapter adapter = new ScriptedAdapter()
+				.respond("get_active_wallet", WALLET_ID_OK)
+				.respond("get_spendability_status", SPENDABILITY_GATED)
+				.respond("rescan", ACKNOWLEDGED);
+
+		// First pass issues; the next observes idle and starts the grace; the third
+		// finds the grace elapsed and retries the apparently dead attempt.
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals("A stalled attempt was not retried after the idle grace", 2,
+				adapter.payloadsFor("rescan").size());
+	}
+
+	@Test
+	public void testLongRunningRescanIsNeverReissuedWhileNativeWorkContinues() throws Exception {
+		// A replay that keeps reporting work must never be disturbed, however long it
+		// runs: every busy observation discards any earlier idleness.
+		PirateWallet wallet = this.walletWithRecord(1_999_000L);
+		wallet.setRecoveryIdleGraceForTesting(0L);
+		ScriptedAdapter adapter = new ScriptedAdapter()
+				.respond("get_active_wallet", WALLET_ID_OK)
+				.respond("get_spendability_status", SPENDABILITY_GATED)
+				.respond("rescan", ACKNOWLEDGED);
+
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		adapter.syncStatus("{\"in_progress\":true}");
+		for (int pass = 0; pass < 5; pass++)
+			assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals("A running replay was disturbed by a reissue", 1,
+				adapter.payloadsFor("rescan").size());
+
+		// One idle pass only starts the grace; it does not immediately retry.
+		adapter.syncStatus("{\"in_progress\":false,\"syncing\":false}");
+		assertEquals(ZcashFamilyWallet.RecoveryProgress.RECOVERING, wallet.progressRecovery(adapter));
+		assertEquals("Idleness must persist before a retry", 1, adapter.payloadsFor("rescan").size());
 	}
 
 	@Test

@@ -6,6 +6,7 @@ import org.bouncycastle.util.encoders.Base64;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
 import org.qortium.crypto.Crypto;
@@ -57,6 +58,18 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private volatile ZcashFamilyWallet.RecoveryProgress lastObservedRecoveryProgress =
 			ZcashFamilyWallet.RecoveryProgress.NONE;
 	private volatile boolean recoveryCompletedInLifetime;
+	/**
+	 * How long the native side must continuously report idle, while the replay gate is
+	 * still set, before the driver reissues its rescan. Measured from the first idle
+	 * observation rather than from the issue, so a replay that runs for hours is never
+	 * disturbed and only a genuinely stalled one is retried.
+	 */
+	static final long RECOVERY_IDLE_GRACE_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+	private boolean recoveryRescanIssued;
+	/** Nanotime of the first idle observation since the last issue; 0 when not idle. */
+	private long recoveryIdleSinceNanos;
+	/** Test seam: overrides the idle grace; null means the production constant. */
+	private volatile Long recoveryIdleGraceOverrideNanos;
 
 	public PirateWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
 		this(PirateChain.WALLET_CONFIG, entropyBytes, isNullSeedWallet, true);
@@ -528,6 +541,94 @@ public class PirateWallet extends ZcashFamilyWallet {
 	}
 
 	/**
+	 * Reads this wallet's balances.
+	 * <p>
+	 * Unified wallets use the typed `get_balance` request rather than the legacy
+	 * `balance` command. The legacy command additionally builds a per-address
+	 * breakdown that Core discards, and building it walks the wallet's own key
+	 * looking for every address holding a balance. An address belonging to another
+	 * key group - which is exactly what a verified spending-key import creates -
+	 * cannot be found that way, so that walk runs to its 4096-address limit on
+	 * every call and exceeds the native lane's timeout after a recovery. The typed
+	 * request returns precisely the two amounts Core consumes.
+	 */
+	PirateChainBalance getWalletBalances(ZcashFamilyNativeAdapter nativeAdapter)
+			throws ForeignBlockchainException {
+		if (!this.unifiedWallet)
+			return PirateChain.parseWalletBalances(nativeAdapter.execute("balance", ""));
+
+		final String walletId;
+		try {
+			walletId = this.getActiveWalletId(nativeAdapter);
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			throw new ForeignBlockchainException("Unable to determine balance");
+		}
+		if (walletId == null)
+			throw new ForeignBlockchainException("Unable to determine balance");
+
+		final String responseText;
+		try {
+			responseText = nativeAdapter.invokeJson(buildBalancePayload(walletId).toString(), false);
+		} catch (UnsatisfiedLinkError | RuntimeException e) {
+			throw new ForeignBlockchainException("Unable to determine balance");
+		}
+		return parseTypedBalance(responseText);
+	}
+
+	static JSONObject buildBalancePayload(String walletId) {
+		return new JSONObject().put("method", "get_balance").put("wallet_id", walletId);
+	}
+
+	static PirateChainBalance parseTypedBalance(String responseText) throws ForeignBlockchainException {
+		final JSONObject response;
+		try {
+			response = new JSONObject(responseText == null ? "" : responseText);
+		} catch (JSONException e) {
+			throw new ForeignBlockchainException("Unable to determine balance");
+		}
+
+		if (!(response.opt("ok") instanceof Boolean ok) || !ok)
+			throw new ForeignBlockchainException("Unable to determine balance");
+		JSONObject result = response.optJSONObject("result");
+		if (result == null)
+			throw new ForeignBlockchainException("Unable to determine balance");
+
+		return new PirateChainBalance(requireAmount(result, "total"), requireAmount(result, "spendable"));
+	}
+
+	/**
+	 * Unified amounts serialize as decimal strings so large values survive JSON
+	 * consumers with limited integer precision; plain integers are accepted too,
+	 * exactly as the upstream decoder accepts either form. Anything else, and any
+	 * negative or non-integral value, fails closed rather than being coerced.
+	 */
+	private static long requireAmount(JSONObject result, String key) throws ForeignBlockchainException {
+		Object value = result.opt(key);
+		final long amount;
+		if (value instanceof String text) {
+			try {
+				amount = Long.parseLong(text.trim());
+			} catch (NumberFormatException e) {
+				throw new ForeignBlockchainException("Unable to determine balance");
+			}
+		} else if (value instanceof Integer || value instanceof Long) {
+			amount = ((Number) value).longValue();
+		} else if (value instanceof java.math.BigInteger bigInteger) {
+			try {
+				amount = bigInteger.longValueExact();
+			} catch (ArithmeticException e) {
+				throw new ForeignBlockchainException("Unable to determine balance");
+			}
+		} else {
+			throw new ForeignBlockchainException("Unable to determine balance");
+		}
+
+		if (amount < 0)
+			throw new ForeignBlockchainException("Unable to determine balance");
+		return amount;
+	}
+
+	/**
 	 * Imports one externally derived spending key through the upstream verified request.
 	 * <p>
 	 * The native response is authoritative for every ownership, network, and birthday rule.
@@ -671,8 +772,14 @@ public class PirateWallet extends ZcashFamilyWallet {
 			throw new ForeignBlockchainException("The verified import was applied natively but its recovery "
 					+ "record could not be stored; retry the exact same request");
 		}
-		if (requiredRescanFromHeight != null)
+		if (requiredRescanFromHeight != null) {
 			this.lastObservedRecoveryProgress = ZcashFamilyWallet.RecoveryProgress.PENDING;
+			// A newly owed replay starts its own issue/idle cycle: inheriting the previous
+			// recovery's state would make this one wait a grace period before its first
+			// rescan.
+			this.recoveryRescanIssued = false;
+			this.recoveryIdleSinceNanos = 0L;
+		}
 	}
 
 	/** Native spendability authority; unknown means a malformed response and never clears state. */
@@ -753,7 +860,14 @@ public class PirateWallet extends ZcashFamilyWallet {
 			SpendabilityStatus spendability = parseSpendabilityStatus(
 					nativeAdapter.invokeJson(buildSpendabilityPayload(walletId).toString(), false));
 			if (spendability.isTerminalSafe()) {
-				// The native authority says the replay completed; clear the driver record atomically.
+				// The native authority says the replay completed — but the rescan SESSION
+				// stays alive as a live-follow sync, and balance/transaction reads are
+				// suppressed (block) while a rescan session exists. End it with a clean
+				// cancel (which preserves the persisted heights) BEFORE clearing the
+				// driver record; if the cancel is not acknowledged, keep the record and
+				// retry the whole completion on the next pass.
+				if (!this.cancelNativeSync(nativeAdapter, walletId))
+					return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.RECOVERING);
 				this.unifiedStorage.write(snapshot.getState(), snapshot.isSyncValidated(),
 						snapshot.getIdentityHash(), snapshot.getSelectedServerUri(), null);
 				this.recoveryCompletedInLifetime = true;
@@ -762,18 +876,44 @@ public class PirateWallet extends ZcashFamilyWallet {
 			}
 
 			// Reissuing rescan is NOT idempotent: it cancels and restarts active work.
-			// While the native task is running, only observe.
-			if (this.isNativeSyncInProgress(nativeAdapter))
+			// While the native task is running, only observe, and treat that as proof the
+			// replay is alive so any earlier idle observation is discarded.
+			if (this.isNativeSyncInProgress(nativeAdapter)) {
+				this.recoveryIdleSinceNanos = 0L;
 				return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.RECOVERING);
+			}
 
-			// The gate is set and nothing is running: issue (or reissue after restart) the
-			// replay. A later from_height is clamped down to the durable native floor, so a
+			// An acknowledged rescan starts, and finishes its gate bookkeeping,
+			// asynchronously: the native side reports idle both before the replay task
+			// starts and between the scan ending and complete_required_rescan running.
+			// Reissuing inside those windows cancels and TRUNCATES the replay that was
+			// about to satisfy the gate. So after an issue, require the idle-while-gated
+			// state to persist for a grace period - timed from when idleness began, not
+			// from the issue - before retrying. A replay that keeps reporting work resets
+			// the timer and is never disturbed, however long it runs.
+			if (this.recoveryRescanIssued) {
+				long now = System.nanoTime();
+				if (this.recoveryIdleSinceNanos == 0L) {
+					this.recoveryIdleSinceNanos = now;
+					return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.RECOVERING);
+				}
+				long grace = this.recoveryIdleGraceOverrideNanos != null
+						? this.recoveryIdleGraceOverrideNanos : RECOVERY_IDLE_GRACE_NANOS;
+				if (now - this.recoveryIdleSinceNanos < grace)
+					return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.RECOVERING);
+			}
+
+			// First issue, restart re-issue, or a debounced retry after a genuinely dead
+			// attempt. A later from_height is clamped down to the durable native floor, so a
 			// controller-paced retry is always safe here.
 			JSONObject rescanResponse = new JSONObject(nativeAdapter.invokeJson(
 					buildRecoveryRescanPayload(walletId, recoveryFloor).toString(), false));
-			return this.observeRecovery(isAcknowledged(rescanResponse)
-					? ZcashFamilyWallet.RecoveryProgress.RECOVERING
-					: ZcashFamilyWallet.RecoveryProgress.PENDING);
+			if (isAcknowledged(rescanResponse)) {
+				this.recoveryRescanIssued = true;
+				this.recoveryIdleSinceNanos = 0L;
+				return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.RECOVERING);
+			}
+			return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.PENDING);
 		} catch (IOException | UnsatisfiedLinkError | RuntimeException e) {
 			// Retryable: the durable record survives and the next controller pass retries.
 			return this.observeRecovery(ZcashFamilyWallet.RecoveryProgress.PENDING);
@@ -783,6 +923,11 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private ZcashFamilyWallet.RecoveryProgress observeRecovery(ZcashFamilyWallet.RecoveryProgress progress) {
 		this.lastObservedRecoveryProgress = progress;
 		return progress;
+	}
+
+	/** Test seam: shrink the idle grace so unit tests can exercise the retry path. */
+	void setRecoveryIdleGraceForTesting(Long graceNanos) {
+		this.recoveryIdleGraceOverrideNanos = graceNanos;
 	}
 
 	@Override
