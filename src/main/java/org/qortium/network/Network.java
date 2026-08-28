@@ -2079,27 +2079,37 @@ public class Network {
             // Pick random peer
             int peerIndex = new Random().nextInt(peers.size());
 
-            // Pick candidate
+            // Pick candidate and reserve it while recording the attempt
             PeerData peerData = peers.get(peerIndex);
-            Peer newPeer = new Peer(peerData, Peer.NETWORK);
-            newPeer.setIsDataPeer(false);
-            if (peerData.getAddress().isI2P())
-                this.connectingI2PPeers.add(peerData.getAddress());
+            return reserveConnectablePeer(repository, peerData, now);
+        } catch (DataException e) {
+            LOGGER.error("Repository issue while finding a connectable peer", e);
+            return null;
+        }
 
-            // Update connection attempt info
+    }
+
+    private Peer reserveConnectablePeer(Repository repository, PeerData peerData, Long now) throws DataException {
+        Peer newPeer = new Peer(peerData, Peer.NETWORK);
+        newPeer.setIsDataPeer(false);
+
+        PeerAddress peerAddress = peerData.getAddress();
+        boolean reservationAdded = peerAddress.isI2P() && this.connectingI2PPeers.add(peerAddress);
+        boolean attemptRecorded = false;
+
+        try {
             peerData.setLastAttempted(now);
             synchronized (this.allKnownPeers) {
                 repository.getNetworkRepository().save(peerData);
                 repository.saveChanges();
             }
 
+            attemptRecorded = true;
             return newPeer;
-        } catch (DataException e) {
-            LOGGER.error("Repository issue while finding a connectable peer", e);
-            return null;
+        } finally {
+            if (reservationAdded && !attemptRecorded)
+                this.connectingI2PPeers.remove(peerAddress);
         }
-
-        
     }
 
     private List<PeerData> preferPeersOutsideRotationCooldown(List<PeerData> peers) {

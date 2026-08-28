@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(i2p): release reservations after repository failures
+
+Prevents a temporary repository failure from making an I2P chain peer look as
+though it is still being connected after the attempt has already been
+abandoned. The peer address is now released immediately when saving the
+connection attempt fails, allowing normal automatic retry and recovery without
+requiring a Core restart. A regression test injects the repository failure at
+the exact point that previously leaked the reservation.
+
 ### 2026-08-28 - fix(qdn): restrict rendered app WebSockets to the serving node
 
 Removes an inherited Content Security Policy wildcard that allowed a rendered
