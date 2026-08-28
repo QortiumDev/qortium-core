@@ -9,11 +9,16 @@ import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.network.i2p.I2PStreamProvider;
 import org.qortium.network.message.Message;
 import org.qortium.network.message.PeersMessage;
+import org.qortium.repository.DataException;
+import org.qortium.repository.NetworkRepository;
+import org.qortium.repository.Repository;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
 import org.qortium.utils.NTP;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
@@ -344,6 +349,42 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
+	public void testI2PChainReservationReleasedWhenAttemptPersistenceFails() throws Exception {
+		PeerAddress i2pAddress = PeerAddress.fromString(B32);
+		PeerData peerData = new PeerData(i2pAddress, 100L, "test");
+
+		NetworkRepository failingNetworkRepository = (NetworkRepository) Proxy.newProxyInstance(
+				NetworkRepository.class.getClassLoader(),
+				new Class<?>[] { NetworkRepository.class },
+				(proxy, method, args) -> {
+					if (method.getName().equals("save")) {
+						assertTrue("I2P address should be reserved before persistence",
+								getConnectingI2PPeers().contains(i2pAddress));
+						throw new DataException("forced attempt persistence failure");
+					}
+					throw new AssertionError("Unexpected NetworkRepository call: " + method.getName());
+				});
+		Repository failingRepository = (Repository) Proxy.newProxyInstance(
+				Repository.class.getClassLoader(),
+				new Class<?>[] { Repository.class },
+				(proxy, method, args) -> {
+					if (method.getName().equals("getNetworkRepository"))
+						return failingNetworkRepository;
+					throw new AssertionError("Unexpected Repository call: " + method.getName());
+				});
+
+		try {
+			invokeReserveConnectablePeer(failingRepository, peerData, System.currentTimeMillis());
+			throw new AssertionError("Expected attempt persistence to fail");
+		} catch (DataException e) {
+			assertEquals("forced attempt persistence failure", e.getMessage());
+		}
+
+		assertFalse("Failed persistence must not leave the I2P address reserved",
+				getConnectingI2PPeers().contains(i2pAddress));
+	}
+
+	@Test
 	public void testI2PChainPeerUsesLongerConnectFailureBackoff() throws Exception {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
@@ -488,6 +529,19 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("getConnectablePeer", Long.class);
 		method.setAccessible(true);
 		return (Peer) method.invoke(Network.getInstance(), now);
+	}
+
+	private Peer invokeReserveConnectablePeer(Repository repository, PeerData peerData, long now) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("reserveConnectablePeer",
+				Repository.class, PeerData.class, Long.class);
+		method.setAccessible(true);
+		try {
+			return (Peer) method.invoke(Network.getInstance(), repository, peerData, now);
+		} catch (InvocationTargetException e) {
+			if (e.getCause() instanceof DataException)
+				throw (DataException) e.getCause();
+			throw e;
+		}
 	}
 
 	private void invokeAddI2PChainPeer(Peer peer) throws Exception {
