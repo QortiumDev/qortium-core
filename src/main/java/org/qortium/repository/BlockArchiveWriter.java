@@ -149,6 +149,13 @@ public class BlockArchiveWriter {
         int i = 0;
         while (headerBytes.size() + bytes.size() < this.fileSizeTarget) {
 
+            // HSQLDB can begin an automatic log-size checkpoint at any time. A checkpoint waits
+            // for every open transaction, while new repository work waits behind the checkpoint.
+            // Never carry this long-lived writer's transaction across a pause: if Synchronizer then
+            // blocks behind the checkpoint, isSynchronizing remains true and the continue below
+            // would otherwise retain the transaction forever.
+            releaseRepositoryBeforeWait(repository);
+
             // pause, since this can be a long process and other processes need to execute
             Thread.sleep(Settings.getInstance().getArchivingPause());
 
@@ -233,6 +240,11 @@ public class BlockArchiveWriter {
             // Write block bytes
             bytes.write(blockBytes);
 
+            // Block construction/serialization can perform fresh reads after the archive-index
+            // save above. End that read transaction immediately rather than waiting for the next
+            // loop iteration (or returning with a full archive buffer).
+            releaseRepositoryBeforeWait(repository);
+
             // Log every 1000 blocks
             if (this.shouldLogProgress && i % 1000 == 0) {
                 LOGGER.info("Archived up to block height {}. Size of current file: {}", currentHeight, StringUtils.formatBytes(headerBytes.size() + bytes.size()));
@@ -278,6 +290,10 @@ public class BlockArchiveWriter {
         this.lastWrittenHeight = endHeight;
         this.outputPath = Paths.get(filePath);
         return BlockArchiveWriteResult.OK;
+    }
+
+    static void releaseRepositoryBeforeWait(Repository repository) throws DataException {
+        repository.discardChanges();
     }
 
     public int getWrittenCount() {

@@ -204,7 +204,7 @@ public class ReindexManager {
 
     private void runRepositoryMaintenance() throws DataException {
         try {
-            this.repository.performPeriodicMaintenance(1000L);
+			RepositoryManager.performPeriodicMaintenance(this.repository, 1000L);
         } catch (TimeoutException e) {
             LOGGER.info("Timed out waiting for repository before running maintenance");
         }

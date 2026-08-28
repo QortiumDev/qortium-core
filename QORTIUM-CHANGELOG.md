@@ -34,6 +34,35 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(recovery): restart nodes after sustained repository stalls
+
+Adds a default-on repository liveness watchdog for failures where the Core
+process remains alive but database calls, synchronization, APIs, and peer
+handling are all blocked. A probe runs on its own thread; if one database read
+cannot finish for five minutes, Core writes a compact incident file with its
+last healthy height, synchronization state, worker counts, and a full thread
+dump. It then launches a separate recovery helper and terminates only the
+wedged JVM. The helper verifies that exact parent process is gone before
+removing the stale database lock and
+relaunching the same Core artifact and settings. This avoids relying on an API
+that may already be unavailable and avoids deleting a lock still owned by a
+live process. Operators can disable or tune the watchdog when diagnosing a
+node, planned backup/defragmentation work receives a longer grace period, and a
+failed helper launch leaves the process intact for investigation.
+
+### 2026-08-28 - fix(archive): release database transactions before archiver waits
+
+Prevents a live node from freezing when HSQLDB starts an automatic checkpoint
+while the block archiver is running. The archiver previously kept a read
+transaction open while sleeping and while waiting for synchronization to end;
+the checkpoint then waited for the archiver, synchronization waited for the
+checkpoint, and the archiver kept waiting because synchronization still looked
+active. Every repository user, including peer handling, eventually queued
+behind that cycle. The writer now ends its transaction before each pause and
+immediately after serializing each block. A real two-session HSQLDB regression
+test proves that a checkpoint blocked by the archiver's idle read transaction
+finishes as soon as this cleanup runs.
+
 ### 2026-08-27 - test(arrr): prove verified recovery end to end and read balances typed
 
 Proves verified import, the dedicated rescan, Core's recovery driver, and

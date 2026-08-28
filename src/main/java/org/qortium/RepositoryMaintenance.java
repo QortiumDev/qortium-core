@@ -58,7 +58,7 @@ public class RepositoryMaintenance {
 
 		LOGGER.info("Starting repository periodic maintenance. This can take a while...");
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			repository.performPeriodicMaintenance(null);
+			RepositoryManager.performPeriodicMaintenance(repository, null);
 
 			LOGGER.info("Repository periodic maintenance completed");
 		} catch (DataException | TimeoutException e) {

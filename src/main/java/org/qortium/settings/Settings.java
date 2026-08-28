@@ -473,6 +473,12 @@ public class Settings {
 	private String repositoryPath = "db";
 	/** Repository connection pool size. Needs to be a bit bigger than maxNetworkThreadPoolSize */
 	private int repositoryConnectionPoolSize = 1920;
+	/** Whether a sustained repository probe stall should capture evidence and restart Core. */
+	private boolean repositoryHealthWatchdogEnabled = true;
+	/** Delay between repository health-watchdog observations. (milliseconds) */
+	private long repositoryHealthCheckInterval = 30 * 1000L;
+	/** Maximum age of one unfinished repository probe before emergency recovery. (milliseconds) */
+	private long repositoryHealthRestartTimeout = 5 * 60 * 1000L;
 	/**
 	 * Chain-network bootstrap addresses, seeding Network's known-peers list at startup.
 	 * Accepts clearnet (host:port) and I2P (.b32.i2p) chain-seed entries; a node only attempts
@@ -1809,6 +1815,12 @@ public class Settings {
 		if (this.minOutboundPeers > this.maxDataPeers)
 			throwValidationError("minOutboundPeers must not be greater than maxDataPeers");
 
+		if (this.repositoryHealthCheckInterval < 1000L)
+			throwValidationError("repositoryHealthCheckInterval must be at least 1000 milliseconds");
+
+		if (this.repositoryHealthRestartTimeout < this.repositoryHealthCheckInterval * 2L)
+			throwValidationError("repositoryHealthRestartTimeout must be at least twice repositoryHealthCheckInterval");
+
 		if (this.minPeerConnectionTime <= 0)
 			throwValidationError("minPeerConnectionTime must be greater than 0");
 
@@ -2735,6 +2747,18 @@ public class Settings {
 
 	public int getRepositoryConnectionPoolSize() {
 		return this.repositoryConnectionPoolSize;
+	}
+
+	public boolean isRepositoryHealthWatchdogEnabled() {
+		return this.repositoryHealthWatchdogEnabled;
+	}
+
+	public long getRepositoryHealthCheckInterval() {
+		return this.repositoryHealthCheckInterval;
+	}
+
+	public long getRepositoryHealthRestartTimeout() {
+		return this.repositoryHealthRestartTimeout;
 	}
 
 	public String getExportPath() {

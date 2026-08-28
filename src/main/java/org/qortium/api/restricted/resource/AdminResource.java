@@ -1149,7 +1149,7 @@ public class AdminResource {
 			try {
 				// Timeout if the database isn't ready for backing up after 60 seconds
 				long timeout = 60 * 1000L;
-				repository.backup(true, "backup", timeout);
+					RepositoryManager.backup(repository, true, "backup", timeout);
 				repository.saveChanges();
 
 				return "true";
@@ -1288,7 +1288,7 @@ public class AdminResource {
 			try {
 				// Timeout if the database isn't ready to start after 60 seconds
 				long timeout = 60 * 1000L;
-				repository.performPeriodicMaintenance(timeout);
+					RepositoryManager.performPeriodicMaintenance(repository, timeout);
 			} finally {
 				blockchainLock.unlock();
 			}
