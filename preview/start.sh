@@ -27,6 +27,8 @@ usage() {
 	echo "is detected."
 	echo
 	echo "QORTIUM_PREVIEW_RUNTIME_DIR can also set the runtime directory."
+	echo "QORTIUM_PREVIEW_NICE_LEVEL can set the CPU nice level from 0 to 19,"
+	echo "or use 'off' to launch at the caller's normal priority (default: 5)."
 }
 
 for arg in "$@"; do
@@ -60,6 +62,26 @@ for arg in "$@"; do
 			;;
 	esac
 done
+
+NICE_ARGS=()
+NICE_LEVEL="${QORTIUM_PREVIEW_NICE_LEVEL:-5}"
+NICE_DESCRIPTION="normal priority"
+case "${NICE_LEVEL}" in
+	off|OFF|none|NONE)
+		;;
+	[0-9]|1[0-9])
+		if command -v nice >/dev/null 2>&1; then
+			NICE_ARGS=(nice -n "${NICE_LEVEL}")
+			NICE_DESCRIPTION="nice ${NICE_LEVEL}"
+		else
+			NICE_DESCRIPTION="normal priority (nice command unavailable)"
+		fi
+		;;
+	*)
+		echo "QORTIUM_PREVIEW_NICE_LEVEL must be an integer from 0 to 19 or 'off'." >&2
+		exit 1
+		;;
+esac
 
 detect_headless_environment() {
 	case "$(uname -s)" in
@@ -351,11 +373,6 @@ case "${HEADLESS_MODE}" in
 		;;
 esac
 
-NICE_ARGS=()
-if command -v nice >/dev/null 2>&1; then
-	NICE_ARGS=(nice -n 20)
-fi
-
 {
 	echo "Qortium preview launcher started at $(date -Is 2>/dev/null || date)"
 	echo "Mode: ${MODE}"
@@ -365,6 +382,7 @@ fi
 	echo "Log4j config: ${LOG4J_CONFIG}"
 	echo "Application log: ${APP_LOG}"
 	echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
+	echo "CPU priority: ${NICE_DESCRIPTION}"
 	echo "Auto-update mode: ${AUTO_UPDATE_MODE_EFFECTIVE:-OFF}"
 	echo
 } >"${RUN_LOG}"
@@ -413,6 +431,7 @@ echo "Runtime directory: ${RUNTIME_DIR}"
 echo "Settings file: ${SETTINGS_LOCAL}"
 echo "Jar file: ${JAR_PATH}"
 echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
+echo "CPU priority: ${NICE_DESCRIPTION}"
 echo "Auto-update mode: ${AUTO_UPDATE_MODE_EFFECTIVE:-OFF}"
 echo "Console log: ${RUN_LOG}"
 echo "Log4j config: ${LOG4J_CONFIG}"

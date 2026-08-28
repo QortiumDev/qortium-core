@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(preview): prevent test jobs from starving the node
+
+Stops the preview launcher from putting Core at the operating system's lowest
+possible CPU priority, where an ordinary build or test job could leave peer,
+sync, and recovery work without enough time to run. Preview nodes now use a
+modest background priority by default, and operators can select any supported
+nice level or disable the adjustment through an environment variable. The
+launcher records the selected policy so runtime diagnostics show how the node
+was started.
+
 ### 2026-08-28 - feat(i2p): expose transport health diagnostics
 
 Adds separate chain and QDN/data I2P health signals to the existing node status
