@@ -64,6 +64,21 @@ public class SamSessionFakeSamTests {
 		return s;
 	}
 
+	private SamSession newSession(Path keyFile, String namingLookupResult, I2PHealthTracker healthTracker)
+			throws IOException {
+		return newSession(keyFile, List.of(namingLookupResult), healthTracker);
+	}
+
+	private SamSession newSession(Path keyFile, List<String> namingLookupResults,
+			I2PHealthTracker healthTracker) throws IOException {
+		this.server = new FakeSamServer(FAKE_PUB, FAKE_PRIV, "OK", true, namingLookupResults);
+		SamSession s = new SamSession("127.0.0.1", server.port(), "qortium-fakesam-test", keyFile,
+				null, null, healthTracker);
+		s.setMinRealSessionBuildMillisForTesting(0);
+		s.setPublicationCheckIntervalMillisForTesting(0);
+		return s;
+	}
+
 	private Path freshKeyDir() throws IOException {
 		this.tempDir = Files.createTempDirectory("samsession-test");
 		return tempDir;
@@ -85,6 +100,64 @@ public class SamSessionFakeSamTests {
 		String contents = Files.readString(keyFile);
 		assertTrue(contents.contains("PUB=" + FAKE_PUB));
 		assertTrue(contents.contains("PRIV=" + FAKE_PRIV));
+	}
+
+	@Test
+	public void testResolvedLeaseSetLookupRecordsEvidence() throws Exception {
+		I2PHealthTracker healthTracker = new I2PHealthTracker();
+		session = newSession(freshKeyDir().resolve("chain.keys"), "OK", healthTracker);
+
+		session.start();
+
+		I2PHealthTracker.LeaseSetLookupEvidence evidence = healthTracker.getLeaseSetLookupEvidence();
+		assertEquals(I2PHealthTracker.LeaseSetLookupStatus.RESOLVED, evidence.status);
+		assertNotNull(evidence.timestamp);
+		assertTrue(session.isSessionUp());
+	}
+
+	@Test
+	public void testUnsupportedLeaseSetLookupRecordsUnknownAndKeepsSession() throws Exception {
+		I2PHealthTracker healthTracker = new I2PHealthTracker();
+		session = newSession(freshKeyDir().resolve("chain.keys"), "INVALID_KEY", healthTracker);
+
+		session.start();
+
+		I2PHealthTracker.LeaseSetLookupEvidence evidence = healthTracker.getLeaseSetLookupEvidence();
+		assertEquals(I2PHealthTracker.LeaseSetLookupStatus.UNKNOWN, evidence.status);
+		assertNotNull(evidence.timestamp);
+		assertTrue("inconclusive lookup remains fail-open", session.isSessionUp());
+	}
+
+	@Test
+	public void testRepeatedNegativeLeaseSetLookupsRecordNotResolvedAndFailStart() throws Exception {
+		I2PHealthTracker healthTracker = new I2PHealthTracker();
+		session = newSession(freshKeyDir().resolve("chain.keys"), "KEY_NOT_FOUND", healthTracker);
+
+		try {
+			session.start();
+			throw new AssertionError("Expected unresolved LeaseSet lookup to fail session start");
+		} catch (IOException expected) {
+			assertTrue(expected.getMessage().contains("not resolvable across all local-router self-lookup attempts"));
+		}
+
+		I2PHealthTracker.LeaseSetLookupEvidence evidence = healthTracker.getLeaseSetLookupEvidence();
+		assertEquals(I2PHealthTracker.LeaseSetLookupStatus.NOT_RESOLVED, evidence.status);
+		assertNotNull(evidence.timestamp);
+		assertFalse(session.isSessionUp());
+	}
+
+	@Test
+	public void testMixedNegativeAndIoFailureRecordsUnknownAndKeepsSession() throws Exception {
+		I2PHealthTracker healthTracker = new I2PHealthTracker();
+		session = newSession(freshKeyDir().resolve("chain.keys"),
+				List.of("KEY_NOT_FOUND", "CLOSE", "CLOSE"), healthTracker);
+
+		session.start();
+
+		I2PHealthTracker.LeaseSetLookupEvidence evidence = healthTracker.getLeaseSetLookupEvidence();
+		assertEquals(I2PHealthTracker.LeaseSetLookupStatus.UNKNOWN, evidence.status);
+		assertNotNull(evidence.timestamp);
+		assertTrue("mixed lookup evidence remains fail-open", session.isSessionUp());
 	}
 
 	@Test
@@ -284,14 +357,27 @@ public class SamSessionFakeSamTests {
 		private final String priv;
 		private final String streamStatusResult;
 		private final boolean echoData;
+		private final List<String> namingLookupResults;
+		private final AtomicInteger namingLookupCount = new AtomicInteger();
 		private final List<Socket> sockets = Collections.synchronizedList(new ArrayList<>());
 		private volatile boolean destGenerateSeen = false;
 
 		FakeSamServer(String pub, String priv, String streamStatusResult, boolean echoData) throws IOException {
+			this(pub, priv, streamStatusResult, echoData, "OK");
+		}
+
+		FakeSamServer(String pub, String priv, String streamStatusResult, boolean echoData,
+				String namingLookupResult) throws IOException {
+			this(pub, priv, streamStatusResult, echoData, List.of(namingLookupResult));
+		}
+
+		FakeSamServer(String pub, String priv, String streamStatusResult, boolean echoData,
+				List<String> namingLookupResults) throws IOException {
 			this.pub = pub;
 			this.priv = priv;
 			this.streamStatusResult = streamStatusResult;
 			this.echoData = echoData;
+			this.namingLookupResults = namingLookupResults;
 			this.serverSocket = new ServerSocket();
 			this.serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
 			Thread acceptThread = new Thread(this::acceptLoop, "fake-sam-accept");
@@ -344,10 +430,14 @@ public class SamSessionFakeSamTests {
 						writeLine(out, "SESSION STATUS RESULT=OK DESTINATION=" + priv);
 						// control connection stays open for the session's lifetime
 					} else if (line.startsWith("NAMING LOOKUP")) {
-						// Post-session LeaseSet publication self-check (verifyLeaseSetPublished): the real
-						// router resolves our own b32 once published. Report OK so the check passes promptly
-						// instead of blocking on the SAM reply timeout.
-						writeLine(out, "NAMING REPLY RESULT=OK NAME=ME VALUE=" + pub);
+						// Post-session LeaseSet self-lookup: the local router normally resolves our own b32
+						// once its LeaseSet is available. Report the configured outcome deterministically.
+						int lookupIndex = namingLookupCount.getAndIncrement();
+						String lookupResult = namingLookupResults.get(
+								Math.min(lookupIndex, namingLookupResults.size() - 1));
+						if ("CLOSE".equals(lookupResult))
+							return;
+						writeLine(out, "NAMING REPLY RESULT=" + lookupResult + " NAME=ME VALUE=" + pub);
 					} else if (line.startsWith("STREAM CONNECT")) {
 						writeLine(out, "STREAM STATUS RESULT=" + streamStatusResult);
 						if ("OK".equals(streamStatusResult) && echoData) {

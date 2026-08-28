@@ -14,6 +14,8 @@ import org.qortium.crypto.Crypto;
 import org.qortium.data.network.PeerData;
 import org.qortium.data.network.KnownPeerDiagnostic;
 import org.qortium.data.network.KnownPeerDiagnostics;
+import org.qortium.event.EventBus;
+import org.qortium.network.i2p.I2PHealthTracker;
 import org.qortium.network.i2p.I2PStreamProvider;
 import org.qortium.network.i2p.SamSession;
 import org.qortium.network.message.*;
@@ -225,6 +227,7 @@ public class NetworkData {
     private final AtomicBoolean i2pStartupInProgress = new AtomicBoolean(false);
     private final AtomicLong i2pStartupAttemptCounter = new AtomicLong(0L);
     private final AtomicBoolean i2pFallbackUnavailableLogged = new AtomicBoolean(false);
+    private final I2PHealthTracker i2pHealthTracker = new I2PHealthTracker(this::notifyI2PStatusChange);
     /** Coalesces OP_WRITE wakeups: only the first caller per select-cycle actually wakes the selector. */
     private final java.util.concurrent.atomic.AtomicBoolean selectorWakeupPending = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -433,7 +436,8 @@ public class NetworkData {
         // already-established I2P data connection, so its initial HELLO sees the live destination.
         // Other data-peer discovery remains transport-scoped through initialDataPeers and gossip.
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                nextI2PDataSessionId(), settings.getI2PDataKeyPath(), null, this::onI2PDataSessionDown);
+                nextI2PDataSessionId(), settings.getI2PDataKeyPath(), null, this::onI2PDataSessionDown,
+                this.i2pHealthTracker);
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -460,6 +464,7 @@ public class NetworkData {
             this.dataI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
             this.i2pFallbackUnavailableLogged.set(false);
+            notifyI2PStatusChange();
             LOGGER.info("NetworkData I2P fallback up at {} (control/tunnels established; inbound reachability depends on LeaseSet publication)",
                     provider.getLocalB32());
             return true;
@@ -540,10 +545,28 @@ public class NetworkData {
         return provider.getLocalB32();
     }
 
+    public boolean isI2PDataSessionUp() {
+        I2PStreamProvider provider = this.dataI2PStreamProvider;
+        return provider != null && provider.isSessionUp();
+    }
+
+    public I2PHealthTracker.LeaseSetLookupEvidence getI2PDataLeaseSetLookupEvidence() {
+        return this.i2pHealthTracker.getLeaseSetLookupEvidence();
+    }
+
+    public Long getLastI2PDataInboundHandshakeTimestamp() {
+        return this.i2pHealthTracker.getLastInboundHandshakeTimestamp();
+    }
+
     private void onI2PDataSessionDown() {
+        notifyI2PStatusChange();
         Thread t = new Thread(this::restartI2PDataFallbackIfSessionDown, "i2p-restart-data");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void notifyI2PStatusChange() {
+        EventBus.INSTANCE.notify(new Controller.StatusChangeEvent());
     }
 
     private void restartI2PDataFallbackIfSessionDown() {
@@ -1160,10 +1183,7 @@ public class NetworkData {
         if (peer.isOutbound()) {
             this.addOutboundHandshakedPeer(peer);
         } else if (!peer.getPeerData().getAddress().isI2P()) {
-            // Only inbound DIRECT connections prove the clearnet port is reachable.
-            // Outbound connections only prove we can reach others, and an inbound I2P
-            // stream says nothing about the IP listen port - counting it here made
-            // canAcceptInbound() advertise a NAT'd external IP as dialable.
+            // Only an inbound DIRECT connection proves the clearnet port is reachable.
             this.inboundReachability.recordInboundHandshake();
         }
     }
@@ -3006,6 +3026,9 @@ public class NetworkData {
 		// Recheck only after insertion so it cannot miss both the cutover snapshot and completion path.
 		if (!Handshake.enforceCompletedPeerFeatureSchedule(peer))
 			return;
+
+		if (!peer.isOutbound() && peer.getPeerData().getAddress().isI2P())
+			this.i2pHealthTracker.recordInboundHandshake();
 
         // Make a note that we've successfully completed handshake (and when)
         peer.getPeerData().setLastConnected(NTP.getTime());

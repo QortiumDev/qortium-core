@@ -31,7 +31,10 @@ public interface I2PStreamProvider {
      */
     String getLocalB32();
 
-    /** @return true if the I2P session is currently established — i.e. we are inbound-reachable over I2P. */
+    /**
+     * @return true if the I2P session is currently established. This alone does not prove inbound
+     *         reachability: LeaseSet publication and a remote inbound handshake are separate signals.
+     */
     boolean isSessionUp();
 
     /**

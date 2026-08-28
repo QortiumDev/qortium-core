@@ -14,10 +14,12 @@ import org.qortium.data.network.KnownPeerDiagnostic;
 import org.qortium.data.network.KnownPeerDiagnostics;
 import org.qortium.data.network.PeerData;
 import org.qortium.data.transaction.TransactionData;
-import org.qortium.network.message.*;
-import org.qortium.network.task.*;
+import org.qortium.event.EventBus;
+import org.qortium.network.i2p.I2PHealthTracker;
 import org.qortium.network.i2p.I2PStreamProvider;
 import org.qortium.network.i2p.SamSession;
+import org.qortium.network.message.*;
+import org.qortium.network.task.*;
 import org.qortium.network.upnp.PortMapperFactory;
 import org.qortium.network.upnp.PortMappingResult;
 import org.qortium.repository.DataException;
@@ -222,6 +224,7 @@ public class Network {
     private final AtomicBoolean i2pStartupInProgress = new AtomicBoolean(false);
     private final AtomicLong i2pStartupAttemptCounter = new AtomicLong(0L);
     private final AtomicBoolean i2pFallbackUnavailableLogged = new AtomicBoolean(false);
+    private final I2PHealthTracker i2pHealthTracker = new I2PHealthTracker(this::notifyI2PStatusChange);
     /** Coalesces OP_WRITE wakeups: only the first caller per select-cycle actually wakes the selector. */
     private final java.util.concurrent.atomic.AtomicBoolean selectorWakeupPending = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -415,7 +418,7 @@ public class Network {
     private boolean startI2PChainFallbackAttempt(Settings settings) {
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
                 nextI2PChainSessionId(), settings.getI2PChainKeyPath(), this::onI2PChainSessionUp,
-                this::onI2PChainSessionDown);
+                this::onI2PChainSessionDown, this.i2pHealthTracker);
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -442,6 +445,7 @@ public class Network {
             this.chainI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
             this.i2pFallbackUnavailableLogged.set(false);
+            notifyI2PStatusChange();
             LOGGER.info("Network I2P fallback up at {} (control/tunnels established; inbound reachability depends on LeaseSet publication)",
                     provider.getLocalB32());
             return true;
@@ -522,6 +526,19 @@ public class Network {
         return provider.getLocalB32();
     }
 
+    public boolean isI2PChainSessionUp() {
+        I2PStreamProvider provider = this.chainI2PStreamProvider;
+        return provider != null && provider.isSessionUp();
+    }
+
+    public I2PHealthTracker.LeaseSetLookupEvidence getI2PChainLeaseSetLookupEvidence() {
+        return this.i2pHealthTracker.getLeaseSetLookupEvidence();
+    }
+
+    public Long getLastI2PChainInboundHandshakeTimestamp() {
+        return this.i2pHealthTracker.getLastInboundHandshakeTimestamp();
+    }
+
     /**
      * Fired by {@link SamSession} the moment our chain I2P session comes up. A NAT'd node finishes its
      * clearnet handshake to seeds in under a second, but its SAM I2P session can take 9-30s to build
@@ -542,9 +559,14 @@ public class Network {
     }
 
     private void onI2PChainSessionDown() {
+        notifyI2PStatusChange();
         Thread t = new Thread(this::restartI2PChainFallbackIfSessionDown, "i2p-restart-chain");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void notifyI2PStatusChange() {
+        EventBus.INSTANCE.notify(new Controller.StatusChangeEvent());
     }
 
     private void restartI2PChainFallbackIfSessionDown() {
@@ -576,7 +598,7 @@ public class Network {
             return;
         }
         String versionString = Controller.getInstance().getVersionString();
-        LOGGER.info("Re-advertising I2P chain capability to handshaked peers (destination now published)");
+        LOGGER.info("Re-advertising I2P chain capability to handshaked peers (session destination now available)");
         broadcast(peer -> {
             // Transport-scoped: only re-advertise the chain I2P destination to I2P peers. A clearnet peer
             // can never reach our I2P destination and must never see our I2P identity.
@@ -2873,6 +2895,9 @@ public class Network {
 		if (!Handshake.enforceCompletedPeerFeatureSchedule(peer))
 			return;
 
+        if (!peer.isOutbound() && peer.getPeerData().getAddress().isI2P())
+            this.i2pHealthTracker.recordInboundHandshake();
+
         // Make a note that we've successfully completed handshake (and when)
         peer.getPeerData().setLastConnected(NTP.getTime());
 
@@ -2978,8 +3003,8 @@ public class Network {
         // Clear direction mismatch if inbound succeeds.
         // They successfully connected to us, so we don't need to avoid them.
         if (!peer.isOutbound()) {
-            // Only an inbound DIRECT connection proves the clearnet port is reachable -
-            // an inbound I2P stream says nothing about the IP listen port.
+            // Preserve the direct-IP reachability signal at its established handshake-completion point.
+            // An inbound I2P stream says nothing about the IP listen port.
             if (!peer.getPeerData().getAddress().isI2P())
                 this.inboundReachability.recordInboundHandshake();
             clearDirectionMismatch(theirNodeId);

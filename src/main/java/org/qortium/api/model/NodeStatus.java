@@ -9,6 +9,7 @@ import org.qortium.network.Network;
 import org.qortium.network.NetworkData;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerList;
+import org.qortium.network.i2p.I2PHealthTracker;
 import org.qortium.settings.Settings;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -25,6 +26,12 @@ public class NodeStatus {
 		BEHIND,
 		CONNECTING,
 		STALE
+	}
+
+	public enum I2PLeaseSetLookupStatus {
+		UNKNOWN,
+		RESOLVED,
+		NOT_RESOLVED
 	}
 
 	public final boolean isMintingPossible;
@@ -78,7 +85,7 @@ public class NodeStatus {
 	public final int numberOfOutboundDataConnections;
 
 	@Schema(
-			description = "Whether this node currently appears reachable for inbound chain peer connections."
+			description = "Whether this node currently appears reachable for inbound chain peer connections over direct IP. This does not include I2P reachability."
 	)
 	public final boolean isP2PInboundReachable;
 
@@ -93,7 +100,7 @@ public class NodeStatus {
 	public final boolean isP2PPortMapped;
 
 	@Schema(
-			description = "Whether this node currently appears reachable for inbound QDN/data peer connections."
+			description = "Whether this node currently appears reachable for inbound QDN/data peer connections over direct IP. This does not include I2P reachability."
 	)
 	public final boolean isQDNInboundReachable;
 
@@ -107,6 +114,50 @@ public class NodeStatus {
 	)
 	public final boolean isQDNPortMapped;
 
+	@Schema(
+			description = "Whether the chain network's I2P SAM session is currently established. This alone does not prove remote inbound reachability."
+	)
+	public final boolean isI2PChainSessionUp;
+
+	@Schema(
+			description = "Result of the chain I2P destination's last self-lookup through the local SAM router. RESOLVED is a LeaseSet publication signal, not independent proof that remote routers can reach it. UNKNOWN with no lookup timestamp means no check has concluded; UNKNOWN with a timestamp means the last check was inconclusive."
+	)
+	public final I2PLeaseSetLookupStatus i2pChainLeaseSetLookupStatus;
+
+	@Schema(
+			description = "Epoch-millisecond time when the chain I2P LeaseSet self-lookup result was concluded. Omitted or null before any check has concluded.",
+			nullable = true
+	)
+	public final Long i2pChainLeaseSetLookupTimestamp;
+
+	@Schema(
+			description = "Epoch-millisecond time of the last successfully completed inbound chain peer handshake over I2P. Omitted or null if none has completed since Core started.",
+			nullable = true
+	)
+	public final Long i2pChainLastInboundHandshakeTimestamp;
+
+	@Schema(
+			description = "Whether the QDN/data network's I2P SAM session is currently established. This alone does not prove remote inbound reachability."
+	)
+	public final boolean isI2PDataSessionUp;
+
+	@Schema(
+			description = "Result of the QDN/data I2P destination's last self-lookup through the local SAM router. RESOLVED is a LeaseSet publication signal, not independent proof that remote routers can reach it. UNKNOWN with no lookup timestamp means no check has concluded; UNKNOWN with a timestamp means the last check was inconclusive."
+	)
+	public final I2PLeaseSetLookupStatus i2pDataLeaseSetLookupStatus;
+
+	@Schema(
+			description = "Epoch-millisecond time when the QDN/data I2P LeaseSet self-lookup result was concluded. Omitted or null before any check has concluded.",
+			nullable = true
+	)
+	public final Long i2pDataLeaseSetLookupTimestamp;
+
+	@Schema(
+			description = "Epoch-millisecond time of the last successfully completed inbound QDN/data peer handshake over I2P. Omitted or null if none has completed since Core started.",
+			nullable = true
+	)
+	public final Long i2pDataLastInboundHandshakeTimestamp;
+
 	public final int height;
 
 	public NodeStatus() {
@@ -116,6 +167,10 @@ public class NodeStatus {
 		Controller controller = Controller.getInstance();
 		Network network = Network.getInstance();
 		NetworkData networkData = NetworkData.getInstance();
+		I2PHealthTracker.LeaseSetLookupEvidence chainLeaseSetEvidence =
+				network.getI2PChainLeaseSetLookupEvidence();
+		I2PHealthTracker.LeaseSetLookupEvidence dataLeaseSetEvidence =
+				networkData.getI2PDataLeaseSetLookupEvidence();
 		List<Peer> handshakedPeers = network.getImmutableHandshakedPeers();
 		PeerList handshakedDataPeers = networkData.getImmutableHandshakedPeers();
 		PeerConnectionStats chainPeerStats = calculatePeerConnectionStats(handshakedPeers.size(),
@@ -139,6 +194,14 @@ public class NodeStatus {
 		this.isQDNInboundReachable = dataPeerStats.inboundReachable;
 		this.isQDNListenSocketAvailable = dataPeerStats.listenSocketAvailable;
 		this.isQDNPortMapped = dataPeerStats.portMapped;
+		this.isI2PChainSessionUp = network.isI2PChainSessionUp();
+		this.i2pChainLeaseSetLookupStatus = toApiLeaseSetLookupStatus(chainLeaseSetEvidence.status);
+		this.i2pChainLeaseSetLookupTimestamp = chainLeaseSetEvidence.timestamp;
+		this.i2pChainLastInboundHandshakeTimestamp = network.getLastI2PChainInboundHandshakeTimestamp();
+		this.isI2PDataSessionUp = networkData.isI2PDataSessionUp();
+		this.i2pDataLeaseSetLookupStatus = toApiLeaseSetLookupStatus(dataLeaseSetEvidence.status);
+		this.i2pDataLeaseSetLookupTimestamp = dataLeaseSetEvidence.timestamp;
+		this.i2pDataLastInboundHandshakeTimestamp = networkData.getLastI2PDataInboundHandshakeTimestamp();
 
 		this.height = controller.getStatusChainHeight();
 
@@ -203,6 +266,18 @@ public class NodeStatus {
 
 		return new PeerConnectionStats(boundedTotalConnections, inboundConnections, boundedOutboundConnections,
 				inboundReachable, listenSocketAvailable, portMapped);
+	}
+
+	static I2PLeaseSetLookupStatus toApiLeaseSetLookupStatus(I2PHealthTracker.LeaseSetLookupStatus status) {
+		switch (status) {
+			case RESOLVED:
+				return I2PLeaseSetLookupStatus.RESOLVED;
+			case NOT_RESOLVED:
+				return I2PLeaseSetLookupStatus.NOT_RESOLVED;
+			case UNKNOWN:
+			default:
+				return I2PLeaseSetLookupStatus.UNKNOWN;
+		}
 	}
 
 	private static Integer chooseSyncTargetHeight(int height, Integer activeSyncTargetHeight, Integer bestPeerHeight,
