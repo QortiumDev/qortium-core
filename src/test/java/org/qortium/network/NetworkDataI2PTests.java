@@ -9,14 +9,18 @@ import org.qortium.data.network.KnownPeerDiagnostics;
 import org.qortium.data.network.PeerData;
 import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.network.i2p.I2PStreamProvider;
+import org.qortium.network.task.PeerConnectTask;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
+import org.qortium.utils.ExecuteProduceConsume;
 
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -226,6 +230,25 @@ public class NetworkDataI2PTests extends Common {
 
 		assertEquals("198.51.100.10:24894", selectedPeer.getPeerData().getAddress().toString());
 		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testRejectedI2PDataConnectTaskReleasesReservation() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		PeerAddress i2pAddress = PeerAddress.fromString(B32);
+		getMutableKnownPeers().add(new PeerData(i2pAddress, 100L, "test"));
+
+		ExecuteProduceConsume.Task task = invokeMaybeProduceConnectPeerTask(System.currentTimeMillis());
+
+		assertTrue(task instanceof PeerConnectTask);
+		assertTrue(getConnectingI2PPeers().contains(i2pAddress));
+		ExecutorService rejectingExecutor = Executors.newSingleThreadExecutor();
+		rejectingExecutor.shutdownNow();
+		invokeSubmitSchedulerTask(rejectingExecutor, task);
+		assertFalse("Rejected data task must release its I2P reservation",
+				getConnectingI2PPeers().contains(i2pAddress));
 	}
 
 	@Test
@@ -564,10 +587,17 @@ public class NetworkDataI2PTests extends Common {
 		return (Peer) method.invoke(NetworkData.getInstance(), now);
 	}
 
-	private Object invokeMaybeProduceConnectPeerTask(long now) throws Exception {
+	private ExecuteProduceConsume.Task invokeMaybeProduceConnectPeerTask(long now) throws Exception {
 		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("maybeProduceConnectPeerTask", Long.class);
 		method.setAccessible(true);
-		return method.invoke(NetworkData.getInstance(), now);
+		return (ExecuteProduceConsume.Task) method.invoke(NetworkData.getInstance(), now);
+	}
+
+	private void invokeSubmitSchedulerTask(ExecutorService executor, ExecuteProduceConsume.Task task) throws Exception {
+		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("submitSchedulerTask",
+				ExecutorService.class, ExecuteProduceConsume.Task.class);
+		method.setAccessible(true);
+		method.invoke(NetworkData.getInstance(), executor, task);
 	}
 
 	private long getNextConnectTaskTimestamp() throws Exception {

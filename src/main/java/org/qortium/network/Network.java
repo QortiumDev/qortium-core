@@ -1502,21 +1502,7 @@ public class Network {
                 Long now = NTP.getTime();
                 ExecuteProduceConsume.Task task = producePingConnectOrBroadcastTask(now);
                 if (task != null) {
-                    final ExecuteProduceConsume.Task t = task;
-                    try {
-                        networkWorkerPool.execute(() -> {
-                            try {
-                                t.perform();
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            } catch (Exception e) {
-                                LOGGER.warn("Scheduler task threw: {}", e.getMessage(), e);
-                            }
-                        });
-                    } catch (java.util.concurrent.RejectedExecutionException e) {
-                        // Worker pool is full or shutting down - skip this task
-                        LOGGER.debug("Worker pool rejected scheduler task (pool full or shutting down)");
-                    }
+                    submitSchedulerTask(this.networkWorkerPool, task);
                 } else {
                     Thread.sleep(10);
                 }
@@ -1526,6 +1512,27 @@ public class Network {
             }
         }
         LOGGER.debug("Network scheduler loop exiting");
+    }
+
+    private void submitSchedulerTask(ExecutorService workerPool, ExecuteProduceConsume.Task task) {
+        try {
+            workerPool.execute(() -> {
+                try {
+                    task.perform();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    LOGGER.warn("Scheduler task threw: {}", e.getMessage(), e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            try {
+                task.onRejected();
+            } catch (RuntimeException cleanupException) {
+                LOGGER.warn("Rejected scheduler task cleanup failed: {}", cleanupException.getMessage(), cleanupException);
+            }
+            LOGGER.debug("Worker pool rejected scheduler task (pool full or shutting down)");
+        }
     }
 
     /** Produces one Ping, Connect, or Broadcast task if due; otherwise null. */
@@ -1601,7 +1608,7 @@ public class Network {
         if (targetPeer == null) {
             return null;
         }
-        return new PeerConnectTask(targetPeer);
+        return new PeerConnectTask(targetPeer, () -> removeConnectingI2PPeer(targetPeer));
     }
 
     private ExecuteProduceConsume.Task maybeProduceBroadcastTask(Long now) {
@@ -2160,10 +2167,14 @@ public class Network {
 
             return true;
         } finally {
-            PeerAddress peerAddress = newPeer.getPeerData().getAddress();
-            if (peerAddress.isI2P())
-                this.connectingI2PPeers.remove(peerAddress);
+            removeConnectingI2PPeer(newPeer);
         }
+    }
+
+    private void removeConnectingI2PPeer(Peer peer) {
+        PeerAddress peerAddress = peer.getPeerData().getAddress();
+        if (peerAddress.isI2P())
+            this.connectingI2PPeers.remove(peerAddress);
     }
 
     private void cleanupStaleHandshakingPeers(Long now) {
