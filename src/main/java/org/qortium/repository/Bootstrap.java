@@ -251,7 +251,7 @@ public class Bootstrap {
             if (liveTip == null)
                 throw new DataException("Live repository has no chain tip to export");
 
-            repository.backup(false, backupName, 10 * 1000L);
+			RepositoryManager.backup(repository, false, backupName, 10 * 1000L);
 
             if (!Settings.getInstance().isTopOnly() && Settings.getInstance().isArchiveEnabled()) {
                 LOGGER.info("Copying block archive into isolated repository snapshot...");

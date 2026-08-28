@@ -16,6 +16,8 @@ import org.qortium.utils.StartupStatus;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.qortium.transaction.Transaction.TransactionType.AT;
@@ -27,6 +29,8 @@ public abstract class RepositoryManager {
 
 	/** null if no checkpoint requested, TRUE for quick checkpoint, false for slow/full checkpoint. */
 	private static Boolean quickCheckpointRequested = null;
+	private static final AtomicInteger healthCheckSuppressionDepth = new AtomicInteger();
+	private static final AtomicLong healthCheckSuppressedSince = new AtomicLong();
 
 	public static RepositoryFactory getRepositoryFactory() {
 		return repositoryFactory;
@@ -64,9 +68,50 @@ public abstract class RepositoryManager {
 
 	public static void backup(boolean quick, String name, Long timeout) throws TimeoutException {
 		try (final Repository repository = getRepository()) {
-			repository.backup(quick, name, timeout);
+			backup(repository, quick, name, timeout);
 		} catch (DataException e) {
 			// Backup is best-effort so don't complain
+		}
+	}
+
+	public static void backup(Repository repository, boolean quick, String name, Long timeout)
+			throws DataException, TimeoutException {
+		try (HealthCheckSuppression ignored = suppressHealthChecks()) {
+			repository.backup(quick, name, timeout);
+		}
+	}
+
+	public static void performPeriodicMaintenance(Repository repository, Long timeout)
+			throws DataException, TimeoutException {
+		try (HealthCheckSuppression ignored = suppressHealthChecks()) {
+			repository.performPeriodicMaintenance(timeout);
+		}
+	}
+
+	public static boolean isHealthCheckSuppressed() {
+		return healthCheckSuppressionDepth.get() > 0;
+	}
+
+	public static long getHealthCheckSuppressedSince() {
+		return healthCheckSuppressedSince.get();
+	}
+
+	private static HealthCheckSuppression suppressHealthChecks() {
+		if (healthCheckSuppressionDepth.getAndIncrement() == 0)
+			healthCheckSuppressedSince.set(System.currentTimeMillis());
+		return new HealthCheckSuppression();
+	}
+
+	private static final class HealthCheckSuppression implements AutoCloseable {
+		private boolean closed;
+
+		@Override
+		public void close() {
+			if (this.closed)
+				return;
+			this.closed = true;
+			if (healthCheckSuppressionDepth.decrementAndGet() == 0)
+				healthCheckSuppressedSince.set(0L);
 		}
 	}
 

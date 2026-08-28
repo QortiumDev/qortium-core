@@ -10,6 +10,7 @@ import org.qortium.test.common.LogLevelOverride;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -65,5 +66,20 @@ public class RestartNodeTests {
 
 			Files.deleteIfExists(missingJavaHome);
 		}
+	}
+
+	@Test
+	public void testEmergencyRestartCommandPinsParentAndPreservesArguments() {
+		List<String> command = RestartNode.buildEmergencyRestartCommand(
+				Path.of("/java"),
+				List.of("-Xmx1g", "-agentlib:jdwp=transport=dt_socket"),
+				"/core/qortium.jar",
+				new String[]{"/runtime/settings.json"},
+				1234L);
+
+		assertTrue(command.contains("-D" + org.qortium.ApplyRestart.EMERGENCY_PARENT_PID_PROPERTY + "=1234"));
+		assertTrue(command.contains(RestartNode.AGENTLIB_JVM_HOLDER_ARG + ":jdwp=transport=dt_socket"));
+		assertTrue(command.contains("/core/qortium.jar"));
+		assertTrue(command.contains("/runtime/settings.json"));
 	}
 }

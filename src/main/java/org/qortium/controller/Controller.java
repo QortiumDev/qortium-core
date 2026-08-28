@@ -128,6 +128,7 @@ public class Controller extends Thread {
 
 	private static volatile boolean isStopping = false;
 	private static BlockMinter blockMinter = null;
+	private static RepositoryHealthWatchdog repositoryHealthWatchdog = null;
 	private static volatile boolean requestSysTrayUpdate = true;
 	private static Controller instance;
 
@@ -698,6 +699,12 @@ public class Controller extends Thread {
 			return; // Not System.exit() so that GUI can display error
 		}
 
+		if (Settings.getInstance().isRepositoryHealthWatchdogEnabled()) {
+			LOGGER.info("Starting repository health watchdog");
+			repositoryHealthWatchdog = new RepositoryHealthWatchdog();
+			repositoryHealthWatchdog.start();
+		}
+
 		if (Settings.getInstance().isGatewayEnabled()) {
 			LOGGER.info("Starting gateway service on port {}", Settings.getInstance().getGatewayPort());
 			try {
@@ -941,7 +948,7 @@ public class Controller extends Thread {
 
 							// Timeout if the database isn't ready for maintenance after 60 seconds
 							long timeout = 60 * 1000L;
-							repository.performPeriodicMaintenance(timeout);
+							RepositoryManager.performPeriodicMaintenance(repository, timeout);
 
 							LOGGER.info("Scheduled repository maintenance completed");
 							break;
@@ -1321,6 +1328,11 @@ public class Controller extends Thread {
 		synchronized (shutdownLock) {
 			if (!isStopping) {
 				isStopping = true;
+
+				if (repositoryHealthWatchdog != null) {
+					LOGGER.info("Shutting down repository health watchdog");
+					repositoryHealthWatchdog.shutdown();
+				}
 
 				LOGGER.info("Shutting down synchronizer");
 				Synchronizer.getInstance().shutdown();

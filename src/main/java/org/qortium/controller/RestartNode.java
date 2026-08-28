@@ -28,6 +28,7 @@ public class RestartNode {
 
 	private static final Logger LOGGER = LogManager.getLogger(RestartNode.class);
 	private static final long RESTART_RESPONSE_DELAY = 1000L;
+	private static final int REPOSITORY_STALL_EXIT_CODE = 75;
 	private static final AtomicBoolean RESTART_APPLY_IN_PROGRESS = new AtomicBoolean(false);
 
 	public static boolean scheduleRestart() {
@@ -59,6 +60,61 @@ public class RestartNode {
 		}
 
 		return attemptToRestartWithGuardHeld();
+	}
+
+	/**
+	 * Starts a helper that waits for this exact JVM to disappear before clearing its stale database
+	 * lock and relaunching Core, then halts this wedged JVM without invoking blocking shutdown hooks.
+	 */
+	public static boolean emergencyRestart(String reason, Path evidencePath) {
+		if (!tryAcquireRestartApply()) {
+			LOGGER.error("Emergency restart is already scheduled or running");
+			return false;
+		}
+
+		boolean helperStarted = false;
+		try {
+			long parentPid = ProcessHandle.current().pid();
+			List<String> javaCmd = buildEmergencyRestartCommand(
+					Paths.get(System.getProperty("java.home"), "bin", "java"),
+					ManagementFactory.getRuntimeMXBean().getInputArguments(),
+					getCurrentJarPath(),
+					Controller.getInstance().getSavedArgs(),
+					parentPid);
+
+			ProcessBuilder processBuilder = new ProcessBuilder(javaCmd);
+			processBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+			processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
+			Process process = processBuilder.start();
+			process.getOutputStream().close();
+			helperStarted = true;
+
+			LOGGER.fatal("Emergency restart helper started for repository stall: {} (evidence: {})",
+					reason, evidencePath == null ? "unavailable" : evidencePath);
+			Runtime.getRuntime().halt(REPOSITORY_STALL_EXIT_CODE);
+			return true;
+		} catch (Exception e) {
+			LOGGER.fatal("Unable to launch emergency restart helper; leaving Core running for diagnosis", e);
+			return false;
+		} finally {
+			if (!helperStarted)
+				releaseRestartApply();
+		}
+	}
+
+	static List<String> buildEmergencyRestartCommand(Path javaBinary, List<String> runtimeArguments,
+			String currentJarPath, String[] savedArgs, long parentPid) {
+		List<String> javaCmd = new ArrayList<>();
+		javaCmd.add(javaBinary.toString());
+		javaCmd.addAll(runtimeArguments.stream()
+				.map(arg -> arg.replace("-agentlib", AGENTLIB_JVM_HOLDER_ARG))
+				.filter(arg -> !Arrays.asList("abort", "exit", "vfprintf").contains(arg))
+				.collect(Collectors.toList()));
+		javaCmd.add("-D" + ApplyRestart.EMERGENCY_PARENT_PID_PROPERTY + "=" + parentPid);
+		javaCmd.addAll(Arrays.asList("-cp", currentJarPath, ApplyRestart.class.getCanonicalName()));
+		if (savedArgs != null)
+			javaCmd.addAll(Arrays.asList(savedArgs));
+		return javaCmd;
 	}
 
 	private static boolean attemptToRestartWithGuardHeld() {

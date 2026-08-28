@@ -46,6 +46,7 @@ public class ApplyRestart {
 	private static final String RUN_PID_FILENAME = "run.pid";
 	private static final String JAVA_TOOL_OPTIONS_NAME = "JAVA_TOOL_OPTIONS";
 	private static final String JAVA_TOOL_OPTIONS_VALUE = "";
+	public static final String EMERGENCY_PARENT_PID_PROPERTY = "qortium.emergencyRestartParentPid";
 
 	private static final long CHECK_INTERVAL = 1_000L; // ms
 	private static final int MAX_ATTEMPTS = 300;
@@ -65,12 +66,28 @@ public class ApplyRestart {
 		LOGGER.info("Applying restart this can take up to 5 minutes...");
 
 		try (RestartTrayAnimator trayAnimator = RestartTrayAnimator.start("Qortium Core is restarting...")) {
-			// Shutdown node using API
-			if (!shutdownNode())
-				return;
+			String emergencyParentPidValue = System.getProperty(EMERGENCY_PARENT_PID_PROPERTY);
+			if (emergencyParentPidValue != null) {
+				Long emergencyParentPid = parseEmergencyParentPid(emergencyParentPidValue);
+				if (emergencyParentPid == null) {
+					LOGGER.error("Invalid emergency restart parent pid: {}", emergencyParentPidValue);
+					return;
+				}
 
-			waitForRepositoryLockToClear();
-			deleteLock();
+				LOGGER.warn("Waiting for stalled parent JVM {} to terminate before repository recovery", emergencyParentPid);
+				if (!waitForParentProcessToExit(emergencyParentPid, REPOSITORY_LOCK_WAIT_TIMEOUT)) {
+					LOGGER.error("Stalled parent JVM {} did not terminate; refusing to clear its repository lock", emergencyParentPid);
+					return;
+				}
+				deleteLock();
+			} else {
+				// Shutdown node using API
+				if (!shutdownNode())
+					return;
+
+				waitForRepositoryLockToClear();
+				deleteLock();
+			}
 
 			Process process = restartNode(args);
 			if (process != null)
@@ -167,6 +184,24 @@ public class ApplyRestart {
 			Thread.sleep(CHECK_INTERVAL);
 	}
 
+	static Long parseEmergencyParentPid(String value) {
+		try {
+			long pid = Long.parseLong(value);
+			return pid > 0L ? pid : null;
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	static boolean waitForParentProcessToExit(long parentPid, long timeout) throws InterruptedException {
+		long deadline = System.currentTimeMillis() + timeout;
+		while (ProcessHandle.of(parentPid).map(ProcessHandle::isAlive).orElse(false)
+				&& System.currentTimeMillis() < deadline)
+			Thread.sleep(CHECK_INTERVAL);
+
+		return ProcessHandle.of(parentPid).map(ProcessHandle::isAlive).orElse(false) == false;
+	}
+
 	private static void deleteLock() {
 		// Get the repository path from settings
 		String repositoryPath = Settings.getInstance().getRepositoryPath();
@@ -202,7 +237,9 @@ public class ApplyRestart {
 			javaCmd.add(javaBinary.toString());
 
 			// JVM arguments
-			javaCmd.addAll(ManagementFactory.getRuntimeMXBean().getInputArguments());
+			javaCmd.addAll(ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
+					.filter(arg -> !arg.startsWith("-D" + EMERGENCY_PARENT_PID_PROPERTY + "="))
+					.collect(Collectors.toList()));
 
 			// Reapply any retained, but disabled, -agentlib JVM arg
 			javaCmd = javaCmd.stream()
