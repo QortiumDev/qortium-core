@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(archive): release database transactions before archiver waits
+
+Prevents a live node from freezing when HSQLDB starts an automatic checkpoint
+while the block archiver is running. The archiver previously kept a read
+transaction open while sleeping and while waiting for synchronization to end;
+the checkpoint then waited for the archiver, synchronization waited for the
+checkpoint, and the archiver kept waiting because synchronization still looked
+active. Every repository user, including peer handling, eventually queued
+behind that cycle. The writer now ends its transaction before each pause and
+immediately after serializing each block. A real two-session HSQLDB regression
+test proves that a checkpoint blocked by the archiver's idle read transaction
+finishes as soon as this cleanup runs.
+
 ### 2026-08-27 - test(arrr): prove verified recovery end to end and read balances typed
 
 Proves verified import, the dedicated rescan, Core's recovery driver, and
