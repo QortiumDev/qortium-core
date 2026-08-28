@@ -2,6 +2,7 @@ package org.qortium.crosschain;
 
 import org.json.JSONObject;
 import org.junit.Test;
+import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
 
@@ -195,5 +196,52 @@ public class PirateChainVerifiedRecoveryContractTests {
 				SPENDING_KEY);
 		assertEquals(Integer.MAX_VALUE, result.birthdayHeight);
 		assertEquals(Long.valueOf(Integer.MAX_VALUE), result.requiredRescanFromHeight);
+	}
+
+	@Test
+	public void testTypedBalancePayloadMatchesUpstreamRequestContract() {
+		JSONObject payload = PirateWallet.buildBalancePayload("wallet-1");
+
+		assertEquals("get_balance", payload.getString("method"));
+		assertEquals("wallet-1", payload.getString("wallet_id"));
+		assertEquals(2, payload.keySet().size());
+	}
+
+	@Test
+	public void testTypedBalanceParsesUpstreamStringAmounts() throws Exception {
+		// Unified serializes amounts as decimal strings.
+		PirateChainBalance balance = PirateWallet.parseTypedBalance(
+				"{\"ok\":true,\"result\":{\"total\":\"123456789\",\"spendable\":\"120000000\","
+						+ "\"pending\":\"3456789\"}}");
+		assertEquals(123456789L, balance.zbalance);
+		assertEquals(120000000L, balance.verified_zbalance);
+
+		// Plain integers are accepted too, as the upstream decoder accepts either form.
+		PirateChainBalance numeric = PirateWallet.parseTypedBalance(
+				"{\"ok\":true,\"result\":{\"total\":10,\"spendable\":4,\"pending\":6}}");
+		assertEquals(10L, numeric.zbalance);
+		assertEquals(4L, numeric.verified_zbalance);
+	}
+
+	@Test
+	public void testTypedBalanceFailsClosedOnMalformedResponses() {
+		for (String malformed : new String[] {
+				// not an envelope success
+				"{\"ok\":false,\"error\":\"nope\"}",
+				"{\"ok\":\"true\",\"result\":{\"total\":\"1\",\"spendable\":\"1\"}}",
+				// missing result or fields
+				"{\"ok\":true}",
+				"{\"ok\":true,\"result\":{\"total\":\"1\"}}",
+				// wrong scalar shapes and impossible values
+				"{\"ok\":true,\"result\":{\"total\":{},\"spendable\":\"1\"}}",
+				"{\"ok\":true,\"result\":{\"total\":\"not-a-number\",\"spendable\":\"1\"}}",
+				"{\"ok\":true,\"result\":{\"total\":1.5,\"spendable\":1}}",
+				"{\"ok\":true,\"result\":{\"total\":\"-1\",\"spendable\":\"1\"}}",
+				// not JSON at all
+				"Error: string input" }) {
+			assertThrows("should fail closed: " + malformed, ForeignBlockchainException.class,
+					() -> PirateWallet.parseTypedBalance(malformed));
+		}
+		assertThrows(ForeignBlockchainException.class, () -> PirateWallet.parseTypedBalance(null));
 	}
 }

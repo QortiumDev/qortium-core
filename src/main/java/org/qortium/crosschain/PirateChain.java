@@ -353,10 +353,8 @@ public class PirateChain extends Bitcoiny {
 		if (walletController == null)
 			throw new ForeignBlockchainException("Pirate Chain wallet is disabled");
 
-		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
-			String response = nativeAdapter.execute("balance", "");
-			return parseWalletBalances(response);
-		});
+		return walletController.withEntropyWallet(entropy58, true,
+				(wallet, nativeAdapter) -> wallet.getWalletBalances(nativeAdapter));
 	}
 
 	/**

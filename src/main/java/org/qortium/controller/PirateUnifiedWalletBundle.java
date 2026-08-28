@@ -30,11 +30,11 @@ import java.util.zip.ZipFile;
 /** Validates the pinned Pirate Unified cross-platform native bundle. */
 final class PirateUnifiedWalletBundle {
 
-	static final String RELEASE_TAG = "v1.1.8-qortium.1";
-	static final String ARTIFACT_FILENAME = "pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip";
-	static final long ARTIFACT_SIZE = 362_642_330L;
+	static final String RELEASE_TAG = "v1.1.8-qortium.3";
+	static final String ARTIFACT_FILENAME = "pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip";
+	static final long ARTIFACT_SIZE = 362_743_273L;
 	static final String ARTIFACT_SHA256 =
-			"3824ea8535fae411d1a20381051aaa6867e89071e3cb2bd49a8264ec3cebe357";
+			"a06bb575929e38b8d6062f0220a71a0a88c25f95a8c90c324a73c1b6950ee0ca";
 	static final String RELEASE_URL = "https://github.com/QortiumDev/Pirate-Unified-Light-Wallet/"
 			+ "releases/download/" + RELEASE_TAG + "/" + ARTIFACT_FILENAME;
 	static final String MANIFEST_FILENAME = "QORTIUM-MANIFEST.txt";

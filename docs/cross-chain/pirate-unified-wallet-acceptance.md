@@ -7,25 +7,61 @@ transactions, deployment, and default enablement remain separate decisions.
 
 ## Pinned artifact
 
-- Release tag: `v1.1.8-qortium.1`
-- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip`
-- Size: `362642330` bytes
-- SHA-256: `3824ea8535fae411d1a20381051aaa6867e89071e3cb2bd49a8264ec3cebe357`
-- URL: `https://github.com/QortiumDev/Pirate-Unified-Light-Wallet/releases/download/v1.1.8-qortium.1/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip`
+- Release tag: `v1.1.8-qortium.3`
+- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip`
+- Size: `362743273` bytes
+- SHA-256: `a06bb575929e38b8d6062f0220a71a0a88c25f95a8c90c324a73c1b6950ee0ca`
+- URL: `https://github.com/QortiumDev/Pirate-Unified-Light-Wallet/releases/download/v1.1.8-qortium.3/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip`
 
 Provenance: this artifact is built by the QortiumDev fork's GitHub Actions
 (the upstream repository's own unmodified `ci.yml` release workflow; fork CI
-run `33035109928`) from upstream `main` commit
-`683141e1280e8e1514dcfe10e09dc556bc2144b7` — the merge of upstream
-[PR #43](https://github.com/PirateNetwork/Pirate-Unified-Light-Wallet/pull/43)
-(verified spending-key import) and the newest green-CI upstream commit at
-pin time. The tagged source is byte-identical to upstream `main` at that
-commit; the fork tag exists so the artifact version is never confusable with
-an official PirateNetwork release. The previously pinned official
+run `33107991489`) from fork `main` commit `72a391e`, which is upstream
+`main` commit `056b191` (green upstream CI) plus exactly two fork commits:
+the cancelled-sync spendability fix offered upstream as
+[PR #44](https://github.com/PirateNetwork/Pirate-Unified-Light-Wallet/pull/44)
+(`2f720ce` — without it, every completed or stopped sync zeroes the
+persisted chain tip that `import_spending_key_verified` validates
+birthdays against, making verified recovery unusable), and a fork-only
+artifact version bump to `0.3.2` (`72a391e` — required so the release
+collector rebuilds the native artifacts instead of backfilling the unfixed
+previous archive). Upstream merged PR #44 on 2026-08-27 as `db7e5f4`, so once
+an upstream release carries it the fork can return to a divergence-free base. The fork tag exists so the artifact version is never
+confusable with an official PirateNetwork release. Superseded artifacts, all
+retained as fork releases for provenance: `v1.1.8-qortium.2` (size
+`362680463`, SHA-256
+`243fe3da010924c63a3509dcc3d01f681d1430fdd0391102b6ae11a78b31d803`) carried
+an incomplete first version of the fix that missed the dominant
+string-wrapped cancellation path; `v1.1.8-qortium.1` (size `362642330`,
+SHA-256 `3824ea8535fae411d1a20381051aaa6867e89071e3cb2bd49a8264ec3cebe357`)
+contains the upstream bug unfixed; and before them the official
 `v1.1.7`/`v1.1.6` artifact (size `353764001`, SHA-256
 `27773b37510ac5f6e9a594e1ae8a98e8b3b0dc9069506776314ba6719341f299`)
-predates the verified spending-key import and is superseded. The pin file is
+predates the verified spending-key import. The pin file is
 `tools/pirate-unified-artifact.properties`.
+
+## Known limitation: legacy address reads after a recovery
+
+Core reads Unified balances through the typed `get_balance` request, which does
+not build a per-address breakdown. Two other paths still call the legacy
+address lookup, which does: Unified wallet initialization and validated-sync
+recording both resolve the wallet's legacy Sapling receive address for the
+migration identity check.
+
+On a wallet whose balance sits on an address imported from another key group -
+the normal outcome of a verified recovery - that lookup runs the upstream
+sequential address scan to its 4096-address limit and exceeds the native lane
+timeout. In practice this means restarting Core, or recording the next
+validated sync, after a completed recovery can stall the Pirate wallet lane.
+Restarting Core unchanged re-enters the same initialization path, so clearing
+the condition needs either an artifact containing the upstream fix or a restart
+with Unified disabled.
+
+A fix for the scan is offered upstream as
+[PR #45](https://github.com/PirateNetwork/Pirate-Unified-Light-Wallet/pull/45).
+Pinning an artifact that contains it is a prerequisite for enabling Unified on
+any node that may perform a recovery. The identity check itself is deliberately
+left alone: it must agree with the value a legacy wallet records, so changing
+its source is a separate reviewed change rather than part of this tranche.
 
 ## Staged bundle contract
 
@@ -34,8 +70,8 @@ archive:
 
 ```sh
 tools/stage-pirate-unified-bundle.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
-  /absolute/new/path/pirate-unified-v1.1.8-qortium.1
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip \
+  /absolute/new/path/pirate-unified-v1.1.8-qortium.3
 ```
 
 The script verifies the archive size and SHA-256, refuses to overwrite output,
@@ -90,8 +126,8 @@ and byte-compares every staged payload to the matching archive entry:
 ```sh
 mvn -DskipTests=false \
   -Dqortium.runPirateUnifiedArtifactAcceptanceTests=true \
-  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
-  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip \
+  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.1.8-qortium.3 \
   -Dtest=PirateUnifiedArtifactAcceptanceTests \
   test
 ```
@@ -161,8 +197,8 @@ termination and secret-capable evidence deletion are both proven:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/new/path/pirate-unified-native-receipt.md \
   --native
 ```
@@ -173,8 +209,8 @@ is approved:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/new/path/pirate-unified-receipt.md
 ```
 
@@ -236,8 +272,8 @@ staged bundle, a new absolute receipt path, and the explicit `--native` marker:
 
 ```sh
 tools/run-pirate-production-native-interoperability-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/new/path/pirate-production-native-receipt.md \
   --native
 ```
@@ -281,8 +317,8 @@ Run the historical gate only from a clean Core commit:
 
 ```sh
 tools/run-pirate-unified-historical-restore-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.1.zip \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.1.8-qortium.3.zip \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/new/path/pirate-unified-historical-restore-receipt.md
 ```
 
@@ -330,7 +366,7 @@ anything. Prepare that fixture from an already validated staged bundle:
 
 ```sh
 tools/prepare-pirate-unified-local-qdn-fixture.sh \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/new/path/pirate-unified-local-qdn-fixture
 ```
 
@@ -364,7 +400,7 @@ loader against that fixture without network egress or wallet creation:
 ```sh
 tools/run-pirate-unified-packaged-loader-acceptance.sh \
   /absolute/path/qortium-1.7.2.jar \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-loader-receipt.md
 ```
@@ -399,7 +435,7 @@ bounded wallet-lifecycle gate:
 ```sh
 tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
   /absolute/path/qortium-1.7.2.jar \
-  /absolute/path/pirate-unified-v1.1.8-qortium.1 \
+  /absolute/path/pirate-unified-v1.1.8-qortium.3 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-lifecycle-receipt.md
 ```
