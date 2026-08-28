@@ -313,12 +313,16 @@ public class BlockMinter extends Thread {
 							LOGGER.debug("Couldn't acquire blockchain lock even after waiting 30 seconds");
 							continue;
 						}
-						final long lockHeldStartMillis = System.currentTimeMillis();
+						final long lockHeldStartNanos = System.nanoTime();
+						BlockchainLockMonitor.Watch lockWatch = null;
 
 						boolean newBlockMinted = false;
 						Block newBlock = null;
 
 						try {
+							lockWatch = BlockchainLockMonitor.getInstance().watch(
+									"BlockMinter candidate height " + newBlocks.get(0).getBlockData().getHeight(), blockchainLock);
+
 							// Clear repository session state so we have latest view of data
 							repository.discardChanges();
 
@@ -481,11 +485,19 @@ public class BlockMinter extends Thread {
 								newBlocks.clear();
 							}
 						} finally {
-							final long lockHeldMillis = System.currentTimeMillis() - lockHeldStartMillis;
-							if (lockHeldMillis >= 2000L) {
+							final long lockHeldMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lockHeldStartNanos);
+							try {
+								if (lockWatch != null)
+									lockWatch.close();
+							} finally {
+								blockchainLock.unlock();
+							}
+
+							if (lockHeldMillis >= BlockchainLockMonitor.WARNING_INTERVAL_MILLIS) {
+								LOGGER.warn("BlockMinter held blockchain lock for {} ms", lockHeldMillis);
+							} else if (lockHeldMillis >= 2000L) {
 								LOGGER.info("BlockMinter held blockchain lock for {} ms", lockHeldMillis);
 							}
-							blockchainLock.unlock();
 						}
 
 						if (newBlockMinted) {

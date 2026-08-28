@@ -19,6 +19,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class HSQLDBRepositoryFactory implements RepositoryFactory {
 
@@ -117,13 +118,15 @@ public class HSQLDBRepositoryFactory implements RepositoryFactory {
 	}
 
 	private Connection getConnection() throws SQLException {
-		final long before = System.currentTimeMillis();
+		final Thread requestingThread = Thread.currentThread();
+		final long before = System.nanoTime();
 		Connection connection = this.connectionPool.getConnection();
-		final long delay = System.currentTimeMillis() - before;
+		final long delay = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - before);
 
 		if (delay > SLOW_CONNECTION_THRESHOLD)
 			// This could be an indication of excessive repository use, or insufficient pool size
-			LOGGER.warn(() -> String.format("Fetching repository connection from pool took %dms (threshold: %dms)", delay, SLOW_CONNECTION_THRESHOLD));
+			LOGGER.warn(() -> String.format("Fetching repository connection from pool took %dms on thread %s#%d (threshold: %dms)",
+					delay, requestingThread.getName(), requestingThread.getId(), SLOW_CONNECTION_THRESHOLD));
 
 		setupConnection(connection);
 		return connection;

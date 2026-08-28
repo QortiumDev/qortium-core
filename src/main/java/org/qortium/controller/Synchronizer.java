@@ -1323,9 +1323,12 @@ public class Synchronizer extends Thread {
 			LOGGER.info("Synchronizer couldn't acquire blockchain lock");
 			return SynchronizationResult.NO_BLOCKCHAIN_LOCK;
 		}
-		final long lockHeldStartMillis = System.currentTimeMillis();
+		final long lockHeldStartNanos = System.nanoTime();
+		BlockchainLockMonitor.Watch lockWatch = null;
 
 		try {
+			lockWatch = BlockchainLockMonitor.getInstance().watch("Synchronizer with peer " + peer, blockchainLock);
+
 			try (final Repository repository = RepositoryManager.getRepository()) {
 				try {
 					final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
@@ -1439,11 +1442,19 @@ public class Synchronizer extends Thread {
 				return SynchronizationResult.REPOSITORY_ISSUE;
 			}
 		} finally {
-			final long lockHeldMillis = System.currentTimeMillis() - lockHeldStartMillis;
-			if (lockHeldMillis >= 2000L) {
+			final long lockHeldMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lockHeldStartNanos);
+			try {
+				if (lockWatch != null)
+					lockWatch.close();
+			} finally {
+				blockchainLock.unlock();
+			}
+
+			if (lockHeldMillis >= BlockchainLockMonitor.WARNING_INTERVAL_MILLIS) {
+				LOGGER.warn("Synchronizer held blockchain lock for {} ms with peer {}", lockHeldMillis, peer);
+			} else if (lockHeldMillis >= 2000L) {
 				LOGGER.info("Synchronizer held blockchain lock for {} ms with peer {}", lockHeldMillis, peer);
 			}
-			blockchainLock.unlock();
 		}
 	}
 
