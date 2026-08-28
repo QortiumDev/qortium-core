@@ -1609,21 +1609,7 @@ public class NetworkData {
                 Long now = NTP.getTime();
                 ExecuteProduceConsume.Task task = maybeProduceConnectPeerTask(now);
                 if (task != null) {
-                    final ExecuteProduceConsume.Task t = task;
-                    try {
-                        networkDataWorkerPool.execute(() -> {
-                            try {
-                                t.perform();
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            } catch (Exception e) {
-                                LOGGER.warn("NetworkData scheduler task threw: {}", e.getMessage(), e);
-                            }
-                        });
-                    } catch (java.util.concurrent.RejectedExecutionException e) {
-                        // Worker pool is full or shutting down - skip this task
-                        LOGGER.debug("NetworkData worker pool rejected scheduler task (pool full or shutting down)");
-                    }
+                    submitSchedulerTask(this.networkDataWorkerPool, task);
                 } else {
                     Thread.sleep(10);
                 }
@@ -1633,6 +1619,28 @@ public class NetworkData {
             }
         }
         LOGGER.debug("NetworkData scheduler loop exiting");
+    }
+
+    private void submitSchedulerTask(ExecutorService workerPool, ExecuteProduceConsume.Task task) {
+        try {
+            workerPool.execute(() -> {
+                try {
+                    task.perform();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    LOGGER.warn("NetworkData scheduler task threw: {}", e.getMessage(), e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            try {
+                task.onRejected();
+            } catch (RuntimeException cleanupException) {
+                LOGGER.warn("Rejected NetworkData scheduler task cleanup failed: {}",
+                        cleanupException.getMessage(), cleanupException);
+            }
+            LOGGER.debug("NetworkData worker pool rejected scheduler task (pool full or shutting down)");
+        }
     }
 
     private ExecuteProduceConsume.Task maybeProduceConnectPeerTask(Long now) throws InterruptedException {
@@ -1659,7 +1667,7 @@ public class NetworkData {
             return null;
         }
         targetPeer.setPeerType(Peer.NETWORKDATA);
-        return new PeerConnectTask(targetPeer);
+        return new PeerConnectTask(targetPeer, () -> removeConnectingI2PPeer(targetPeer));
     }
 
     /**

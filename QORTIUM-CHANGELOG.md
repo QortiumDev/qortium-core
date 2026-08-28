@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(i2p): release rejected connection tasks
+
+Prevents an I2P peer from remaining falsely marked as connecting when Core is
+too busy or shutting down to accept the task that would open its connection.
+Rejected chain and data connection tasks now release their peer reservation
+immediately, including the second handoff to the dedicated connection pool, so
+normal peer selection can recover without requiring a Core restart. Focused
+tests cover both network paths.
+
 ### 2026-08-28 - fix(i2p): release reservations after repository failures
 
 Prevents a temporary repository failure from making an I2P chain peer look as

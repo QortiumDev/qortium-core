@@ -117,6 +117,7 @@ public abstract class ExecuteProduceConsume implements Runnable {
 	public interface Task {
 		String getName();
 		void perform() throws InterruptedException;
+		default void onRejected() {}
 	}
 
 	@Override

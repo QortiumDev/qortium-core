@@ -9,12 +9,14 @@ import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.network.i2p.I2PStreamProvider;
 import org.qortium.network.message.Message;
 import org.qortium.network.message.PeersMessage;
+import org.qortium.network.task.PeerConnectTask;
 import org.qortium.repository.DataException;
 import org.qortium.repository.NetworkRepository;
 import org.qortium.repository.Repository;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
 import org.qortium.utils.NTP;
+import org.qortium.utils.ExecuteProduceConsume;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -25,6 +27,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -385,6 +389,25 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
+	public void testRejectedI2PChainConnectTaskReleasesReservation() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		PeerAddress i2pAddress = PeerAddress.fromString(B32);
+		getMutableKnownPeers().add(new PeerData(i2pAddress, 100L, "test"));
+
+		ExecuteProduceConsume.Task task = invokeMaybeProduceConnectPeerTask(System.currentTimeMillis());
+
+		assertTrue(task instanceof PeerConnectTask);
+		assertTrue(getConnectingI2PPeers().contains(i2pAddress));
+		ExecutorService rejectingExecutor = Executors.newSingleThreadExecutor();
+		rejectingExecutor.shutdownNow();
+		invokeSubmitSchedulerTask(rejectingExecutor, task);
+		assertFalse("Rejected chain task must release its I2P reservation",
+				getConnectingI2PPeers().contains(i2pAddress));
+	}
+
+	@Test
 	public void testI2PChainPeerUsesLongerConnectFailureBackoff() throws Exception {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
@@ -503,6 +526,8 @@ public class NetworkI2PTests extends Common {
 		FieldUtils.writeField(Network.getInstance(), "immutableHandshakedPeers", List.of(), true);
 		FieldUtils.writeField(Network.getInstance(), "immutableOutboundHandshakedPeers", List.of(), true);
 		FieldUtils.writeField(Network.getInstance(), "nextHandshakeCleanup", 0L, true);
+		((java.util.concurrent.atomic.AtomicLong) FieldUtils.readField(
+				Network.getInstance(), "nextConnectTaskTimestamp", true)).set(0L);
 		getConnectingI2PPeers().clear();
 	}
 
@@ -529,6 +554,19 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("getConnectablePeer", Long.class);
 		method.setAccessible(true);
 		return (Peer) method.invoke(Network.getInstance(), now);
+	}
+
+	private ExecuteProduceConsume.Task invokeMaybeProduceConnectPeerTask(long now) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("maybeProduceConnectPeerTask", Long.class);
+		method.setAccessible(true);
+		return (ExecuteProduceConsume.Task) method.invoke(Network.getInstance(), now);
+	}
+
+	private void invokeSubmitSchedulerTask(ExecutorService executor, ExecuteProduceConsume.Task task) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("submitSchedulerTask",
+				ExecutorService.class, ExecuteProduceConsume.Task.class);
+		method.setAccessible(true);
+		method.invoke(Network.getInstance(), executor, task);
 	}
 
 	private Peer invokeReserveConnectablePeer(Repository repository, PeerData peerData, long now) throws Exception {
