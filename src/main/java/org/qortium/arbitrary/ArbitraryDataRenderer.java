@@ -215,18 +215,7 @@ public class ArbitraryDataRenderer {
                 htmlParser.addAdditionalHeaderTags();
                 response.addHeader(
                     "Content-Security-Policy",
-                    "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-                    "font-src 'self' data:; " +
-
-                    // allow localhost for media
-                    "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; " +
-
-                    "img-src 'self' data: blob:; " +
-
-                    // emulator/Emscripten runtimes spawn workers from same-origin or blob URLs
-                    "worker-src 'self' blob:; " +
-
-                    "connect-src 'self' wss: blob:;"
+                    contentSecurityPolicyForHtml()
                 );
                 response.setContentType(context.getMimeType(filename));
                 response.setContentLength(htmlParser.getData().length);
@@ -264,6 +253,28 @@ public class ArbitraryDataRenderer {
             super(String.format("HTML file is too large: %d bytes (max size: %d bytes)", fileSize, MAX_HTML_REWRITE_SIZE));
         }
 
+    }
+
+    /**
+     * Content-Security-Policy for a rendered HTML document.
+     *
+     * <p>Network connections are limited to the document's own node origin. CSP's {@code 'self'}
+     * matching covers the same-host, same-port WebSocket upgrade used by QDN apps, while avoiding
+     * a bare {@code wss:} source that would permit connections to any secure WebSocket server.</p>
+     */
+    static String contentSecurityPolicyForHtml() {
+        return "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                "font-src 'self' data:; " +
+
+                // allow localhost for media
+                "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; " +
+
+                "img-src 'self' data: blob:; " +
+
+                // emulator/Emscripten runtimes spawn workers from same-origin or blob URLs
+                "worker-src 'self' blob:; " +
+
+                "connect-src 'self' blob:;";
     }
 
     /**

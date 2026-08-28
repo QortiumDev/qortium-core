@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(qdn): restrict rendered app WebSockets to the serving node
+
+Removes an inherited Content Security Policy wildcard that allowed a rendered
+QDN app to open a secure WebSocket to any Internet origin. Rendered apps can
+still use the Qortium node's own WebSocket endpoints through the policy's
+same-origin rule, preserving known Chat and Chess live updates while closing
+the arbitrary external WebSocket channel. The exact document policy is now
+covered by a regression test so the wildcard cannot return silently.
+
 ### 2026-08-28 - fix(recovery): restart nodes after sustained repository stalls
 
 Adds a default-on repository liveness watchdog for failures where the Core
