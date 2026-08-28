@@ -31,6 +31,24 @@ import static org.junit.Assert.fail;
 public class ArbitraryDataRendererTests {
 
     @Test
+    public void testHtmlContentSecurityPolicyRestrictsConnectionsToTheNodeOrigin() {
+        String csp = ArbitraryDataRenderer.contentSecurityPolicyForHtml();
+
+        assertEquals(
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                        "font-src 'self' data:; " +
+                        "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; " +
+                        "img-src 'self' data: blob:; " +
+                        "worker-src 'self' blob:; " +
+                        "connect-src 'self' blob:;",
+                csp);
+        assertFalse("A bare wss: source would allow arbitrary secure WebSocket origins: " + csp,
+                csp.contains(" wss:"));
+        assertFalse("A bare ws: source would allow arbitrary WebSocket origins: " + csp,
+                csp.contains(" ws:"));
+    }
+
+    @Test
     public void testNonHtmlFileResponseSetsContentLengthBeforeStreaming() throws Exception {
         byte[] body = "rendered asset body".getBytes(StandardCharsets.UTF_8);
         Path directory = Files.createTempDirectory("qdn-renderer");
