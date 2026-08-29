@@ -38,6 +38,10 @@ jobs:
       run: |
         mvn -B clean package --file pom.xml
 
+    - name: Test read-only QDN gateway bridge
+      run: |
+        node tools/test-q-apps-gateway.js
+
     # Runs the whole JUnit suite. This deliberately replaces the previous
     # `-Dtest=CorsFilterTests,TranslationsTests` filter: that filter meant CI green proved only
     # that the package built and two classes passed, so consensus, repository-schema and

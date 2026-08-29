@@ -171,7 +171,7 @@ async function main() {
 
   console.log("\n[6] resource URLs stay on the serving origin");
   const url = await qdnRequest({ action: "GET_QDN_RESOURCE_URL", service: "APP", name: "Recipes" });
-  check("render URL is same-origin", url.startsWith(ORIGIN + "/render/APP/Recipes"), url);
+  check("gateway resource URL is same-origin", url.startsWith(ORIGIN + "/APP/Recipes"), url);
 
   console.log("\n[7] SHOW_ACTIONS matches what is actually dispatchable");
   const advertised = await qdnRequest({ action: "SHOW_ACTIONS" });
@@ -341,6 +341,131 @@ async function main() {
       legacyAfterOversize.contentType === "image/png",
     JSON.stringify(legacyAfterOversize),
   );
+
+  console.log("\n[9] gateway identity and node reads are honest and same-origin");
+  check(
+    "advertises the four additive gateway reads",
+    ["GET_HOST_INFO", "GET_MINTING_STATUS", "GET_NODE_INFO", "GET_QDN_RESOURCE_STREAM_URL"].every(
+      (action) => advertised.includes(action),
+    ),
+  );
+
+  const hostInfo = await qdnRequest({ action: "GET_HOST_INFO" });
+  check(
+    "host info identifies the read-only gateway without claiming Home compatibility",
+    hostInfo.hostName === "qortium-gateway" &&
+      hostInfo.platform === "gateway" &&
+      hostInfo.platformVersion === "0.0" &&
+      hostInfo.protocol === "qdnRequest" &&
+      hostInfo.network === "qortium" &&
+      hostInfo.readOnly === true &&
+      hostInfo.route.configuredKind === "public" &&
+      hostInfo.route.reachable === true,
+    JSON.stringify(hostInfo),
+  );
+
+  setResponder((url) => {
+    if (url.endsWith("/admin/info"))
+      return response({ json: { buildVersion: "qortium-test", nodeId: "NodeId" } });
+    if (url.endsWith("/admin/status"))
+      return response({ json: { height: 123, syncPhase: "SYNCED" } });
+    return response({ status: 404 });
+  });
+  const nodeInfo = await qdnRequest({ action: "GET_NODE_INFO" });
+  check(
+    "node info resolves through the gateway admin route",
+    nodeInfo.buildVersion === "qortium-test" && lastUrl().endsWith("/admin/info"),
+    JSON.stringify(nodeInfo),
+  );
+  const nodeStatus = await qdnRequest({ action: "GET_NODE_STATUS" });
+  check(
+    "node status resolves through the gateway admin route",
+    nodeStatus.height === 123 && lastUrl().endsWith("/admin/status"),
+    JSON.stringify(nodeStatus),
+  );
+
+  console.log("\n[10] gateway minting status matches Home's public-node contract");
+  try {
+    await qdnRequest({ action: "GET_MINTING_STATUS" });
+    check("minting status requires an explicit address", false);
+  } catch (e) {
+    check("minting status requires an explicit address", /Address is required/.test(e.message), e.message);
+  }
+  try {
+    await qdnRequest({ action: "GET_MINTING_STATUS", address: "Qabc" });
+    check("minting status validates the explicit address", false);
+  } catch (e) {
+    check("minting status validates the explicit address", /Address is invalid/.test(e.message), e.message);
+  }
+
+  const mintingAddress = "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v";
+  setResponder((url) => {
+    if (url.includes("/addresses/rewardshares?"))
+      return response({
+        json: [{ mintingAccount: mintingAddress, recipient: mintingAddress }],
+      });
+    return response({ status: 404 });
+  });
+  const mintingStatus = await qdnRequest({
+    action: "GET_MINTING_STATUS",
+    payload: { address: mintingAddress },
+  });
+  check(
+    "minting status reads only the public self-share and withholds node-local state",
+    mintingStatus.address === mintingAddress &&
+      mintingStatus.hasRewardShare === true &&
+      mintingStatus.isMinting === null &&
+      mintingStatus.keyOnNode === null &&
+      mintingStatus.nodeMintingPossible === null &&
+      lastUrl().includes("minters=" + mintingAddress) &&
+      lastUrl().includes("recipients=" + mintingAddress) &&
+      !lastUrl().includes("mintingaccounts"),
+    JSON.stringify(mintingStatus),
+  );
+
+  console.log("\n[11] stream URLs preserve Home's media boundary");
+  setResponder((url) => {
+    if (url.includes("/arbitrary/resource/status/VIDEO/Alice/demo"))
+      return response({ json: { status: "READY" } });
+    return response({ status: 404 });
+  });
+  const streamUrl = await qdnRequest({
+    action: "GET_QDN_RESOURCE_STREAM_URL",
+    service: "VIDEO",
+    name: "Alice",
+    identifier: "demo",
+    path: "clips/intro.mp4?download=false",
+  });
+  check(
+    "stream URL is same-origin and keeps the exact resource path",
+    streamUrl === ORIGIN + "/VIDEO/Alice/demo/clips/intro.mp4?download=false",
+    streamUrl,
+  );
+
+  for (const [label, request, message] of [
+    [
+      "stream action refuses executable app services",
+      { action: "GET_QDN_RESOURCE_STREAM_URL", service: "APP", name: "Alice" },
+      /only supports image, audio, video/,
+    ],
+    [
+      "stream action refuses dot path segments",
+      { action: "GET_QDN_RESOURCE_STREAM_URL", service: "VIDEO", name: "Alice", path: "../admin/info" },
+      /cannot contain \. or \.\./,
+    ],
+    [
+      "stream action refuses backslash paths",
+      { action: "GET_QDN_RESOURCE_STREAM_URL", service: "VIDEO", name: "Alice", path: "..\\admin" },
+      /cannot contain backslashes/,
+    ],
+  ]) {
+    try {
+      await qdnRequest(request);
+      check(label, false);
+    } catch (e) {
+      check(label, message.test(e.message), e.message);
+    }
+  }
 
   console.log("\n=== " + passed + " passed, " + failed + " failed ===");
   process.exit(failed ? 1 : 0);

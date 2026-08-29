@@ -37,6 +37,7 @@ public class GatewayServiceAccessTests extends Common {
 		FieldUtils.writeField(this.settings, "publicApiWhitelist",
 				new String[] {"0.0.0.0/0", "::/0"}, true);
 		FieldUtils.writeField(this.settings, "publicApiPaths", new String[] {
+				"GET /admin/info",
 				"GET /admin/status",
 				"GET /arbitrary/*",
 				"GET /render/*",
@@ -69,10 +70,12 @@ public class GatewayServiceAccessTests extends Common {
 			assertAllowed(server, "GET /apps/q-apps.js HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertAllowed(server, "GET /apps/q-apps-gateway.js HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertAllowed(server, "GET /arbitrary/APP/Boards/default HTTP/1.1\r\nHost: localhost\r\n\r\n");
+			assertAllowed(server, "GET /admin/info HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertAllowed(server, "GET /admin/status HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertAllowed(server, "GET /names/search HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertAllowed(server, "GET /chat/messages HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertForbidden(server, "GET /peers HTTP/1.1\r\nHost: localhost\r\n\r\n");
+			assertForbidden(server, "GET /admin/mintingaccounts HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertForbidden(server, "GET /admin/settings HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertForbidden(server, "GET /wallet/balance HTTP/1.1\r\nHost: localhost\r\n\r\n");
 			assertForbidden(server, "POST /render/authorize/APP/Boards/default HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
@@ -80,6 +83,16 @@ public class GatewayServiceAccessTests extends Common {
 			// Gateway protection runs before Jersey authorization. An oversized route that is not public
 			// must still reach the access filter and return 403 rather than consume protection work/return 413.
 			assertForbidden(server, "POST /render/authorize/APP/Boards/default HTTP/1.1\r\nHost: localhost\r\nContent-Length: 17\r\n\r\n");
+		}
+	}
+
+	@Test
+	public void testProductionGatewayConfigRegistersAdminReads() throws Exception {
+		try (HandlerServer server = new HandlerServer(GatewayService.createResourceConfig())) {
+			assertJsonAllowed(server, "GET /admin/status HTTP/1.1\r\nHost: localhost\r\n\r\n", "\"height\"");
+			assertJsonAllowed(server, "GET /admin/info HTTP/1.1\r\nHost: localhost\r\n\r\n", "\"buildVersion\"");
+			assertForbidden(server, "GET /admin/mintingaccounts HTTP/1.1\r\nHost: localhost\r\n\r\n");
+			assertForbidden(server, "GET /admin/settings HTTP/1.1\r\nHost: localhost\r\n\r\n");
 		}
 	}
 
@@ -107,13 +120,22 @@ public class GatewayServiceAccessTests extends Common {
 		assertTrue(server.request(request).startsWith("HTTP/1.1 413"));
 	}
 
+	private static void assertJsonAllowed(HandlerServer server, String request, String expectedBodyText) throws Exception {
+		String response = server.request(request);
+		assertTrue(response, response.startsWith("HTTP/1.1 200"));
+		assertTrue(response, response.toLowerCase().contains("content-type: application/json"));
+		assertTrue(response, response.contains(expectedBodyText));
+	}
+
 	private static final class HandlerServer implements AutoCloseable {
 		private final Server server = new Server();
 		private final LocalConnector connector = new LocalConnector(this.server);
 
 		private HandlerServer() throws Exception {
-			ResourceConfig config = new ResourceConfig(TestGatewayResource.class, TestApiResource.class);
-			GatewayService.registerPublicApiAccess(config);
+			this(createTestResourceConfig());
+		}
+
+		private HandlerServer(ResourceConfig config) throws Exception {
 
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
 			context.setContextPath("/");
@@ -125,6 +147,12 @@ public class GatewayServiceAccessTests extends Common {
 			this.server.addConnector(this.connector);
 			this.server.setHandler(protection);
 			this.server.start();
+		}
+
+		private static ResourceConfig createTestResourceConfig() {
+			ResourceConfig config = new ResourceConfig(TestGatewayResource.class, TestApiResource.class);
+			GatewayService.registerPublicApiAccess(config);
+			return config;
 		}
 
 		private String request(String rawRequest) throws Exception {
@@ -170,6 +198,18 @@ public class GatewayServiceAccessTests extends Common {
 		@GET
 		@Path("admin/status")
 		public Response getAdminStatus() {
+			return Response.noContent().build();
+		}
+
+		@GET
+		@Path("admin/info")
+		public Response getAdminInfo() {
+			return Response.noContent().build();
+		}
+
+		@GET
+		@Path("admin/mintingaccounts")
+		public Response getAdminMintingAccounts() {
 			return Response.noContent().build();
 		}
 

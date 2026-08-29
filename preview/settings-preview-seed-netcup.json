@@ -54,6 +54,7 @@
     "::/0"
   ],
   "publicApiPaths": [
+    "GET /admin/info",
     "GET /admin/status",
     "GET /peers/known",
     "GET /peers/data/known",

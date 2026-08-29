@@ -35,13 +35,19 @@ public class GatewayService {
 	private Server server;
 
 	private GatewayService() {
-		this.config = new ResourceConfig();
-		this.config.packages("org.qortium.api.resource", "org.qortium.api.gateway.resource");
-		registerPublicApiAccess(this.config);
-		this.config.register(org.glassfish.jersey.media.multipart.MultiPartFeature.class);
-		this.config.register(OpenApiResource.class);
-		this.config.register(ApiDefinition.class);
-		this.config.register(AnnotationPostProcessor.class);
+		this.config = createResourceConfig();
+	}
+
+	/** Creates the same resource configuration used by the live gateway. */
+	static ResourceConfig createResourceConfig() {
+		ResourceConfig config = new ResourceConfig();
+		config.packages("org.qortium.api.resource", "org.qortium.api.gateway.resource");
+		registerPublicApiAccess(config);
+		config.register(org.glassfish.jersey.media.multipart.MultiPartFeature.class);
+		config.register(OpenApiResource.class);
+		config.register(ApiDefinition.class);
+		config.register(AnnotationPostProcessor.class);
+		return config;
 	}
 
 	public static GatewayService getInstance() {

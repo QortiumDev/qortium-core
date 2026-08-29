@@ -327,29 +327,7 @@ public class AdminResource {
 		}
 	)
 	public NodeInfo info() {
-		NodeInfo nodeInfo = new NodeInfo();
-
-		nodeInfo.currentTimestamp = NTP.getTime();
-		nodeInfo.uptime = System.currentTimeMillis() - Controller.startTime;
-		nodeInfo.buildVersion = Controller.getInstance().getVersionString();
-		nodeInfo.buildTimestamp = Controller.getInstance().getBuildTimestamp();
-		nodeInfo.nodeId = Network.getInstance().getOurNodeId();
-		nodeInfo.isTestNet = Settings.getInstance().isTestNet();
-		nodeInfo.type = getNodeType();
-
-		return nodeInfo;
-	}
-
-	private String getNodeType() {
-		if (Settings.getInstance().isLite()) {
-			return "lite";
-		}
-		else if (Settings.getInstance().isTopOnly()) {
-			return "topOnly";
-		}
-		else {
-			return "full";
-		}
+		return NodeInfo.current();
 	}
 
 	@GET
