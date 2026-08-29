@@ -1318,11 +1318,15 @@ window.addEventListener("beforeunload", () => {
     "GET_GROUP_MEMBERS",
     "GET_MEMBER_BANS",
     "GET_MEMBER_KICKS",
+    "GET_HOST_INFO",
+    "GET_MINTING_STATUS",
     "GET_NAME_DATA",
+    "GET_NODE_INFO",
     "GET_NODE_STATUS",
     "GET_QDN_RESOURCE_METADATA",
     "GET_QDN_RESOURCE_PROPERTIES",
     "GET_QDN_RESOURCE_STATUS",
+    "GET_QDN_RESOURCE_STREAM_URL",
     "GET_QDN_RESOURCE_URL",
     "GET_RESOURCE_RATING",
     "IS_USING_PUBLIC_NODE",
@@ -1477,6 +1481,13 @@ window.addEventListener("beforeunload", () => {
   // than saying what the app actually got wrong.
   function requiredAddress(request, label) {
     return requiredString(request, "address", label || "Address");
+  }
+
+  function requiredValidAddress(request, label) {
+    const address = requiredAddress(request, label);
+    if (!/^Q[1-9A-HJ-NP-Za-km-z]{20,80}$/.test(address))
+      throw new Error((label || "Address") + " is invalid.");
+    return address;
   }
 
   function requiredGroupId(request, minimumValue) {
@@ -2001,8 +2012,10 @@ window.addEventListener("beforeunload", () => {
       .join("/");
   }
 
-  // Home resolves this against its configured node; on a gateway the serving
-  // origin IS the node, so the render URL is same-origin by construction.
+  // Home resolves this against its configured node. On a gateway the serving
+  // origin IS the renderer, so use its direct /{service}/{name} route. The
+  // normal /render resource lives on Core's authenticated API service and is
+  // intentionally not registered wholesale on the gateway.
   function getResourceUrl(request) {
     const resource = getResourceRequest(request);
     return fetchPayload(request, buildResourceStatusPath(request)).then((status) => {
@@ -2017,7 +2030,7 @@ window.addEventListener("beforeunload", () => {
 
       return withQuery(
         window.location.origin +
-          "/render/" +
+          "/" +
           encodeURIComponent(resource.service) +
           "/" +
           encodeURIComponent(resource.name) +
@@ -2026,6 +2039,102 @@ window.addEventListener("beforeunload", () => {
         new URLSearchParams(queryString),
       );
     });
+  }
+
+  const QDN_STREAMABLE_SERVICES = new Set([
+    "IMAGE",
+    "THUMBNAIL",
+    "QCHAT_IMAGE",
+    "AUDIO",
+    "VOICE",
+    "PODCAST",
+    "VIDEO",
+    "DOCUMENT",
+    "FILE",
+    "FILES",
+    "ATTACHMENT",
+  ]);
+
+  function getResourceStreamUrl(request) {
+    const resource = getResourceRequest(request);
+    if (!QDN_STREAMABLE_SERVICES.has(resource.service))
+      throw new Error(
+        "GET_QDN_RESOURCE_STREAM_URL only supports image, audio, video, document, file, and attachment services.",
+      );
+
+    for (const value of [resource.name, resource.identifier]) {
+      if (value === "." || value === "..")
+        throw new Error("QDN resource path segments cannot be dot or dot-dot.");
+      if (value && value.length > 1024)
+        throw new Error("QDN resource stream coordinates are too long.");
+    }
+
+    const rawPath = resource.path || "";
+    const pathOnly = rawPath.split("?", 1)[0];
+    if (rawPath.length > 1024)
+      throw new Error("QDN resource stream path is too long.");
+    if (pathOnly.indexOf("\\") !== -1)
+      throw new Error("QDN resource file paths cannot contain backslashes.");
+    if (pathOnly.split("/").some((segment) => segment === "." || segment === ".."))
+      throw new Error("QDN resource file paths cannot contain . or .. segments.");
+
+    // The app is already running at this public origin, so the existing
+    // same-origin render URL is the gateway's safe streaming capability. It
+    // grants no authority beyond a direct browser request to the same URL.
+    return getResourceUrl(request);
+  }
+
+  function getHostInfo() {
+    return Promise.resolve({
+      hostName: "qortium-gateway",
+      // Version the gateway bridge contract independently from the Core JAR.
+      hostVersion: "1.0.0",
+      // The gateway is not a Home implementation and must not claim Home's
+      // app-platform compatibility level. Apps should feature-detect via
+      // SHOW_ACTIONS while treating this conservative level as pre-Home.
+      platformVersion: "0.0",
+      platform: "gateway",
+      protocol: "qdnRequest",
+      network: "qortium",
+      readOnly: true,
+      route: {
+        available: true,
+        configuredKind: "public",
+        effectiveKind: "public",
+        reachable: true,
+        revision: "qortium-gateway-read-only-v1",
+      },
+    });
+  }
+
+  function getMintingStatus(request) {
+    const address = requiredValidAddress(request);
+    const queryParams = new URLSearchParams({ minters: address, recipients: address });
+
+    return fetchPayload(request, "/addresses/rewardshares?" + queryParams.toString()).then(
+      (rewardShares) => {
+        const hasRewardShare =
+          Array.isArray(rewardShares) &&
+          rewardShares.some(
+            (rewardShare) =>
+              rewardShare &&
+              typeof rewardShare === "object" &&
+              rewardShare.mintingAccount === address &&
+              rewardShare.recipient === address,
+          );
+
+        // A public gateway cannot report the user's own node-local minting-key
+        // state. This matches Home's public-node contract without exposing
+        // /admin/mintingaccounts.
+        return {
+          address: address,
+          hasRewardShare: hasRewardShare,
+          isMinting: null,
+          keyOnNode: null,
+          nodeMintingPossible: null,
+        };
+      },
+    );
   }
 
   // --- Group / chat paths ----------------------------------------------------
@@ -2234,6 +2343,7 @@ window.addEventListener("beforeunload", () => {
     GET_MEMBER_KICKS: buildMemberKicksPath,
     GET_NAME_DATA: (request) =>
       "/names/" + encodeURIComponent(requiredString(request, "name", "Name")),
+    GET_NODE_INFO: () => "/admin/info",
     GET_NODE_STATUS: () => "/admin/status",
     GET_QDN_RESOURCE_METADATA: buildResourceMetadataPath,
     GET_QDN_RESOURCE_PROPERTIES: buildResourcePropertiesPath,
@@ -2251,6 +2361,9 @@ window.addEventListener("beforeunload", () => {
     FETCH_ACCOUNT_AVATAR: fetchAccountAvatar,
     FETCH_GROUP_AVATAR: fetchGroupAvatar,
     GET_ACCOUNT_RATING: getAccountRating,
+    GET_HOST_INFO: getHostInfo,
+    GET_MINTING_STATUS: getMintingStatus,
+    GET_QDN_RESOURCE_STREAM_URL: getResourceStreamUrl,
     GET_QDN_RESOURCE_URL: getResourceUrl,
     GET_RESOURCE_RATING: getResourceRating,
     IS_USING_PUBLIC_NODE: () => Promise.resolve(true),
