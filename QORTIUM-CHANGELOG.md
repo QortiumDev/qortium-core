@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-28 - fix(qdn): restrict developer proxy WebSockets to loopback
+
+Removes the developer proxy's broad permission to open a WebSocket to any
+host. Local app development can still use hot reload and Core
+WebSocket APIs through exact loopback origins on the configured development
+server and API ports through `127.0.0.1` and `localhost`. IPv6-backed local
+servers remain usable through the `localhost` hostname because CSP does not
+portably match literal IPv6 addresses. The proxy remains disabled by default
+and retains its existing local-only access checks.
+
 ### 2026-08-28 - feat(core): diagnose live blockchain lock stalls
 
 Adds live diagnostics for unusually long blockchain-lock holds instead of only

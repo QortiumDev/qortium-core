@@ -288,14 +288,15 @@ public class DevProxyServerResource {
         }
 
         if (isProxyHtmlResponse(filename, con.getContentType())) {
-            this.proxyHtmlConnectionToResponse(con, response, inPath, responseCode);
+            this.proxyHtmlConnectionToResponse(con, response, inPath, responseCode, source);
         }
         else {
             this.proxyNonHtmlConnectionToResponse(con, response, responseCode);
         }
     }
 
-    private void proxyHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath, int responseCode) throws IOException {
+    private void proxyHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath,
+                                               int responseCode, String source) throws IOException {
         byte[] data = readProxyResponseData(con, responseCode);
 
         String lang = request.getParameter("lang");
@@ -325,7 +326,7 @@ public class DevProxyServerResource {
 
         HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize, accent, uiStyle);
         htmlParser.addAdditionalHeaderTags();
-        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, buildHtmlContentSecurityPolicy());
+        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, buildHtmlContentSecurityPolicy(source));
         response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
         response.setContentType(con.getContentType());
         response.setContentLength(htmlParser.getData().length);
@@ -334,14 +335,26 @@ public class DevProxyServerResource {
         response.getOutputStream().write(htmlParser.getData());
     }
 
-    private static String buildHtmlContentSecurityPolicy() {
+    private static String buildHtmlContentSecurityPolicy(String source) throws IOException {
         StringBuilder csp = new StringBuilder("default-src 'self' 'unsafe-inline'");
         if (Settings.getInstance().isDevProxyUnsafeEvalEnabled()) {
             csp.append(" 'unsafe-eval'");
         }
 
-        csp.append("; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;");
+        URI sourceUri = parseLoopbackProxySource(source);
+        int sourcePort = effectiveHttpPort(sourceUri);
+        int apiPort = Settings.getInstance().getApiPort();
+
+        csp.append("; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self'");
+        appendLoopbackWebSocketSources(csp, sourcePort);
+        appendLoopbackWebSocketSources(csp, apiPort);
+        csp.append("; font-src 'self' data:;");
         return csp.toString();
+    }
+
+    private static void appendLoopbackWebSocketSources(StringBuilder csp, int port) {
+        csp.append(" ws://127.0.0.1:").append(port)
+                .append(" ws://localhost:").append(port);
     }
 
     private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {

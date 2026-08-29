@@ -21,3 +21,11 @@ The default developer-proxy content security policy allows inline script because
   "devProxyUnsafeEvalEnabled": true
 }
 ```
+
+The proxy permits WebSocket connections only to exact loopback origins on the
+configured development-server port and Core API port. It includes
+`127.0.0.1` and `localhost` so Vite-style hot reload and local Core WebSocket
+APIs work without allowing a developed app to connect to arbitrary remote
+WebSocket servers. When a development server listens on IPv6 loopback, configure
+its browser-facing HMR host as `localhost`: CSP Level 3 does not portably match
+literal IPv6 addresses such as `[::1]` in host-source expressions.

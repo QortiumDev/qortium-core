@@ -272,7 +272,9 @@ public class DevProxyServerResourceTests {
         assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
         assertEquals("text/html; charset=UTF-8", exchange.contentType);
         assertEquals(exchange.outputStream.toByteArray().length, exchange.contentLength);
-        assertEquals("default-src 'self' 'unsafe-inline'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
+        String csp = exchange.getResponseHeader("Content-Security-Policy");
+        assertEquals(expectedHtmlContentSecurityPolicy(this.server.getAddress().getPort(), false), csp);
+        assertConnectSourcesHaveNoSchemeWildcard(csp);
         assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
         assertTrue(rewrittenBody.contains("route html"));
@@ -303,7 +305,25 @@ public class DevProxyServerResourceTests {
 
         resource.getProxyPath("dashboard");
 
-        assertEquals("default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
+        String csp = exchange.getResponseHeader("Content-Security-Policy");
+        assertEquals(expectedHtmlContentSecurityPolicy(this.server.getAddress().getPort(), true), csp);
+        assertConnectSourcesHaveNoSchemeWildcard(csp);
+    }
+
+    @Test
+    public void testProxyHtmlPolicyUsesConfiguredApiPort() throws Exception {
+        int configuredApiPort = 23456;
+        useDevProxyApiPortSettings(configuredApiPort);
+        Method buildHtmlContentSecurityPolicy = DevProxyServerResource.class.getDeclaredMethod(
+                "buildHtmlContentSecurityPolicy", String.class);
+        buildHtmlContentSecurityPolicy.setAccessible(true);
+
+        String csp = (String) buildHtmlContentSecurityPolicy.invoke(null, "127.0.0.1:5173");
+
+        assertEquals(expectedHtmlContentSecurityPolicy(5173, false), csp);
+        assertTrue(csp.contains("ws://127.0.0.1:" + configuredApiPort));
+        assertTrue(csp.contains("ws://localhost:" + configuredApiPort));
+        assertConnectSourcesHaveNoSchemeWildcard(csp);
     }
 
     @Test
@@ -824,6 +844,47 @@ public class DevProxyServerResourceTests {
         Path settingsPath = directory.resolve("settings.json");
         Files.write(settingsPath, ("{\"devProxyUnsafeEvalEnabled\":true,\"blockchainConfig\":\"src/test/resources/test-chain-v2.json\"}" + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
         Settings.fileInstance(settingsPath.toString());
+    }
+
+    private static void useDevProxyApiPortSettings(int apiPort) throws Exception {
+        Path directory = Files.createTempDirectory("dev-proxy-api-port-test");
+        Path settingsPath = directory.resolve("settings.json");
+        Files.write(settingsPath, (String.format(
+                "{\"apiPort\":%d,\"blockchainConfig\":\"src/test/resources/test-chain-v2.json\"}%n",
+                apiPort)).getBytes(StandardCharsets.UTF_8));
+        Settings.fileInstance(settingsPath.toString());
+    }
+
+    private static String expectedHtmlContentSecurityPolicy(int sourcePort, boolean unsafeEval) {
+        String defaultSources = unsafeEval
+                ? "default-src 'self' 'unsafe-inline' 'unsafe-eval'"
+                : "default-src 'self' 'unsafe-inline'";
+        int apiPort = Settings.getInstance().getApiPort();
+
+        return String.format(
+                "%1$s; media-src 'self' data: blob:; img-src 'self' data: blob:; " +
+                        "connect-src 'self' " +
+                        "ws://127.0.0.1:%2$d ws://localhost:%2$d " +
+                        "ws://127.0.0.1:%3$d ws://localhost:%3$d; " +
+                        "font-src 'self' data:;",
+                defaultSources, sourcePort, apiPort);
+    }
+
+    private static void assertConnectSourcesHaveNoSchemeWildcard(String csp) {
+        boolean foundConnectSources = false;
+        for (String directive : csp.split(";")) {
+            String trimmedDirective = directive.trim();
+            if (!trimmedDirective.startsWith("connect-src ")) {
+                continue;
+            }
+
+            foundConnectSources = true;
+            for (String token : trimmedDirective.split("\\s+")) {
+                assertNotEquals("ws:", token);
+                assertNotEquals("wss:", token);
+            }
+        }
+        assertTrue(foundConnectSources);
     }
 
     private static void assertProxyTargetRejected(Method openProxyConnection, DevProxyServerResource resource, String url) throws Exception {
