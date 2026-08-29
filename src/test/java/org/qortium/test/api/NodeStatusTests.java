@@ -1,17 +1,29 @@
 package org.qortium.test.api;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.model.NodeStatus;
 import org.qortium.api.model.NodeStatus.PeerConnectionStats;
 import org.qortium.api.model.NodeStatus.SyncPhase;
 import org.qortium.api.model.NodeStatus.SyncProgress;
+import org.qortium.data.network.PeerData;
+import org.qortium.network.Peer;
+import org.qortium.network.PeerAddress;
+import org.qortium.test.common.Common;
+
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class NodeStatusTests {
+public class NodeStatusTests extends Common {
+
+	@Before
+	public void before() throws Exception {
+		Common.useDefaultSettings();
+	}
 
 	@Test
 	public void testPeerTargetProgressShowsBehind() {
@@ -105,6 +117,17 @@ public class NodeStatusTests {
 		assertFalse(stats.inboundReachable);
 		assertTrue(stats.listenSocketAvailable);
 		assertTrue(stats.portMapped);
+	}
+
+	@Test
+	public void testI2PConnectionCountUsesPeerTransport() {
+		String i2pAddress = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
+		List<Peer> peers = List.of(
+				new Peer(new PeerData(PeerAddress.fromString(i2pAddress)), Peer.NETWORK),
+				new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK),
+				new Peer(new PeerData(PeerAddress.fromString(i2pAddress)), Peer.NETWORKDATA));
+
+		assertEquals(2, NodeStatus.countI2PConnections(peers));
 	}
 
 }
