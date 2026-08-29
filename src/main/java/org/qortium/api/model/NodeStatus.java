@@ -72,6 +72,11 @@ public class NodeStatus {
 	)
 	public final int numberOfOutboundConnections;
 
+	@Schema(
+			description = "Number of handshaked chain peers connected over I2P. The direct-IP count is numberOfConnections minus this value."
+	)
+	public final int numberOfI2PConnections;
+
 	public final int numberOfDataConnections;
 
 	@Schema(
@@ -83,6 +88,11 @@ public class NodeStatus {
 			description = "Number of handshaked QDN/data peers this node connected to outbound."
 	)
 	public final int numberOfOutboundDataConnections;
+
+	@Schema(
+			description = "Number of handshaked QDN/data peers connected over I2P. The direct-IP count is numberOfDataConnections minus this value."
+	)
+	public final int numberOfI2PDataConnections;
 
 	@Schema(
 			description = "Whether this node currently appears reachable for inbound chain peer connections over direct IP. This does not include I2P reachability."
@@ -184,10 +194,12 @@ public class NodeStatus {
 		this.numberOfConnections = chainPeerStats.totalConnections;
 		this.numberOfInboundConnections = chainPeerStats.inboundConnections;
 		this.numberOfOutboundConnections = chainPeerStats.outboundConnections;
+		this.numberOfI2PConnections = countI2PConnections(handshakedPeers);
 
 		this.numberOfDataConnections = dataPeerStats.totalConnections;
 		this.numberOfInboundDataConnections = dataPeerStats.inboundConnections;
 		this.numberOfOutboundDataConnections = dataPeerStats.outboundConnections;
+		this.numberOfI2PDataConnections = countI2PConnections(handshakedDataPeers);
 		this.isP2PInboundReachable = chainPeerStats.inboundReachable;
 		this.isP2PListenSocketAvailable = chainPeerStats.listenSocketAvailable;
 		this.isP2PPortMapped = chainPeerStats.portMapped;
@@ -326,6 +338,16 @@ public class NodeStatus {
 				outboundConnections++;
 
 		return outboundConnections;
+	}
+
+	public static int countI2PConnections(Iterable<Peer> peers) {
+		int i2pConnections = 0;
+
+		for (Peer peer : peers)
+			if (peer.getPeerData().getAddress().isI2P())
+				i2pConnections++;
+
+		return i2pConnections;
 	}
 
 	public static class PeerConnectionStats {
