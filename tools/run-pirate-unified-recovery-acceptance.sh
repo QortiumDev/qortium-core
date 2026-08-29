@@ -221,13 +221,16 @@ receipt_tmp=$runtime/receipt.md
 	printf '%s\n' "- Executed platform: \`Linux x86_64\`"
 	printf '%s\n' "- Process-local HOME/XDG/temp/storage roots: fresh, single isolated JVM/native process"
 	printf '%s\n' "- End-to-end recovery: verified import of a foreign spending key + dedicated rescan recovered \`123456789\` arrrtoshis at height \`152856\`: \`PASS\`"
-	printf '%s\n' "- Fail-closed counterexamples (wrong address, wrong index, mixed-case key, birthday above tip): \`PASS\`, each rejected with the wallet's key-group set unchanged"
+	printf '%s\n' "- Fail-closed counterexamples (wrong address, mixed-case key, birthday above tip): \`PASS\`, each rejected with the wallet's key-group set unchanged"
+	printf '%s\n' "- Legacy 32-bit address-index metadata retry: \`PASS\`, idempotent with the verified key group and full 88-bit ownership cursor"
 	printf '%s\n' "- Bech32 uppercase exact-retry idempotency and post-completion null-floor retry: \`PASS\`"
 	printf '%s\n' "- In-process storage reopen retained the imported key and recovered history: \`PASS\`"
 	printf '%s\n' "- Core R2 driver against the real native library (durable record -> issue -> observe -> spendability-terminal clear): \`PASS\`"
+	printf '%s\n' "- Post-recovery Core identity paths (validated-sync recording + persistent Unified reinitialization): \`PASS\`, each completed in under \`15 seconds\`"
+	printf '%s\n' "- Reinitialized recovered namespace state and balance: \`UNIFIED_READY\`, \`123456789\` total and verified arrrtoshis"
 	printf '%s\n' "- Forbidden transaction RPCs: \`0\`; unexpected RPCs: \`0\`"
 	printf '%s\n\n' "- Raw-log and Surefire secret scan: \`PASS\`; raw evidence deleted"
-	printf '%s\n' 'This proves the unfunded verified-import recovery path against the pinned native library on loopback fixtures: the verified import contract, the exact dedicated rescan, the spendability completion authority, durable driver state, and in-process reopen persistence. It does not prove Core Unified initialization after a recovery (see the acceptance document known limitation), production lightwalletd interoperability, canonical mainnet history, a funded send, cross-process packaged-Core recovery, QDN publication, deployment, default enablement, or Home behavior.'
+	printf '%s\n' 'This proves the unfunded verified-import recovery path against the pinned native library on loopback fixtures: the verified import contract, the exact dedicated rescan, the spendability completion authority, durable driver state, post-recovery validated-sync identity recording, and persistent Unified reinitialization. It does not prove production lightwalletd interoperability, canonical mainnet history, a funded send, cross-process packaged-Core recovery, QDN publication, deployment, default enablement, or Home behavior.'
 } > "$receipt_tmp"
 mv "$receipt_tmp" "$receipt"
 printf 'PASS receipt=%s\n' "$receipt"
