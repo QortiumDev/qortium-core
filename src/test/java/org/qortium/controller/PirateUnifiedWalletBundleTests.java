@@ -89,7 +89,7 @@ public class PirateUnifiedWalletBundleTests {
 	public void testWrongOfficialProvenanceIsRejected() throws Exception {
 		Path bundle = createBundle();
 		Path manifest = bundle.resolve(PirateUnifiedWalletBundle.MANIFEST_FILENAME);
-		Files.writeString(manifest, Files.readString(manifest).replace("release-tag: v1.1.8-qortium.3", "release-tag: v1.1.7"));
+		Files.writeString(manifest, Files.readString(manifest).replace("release-tag: v1.1.9", "release-tag: v1.1.7"));
 
 		assertThrows(DataException.class, () -> PirateUnifiedWalletBundle.validate(bundle, HOST_LIBRARY));
 	}

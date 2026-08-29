@@ -103,10 +103,7 @@ public class PirateUnifiedRecoveryAcceptanceTests {
 						assertRejectedWithoutMutation(adapter, recipientWalletId, donorSpendingKey,
 								recipientAddress, 0, PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_HEIGHT,
 								"Expected address is not controlled by the spending key");
-						assertRejectedWithoutMutation(adapter, recipientWalletId, donorSpendingKey,
-								donorAddress, 1, PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_HEIGHT,
-								"Expected address is not controlled by the spending key");
-						assertRejectedWithoutMutation(adapter, recipientWalletId, mixCase(donorSpendingKey),
+					assertRejectedWithoutMutation(adapter, recipientWalletId, mixCase(donorSpendingKey),
 								donorAddress, 0, PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_HEIGHT,
 								"Invalid Sapling spending key");
 						assertRejectedWithoutMutation(adapter, recipientWalletId, donorSpendingKey,
@@ -125,9 +122,23 @@ public class PirateUnifiedRecoveryAcceptanceTests {
 								imported.getLong("required_rescan_from_height"));
 						assertEquals("Verified import returned a non-canonical address",
 								donorAddress, imported.getString("address"));
-						long keyId = imported.getLong("key_id");
+					long keyId = imported.getLong("key_id");
 
-						// Bech32 case idempotency: an all-uppercase retry is the same import.
+					// The 32-bit address index is legacy response/display metadata in v1.1.9,
+					// not an ownership boundary or derivation cursor. Direct proof recovered
+					// and persisted the full 88-bit cursor, so changing only this metadata is
+					// still an idempotent import of the same key group.
+					JSONObject alternateIndexRetry = importResult(adapter, recipientWalletId,
+							donorSpendingKey, donorAddress, 1,
+							PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT);
+					assertTrue("Alternate legacy-index retry was not idempotent",
+							alternateIndexRetry.getBoolean("already_imported"));
+					assertEquals("Alternate legacy-index retry created a new key group",
+							keyId, alternateIndexRetry.getLong("key_id"));
+					assertEquals("Alternate legacy-index metadata was not echoed",
+							1, alternateIndexRetry.getInt("address_index"));
+
+					// Bech32 case idempotency: an all-uppercase retry is the same import.
 						JSONObject uppercaseRetry = importResult(adapter, recipientWalletId,
 								donorSpendingKey.toUpperCase(Locale.ROOT), donorAddress, 0,
 								PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT);

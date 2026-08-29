@@ -34,6 +34,7 @@ public class PirateChainRecoveryDriverNativeTests {
 	private static final String BUNDLE_PATH_PROPERTY = "qortium.pirateUnifiedBundlePath";
 	private static final String STORAGE_PATH_PROPERTY = "qortium.pirateRecoveryDriverStoragePath";
 	private static final int DEFAULT_BIRTHDAY = (int) PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT;
+	private static final long POST_RECOVERY_IDENTITY_LIMIT_NANOS = TimeUnit.SECONDS.toNanos(15);
 
 	@Test
 	public void testDriverDrivesRealNativeRecoveryToCompletion() throws Exception {
@@ -75,14 +76,14 @@ public class PirateChainRecoveryDriverNativeTests {
 
 						// Donor: export the foreign spending key and its address.
 						initNativeWallet(adapter, storageRoot.resolve("donor"), (byte) 7,
-								lightwalletd.endpoint());
+								lightwalletd.endpoint(), "qortium-recovery-driver-donor");
 						org.json.JSONArray donorExport = new org.json.JSONArray(adapter.execute("export", ""));
 						String donorAddress = donorExport.getJSONObject(0).getString("address");
 						String donorSpendingKey = donorExport.getJSONObject(0).getString("private_key");
 
 						// Recipient: the PirateWallet-owned namespace, synced for birthday validation.
 						String recipientWalletId = initNativeWallet(adapter, walletStorage, (byte) 11,
-								lightwalletd.endpoint());
+								lightwalletd.endpoint(), wallet.getEncryptionKey());
 						assertNotEquals("Recipient derived the donor address", donorAddress,
 								new org.json.JSONArray(adapter.execute("export", ""))
 										.getJSONObject(0).getString("address"));
@@ -144,6 +145,34 @@ public class PirateChainRecoveryDriverNativeTests {
 								PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_VALUE,
 								balance.verified_zbalance);
 
+						// These are the two Core identity paths that the previous artifact could
+						// strand in its sequential 4096-address scan after a foreign-key recovery.
+						// First record a validated sync on the recovered wallet, then recreate the
+						// Core wallet object over the same native registry and initialize it again.
+						long validatedSyncStart = System.nanoTime();
+						wallet.recordValidatedSync(adapter);
+						assertCompletesWithin("Post-recovery validated-sync identity check",
+								validatedSyncStart, POST_RECOVERY_IDENTITY_LIMIT_NANOS);
+						assertTrue("Validated sync was not persisted after recovery",
+								wallet.getUnifiedStorage().read().isSyncValidated());
+
+						PirateWallet reopened = new PirateWallet(config, entropy((byte) 11), false, false);
+						long initializationStart = System.nanoTime();
+						assertTrue("Recovered Unified wallet did not initialize again",
+								reopened.initializeUnified(adapter, lightwalletd.endpoint(), DEFAULT_BIRTHDAY));
+						assertCompletesWithin("Post-recovery Unified initialization identity check",
+								initializationStart, POST_RECOVERY_IDENTITY_LIMIT_NANOS);
+						assertEquals("Validated recovered wallet did not promote to UNIFIED_READY",
+								PirateUnifiedWalletStorage.State.UNIFIED_READY,
+								reopened.getUnifiedStorage().read().getState());
+						PirateChainBalance reopenedBalance = reopened.getWalletBalances(adapter);
+						assertEquals("Reinitialized wallet lost the recovered total balance",
+								PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_VALUE,
+								reopenedBalance.zbalance);
+						assertEquals("Reinitialized wallet lost the recovered verified balance",
+								PirateUnifiedLoopbackLightwalletd.HISTORICAL_NOTE_VALUE,
+								reopenedBalance.verified_zbalance);
+
 						JSONObject cancelled = new JSONObject(adapter.invokeJson(new JSONObject()
 								.put("method", "cancel_sync").put("wallet_id", recipientWalletId)
 								.toString(), false));
@@ -164,10 +193,17 @@ public class PirateChainRecoveryDriverNativeTests {
 		return entropy;
 	}
 
+	private static void assertCompletesWithin(String operation, long startedNanos, long limitNanos) {
+		long elapsedNanos = System.nanoTime() - startedNanos;
+		assertTrue(operation + " exceeded " + TimeUnit.NANOSECONDS.toSeconds(limitNanos)
+				+ " seconds (elapsed " + TimeUnit.NANOSECONDS.toMillis(elapsedNanos) + " ms)",
+				elapsedNanos < limitNanos);
+	}
+
 	private static String initNativeWallet(ZcashFamilyNativeAdapter adapter, Path storage, byte marker,
-			String endpoint) throws Exception {
+			String endpoint, String passphrase) throws Exception {
 		JSONObject configured = new JSONObject(adapter.configureStorage(storage.toString(),
-				"qortium-recovery-driver-" + marker));
+				passphrase));
 		assertTrue("Storage was not initialized: " + storage, configured.optBoolean("initialized"));
 		String seed = new JSONObject(adapter.getSeedPhraseFromEntropyB64(
 				Base64.getEncoder().encodeToString(entropy(marker)))).getString("seedPhrase");

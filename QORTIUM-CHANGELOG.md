@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-29 - chore(arrr): pin the official Pirate Unified v1.1.9 wallet
+
+Replaces the temporary Qortium-built Pirate wallet artifact with Pirate
+Network's official v1.1.9 release, preserving exact source, archive, signature,
+and per-file provenance. The release contains the cancelled-sync recovery fix
+and replaces the address ownership scan that could stall Core after importing
+another key group's history. Acceptance follows v1.1.9's clarified contract:
+the 32-bit address index is legacy display metadata, while ownership uses the
+directly recovered full 88-bit diversifier cursor. The real-native recovery gate now proves both
+affected Core identity paths: recording a validated sync and initializing a
+new wallet object over the recovered persistent registry, with the recovered
+balance retained and the namespace promoted to ready. Unified remains
+default-off; this change does not publish the bundle to QDN or deploy it.
+
 ### 2026-08-28 - fix(qdn): restrict developer proxy WebSockets to loopback
 
 Removes the developer proxy's broad permission to open a WebSocket to any
