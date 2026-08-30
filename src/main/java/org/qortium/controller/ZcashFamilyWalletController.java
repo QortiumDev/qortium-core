@@ -263,7 +263,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		return this.running;
 	}
 
-	private boolean synchronizeCurrentWallet(W wallet, ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
+	boolean synchronizeCurrentWallet(W wallet, ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
 		if (!wallet.prepareForSynchronization(nativeAdapter)) {
 			this.cacheCurrentWalletStatus(WalletSyncStatus.loading(
 					"Waiting for a validated " + this.config.getDisplayName() + " lightwalletd endpoint..."));
@@ -294,11 +294,10 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 								? recovery.name() : null));
 				return true;
 			}
-			if (wallet.isNativeSyncInProgress(nativeAdapter)) {
-				this.cacheCurrentWalletStatus(
-						WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
-				return true;
-			}
+			// A persisted incomplete native sync can still report in_progress after a Core
+			// restart even though the process-local native task no longer exists. Always
+			// reissue the idempotent sync request while the wallet is short of the tip; the
+			// Unified service keeps a live task unchanged and resumes a restored one.
 		}
 
 		this.cacheCurrentWalletStatus(WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));

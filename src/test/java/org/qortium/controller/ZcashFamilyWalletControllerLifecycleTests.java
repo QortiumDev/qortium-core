@@ -227,6 +227,17 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	}
 
 	@Test
+	public void testPersistentIncompleteSyncIsReissuedAfterControllerRestart() throws Exception {
+		TestController controller = new TestController();
+		PersistentIncompleteWallet wallet = new PersistentIncompleteWallet(filledEntropy(9));
+		RecordingNativeAdapter nativeAdapter = new RecordingNativeAdapter();
+
+		assertTrue(wallet.isNativeSyncInProgress(nativeAdapter));
+		assertTrue(controller.synchronizeCurrentWallet(wallet, nativeAdapter));
+		assertEquals(1, nativeAdapter.syncRequests);
+	}
+
+	@Test
 	public void testWalletSelectionUsesInitializationTimeoutButSteadyStatusStaysBounded() throws Exception {
 		TestController controller = new TestController();
 		byte[] entropyA = filledEntropy(1);
@@ -390,6 +401,92 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		@Override
 		public boolean prepareForShutdown(ZcashFamilyNativeAdapter nativeAdapter) {
 			return false;
+		}
+	}
+
+	private static class PersistentIncompleteWallet extends TestWallet {
+		private PersistentIncompleteWallet(byte[] entropyBytes) throws IOException {
+			super(entropyBytes);
+		}
+
+		@Override
+		public boolean usesPersistentNativeStorage() {
+			return true;
+		}
+
+		@Override
+		public boolean isSynchronized() {
+			return false;
+		}
+
+		@Override
+		public boolean isNativeSyncInProgress(ZcashFamilyNativeAdapter nativeAdapter) {
+			// Models v1.1.9 restoring an incomplete persisted sync state without a live
+			// process-local task after Core restarts.
+			return true;
+		}
+	}
+
+	private static class RecordingNativeAdapter implements ZcashFamilyNativeAdapter {
+		private int syncRequests;
+
+		@Override
+		public boolean isLoaded() {
+			return true;
+		}
+
+		@Override
+		public void loadLibrary(java.nio.file.Path path) {
+		}
+
+		@Override
+		public void initLogging() {
+		}
+
+		@Override
+		public String getSeedPhraseFromEntropyB64(String entropy64) {
+			return null;
+		}
+
+		@Override
+		public String getSeedPhraseFromEntropy(String entropy) {
+			return null;
+		}
+
+		@Override
+		public String configureStorage(String baseDirectory, String passphrase) {
+			return null;
+		}
+
+		@Override
+		public String invokeJson(String requestJson, boolean pretty) {
+			return null;
+		}
+
+		@Override
+		public String initFromSeed(String serverUri, String params, String seedPhrase, String birthday,
+				String saplingOutput64, String saplingSpend64) {
+			return null;
+		}
+
+		@Override
+		public String initFromB64(String serverUri, String params, String wallet64,
+				String saplingOutput64, String saplingSpend64) {
+			return null;
+		}
+
+		@Override
+		public String save() {
+			return null;
+		}
+
+		@Override
+		public String execute(String command, String arguments) {
+			if ("sync".equalsIgnoreCase(command)) {
+				++this.syncRequests;
+				return "{\"result\":\"success\"}";
+			}
+			return "{}";
 		}
 	}
 

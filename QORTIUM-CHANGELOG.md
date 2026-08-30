@@ -45,6 +45,9 @@ and requires a Core restart instead of silently creating another controller on
 top of a scan that may still be running. Repeating the stop while already idle
 is safe, and the existing start operation creates a fresh controller when the
 operator is ready to resume.
+On restart, Core also reissues the native library's idempotent sync request for
+an incomplete persistent wallet. This distinguishes restored progress metadata
+from a live native task and lets an interrupted scan actually continue.
 
 ### 2026-08-30 - feat(arrr): enable Pirate Unified for Previewnet 1.8.0
 
