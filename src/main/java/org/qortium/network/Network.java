@@ -65,6 +65,8 @@ public class Network {
      * direct TCP to avoid repeated fallback probes while direct peers are healthy.
      */
     private static final long I2P_CONNECT_FAILURE_BACKOFF = 15 * 60 * 1000L; // ms
+    /** Bound concurrent SAM stream lookups so a cold start cannot fan out across every known destination. */
+    /* package */ static final int MAX_CONCURRENT_I2P_CONNECTS = 4;
     private static final long ROTATION_RECONNECT_COOLDOWN_NANOS = TimeUnit.MINUTES.toNanos(10);
     /**
      * After dropping a working I2P fallback peer to retry direct TCP, don't drop another
@@ -80,10 +82,10 @@ public class Network {
      */
     /* package */ static final int RESERVED_NON_PREFERRED_OUTBOUND_SLOTS = 2;
     /**
-     * How long to wait between connection attempts when isolated (no peers) and retrying backoff peers, in milliseconds.
-     * This prevents hammering peers when the node has no connections.
+     * How long to wait between connection attempts when below minBlockchainPeers and retrying
+     * backed-off peers. This preserves automatic recovery without hammering unavailable destinations.
      */
-    private static final long ISOLATION_RETRY_INTERVAL = 60 * 1000L; // ms
+    private static final long MINIMUM_RECOVERY_RETRY_INTERVAL = 60 * 1000L; // ms
     /**
      * How long between informational broadcasts to all connected peers, in milliseconds.
      */
@@ -132,7 +134,7 @@ public class Network {
     
     /**
      * Track whether the last peer selected was from the backoff list.
-     * Used to determine retry interval when isolated.
+     * Used to determine the degraded retry interval while below the configured chain floor.
      */
     private volatile boolean lastPeerWasFromBackoff = false;
 
@@ -1620,13 +1622,12 @@ public class Network {
                 return null;
             }
         }
-        boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
-        if (hasNoPeers && lastPeerWasFromBackoff) {
-            nextConnectTaskTimestamp.set(now + ISOLATION_RETRY_INTERVAL);
-        } else {
-            nextConnectTaskTimestamp.set(now + 1000L);
-        }
         Peer targetPeer = getConnectablePeer(now);
+        boolean isBelowMinimum = getImmutableHandshakedPeers().size()
+                < Settings.getInstance().getMinBlockchainPeers();
+        nextConnectTaskTimestamp.set(now + (isBelowMinimum && lastPeerWasFromBackoff
+                ? MINIMUM_RECOVERY_RETRY_INTERVAL
+                : 1000L));
         if (targetPeer == null) {
             return null;
         }
@@ -1967,12 +1968,14 @@ public class Network {
         
             LOGGER.trace("ConnectedPeers: {}, Handshaked Peers: {} ", immutableConnectedPeers.size(), immutableHandshakedPeers.size());
             
-            // Check if we have any handshaked peers (inbound or outbound) - are we isolated?
-            boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
+            int handshakedPeerCount = getImmutableHandshakedPeers().size();
+            boolean hasNoPeers = handshakedPeerCount == 0;
+            boolean isBelowMinimum = handshakedPeerCount < Settings.getInstance().getMinBlockchainPeers();
                 
-            // Save peers in backoff for later consideration if we're isolated
+            // Save peers in backoff while below the configured chain floor. A single surviving
+            // peer must not suppress automatic recovery for the full I2P backoff window.
             List<PeerData> peersInBackoff = new ArrayList<>();
-            if (hasNoPeers) {
+            if (isBelowMinimum) {
                 peersInBackoff = peers.stream()
                     .filter(peerData -> hasRecentConnectFailure(peerData, now))
                     .collect(Collectors.toList());
@@ -1990,6 +1993,8 @@ public class Network {
             peers.removeIf(isConnectedPeer);
             peers.removeIf(isConnectingI2PPeer);
             peers.removeIf(isI2PAlternativeForConnectedPeer);
+            if (this.connectingI2PPeers.size() >= MAX_CONCURRENT_I2P_CONNECTS)
+                peers.removeIf(peerData -> peerData.getAddress().isI2P());
 
             // CRITICAL FIX: Don't consider peers we're already connected to by nodeId
             // This handles cases where we have an inbound connection on an ephemeral port
@@ -2073,9 +2078,10 @@ public class Network {
             // Which is ok because duplicate connections to the same peer are handled during handshaking
             // peers.removeIf(isResolvedAsConnectedPeer);
 
-            // If we have no available peers but have peers in backoff, and we're isolated, retry them
-            // Being isolated is worse than retrying a peer that might still be down
-            if (peers.isEmpty() && !peersInBackoff.isEmpty() && hasNoPeers) {
+            // If ordinary candidates are exhausted while below the configured floor, retry one
+            // backed-off peer at the scheduler's degraded one-minute cadence.
+            lastPeerWasFromBackoff = false;
+            if (peers.isEmpty() && !peersInBackoff.isEmpty() && isBelowMinimum) {
                 // Filter out self and connected from backoff list
                 synchronized (this.selfPeers) {
                     peersInBackoff.removeIf(isSelfPeer);
@@ -2084,15 +2090,19 @@ public class Network {
                 peersInBackoff.removeIf(isConnectedPeer);
                 peersInBackoff.removeIf(isConnectingI2PPeer);
                 peersInBackoff.removeIf(isI2PAlternativeForConnectedPeer);
+                if (this.connectingI2PPeers.size() >= MAX_CONCURRENT_I2P_CONNECTS)
+                    peersInBackoff.removeIf(peerData -> peerData.getAddress().isI2P());
                 
                 if (!peersInBackoff.isEmpty()) {
-                    peers = peersInBackoff;
+                    peers = preferDegradedRecoveryPeers(peersInBackoff);
                     lastPeerWasFromBackoff = true;
-                    LOGGER.debug("No connected peers - retrying {} peer(s) in backoff period", peers.size());
+                    LOGGER.debug("Chain peers below configured minimum ({}/{}) - retrying {} preferred peer(s) in backoff period",
+                            handshakedPeerCount, Settings.getInstance().getMinBlockchainPeers(), peers.size());
                 }
-            } else {
-                lastPeerWasFromBackoff = false;
             }
+
+            if (isBelowMinimum && !lastPeerWasFromBackoff)
+                peers = preferDegradedRecoveryPeers(peers);
 
             peers = preferPeersOutsideRotationCooldown(peers);
             peers = selectPreferredTransportPeers(peers);
@@ -2116,6 +2126,22 @@ public class Network {
             return null;
         }
 
+    }
+
+    private List<PeerData> preferDegradedRecoveryPeers(List<PeerData> peers) {
+        List<PeerData> configuredPeers = peers.stream()
+                .filter(peerData -> isFixedPeer(peerData.getAddress()) || isInitialPeer(peerData.getAddress()))
+                .collect(Collectors.toList());
+        if (!configuredPeers.isEmpty())
+            return configuredPeers;
+
+        List<PeerData> previouslyConnectedPeers = peers.stream()
+                .filter(peerData -> peerData.getLastConnected() != null)
+                .collect(Collectors.toList());
+        if (!previouslyConnectedPeers.isEmpty())
+            return previouslyConnectedPeers;
+
+        return peers;
     }
 
     private Peer reserveConnectablePeer(Repository repository, PeerData peerData, Long now) throws DataException {

@@ -59,6 +59,8 @@ public class NetworkData {
     // How long before retrying after a connection failure, in milliseconds.
     private static final long CONNECT_FAILURE_BACKOFF = 2 * 60 * 1000L; // ms
     private static final long I2P_CONNECT_FAILURE_BACKOFF = 15 * 60 * 1000L; // ms
+    /** Bound concurrent SAM stream lookups so slow destinations cannot grow the shared connect executor. */
+    /* package */ static final int MAX_CONCURRENT_I2P_CONNECTS = 4;
     private static final long ROTATION_RECONNECT_COOLDOWN_NANOS = TimeUnit.MINUTES.toNanos(10);
 
     /**
@@ -2059,6 +2061,8 @@ public class NetworkData {
         peers.removeIf(isConnectedPeer);
         peers.removeIf(isConnectingI2PPeer);
         peers.removeIf(isI2PAlternativeForConnectedPeer);
+        if (this.connectingI2PPeers.size() >= MAX_CONCURRENT_I2P_CONNECTS)
+            peers.removeIf(peerData -> peerData.getAddress().isI2P());
 
         // Don't consider peers we're already connected to by nodeId
         // This handles cases where we have an inbound connection on an ephemeral port
@@ -2088,6 +2092,8 @@ public class NetworkData {
             peersInBackoff.removeIf(this::isKnownNodeAlreadyConnected);
             peersInBackoff.removeIf(peerData -> peerData.getAddress().isI2P() && this.getI2PDataDestination() == null);
             peersInBackoff.removeIf(this::hasRecentDirectionMismatchUnlessConfigured);
+            if (this.connectingI2PPeers.size() >= MAX_CONCURRENT_I2P_CONNECTS)
+                peersInBackoff.removeIf(peerData -> peerData.getAddress().isI2P());
             
             if (!peersInBackoff.isEmpty()) {
                 peers = preferDegradedRecoveryPeers(peersInBackoff);

@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - fix(i2p): bound cold-start connections and refill the chain floor
+
+Prevents an I2P cold start from launching an unbounded number of simultaneous
+destination lookups, and keeps automatic chain recovery moving when only one
+peer survives. Each network layer now caps its in-flight I2P connection
+attempts at four while still allowing direct candidates, and a chain node below
+its configured peer floor retries one backed-off destination per minute rather
+than waiting the full 15-minute I2P backoff. Recovery first tries configured
+peers, then destinations that have connected successfully before, without
+weakening the normal backoff once the chain floor is restored.
+
 ### 2026-08-30 - fix(build): prevent stale Previewnet release packages
 
 Prevents an older Previewnet release ZIP from surviving a successful Maven
