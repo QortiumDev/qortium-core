@@ -25,6 +25,11 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
 		return instance;
 	}
 
+	/** Stops the existing controller without creating one when the wallet is already idle. */
+	public static synchronized boolean stopInstance() {
+		return instance == null || instance.shutdown();
+	}
+
 	static synchronized void resetForTesting() {
 		if (instance != null)
 			instance.shutdown();

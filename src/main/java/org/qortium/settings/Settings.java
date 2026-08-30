@@ -2643,13 +2643,13 @@ public class Settings {
 			return false;
 		}
 
-		if (ForeignBlockchainRegistry.PIRATECHAIN_NAME.equals(foreignBlockchain.name())) {
-			PirateChainWalletController pirateWalletController = PirateChainWalletController.getInstance();
-			if (pirateWalletController != null)
-				pirateWalletController.shutdown();
-		}
-
 		this.wallets.put(foreignBlockchain.getCurrencyCode(), false);
+
+		// Disable first so a concurrent status read cannot recreate a terminated controller
+		// while the stop is still in progress. stopInstance() deliberately never creates one.
+		if (ForeignBlockchainRegistry.PIRATECHAIN_NAME.equals(foreignBlockchain.name()))
+			return PirateChainWalletController.stopInstance();
+
 		return true;		
 	}
 

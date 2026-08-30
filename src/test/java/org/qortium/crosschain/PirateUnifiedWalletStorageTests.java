@@ -343,6 +343,25 @@ public class PirateUnifiedWalletStorageTests {
 	}
 
 	@Test
+	public void testPersistentShutdownCancelsNativeSyncAndPreservesStorage() throws Exception {
+		PirateWallet wallet = new PirateWallet(this.config(this.temporaryDirectory.resolve("persistent-shutdown")),
+				entropy(24), false, false);
+		FakeAdapter adapter = new FakeAdapter();
+		assertTrue(wallet.initializeUnified(adapter, "https://light.example:443/", DEFAULT_BIRTHDAY));
+		Path storage = wallet.getUnifiedStorage().getStorageDirectory();
+		long cancellationsBefore = adapter.calls.stream().filter("cancel_sync"::equals).count();
+
+		assertTrue(wallet.prepareForShutdown(adapter));
+		assertTrue(Files.isDirectory(storage));
+		assertEquals(cancellationsBefore + 1L,
+				adapter.calls.stream().filter("cancel_sync"::equals).count());
+
+		adapter.cancelAcknowledged = false;
+		assertFalse(wallet.prepareForShutdown(adapter));
+		assertTrue(Files.isDirectory(storage));
+	}
+
+	@Test
 	public void testValidatedNativeEndpointCutoverIsOrderedIdempotentAndRequiresFreshSync() throws Exception {
 		PirateWallet wallet = new PirateWallet(this.config(this.temporaryDirectory.resolve("cutover")),
 				entropy(20), false, false);

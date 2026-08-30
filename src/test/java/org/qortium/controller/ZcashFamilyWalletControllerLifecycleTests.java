@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.json.JSONObject;
 import org.qortium.crosschain.PirateChain;
 import org.qortium.crosschain.ForeignBlockchainException;
+import org.qortium.crosschain.ZcashFamilyNativeAdapter;
 import org.qortium.crosschain.ZcashFamilyNativeCoordinator;
 import org.qortium.crosschain.ZcashFamilyWallet;
 import org.qortium.crosschain.ZcashFamilyWalletConfig;
@@ -53,11 +54,35 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		assertTrue(controller.startController());
 		assertEquals(ZcashFamilyWalletController.LifecycleState.RUNNING, controller.getLifecycleState());
 
-		controller.shutdown();
+		assertTrue(controller.shutdown());
 		controller.join(2_000L);
 		assertFalse(controller.isAlive());
 		assertEquals(ZcashFamilyWalletController.LifecycleState.TERMINATED, controller.getLifecycleState());
 		assertFalse(controller.startController());
+	}
+
+	@Test
+	public void testFailedWalletShutdownFailsClosedUntilCoreRestart() throws Exception {
+		TestController controller = new TestController();
+		setControllerField(controller, "currentWallet", new FailedShutdownWallet(filledEntropy(7)));
+		assertTrue(controller.startController());
+
+		assertFalse(controller.shutdown());
+		controller.join(2_000L);
+		assertFalse(controller.isAlive());
+		assertEquals(ZcashFamilyWalletController.LifecycleState.DEGRADED, controller.getLifecycleState());
+		assertTrue(controller.requiresCoreRestart());
+	}
+
+	@Test
+	public void testNormalShutdownWakesControllerWithoutThreadInterrupt() throws Exception {
+		InterruptTrackingController controller = new InterruptTrackingController();
+		assertTrue(controller.startController());
+
+		assertTrue(controller.shutdown());
+		controller.join(2_000L);
+		assertFalse(controller.wasInterrupted());
+		assertEquals(ZcashFamilyWalletController.LifecycleState.TERMINATED, controller.getLifecycleState());
 	}
 
 	@Test
@@ -199,6 +224,17 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		ZcashFamilyWalletController.WalletSyncStatus legacy =
 				ZcashFamilyWalletController.statusAfterSyncAttempt(true, false, false, false);
 		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, legacy.getState());
+	}
+
+	@Test
+	public void testPersistentIncompleteSyncIsReissuedAfterControllerRestart() throws Exception {
+		TestController controller = new TestController();
+		PersistentIncompleteWallet wallet = new PersistentIncompleteWallet(filledEntropy(9));
+		RecordingNativeAdapter nativeAdapter = new RecordingNativeAdapter();
+
+		assertTrue(wallet.isNativeSyncInProgress(nativeAdapter));
+		assertTrue(controller.synchronizeCurrentWallet(wallet, nativeAdapter));
+		assertEquals(1, nativeAdapter.syncRequests);
 	}
 
 	@Test
@@ -354,6 +390,117 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		@Override
 		public boolean save() {
 			return false;
+		}
+	}
+
+	private static class FailedShutdownWallet extends TestWallet {
+		private FailedShutdownWallet(byte[] entropyBytes) throws IOException {
+			super(entropyBytes);
+		}
+
+		@Override
+		public boolean prepareForShutdown(ZcashFamilyNativeAdapter nativeAdapter) {
+			return false;
+		}
+	}
+
+	private static class PersistentIncompleteWallet extends TestWallet {
+		private PersistentIncompleteWallet(byte[] entropyBytes) throws IOException {
+			super(entropyBytes);
+		}
+
+		@Override
+		public boolean usesPersistentNativeStorage() {
+			return true;
+		}
+
+		@Override
+		public boolean isSynchronized() {
+			return false;
+		}
+
+		@Override
+		public boolean isNativeSyncInProgress(ZcashFamilyNativeAdapter nativeAdapter) {
+			// Models v1.1.9 restoring an incomplete persisted sync state without a live
+			// process-local task after Core restarts.
+			return true;
+		}
+	}
+
+	private static class RecordingNativeAdapter implements ZcashFamilyNativeAdapter {
+		private int syncRequests;
+
+		@Override
+		public boolean isLoaded() {
+			return true;
+		}
+
+		@Override
+		public void loadLibrary(java.nio.file.Path path) {
+		}
+
+		@Override
+		public void initLogging() {
+		}
+
+		@Override
+		public String getSeedPhraseFromEntropyB64(String entropy64) {
+			return null;
+		}
+
+		@Override
+		public String getSeedPhraseFromEntropy(String entropy) {
+			return null;
+		}
+
+		@Override
+		public String configureStorage(String baseDirectory, String passphrase) {
+			return null;
+		}
+
+		@Override
+		public String invokeJson(String requestJson, boolean pretty) {
+			return null;
+		}
+
+		@Override
+		public String initFromSeed(String serverUri, String params, String seedPhrase, String birthday,
+				String saplingOutput64, String saplingSpend64) {
+			return null;
+		}
+
+		@Override
+		public String initFromB64(String serverUri, String params, String wallet64,
+				String saplingOutput64, String saplingSpend64) {
+			return null;
+		}
+
+		@Override
+		public String save() {
+			return null;
+		}
+
+		@Override
+		public String execute(String command, String arguments) {
+			if ("sync".equalsIgnoreCase(command)) {
+				++this.syncRequests;
+				return "{\"result\":\"success\"}";
+			}
+			return "{}";
+		}
+	}
+
+	private static class InterruptTrackingController extends TestController {
+		private volatile boolean interrupted;
+
+		@Override
+		public void interrupt() {
+			this.interrupted = true;
+			super.interrupt();
+		}
+
+		private boolean wasInterrupted() {
+			return this.interrupted;
 		}
 	}
 }

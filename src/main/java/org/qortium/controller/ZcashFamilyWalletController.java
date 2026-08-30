@@ -154,6 +154,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private volatile CachedWalletSyncStatus cachedStatus = new CachedWalletSyncStatus(
 			WalletSyncStatus.loading("Not initialized yet"), null);
 	private volatile LifecycleState lifecycleState = LifecycleState.NEW;
+	private volatile boolean shutdownPrepared = true;
 
 	protected ZcashFamilyWalletController(ZcashFamilyWalletConfig config) {
 		this.config = config;
@@ -188,7 +189,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 		try {
 			while (running && !Controller.isStopping()) {
-				Thread.sleep(1000);
+				if (!this.waitWhileRunning(1000))
+					break;
 
 				if (!shouldLoadWallet)
 					continue;
@@ -197,7 +199,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 					this.loadLibrary();
 
 					if (!isLibraryLoaded()) {
-						Thread.sleep(5 * 1000);
+						if (!this.waitWhileRunning(5 * 1000))
+							break;
 						continue;
 					}
 				}
@@ -215,7 +218,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				if (!syncAttempted)
 					continue;
 
-				Thread.sleep(30000);
+				if (!this.waitWhileRunning(30000))
+					break;
 
 				Long now = NTP.getTime();
 				if (now != null && now - SAVE_INTERVAL >= this.lastSaveTime)
@@ -231,17 +235,20 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			LOGGER.error("{} wallet controller stopped because the native lane is unavailable: {}",
 					this.config.getDisplayName(), e.getMessage());
 		} finally {
-			// Consume any shutdown signal that arrived after the last interruptible wait so cleanup
-			// does not present it to the native coordinator as an interrupted native operation.
+			// Consume any external interrupt so cleanup does not present it to the native
+			// coordinator as an interrupted native operation. Normal shutdown uses notifyAll().
 			Thread.interrupted();
 			this.running = false;
-			if (NATIVE_COORDINATOR.isDegraded()) {
-				this.cacheStatus(WalletSyncStatus.degraded(
-						this.config.getDisplayName() + " native wallet is unavailable until Core restart"));
+			this.shutdownPrepared = this.prepareCurrentWalletForShutdown();
+			this.saveCurrentWallet();
+			if (NATIVE_COORDINATOR.isDegraded() || !this.shutdownPrepared) {
+				String status = NATIVE_COORDINATOR.isDegraded()
+						? this.config.getDisplayName() + " native wallet is unavailable until Core restart"
+						: this.config.getDisplayName() + " wallet did not stop cleanly; Core restart required";
+				this.cacheStatus(WalletSyncStatus.degraded(status));
+				this.loadStatus = status;
 				this.lifecycleState = LifecycleState.DEGRADED;
 			} else {
-				this.prepareCurrentWalletForShutdown();
-				this.saveCurrentWallet();
 				this.cacheStatus(WalletSyncStatus.loading(
 						this.config.getDisplayName() + " wallet controller is stopped"));
 				this.lifecycleState = LifecycleState.TERMINATED;
@@ -249,7 +256,14 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private boolean synchronizeCurrentWallet(W wallet, ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
+	private synchronized boolean waitWhileRunning(long delayMillis) throws InterruptedException {
+		if (!this.running)
+			return false;
+		this.wait(delayMillis);
+		return this.running;
+	}
+
+	boolean synchronizeCurrentWallet(W wallet, ZcashFamilyNativeAdapter nativeAdapter) throws IOException {
 		if (!wallet.prepareForSynchronization(nativeAdapter)) {
 			this.cacheCurrentWalletStatus(WalletSyncStatus.loading(
 					"Waiting for a validated " + this.config.getDisplayName() + " lightwalletd endpoint..."));
@@ -280,11 +294,10 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 								? recovery.name() : null));
 				return true;
 			}
-			if (wallet.isNativeSyncInProgress(nativeAdapter)) {
-				this.cacheCurrentWalletStatus(
-						WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
-				return true;
-			}
+			// A persisted incomplete native sync can still report in_progress after a Core
+			// restart even though the process-local native task no longer exists. Always
+			// reissue the idempotent sync request while the wallet is short of the tip; the
+			// Unified service keeps a live task unchanged and resumes a restored one.
 		}
 
 		this.cacheCurrentWalletStatus(WalletSyncStatus.synchronizing("Synchronizing wallet...", null, null));
@@ -315,23 +328,27 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		return true;
 	}
 
-	public synchronized void shutdown() {
-		if (this.lifecycleState == LifecycleState.TERMINATED || this.lifecycleState == LifecycleState.DEGRADED)
-			return;
+	public boolean shutdown() {
+		synchronized (this) {
+			if (this.lifecycleState == LifecycleState.TERMINATED)
+				return this.shutdownPrepared;
+			if (this.lifecycleState == LifecycleState.DEGRADED)
+				return false;
 
-		if (this.lifecycleState == LifecycleState.NEW) {
-			this.running = false;
-			this.lifecycleState = LifecycleState.TERMINATED;
+			if (this.lifecycleState == LifecycleState.NEW) {
+				this.running = false;
+				this.lifecycleState = LifecycleState.TERMINATED;
+				this.cacheStatus(WalletSyncStatus.loading(
+						this.config.getDisplayName() + " wallet controller is stopped"));
+				return true;
+			}
+
 			this.cacheStatus(WalletSyncStatus.loading(
-					this.config.getDisplayName() + " wallet controller is stopped"));
-			return;
+					"Stopping " + this.config.getDisplayName() + " wallet controller..."));
+			this.lifecycleState = LifecycleState.STOPPING;
+			this.running = false;
+			this.notifyAll();
 		}
-
-		this.cacheStatus(WalletSyncStatus.loading(
-				"Stopping " + this.config.getDisplayName() + " wallet controller..."));
-		this.lifecycleState = LifecycleState.STOPPING;
-		this.running = false;
-		this.interrupt();
 
 		if (Thread.currentThread() != this) {
 			try {
@@ -340,6 +357,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				Thread.currentThread().interrupt();
 			}
 		}
+
+		return this.lifecycleState == LifecycleState.TERMINATED && this.shutdownPrepared;
 	}
 
 	public LifecycleState getLifecycleState() {
@@ -603,16 +622,16 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private void prepareCurrentWalletForShutdown() {
+	private boolean prepareCurrentWalletForShutdown() {
 		try {
-			NATIVE_COORDINATOR.execute("prepare " + this.config.getCurrencyCode() + " wallet shutdown", nativeAdapter -> {
+			return NATIVE_COORDINATOR.execute("prepare " + this.config.getCurrencyCode() + " wallet shutdown", nativeAdapter -> {
 				if (this.currentWallet != null && !this.currentWallet.prepareForShutdown(nativeAdapter))
-					LOGGER.warn("Unable to release {} transient wallet storage before shutdown",
-							this.config.getDisplayName());
-				return null;
+					return false;
+				return true;
 			});
 		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
 			LOGGER.warn("Unable to prepare {} wallet shutdown", this.config.getDisplayName());
+			return false;
 		}
 	}
 

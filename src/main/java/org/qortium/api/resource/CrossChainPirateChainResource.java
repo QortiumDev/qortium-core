@@ -78,8 +78,8 @@ public class CrossChainPirateChainResource {
 	@POST
 	@Path("/start")
 	@Operation(
-			summary = "Start PirateChain Electrum Connections",
-			description = "Start PirateChain Electrum Connections",
+			summary = "Start the Pirate Chain wallet controller",
+			description = "Enable and start the Pirate Chain wallet controller",
 			responses = {
 					@ApiResponse(
 							description = "true if Pirate Wallet Started",
@@ -101,6 +101,28 @@ public class CrossChainPirateChainResource {
 		boolean started = pirate != null && pirate.startController();
 
 		return Boolean.toString(started);
+	}
+
+	@POST
+	@Path("/stop")
+	@Operation(
+			summary = "Stop the Pirate Chain wallet controller",
+			description = "Cancel any active Pirate Chain wallet scan and stop the wallet controller without stopping Core",
+			responses = {
+					@ApiResponse(
+							description = "true if the wallet controller stopped cleanly",
+							content = @Content(schema = @Schema(type = "string"))
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String stopPirateChainSingleton(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+
+		Security.checkApiCallAllowed(request);
+		boolean stopped = Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
+
+		return Boolean.toString(stopped);
 	}
 
 	@GET
