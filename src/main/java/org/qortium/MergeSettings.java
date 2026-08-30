@@ -29,7 +29,9 @@ import java.util.Objects;
  * but the settings file lacks is treated as a local removal and stays removed;
  * every other key follows the current template. Without a snapshot, removals
  * cannot be told apart from keys the template gained since the settings file
- * was generated, so only added and changed keys are preserved.
+ * was generated, so only added and changed keys are preserved. Narrow
+ * migrations can recognize an exact former default where preserving it would
+ * otherwise prevent a managed profile from following a new release default.
  */
 public class MergeSettings {
 
@@ -163,6 +165,31 @@ public class MergeSettings {
 
 		if (!haveSnapshot && "publicApiPaths".equals(key) && baseValue instanceof List<?> && settingValue instanceof List<?>)
 			return !((List<?>) baseValue).containsAll((List<?>) settingValue);
+
+		if (!haveSnapshot && "wallets".equals(key) && baseValue instanceof Map<?, ?> && settingValue instanceof Map<?, ?>)
+			return !isLegacyWalletMapWithNewArrrDefault((Map<?, ?>) baseValue, (Map<?, ?>) settingValue);
+
+		return true;
+	}
+
+	private static boolean isLegacyWalletMapWithNewArrrDefault(Map<?, ?> templateWallets, Map<?, ?> settingWallets) {
+		// Without a snapshot, ARRR false in the otherwise-exact wallet map is the only former
+		// participant default we can safely recognize. Any missing key, added key, or other value
+		// difference makes the map operator-owned and preserves it whole.
+		if (templateWallets.size() != settingWallets.size())
+			return false;
+
+		for (Map.Entry<?, ?> entry : templateWallets.entrySet()) {
+			Object wallet = entry.getKey();
+			Object templateEnabled = entry.getValue();
+			Object settingEnabled = settingWallets.get(wallet);
+
+			if ("ARRR".equals(wallet) && Boolean.TRUE.equals(templateEnabled) && Boolean.FALSE.equals(settingEnabled))
+				continue;
+
+			if (!settingWallets.containsKey(wallet) || !Objects.equals(templateEnabled, settingEnabled))
+				return false;
+		}
 
 		return true;
 	}
