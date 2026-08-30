@@ -39,17 +39,7 @@ public class CrossChainUtils {
     public static final String LOCAL_CHAIN_EXCHANGE_LABEL = "Local Chain";
 
     public static ServerConfigurationInfo buildServerConfigurationInfo(Bitcoiny blockchain) {
-
         BitcoinyBlockchainProvider blockchainProvider = blockchain.getBlockchainProvider();
-
-        // the only reason this is called is to ensure the current server is set on the blockchain provider,
-        // if there is an exception, then ignore it
-        try {
-            blockchainProvider.getCurrentHeight();
-        } catch (ForeignBlockchainException e) {
-            LOGGER.warn("Problems getting block height before building server configuration infos");
-        }
-
         ChainableServer currentServer = blockchainProvider.getCurrentServer();
 
         return new ServerConfigurationInfo(
