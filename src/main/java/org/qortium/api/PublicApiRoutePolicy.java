@@ -73,7 +73,24 @@ final class PublicApiRoutePolicy {
 			return requestPath.equals(pathPrefix) || requestPath.startsWith(pathPrefix + "/");
 		}
 
-		return configuredPath.equals(requestPath);
+		if (!configuredPath.contains("*"))
+			return configuredPath.equals(requestPath);
+
+		String[] configuredSegments = configuredPath.split("/", -1);
+		String[] requestSegments = requestPath.split("/", -1);
+		if (configuredSegments.length != requestSegments.length)
+			return false;
+
+		for (int i = 0; i < configuredSegments.length; ++i) {
+			if ("*".equals(configuredSegments[i])) {
+				if (requestSegments[i].isEmpty())
+					return false;
+			} else if (!configuredSegments[i].equals(requestSegments[i])) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private static String[] parseConfiguredRoute(String configuredRoute) {

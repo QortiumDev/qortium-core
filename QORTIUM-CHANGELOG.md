@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-29 - fix(api): honor segment wildcards in public routes
+
+Makes configured public routes with a wildcard in the middle work as intended,
+including the read-only cross-chain routes used by gateway apps. A middle
+wildcard matches exactly one non-empty path segment, so the intended blockchain
+name is accepted without exposing deeper, missing, or unrelated endpoints. The
+existing terminal wildcard behavior remains unchanged for recursive route
+families such as public QDN reads.
+
 ### 2026-08-29 - feat(gateway): add passive cross-chain reads
 
 Adds four public, read-only cross-chain app capabilities to the Core gateway:

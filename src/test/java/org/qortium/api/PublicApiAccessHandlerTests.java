@@ -77,6 +77,26 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
+	public void testPublicSegmentWildcardMatchesExactlyOneNonEmptySegment() throws Exception {
+		enablePublicApi();
+		FieldUtils.writeField(this.settings, "publicApiPaths",
+				new String[] {"GET /crosschain/*/serverinfos"}, true);
+
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/crosschain/btc/serverinfos", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/crosschain/serverinfos", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/crosschain//serverinfos", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/crosschain/btc/extra/serverinfos", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/crosschain/btc/feekb", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/crosschain/btc/serverinfos", this.settings));
+	}
+
+	@Test
 	public void testPublicRequestsCannotUseOtherReadEndpoints() throws Exception {
 		enablePublicApi();
 
