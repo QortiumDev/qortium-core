@@ -393,6 +393,23 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
+	public void testDataI2PConnectLimitStillAllowsDirectCandidate() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		getConnectingI2PPeers().add(PeerAddress.fromString("cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p"));
+		getConnectingI2PPeers().add(PeerAddress.fromString("defghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvw.b32.i2p"));
+		getConnectingI2PPeers().add(PeerAddress.fromString("efghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.b32.i2p"));
+		getConnectingI2PPeers().add(PeerAddress.fromString("fghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxy.b32.i2p"));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertEquals("198.51.100.10:24894", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
 	public void testBackoffRecoveryUsesOneMinuteSchedulerCadence() throws Exception {
 		long now = System.currentTimeMillis();
 		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);

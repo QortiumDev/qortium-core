@@ -410,6 +410,7 @@ public class NetworkI2PTests extends Common {
 	@Test
 	public void testI2PChainPeerUsesLongerConnectFailureBackoff() throws Exception {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 1, true);
 		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
 		connectedPeer.setPeersNodeId(NODE_ID);
 		Network.getInstance().addConnectedPeer(connectedPeer);
@@ -440,6 +441,114 @@ public class NetworkI2PTests extends Common {
 
 		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
 		assertTrue(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testChainNetworkBelowMinimumRetriesBackoffPeer() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 2, true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PFiller(FILLER_B32_1);
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
+	public void testChainNetworkAtMinimumHonorsI2PBackoff() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 2, true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PFiller(FILLER_B32_1);
+		addOutboundHandshakedI2PFiller(FILLER_B32_2);
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		assertNull(invokeGetConnectablePeer(now));
+	}
+
+	@Test
+	public void testDegradedChainRecoveryPrefersInitialPeer() throws Exception {
+		long now = System.currentTimeMillis();
+		String gossipB32 = "fghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxy.b32.i2p";
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 2, true);
+		FieldUtils.writeField(Settings.getInstance(), "initialPeers", new String[] { B32 }, true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "initial"));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(gossipB32), 100L, "gossip"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
+	public void testDegradedChainRecoveryPrefersPreviouslyConnectedPeer() throws Exception {
+		long now = System.currentTimeMillis();
+		String unverifiedB32 = "fghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxy.b32.i2p";
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 2, true);
+		FieldUtils.writeField(Settings.getInstance(), "initialPeers", new String[0], true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+
+		PeerData successfulPeer = new PeerData(PeerAddress.fromString(B32), 100L, "known");
+		successfulPeer.setLastAttempted(now - 2 * 60 * 1000L);
+		successfulPeer.setLastConnected(now - 2 * 60 * 1000L);
+		getMutableKnownPeers().add(successfulPeer);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(unverifiedB32), 100L, "gossip"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(now);
+
+		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
+	}
+
+	@Test
+	public void testChainBackoffRecoveryUsesOneMinuteSchedulerCadence() throws Exception {
+		long now = System.currentTimeMillis();
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 2, true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		addOutboundHandshakedI2PFiller(FILLER_B32_1);
+
+		PeerData recentlyAttemptedPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		recentlyAttemptedPeer.setLastAttempted(now - 30 * 1000L);
+		getMutableKnownPeers().add(recentlyAttemptedPeer);
+
+		assertTrue(invokeMaybeProduceConnectPeerTask(now) != null);
+		assertEquals(now + 60 * 1000L, getNextConnectTaskTimestamp());
+	}
+
+	@Test
+	public void testChainI2PConnectLimitStillAllowsDirectCandidate() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "minBlockchainPeers", 2, true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider",
+				new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		getConnectingI2PPeers().add(PeerAddress.fromString("fghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxy.b32.i2p"));
+		getConnectingI2PPeers().add(PeerAddress.fromString("ghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxyz.b32.i2p"));
+		getConnectingI2PPeers().add(PeerAddress.fromString("hijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxyza.b32.i2p"));
+		getConnectingI2PPeers().add(PeerAddress.fromString("ijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwxyzab.b32.i2p"));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertEquals("198.51.100.10:24892", selectedPeer.getPeerData().getAddress().toString());
 	}
 
 	@Test
@@ -528,6 +637,7 @@ public class NetworkI2PTests extends Common {
 		FieldUtils.writeField(Network.getInstance(), "nextHandshakeCleanup", 0L, true);
 		((java.util.concurrent.atomic.AtomicLong) FieldUtils.readField(
 				Network.getInstance(), "nextConnectTaskTimestamp", true)).set(0L);
+		FieldUtils.writeField(Network.getInstance(), "lastPeerWasFromBackoff", false, true);
 		getConnectingI2PPeers().clear();
 	}
 
@@ -560,6 +670,11 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("maybeProduceConnectPeerTask", Long.class);
 		method.setAccessible(true);
 		return (ExecuteProduceConsume.Task) method.invoke(Network.getInstance(), now);
+	}
+
+	private long getNextConnectTaskTimestamp() throws Exception {
+		return ((java.util.concurrent.atomic.AtomicLong) FieldUtils.readField(
+				Network.getInstance(), "nextConnectTaskTimestamp", true)).get();
 	}
 
 	private void invokeSubmitSchedulerTask(ExecutorService executor, ExecuteProduceConsume.Task task) throws Exception {
