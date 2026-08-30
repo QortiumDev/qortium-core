@@ -38,6 +38,11 @@ jobs:
       run: |
         mvn -B clean package --file pom.xml
 
+    - name: Build and verify Previewnet release package
+      run: |
+        ./preview/package-release.sh --skip-build
+        ./preview/verify-release-package.sh
+
     - name: Test read-only QDN gateway bridge
       run: |
         node tools/test-q-apps-gateway.js

@@ -333,6 +333,13 @@ Before publishing a tester zip, build the package from the repository root:
 ./preview/smoke-release-logging.sh --package=target/qortium-preview.zip
 ```
 
+`package-release.sh` now fails closed unless the ZIP contains the exact current
+built jar, the jar embeds the current full Git commit, and the packaged chain
+config matches `src/main/resources/previewchain.json`. It also refuses a dirty
+source checkout so that the embedded commit identifies the exact source tree.
+Maven removes any older `target/qortium-preview.zip` at lifecycle start, so run
+the packager only after the final Maven build.
+
 The package should include the jar, preview scripts, settings templates, tester
 guide, this operator runbook, and the release logging smoke check. It should not
 include local databases, logs, API keys, keystores, backup folders, or ignored

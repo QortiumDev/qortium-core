@@ -50,6 +50,7 @@
 		<junit-jupiter-engine.version>5.11.0-M2</junit-jupiter-engine.version>
 		<junit.version>4.13.2</junit.version>
 		<log4j.version>2.26.1</log4j.version>
+		<maven-antrun-plugin.version>3.2.0</maven-antrun-plugin.version>
 		<maven-build-helper-plugin.version>3.6.1</maven-build-helper-plugin.version>
 		<maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
 		<maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
@@ -116,6 +117,29 @@
 			</extension>
 		</extensions>
 		<plugins>
+			<!-- A preview release ZIP is valid only when package-release.sh creates and
+			     verifies it from the current shaded JAR. Remove any older ZIP before
+			     every Maven lifecycle run so the reproducible-build plugin cannot give
+			     stale contents a fresh timestamp and apparently successful package. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>${maven-antrun-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>remove-stale-preview-release-package</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<delete file="${project.build.directory}/qortium-preview.zip" quiet="true" />
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>versions-maven-plugin</artifactId>

@@ -220,6 +220,21 @@ If the jar has already been built, skip the build step:
 ./preview/package-release.sh --skip-build
 ```
 
+The packager verifies that the ZIP's inner jar is byte-identical to the current
+built jar, that the jar embeds the current full Git commit, and that the
+packaged `previewchain.json` is byte-identical to source. It removes the ZIP and
+fails if any check disagrees or the source checkout is dirty, because an
+uncommitted build cannot be identified exactly by its embedded commit. Maven
+lifecycle commands deliberately remove an existing `target/qortium-preview.zip`;
+always run the packager after the final Maven build instead of treating an older
+ZIP as a build output.
+
+To repeat the parity check without rebuilding the ZIP:
+
+```sh
+./preview/verify-release-package.sh
+```
+
 Before uploading the zip, smoke-check that the extracted package creates the
 expected runtime logs:
 
