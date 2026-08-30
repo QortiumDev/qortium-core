@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - chore(arrr): pin the published Pirate Unified QDN bundle
+
+Pins the independently verified Qortium Previewnet publication of Pirate
+Unified v1.1.9 as Core's default immutable bundle source. Both managed seeds
+reconstructed all 693 chunks and matched every file to the reviewed official
+artifact before the signature was accepted. The Unified implementation and
+ARRR wallet remain disabled by default; carrying the verified pin alone does
+not load native code or start a wallet.
+
 ### 2026-08-30 - fix(i2p): bound cold-start connections and refill the chain floor
 
 Prevents an I2P cold start from launching an unbounded number of simultaneous
