@@ -1062,10 +1062,12 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 	@Override
 	public boolean prepareForShutdown(ZcashFamilyNativeAdapter nativeAdapter) {
-		if (!this.unifiedWallet || this.unifiedStorage == null || !this.unifiedStorage.isTransientWallet())
+		if (!this.unifiedWallet)
 			return true;
 		if (!this.stopNativeSync(nativeAdapter))
 			return false;
+		if (this.unifiedStorage == null || !this.unifiedStorage.isTransientWallet())
+			return true;
 
 		try {
 			Path releaseDirectory = this.unifiedStorage.createReleaseDirectory();

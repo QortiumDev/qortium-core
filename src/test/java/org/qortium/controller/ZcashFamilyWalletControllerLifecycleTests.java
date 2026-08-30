@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.json.JSONObject;
 import org.qortium.crosschain.PirateChain;
 import org.qortium.crosschain.ForeignBlockchainException;
+import org.qortium.crosschain.ZcashFamilyNativeAdapter;
 import org.qortium.crosschain.ZcashFamilyNativeCoordinator;
 import org.qortium.crosschain.ZcashFamilyWallet;
 import org.qortium.crosschain.ZcashFamilyWalletConfig;
@@ -53,11 +54,35 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		assertTrue(controller.startController());
 		assertEquals(ZcashFamilyWalletController.LifecycleState.RUNNING, controller.getLifecycleState());
 
-		controller.shutdown();
+		assertTrue(controller.shutdown());
 		controller.join(2_000L);
 		assertFalse(controller.isAlive());
 		assertEquals(ZcashFamilyWalletController.LifecycleState.TERMINATED, controller.getLifecycleState());
 		assertFalse(controller.startController());
+	}
+
+	@Test
+	public void testFailedWalletShutdownFailsClosedUntilCoreRestart() throws Exception {
+		TestController controller = new TestController();
+		setControllerField(controller, "currentWallet", new FailedShutdownWallet(filledEntropy(7)));
+		assertTrue(controller.startController());
+
+		assertFalse(controller.shutdown());
+		controller.join(2_000L);
+		assertFalse(controller.isAlive());
+		assertEquals(ZcashFamilyWalletController.LifecycleState.DEGRADED, controller.getLifecycleState());
+		assertTrue(controller.requiresCoreRestart());
+	}
+
+	@Test
+	public void testNormalShutdownWakesControllerWithoutThreadInterrupt() throws Exception {
+		InterruptTrackingController controller = new InterruptTrackingController();
+		assertTrue(controller.startController());
+
+		assertTrue(controller.shutdown());
+		controller.join(2_000L);
+		assertFalse(controller.wasInterrupted());
+		assertEquals(ZcashFamilyWalletController.LifecycleState.TERMINATED, controller.getLifecycleState());
 	}
 
 	@Test
@@ -354,6 +379,31 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		@Override
 		public boolean save() {
 			return false;
+		}
+	}
+
+	private static class FailedShutdownWallet extends TestWallet {
+		private FailedShutdownWallet(byte[] entropyBytes) throws IOException {
+			super(entropyBytes);
+		}
+
+		@Override
+		public boolean prepareForShutdown(ZcashFamilyNativeAdapter nativeAdapter) {
+			return false;
+		}
+	}
+
+	private static class InterruptTrackingController extends TestController {
+		private volatile boolean interrupted;
+
+		@Override
+		public void interrupt() {
+			this.interrupted = true;
+			super.interrupt();
+		}
+
+		private boolean wasInterrupted() {
+			return this.interrupted;
 		}
 	}
 }

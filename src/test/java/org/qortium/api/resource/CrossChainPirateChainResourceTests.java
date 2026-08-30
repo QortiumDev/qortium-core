@@ -8,6 +8,7 @@ import org.qortium.api.ApiException;
 import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
+import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.ZcashFamilyWalletController;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.PirateChain;
@@ -19,6 +20,7 @@ import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -64,6 +66,27 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 		assertEquals(PirateChainSyncStatus.State.DISABLED, status.state);
 		assertEquals("Pirate Chain wallet is disabled", status.message);
 		assertFalse(status.restartRequired);
+	}
+
+	@Test
+	public void testStopDisablesWithoutCreatingAReplacementController() {
+		Settings.getInstance().enableWallet(PirateChain.CURRENCY_CODE);
+		PirateChainWalletController controller = PirateChainWalletController.getInstance();
+		assertEquals(ZcashFamilyWalletController.LifecycleState.NEW, controller.getLifecycleState());
+
+		assertEquals("true", this.resource.stopPirateChainSingleton(ApiCommon.TEST_API_KEY));
+		assertFalse(Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE));
+		assertEquals(ZcashFamilyWalletController.LifecycleState.TERMINATED, controller.getLifecycleState());
+		assertNull(PirateChainWalletController.getInstance());
+
+		assertEquals("true", this.resource.stopPirateChainSingleton(ApiCommon.TEST_API_KEY));
+		assertNull(PirateChainWalletController.getInstance());
+
+		assertEquals("true", this.resource.startPirateChainSingleton(ApiCommon.TEST_API_KEY));
+		PirateChainWalletController restarted = PirateChainWalletController.getInstance();
+		assertNotSame(controller, restarted);
+		assertEquals(ZcashFamilyWalletController.LifecycleState.RUNNING, restarted.getLifecycleState());
+		assertEquals("true", this.resource.stopPirateChainSingleton(ApiCommon.TEST_API_KEY));
 	}
 
 	@Test

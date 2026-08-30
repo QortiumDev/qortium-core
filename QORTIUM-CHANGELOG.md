@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - feat(arrr): stop wallet scans without stopping Core
+
+Adds an authenticated Pirate wallet stop operation so a long initial or restore
+scan can be paused without taking down Core networking, synchronization, or
+minting. Stopping first disables new wallet access, cooperatively cancels the
+Unified native scan, preserves its persistent registry for a later resume, and
+then joins the wallet controller. A failed native cancellation now fails closed
+and requires a Core restart instead of silently creating another controller on
+top of a scan that may still be running. Repeating the stop while already idle
+is safe, and the existing start operation creates a fresh controller when the
+operator is ready to resume.
+
 ### 2026-08-30 - feat(arrr): enable Pirate Unified for Previewnet 1.8.0
 
 Enables ARRR through Pirate Unified v1.1.9 in the normal Previewnet participant
