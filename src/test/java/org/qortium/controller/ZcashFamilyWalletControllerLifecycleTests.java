@@ -16,6 +16,7 @@ import org.qortium.utils.Base58;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -238,6 +239,34 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	}
 
 	@Test
+	public void testLoadedNativeWalletInitializationRearmsBackgroundSyncAfterControllerRestart() throws Exception {
+		SyncRequestingController controller = new SyncRequestingController();
+		RecordingNativeAdapter nativeAdapter = new RecordingNativeAdapter();
+		String entropy58 = Base58.encode(filledEntropy(10));
+
+		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
+				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+		initialize.setAccessible(true);
+		assertTrue((Boolean) initialize.invoke(controller, entropy58, false, false, nativeAdapter));
+
+		Field shouldLoadWallet = ZcashFamilyWalletController.class.getDeclaredField("shouldLoadWallet");
+		shouldLoadWallet.setAccessible(true);
+		assertTrue("An already-loaded native lane must still re-arm the replacement controller's sync loop",
+				shouldLoadWallet.getBoolean(controller));
+	}
+
+	@Test
+	public void testNotReadyWalletInitializationReportsFailure() throws Exception {
+		NotReadyController controller = new NotReadyController();
+		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
+				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+		initialize.setAccessible(true);
+
+		assertFalse((Boolean) initialize.invoke(controller, Base58.encode(filledEntropy(11)),
+				false, false, new RecordingNativeAdapter()));
+	}
+
+	@Test
 	public void testWalletSelectionUsesInitializationTimeoutButSteadyStatusStaysBounded() throws Exception {
 		TestController controller = new TestController();
 		byte[] entropyA = filledEntropy(1);
@@ -381,6 +410,20 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		}
 	}
 
+	private static class SyncRequestingController extends TestController {
+		@Override
+		protected ZcashFamilyWallet createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
+			return new TestWallet(entropyBytes);
+		}
+	}
+
+	private static class NotReadyController extends TestController {
+		@Override
+		protected ZcashFamilyWallet createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
+			return new NotReadyWallet(entropyBytes);
+		}
+	}
+
 	private static class TestWallet extends ZcashFamilyWallet {
 		private TestWallet(byte[] entropyBytes) throws IOException {
 			super(TestController.TEST_CONFIG, entropyBytes, false, false, false);
@@ -390,6 +433,12 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		@Override
 		public boolean save() {
 			return false;
+		}
+	}
+
+	private static class NotReadyWallet extends ZcashFamilyWallet {
+		private NotReadyWallet(byte[] entropyBytes) throws IOException {
+			super(TestController.TEST_CONFIG, entropyBytes, false, false, false);
 		}
 	}
 

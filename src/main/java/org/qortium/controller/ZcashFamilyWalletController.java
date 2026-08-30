@@ -151,6 +151,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private volatile W currentWallet = null;
 	private volatile boolean shouldLoadWallet = false;
 	private volatile String loadStatus = null;
+	private volatile String initializationFailure = null;
 	private volatile CachedWalletSyncStatus cachedStatus = new CachedWalletSyncStatus(
 			WalletSyncStatus.loading("Not initialized yet"), null);
 	private volatile LifecycleState lifecycleState = LifecycleState.NEW;
@@ -161,6 +162,24 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	protected abstract W createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException;
+
+	/** Coin-specific opt-in hook for a fresh wallet whose birthday must be chosen from the current tip. */
+	protected W createWallet(byte[] entropyBytes, boolean isNullSeedWallet, boolean initializeAtCurrentTip)
+			throws IOException {
+		if (initializeAtCurrentTip)
+			throw new IOException(this.config.getDisplayName() + " does not support current-tip initialization");
+		return this.createWallet(entropyBytes, isNullSeedWallet);
+	}
+
+	/** Whether an initialized wallet satisfies an exact current-tip initialization retry. */
+	protected boolean isCurrentTipInitializedWallet(W wallet) {
+		return false;
+	}
+
+	/** Optional safe, coin-specific detail for a failed wallet initialization. */
+	protected String getWalletInitializationFailure(W wallet) {
+		return null;
+	}
 
 	@FunctionalInterface
 	public interface WalletOperation<W extends ZcashFamilyWallet, T> {
@@ -563,6 +582,11 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
 			ZcashFamilyNativeAdapter nativeAdapter) {
+		return this.initWithEntropy58(entropy58, isNullSeedWallet, false, nativeAdapter);
+	}
+
+	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
+			boolean initializeAtCurrentTip, ZcashFamilyNativeAdapter nativeAdapter) {
 		if (!nativeAdapter.isLoaded()) {
 			shouldLoadWallet = true;
 			return false;
@@ -573,11 +597,17 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			LOGGER.info("Invalid entropy bytes");
 			return false;
 		}
+		this.initializationFailure = null;
 
 		W previousWallet = null;
 		if (this.currentWallet != null) {
-			if (this.currentWallet.matchesWallet(entropyBytes, isNullSeedWallet))
+			if (this.currentWallet.matchesWallet(entropyBytes, isNullSeedWallet)) {
+				if (initializeAtCurrentTip && !this.isCurrentTipInitializedWallet(this.currentWallet)) {
+					this.initializationFailure = "Known-new initialization requires an unused wallet namespace";
+					return false;
+				}
 				return true;
+			}
 
 			if (!this.currentWallet.prepareForSwitch(nativeAdapter)) {
 				LOGGER.info("Unable to switch {} wallet because prior native work has not terminated",
@@ -590,18 +620,46 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 
 		try {
-			this.currentWallet = this.createWallet(entropyBytes, isNullSeedWallet);
+			this.currentWallet = this.createWallet(entropyBytes, isNullSeedWallet, initializeAtCurrentTip);
 			if (!this.currentWallet.isReady()) {
+				this.initializationFailure = this.getWalletInitializationFailure(this.currentWallet);
 				this.currentWallet = null;
-			} else if (previousWallet != null) {
-				previousWallet.cleanupAfterSwitch();
+			} else {
+				// The native library can outlive a stopped controller. In that case wallet
+				// initialization succeeds without passing through the unloaded branch above,
+				// so explicitly re-arm the new controller's background sync loop.
+				this.shouldLoadWallet = true;
+				if (previousWallet != null)
+					previousWallet.cleanupAfterSwitch();
 			}
-			return true;
+			return this.currentWallet != null;
 		} catch (IOException e) {
+			this.initializationFailure = e.getMessage();
 			LOGGER.info("Unable to initialize wallet: {}", e.getMessage());
 		}
 
 		return false;
+	}
+
+	/**
+	 * Initializes one explicitly known-new entropy wallet at a coin-specific validated current tip.
+	 * The coin implementation owns durable intent and exact-retry semantics.
+	 */
+	protected final W initializeWalletAtCurrentTip(String entropy58) throws ForeignBlockchainException {
+		if (!acceptsWalletOperations(this.lifecycleState))
+			throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
+		if (!isValidEntropy(entropy58))
+			throw new ForeignBlockchainException("Invalid entropy bytes");
+
+		return executeChecked("initialize known-new " + this.config.getCurrencyCode() + " wallet", nativeAdapter -> {
+			if (!acceptsWalletOperations(this.lifecycleState))
+				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
+			if (!this.initWithEntropy58(entropy58, false, true, nativeAdapter))
+				throw new ForeignBlockchainException(this.initializationFailure == null
+						? this.config.getDisplayName() + " wallet could not be initialized as known-new"
+						: this.initializationFailure);
+			return this.currentWallet;
+		});
 	}
 
 	private void saveCurrentWallet() {

@@ -475,6 +475,16 @@ After that single-endpoint lifecycle passes, the same command accepts an
 explicit cold-restart endpoint gate by adding `--cutover` after the new receipt
 path. The option does not change the original invocation.
 
+For a wallet that the caller explicitly confirms has no historical receipts,
+add `--known-new` instead. This mode calls the authenticated, loopback-only
+`POST /crosschain/arrr/initialize` operation with
+`NEW_AT_CURRENT_TIP`, requires the returned and durable birthday to equal the
+fixture tip `152858`, stops and restarts only the wallet controller while Core's
+admin API remains healthy, and then repeats the exact initialization request in
+a second packaged Core process. The namespace, one-way identity hash,
+wallet-address hash, initialization policy, and birthday must remain exact
+through both recovery boundaries.
+
 This runner starts packaged Core exactly twice in one rootless, loopback-only
 network namespace. A standalone form of the test lightwalletd stays up across
 both starts on explicit IPv4 loopback. Its Java-compatible service identifies
@@ -502,6 +512,12 @@ native, fixture, API-status, and wallet-state evidence for the request entropy,
 API key, seed/key/address-shaped JSON, and shielded addresses, then deletes that
 evidence and retains only a sanitized receipt and log.
 
+The `--known-new` fixture contract is deliberately different: it requires at
+least one validated tip request and exactly zero compact-block ranges, unary
+compact blocks, scanned blocks, subtree probes, transaction RPCs, and unexpected
+RPCs. That zero-history pattern is the runtime proof that the explicit current
+tip birthday avoided the conservative historical scan.
+
 In `--cutover` mode, fixed regtest endpoints A (`127.0.0.1:9067`, tip `152858`)
 and B (`127.0.0.1:9068`, tip `152862`) remain live across both Core processes.
 Process one first reaches A, then Java selects B and a wallet operation
@@ -517,11 +533,13 @@ B-native evidence, and retain the exact namespace, one-way identity hash, and
 wallet-address hash.
 
 This proves fresh creation, exact-tip synchronization, persistence, and clean
-restart/reopen on unfunded Linux x86_64 local fixtures. Historical recovery is
+restart/reopen on unfunded Linux x86_64 local fixtures. In `--known-new` mode it
+also proves wallet-only disable/re-enable and current-tip initialization against
+the deterministic fixture. Historical recovery is
 covered by the separate fresh-install gate above, not by this transaction-free
 packaged run. This packaged gate does not prove real legacy
 migration, transient endpoint-failure recovery, switching during an active
-sync, disable/re-enable, production
+sync, production
 lightwalletd interoperability, funds, QDN publication, deployment, default
 enablement, or Home behavior.
 

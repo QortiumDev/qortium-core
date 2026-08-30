@@ -7,7 +7,7 @@ umask 077
 # transaction, publishes nothing, and runs without a non-loopback route.
 
 usage() {
-	printf '%s\n' "Usage: $0 <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md> [--cutover]" >&2
+	printf '%s\n' "Usage: $0 <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md> [--cutover|--known-new]" >&2
 }
 
 property() {
@@ -79,8 +79,11 @@ run_inside_namespace() {
 	result_file=$5
 	mode=$6
 	cutover_mode=false
+	known_new_mode=false
 	if [ "$mode" = '--cutover' ]; then
 		cutover_mode=true
+	elif [ "$mode" = '--known-new' ]; then
+		known_new_mode=true
 	elif [ -n "$mode" ]; then
 		printf 'Unsupported packaged lifecycle mode: %s\n' "$mode" >&2
 		return 2
@@ -259,6 +262,40 @@ run_inside_namespace() {
 				return 1
 			fi
 		fi
+		if [ "$known_new_mode" = true ]; then
+			initialization_response=$runtime/initialization-start-$start_number.json
+			initialization_ready=false
+			wait_count=0
+			while [ "$wait_count" -lt 120 ]; do
+				set +e
+				initialization_http_code=$(curl --silent --show-error --max-time 30 \
+						--config "$runtime/curl-json-api.conf" \
+						--data-binary "@$runtime/initialization-request.json" \
+						"http://127.0.0.1:$api_port/crosschain/arrr/initialize" \
+						--output "$initialization_response" --write-out '%{http_code}' 2>/dev/null)
+				initialization_curl_status=$?
+				set -e
+				if [ "$initialization_curl_status" -eq 0 ] && [ "$initialization_http_code" = 200 ] \
+						&& grep -Eq '"initializationMode"[[:space:]]*:[[:space:]]*"NEW_AT_CURRENT_TIP"' "$initialization_response" \
+						&& grep -Eq '"birthdayHeight"[[:space:]]*:[[:space:]]*152858' "$initialization_response"; then
+					initialization_ready=true
+					break
+				fi
+				if ! kill -0 "$core_pid" 2>/dev/null; then
+					break
+				fi
+				sleep 1
+				wait_count=$((wait_count + 1))
+			done
+			if [ "$initialization_ready" != true ]; then
+				observed_initialization_mode=$(state_field initializationMode "$initialization_response" 2>/dev/null || true)
+				observed_initialization_birthday=$(state_field birthdayHeight "$initialization_response" 2>/dev/null || true)
+				printf 'Packaged Core start %s did not initialize/retry the known-new wallet at tip 152858: curl=%s HTTP=%s mode=%s birthday=%s\n' \
+					"$start_number" "$initialization_curl_status" "${initialization_http_code:-NONE}" \
+					"${observed_initialization_mode:-NONE}" "${observed_initialization_birthday:-NONE}" >&2
+				return 1
+			fi
+		fi
 
 		ready=false
 		wait_count=0
@@ -313,7 +350,10 @@ run_inside_namespace() {
 					&& [ -f "$registry_path" ] && [ ! -L "$registry_path" ] \
 					&& grep -Eq '"state"[[:space:]]*:[[:space:]]*"'"$expected_state"'"' "$state_path" \
 					&& grep -Eq '"syncValidated"[[:space:]]*:[[:space:]]*true' "$state_path" \
-					&& grep -Eq '"identityHash"[[:space:]]*:[[:space:]]*"[1-9A-HJ-NP-Za-km-z]+"' "$state_path"; then
+					&& grep -Eq '"identityHash"[[:space:]]*:[[:space:]]*"[1-9A-HJ-NP-Za-km-z]+"' "$state_path" \
+					&& { [ "$known_new_mode" != true ] \
+						|| { grep -Eq '"initializationMode"[[:space:]]*:[[:space:]]*"NEW_AT_CURRENT_TIP"' "$state_path" \
+							&& grep -Eq '"initializationBirthdayHeight"[[:space:]]*:[[:space:]]*152858' "$state_path"; }; }; then
 				persisted_state_ready=true
 				break
 			fi
@@ -345,6 +385,70 @@ run_inside_namespace() {
 			fi
 		fi
 		address_sha256=
+
+		if [ "$known_new_mode" = true ] && [ "$start_number" -eq 1 ]; then
+			if ! curl --fail --silent --show-error --max-time 60 \
+					--config "$runtime/curl-api.conf" --request POST \
+					"http://127.0.0.1:$api_port/crosschain/arrr/stop" \
+					> "$runtime/stop-response.txt" 2>/dev/null \
+					|| ! grep -Eq '^true$' "$runtime/stop-response.txt"; then
+				printf '%s\n' 'Known-new wallet scan did not stop cleanly through the packaged API' >&2
+				return 1
+			fi
+			if ! kill -0 "$core_pid" 2>/dev/null \
+					|| ! curl --fail --silent --show-error --max-time 5 \
+						"http://127.0.0.1:$api_port/admin/status" >/dev/null 2>&1; then
+				printf '%s\n' 'Stopping the known-new wallet also stopped or unhealthy Core' >&2
+				return 1
+			fi
+			if ! curl --fail --silent --show-error --max-time 60 \
+					--config "$runtime/curl-api.conf" --request POST \
+					"http://127.0.0.1:$api_port/crosschain/arrr/start" \
+					> "$runtime/start-response.txt" 2>/dev/null \
+					|| ! grep -Eq '^true$' "$runtime/start-response.txt"; then
+				printf '%s\n' 'Known-new wallet scan did not resume through the packaged API' >&2
+				return 1
+			fi
+			resume_ready=false
+			wait_count=0
+			while [ "$wait_count" -lt 300 ]; do
+				if ! kill -0 "$core_pid" 2>/dev/null; then
+					printf '%s\n' 'Packaged Core exited while the known-new wallet resumed' >&2
+					return 1
+				fi
+				if curl --fail --silent --show-error --max-time 15 \
+						--config "$runtime/curl-api.conf" \
+						--data-binary "@$runtime/entropy.txt" \
+						"http://127.0.0.1:$api_port/crosschain/arrr/syncstatus?json=true" \
+						> "$runtime/status-resume.json" 2>/dev/null \
+						&& grep -Eq '"state"[[:space:]]*:[[:space:]]*"READY"' "$runtime/status-resume.json" \
+						&& grep -Eq '"restartRequired"[[:space:]]*:[[:space:]]*false' "$runtime/status-resume.json"; then
+					resume_ready=true
+					break
+				fi
+				sleep 1
+				wait_count=$((wait_count + 1))
+			done
+			resumed_address_sha256=$(wallet_address_sha256) || return 1
+			if [ "$resume_ready" != true ] || [ "$resumed_address_sha256" != "$first_address_sha256" ] \
+					|| [ "$(state_field initializationMode "$state_path")" != NEW_AT_CURRENT_TIP ] \
+					|| [ "$(state_field initializationBirthdayHeight "$state_path")" != 152858 ]; then
+				resume_state=$(state_field state "$runtime/status-resume.json" 2>/dev/null || true)
+				resume_restart=$(state_field restartRequired "$runtime/status-resume.json" 2>/dev/null || true)
+				resume_identity=FAIL
+				[ "$resumed_address_sha256" = "$first_address_sha256" ] && resume_identity=PASS
+				printf 'Known-new wallet did not resume with exact identity and birthday continuity: ready=%s state=%s restart=%s identity=%s mode=%s birthday=%s\n' \
+					"$resume_ready" "${resume_state:-NONE}" "${resume_restart:-NONE}" "$resume_identity" \
+					"$(state_field initializationMode "$state_path" 2>/dev/null || printf NONE)" \
+					"$(state_field initializationBirthdayHeight "$state_path" 2>/dev/null || printf NONE)" >&2
+				return 1
+			fi
+			resumed_address_sha256=
+			# Reopening the validated namespace in the replacement controller promotes
+			# the durable migration marker before the enclosing Core process shuts down.
+			expected_state=UNIFIED_READY
+			printf 'walletStopResume=PASS\ncoreHealthyWhileWalletStopped=PASS\n' >> "$result_file"
+		fi
 
 		if [ "$cutover_mode" = true ]; then
 			selected_server_uri=$(state_field selectedServerUri "$state_path")
@@ -497,6 +601,9 @@ run_inside_namespace() {
 		return 1
 	fi
 	printf 'packagedStarts=2\nnamespaceContinuity=PASS\n' >> "$result_file"
+	if [ "$known_new_mode" = true ]; then
+		printf 'knownNewTipInitialization=PASS\nknownNewBirthdayContinuity=PASS\n' >> "$result_file"
+	fi
 
 	if ! terminate_group "$fixture_pid"; then
 		printf '%s\n' 'Loopback lightwalletd process group did not terminate' >&2
@@ -565,10 +672,21 @@ run_inside_namespace() {
 	case $pirate_tip_requests:$pirate_tip_ranges:$pirate_tip_blocks:$pirate_scanned_blocks:$forbidden_rpcs:$unexpected_rpcs:$subtree_probes in
 		*[!0-9:]*|*::*|:*) printf '%s\n' 'Loopback lightwalletd audit contains invalid counts' >&2; return 1 ;;
 	esac
-	if [ "$pirate_tip_requests" -lt 1 ] \
-			|| { [ "$pirate_tip_ranges" -lt 1 ] && [ "$pirate_tip_blocks" -lt 1 ]; } \
-			|| [ "$forbidden_rpcs" -ne 0 ] || [ "$unexpected_rpcs" -ne 0 ] \
-			|| [ "$subtree_probes" -lt 1 ]; then
+	audit_matches=false
+	if [ "$known_new_mode" = true ]; then
+		if [ "$pirate_tip_requests" -ge 1 ] && [ "$pirate_tip_ranges" -eq 0 ] \
+				&& [ "$pirate_tip_blocks" -eq 0 ] && [ "$pirate_scanned_blocks" -eq 0 ] \
+				&& [ "$forbidden_rpcs" -eq 0 ] && [ "$unexpected_rpcs" -eq 0 ] \
+				&& [ "$subtree_probes" -eq 0 ]; then
+			audit_matches=true
+		fi
+	elif [ "$pirate_tip_requests" -ge 1 ] \
+			&& { [ "$pirate_tip_ranges" -ge 1 ] || [ "$pirate_tip_blocks" -ge 1 ]; } \
+			&& [ "$forbidden_rpcs" -eq 0 ] && [ "$unexpected_rpcs" -eq 0 ] \
+			&& [ "$subtree_probes" -ge 1 ]; then
+		audit_matches=true
+	fi
+	if [ "$audit_matches" != true ]; then
 		printf 'Loopback lightwalletd audit mismatch: tip=%s ranges=%s tip-blocks=%s blocks=%s forbidden=%s unexpected=%s subtree=%s\n' \
 			"$pirate_tip_requests" "$pirate_tip_ranges" "$pirate_tip_blocks" "$pirate_scanned_blocks" \
 			"$forbidden_rpcs" "$unexpected_rpcs" "$subtree_probes" >&2
@@ -602,7 +720,7 @@ bundle=$2
 fixture=$3
 receipt=$4
 mode=${5:-}
-if [ -n "$mode" ] && [ "$mode" != '--cutover' ]; then
+if [ -n "$mode" ] && [ "$mode" != '--cutover' ] && [ "$mode" != '--known-new' ]; then
 	usage
 	exit 2
 fi
@@ -713,8 +831,10 @@ printf '%s\n' "header = \"X-API-KEY: $api_key\"" \
 printf '%s\n' "header = \"X-API-KEY: $api_key\"" \
 	'header = "Content-Type: application/json"' > "$runtime/curl-json-api.conf"
 printf '%s' "$entropy" > "$runtime/entropy.txt"
+printf '{"entropy58":"%s","initializationMode":"NEW_AT_CURRENT_TIP"}\n' \
+	"$entropy" > "$runtime/initialization-request.json"
 chmod 600 "$runtime/api/apikey.txt" "$runtime/curl-api.conf" "$runtime/curl-json-api.conf" \
-	"$runtime/entropy.txt"
+	"$runtime/entropy.txt" "$runtime/initialization-request.json"
 
 cat > "$runtime/log4j2-acceptance.properties" <<'EOF'
 rootLogger.level = info
@@ -855,6 +975,10 @@ endpoint_cutover=NOT_APPLICABLE
 cold_restart_endpoint=NOT_APPLICABLE
 address_continuity=NOT_APPLICABLE
 no_native_server_a_after_selection_barrier=NOT_APPLICABLE
+known_new_tip_initialization=NOT_APPLICABLE
+known_new_birthday_continuity=NOT_APPLICABLE
+wallet_stop_resume=NOT_APPLICABLE
+core_healthy_while_wallet_stopped=NOT_APPLICABLE
 if [ -f "$result_file" ]; then
 	network_result=$(property networkEgress "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 	fixture_result=$(property loopbackFixture "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
@@ -874,6 +998,11 @@ if [ -f "$result_file" ]; then
 		cold_restart_endpoint=$(property coldRestartEndpoint "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 		address_continuity=$(property addressContinuity "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 		no_native_server_a_after_selection_barrier=$(property noNativeServerAAfterSelectionBarrier "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+	elif [ "$mode" = '--known-new' ]; then
+		known_new_tip_initialization=$(property knownNewTipInitialization "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+		known_new_birthday_continuity=$(property knownNewBirthdayContinuity "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+		wallet_stop_resume=$(property walletStopResume "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
+		core_healthy_while_wallet_stopped=$(property coreHealthyWhileWalletStopped "$result_file" 2>/dev/null || printf 'NOT_PROVEN')
 	fi
 	cutover_contract=PASS
 	if [ "$mode" = '--cutover' ] && { [ "$endpoint_cutover" != PASS ] \
@@ -881,7 +1010,14 @@ if [ -f "$result_file" ]; then
 			|| [ "$no_native_server_a_after_selection_barrier" != PASS ]; }; then
 		cutover_contract=FAIL
 	fi
+	known_new_contract=PASS
+	if [ "$mode" = '--known-new' ] && { [ "$known_new_tip_initialization" != PASS ] \
+			|| [ "$known_new_birthday_continuity" != PASS ] || [ "$wallet_stop_resume" != PASS ] \
+			|| [ "$core_healthy_while_wallet_stopped" != PASS ]; }; then
+		known_new_contract=FAIL
+	fi
 	if [ "$acceptance_status" -eq 0 ] && [ "$secret_scan" = PASS ] && [ "$cutover_contract" = PASS ] \
+			&& [ "$known_new_contract" = PASS ] \
 			&& [ "$(property result "$result_file" 2>/dev/null || true)" = PASS ]; then
 		result=PASS
 	fi
@@ -910,6 +1046,8 @@ temporary_log=$work_directory/sanitized.log
 {
 	if [ "$mode" = '--cutover' ]; then
 		printf '# Pirate Unified packaged cold-restart cutover acceptance receipt\n\n'
+	elif [ "$mode" = '--known-new' ]; then
+		printf '# Pirate Unified packaged known-new tip initialization acceptance receipt\n\n'
 	else
 		printf '# Pirate Unified packaged lifecycle acceptance receipt\n\n'
 	fi
@@ -925,6 +1063,8 @@ temporary_log=$work_directory/sanitized.log
 	printf '%s `%s`\n' '- Normalized command:' "tools/run-pirate-unified-packaged-lifecycle-acceptance.sh <absolute-packaged-core.jar> <absolute-staged-bundle-directory> <absolute-local-qdn-fixture-directory> <new-receipt.md>${mode:+ $mode}"
 	if [ "$mode" = '--cutover' ]; then
 		printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 12 scripted lifecycle/cutover boundaries'
+	elif [ "$mode" = '--known-new' ]; then
+		printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 12 scripted known-new lifecycle boundaries'
 	else
 		printf '%s `%s`\n' '- Test counts:' 'Maven tests N/A; 8 scripted lifecycle boundaries'
 	fi
@@ -937,6 +1077,10 @@ temporary_log=$work_directory/sanitized.log
 		printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext A/B pair; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
 		printf '| Fresh packaged start | %s | created on A, cut over and freshly synchronized to newer B, persisted `MIGRATING` |\n' "$first_start"
 		printf '| Packaged restart | %s | reopened B in a clean second Core process and promoted the same namespace to `UNIFIED_READY` |\n' "$second_start"
+	elif [ "$mode" = '--known-new' ]; then
+		printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext endpoint and deterministic tip `152858`; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
+		printf '| Fresh packaged start | %s | explicit local known-new initialization created and synchronized one wallet at current tip |\n' "$first_start"
+		printf '| Packaged restart | %s | exact initialization retry reopened the same namespace at the retained birthday |\n' "$second_start"
 	else
 		printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext endpoint; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
 		printf '| Fresh packaged start | %s | created, synchronized, and persisted `MIGRATING` with validated sync |\n' "$first_start"
@@ -950,6 +1094,12 @@ temporary_log=$work_directory/sanitized.log
 		printf '| Address continuity | %s | wallet address hash remained exact before/after cutover and across restart |\n' "$address_continuity"
 		printf '| No native server A traffic after B-application barrier | %s | post-application barrier remained exact through the subsequent B-readiness observation, both shutdowns, and process 2 |\n' "$no_native_server_a_after_selection_barrier"
 		printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; process 1 reached A `152858` then B `152862` before durable validation |\n' "$birthday_result"
+	elif [ "$mode" = '--known-new' ]; then
+		printf '| Known-new initialization API | %s | both packaged processes returned mode `NEW_AT_CURRENT_TIP` and birthday `152858` |\n' "$known_new_tip_initialization"
+		printf '| Exact birthday continuity | %s | durable initialization mode and birthday remained exact across wallet restart and Core restart |\n' "$known_new_birthday_continuity"
+		printf '| Wallet stop/resume | %s | `/stop` closed the wallet lane and `/start` restored `READY` with exact identity |\n' "$wallet_stop_resume"
+		printf '| Core health while wallet stopped | %s | `/admin/status` stayed reachable between wallet stop and start |\n' "$core_healthy_while_wallet_stopped"
+		printf '| Current-tip birthday and exact-tip sync | %s | explicit birthday `152858` matched the validated fixture tip and avoided historical range scanning |\n' "$birthday_result"
 	else
 		printf '| Conservative birthday and exact-tip sync | %s | settings pin birthday `152855`; Pirate compact-block data reached exact tip `152858` before durable validation |\n' "$birthday_result"
 	fi
@@ -958,6 +1108,8 @@ temporary_log=$work_directory/sanitized.log
 	printf '| Secret scan | %s | raw outputs checked before deletion; none retained |\n' "$secret_scan"
 	if [ "$mode" = '--cutover' ]; then
 		printf '\nThis receipt proves one unfunded Linux x86_64 packaged two-process cold-restart endpoint cutover against deterministic local fixtures. '
+	elif [ "$mode" = '--known-new' ]; then
+		printf '\nThis receipt proves one unfunded Linux x86_64 packaged known-new tip initialization, wallet-only stop/resume, and two-process exact-birthday continuity against a deterministic local fixture. '
 	else
 		printf '\nThis receipt proves one unfunded Linux x86_64 packaged lifecycle against deterministic local fixtures. '
 	fi

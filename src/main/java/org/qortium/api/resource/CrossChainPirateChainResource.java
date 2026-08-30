@@ -19,6 +19,8 @@ import org.qortium.api.model.crosschain.PirateChainSendRequest;
 import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
+import org.qortium.api.model.crosschain.PirateChainWalletInitializationRequest;
+import org.qortium.api.model.crosschain.PirateChainWalletInitializationResult;
 import org.qortium.utils.Base58;
 import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.ZcashFamilyWalletController;
@@ -123,6 +125,82 @@ public class CrossChainPirateChainResource {
 		boolean stopped = Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
 
 		return Boolean.toString(stopped);
+	}
+
+	@POST
+	@Path("/initialize")
+	@Operation(
+			summary = "Initialize an explicitly known-new Pirate Chain wallet at the current tip",
+			description = "Local-operator endpoint: requires the API key, a loopback remote address, and the "
+					+ "Unified Pirate wallet. NEW_AT_CURRENT_TIP is a deliberate assertion that the deterministic "
+					+ "wallet has no historical receipts. Core persists the exact validated tip before native wallet "
+					+ "creation and reuses it on exact retries. Existing, legacy, or conservatively initialized "
+					+ "namespaces are rejected; ordinary wallet access remains conservatively initialized.",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = PirateChainWalletInitializationRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = PirateChainWalletInitializationResult.class)))
+			}
+	)
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@javax.ws.rs.Consumes(MediaType.APPLICATION_JSON)
+	@javax.ws.rs.Produces(MediaType.APPLICATION_JSON)
+	public PirateChainWalletInitializationResult initializeKnownNewWallet(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PirateChainWalletInitializationRequest initializationRequest) {
+		Security.checkApiCallAllowed(request);
+		Security.requireLoopbackRequest(request);
+
+		String validationError = validateWalletInitializationRequest(initializationRequest);
+		if (validationError != null)
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					validationError);
+		if (!Settings.getInstance().isPirateChainWalletUnified())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					"Known-new initialization requires the Unified Pirate wallet");
+
+		PirateChainWalletController controller = PirateChainWalletController.getInstance();
+		if (controller == null)
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					"Pirate Chain wallet is disabled");
+
+		try {
+			PirateChainWalletController.KnownNewInitialization result =
+					controller.initializeKnownNewWallet(initializationRequest.entropy58);
+			return new PirateChainWalletInitializationResult(initializationRequest.initializationMode,
+					result.birthdayHeight());
+		} catch (ForeignBlockchainException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request,
+					ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
+		}
+	}
+
+	static String validateWalletInitializationRequest(PirateChainWalletInitializationRequest initializationRequest) {
+		if (initializationRequest == null)
+			return "Missing request body";
+
+		byte[] entropyBytes;
+		try {
+			entropyBytes = initializationRequest.entropy58 == null
+					? null : Base58.decode(initializationRequest.entropy58);
+		} catch (RuntimeException e) {
+			entropyBytes = null;
+		}
+		if (entropyBytes == null || entropyBytes.length != 32)
+			return "Invalid entropy bytes";
+		if (!PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP.name()
+				.equals(initializationRequest.initializationMode))
+			return "Initialization mode must be NEW_AT_CURRENT_TIP";
+
+		return null;
 	}
 
 	@GET

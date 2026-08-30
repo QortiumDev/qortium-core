@@ -8,6 +8,7 @@ import org.qortium.api.ApiException;
 import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
+import org.qortium.api.model.crosschain.PirateChainWalletInitializationRequest;
 import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.ZcashFamilyWalletController;
 import org.qortium.crosschain.ForeignBlockchainException;
@@ -117,6 +118,14 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 		return recoveryRequest;
 	}
 
+	private static PirateChainWalletInitializationRequest buildValidInitializationRequest() {
+		PirateChainWalletInitializationRequest initializationRequest =
+				new PirateChainWalletInitializationRequest();
+		initializationRequest.entropy58 = "5oSXF53qENtdUyKhqSxYzP57m6RhVFP9BJKRr9E5kRGV";
+		initializationRequest.initializationMode = "NEW_AT_CURRENT_TIP";
+		return initializationRequest;
+	}
+
 	private static void setUnifiedWalletEnabled(boolean enabled) throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "pirateChainWalletUnified", enabled, true);
 	}
@@ -194,6 +203,69 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 		recoveryRequest = buildValidRecoveryRequest();
 		recoveryRequest.label = "x".repeat(101);
 		assertNull(CrossChainPirateChainResource.validateVerifiedRecoveryRequest(recoveryRequest));
+	}
+
+	@Test
+	public void testKnownNewInitializationValidationMatrix() {
+		assertEquals("Missing request body",
+				CrossChainPirateChainResource.validateWalletInitializationRequest(null));
+
+		PirateChainWalletInitializationRequest initializationRequest = buildValidInitializationRequest();
+		assertNull(CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
+
+		initializationRequest = buildValidInitializationRequest();
+		initializationRequest.entropy58 = "not-base58-!!";
+		assertEquals("Invalid entropy bytes",
+				CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
+
+		initializationRequest = buildValidInitializationRequest();
+		initializationRequest.entropy58 = "abc";
+		assertEquals("Invalid entropy bytes",
+				CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
+
+		initializationRequest = buildValidInitializationRequest();
+		initializationRequest.initializationMode = "CONSERVATIVE";
+		assertEquals("Initialization mode must be NEW_AT_CURRENT_TIP",
+				CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
+
+		initializationRequest = buildValidInitializationRequest();
+		initializationRequest.initializationMode = null;
+		assertEquals("Initialization mode must be NEW_AT_CURRENT_TIP",
+				CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
+	}
+
+	@Test
+	public void testKnownNewInitializationRejectsNonLoopbackRequestsBeforeAnythingElse() {
+		CrossChainPirateChainResource remoteResource = (CrossChainPirateChainResource) ApiCommon.buildResource(
+				CrossChainPirateChainResource.class,
+				ApiCommon.buildRequest("203.0.113.5", ApiCommon.TEST_API_KEY));
+
+		ApiException exception = assertThrows(ApiException.class,
+				() -> remoteResource.initializeKnownNewWallet(ApiCommon.TEST_API_KEY,
+						buildValidInitializationRequest()));
+		assertEquals(403, exception.getResponse().getStatus());
+	}
+
+	@Test
+	public void testKnownNewInitializationRequiresUnifiedWallet() {
+		ApiException exception = assertThrows(ApiException.class,
+				() -> this.resource.initializeKnownNewWallet(ApiCommon.TEST_API_KEY,
+						buildValidInitializationRequest()));
+		assertTrue(String.valueOf(exception.getMessage()).contains("Unified"));
+	}
+
+	@Test
+	public void testKnownNewInitializationRejectsInvalidRequestBeforeWalletWork() throws Exception {
+		setUnifiedWalletEnabled(true);
+		try {
+			PirateChainWalletInitializationRequest initializationRequest = buildValidInitializationRequest();
+			initializationRequest.initializationMode = "CONSERVATIVE";
+			ApiException exception = assertThrows(ApiException.class,
+					() -> this.resource.initializeKnownNewWallet(ApiCommon.TEST_API_KEY, initializationRequest));
+			assertTrue(String.valueOf(exception.getMessage()).contains("NEW_AT_CURRENT_TIP"));
+		} finally {
+			setUnifiedWalletEnabled(false);
+		}
 	}
 
 	@Test

@@ -155,6 +155,51 @@ public class PirateUnifiedNativeSmokeTests {
 				assertFalse("Wallet state leaked into the second namespace",
 						FIRST_ADDRESS.equals(secondExportEntry.getString("address")));
 
+				byte[] tipEntropy = new byte[32];
+				Arrays.fill(tipEntropy, (byte) 9);
+				String tipSeed = seedPhrase(adapter.getSeedPhraseFromEntropyB64(
+						Base64.getEncoder().encodeToString(tipEntropy)));
+				Path tipStorage = storageRoot.resolve("wallet-tip");
+				JSONObject tipConfigured = object(adapter.configureStorage(
+						tipStorage.toString(), "qortium-offline-wallet-tip"),
+						"tip storage configuration");
+				assertTrue("Tip storage was not initialized", tipConfigured.optBoolean("initialized"));
+				JSONObject tipInitialized = object(adapter.initFromSeed(
+						serverA.endpoint(), "", tipSeed,
+						Long.toString(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT), "", ""),
+						"tip wallet initialization");
+				assertEquals("Tip wallet birthday changed", PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT,
+						tipInitialized.getLong("birthday"));
+				String tipWalletId = tipInitialized.getString("wallet_id");
+				assertEquals("Tip wallet registry did not retain its birthday",
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT,
+						walletBirthday(adapter, tipWalletId));
+				assertEquals("Tip wallet did not begin at the deterministic tip",
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT,
+						object(adapter.execute("height", ""), "tip wallet height").getLong("height"));
+				try {
+					JSONObject tipSyncStarted = object(adapter.execute("sync", ""), "tip wallet sync start");
+					assertEquals("Tip wallet sync command was not accepted", "success",
+							tipSyncStarted.getString("result"));
+					awaitNativeSync(adapter);
+				} finally {
+					assertAcknowledged(object(adapter.invokeJson(new JSONObject().put("method", "cancel_sync")
+							.put("wallet_id", tipWalletId).toString(), false), "tip wallet sync cancellation"),
+							"Tip wallet cancellation");
+				}
+
+				JSONObject tipReconfigured = object(adapter.configureStorage(
+						tipStorage.toString(), "qortium-offline-wallet-tip"), "tip storage reopen");
+				assertTrue("Tip storage did not reopen", tipReconfigured.optBoolean("initialized"));
+				JSONObject tipReopened = object(adapter.initFromSeed(serverA.endpoint(), "", tipSeed,
+						Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT), "", ""),
+						"tip wallet reopen with conflicting birthday");
+				assertEquals("Tip wallet reopen changed wallet identity", tipWalletId,
+						tipReopened.getString("wallet_id"));
+				assertEquals("Tip wallet reopen replaced its retained birthday",
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT,
+						walletBirthday(adapter, tipWalletId));
+
 				JSONObject firstReconfigured = object(adapter.configureStorage(
 						storageRoot.resolve("wallet-a").toString(), "qortium-offline-wallet-a"),
 						"first storage reconfiguration");
@@ -259,6 +304,8 @@ public class PirateUnifiedNativeSmokeTests {
 					serverA.forbiddenRpcCount() + serverB.forbiddenRpcCount() + nativeBad.forbiddenRpcCount());
 			assertTrue("Native acceptance omitted its optional subtree capability probe",
 					serverA.subtreeProbeCount() + serverB.subtreeProbeCount() >= 1);
+			assertTrue("Tip-born wallet did not request its Pirate tree state",
+					serverA.treeStateProbeCount() >= 1);
 			assertEquals("Native acceptance attempted an RPC outside the deterministic fixture", 0,
 					serverA.unexpectedRpcCount() + serverB.unexpectedRpcCount() + nativeBad.unexpectedRpcCount());
 		}
@@ -330,6 +377,20 @@ public class PirateUnifiedNativeSmokeTests {
 
 	private static String withoutTrailingSlash(String endpoint) {
 		return endpoint != null && endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
+	}
+
+	private static long walletBirthday(ZcashFamilyNativeAdapter adapter, String walletId) {
+		JSONObject envelope = object(adapter.invokeJson("{\"method\":\"list_wallets\"}", false),
+				"wallet registry list");
+		assertTrue("Wallet registry list failed", envelope.optBoolean("ok"));
+		JSONArray wallets = envelope.optJSONArray("result");
+		assertTrue("Wallet registry list returned no array", wallets != null);
+		for (int i = 0; i < wallets.length(); i++) {
+			JSONObject wallet = wallets.getJSONObject(i);
+			if (walletId.equals(wallet.optString("id")))
+				return wallet.getLong("birthday_height");
+		}
+		throw new AssertionError("Wallet registry omitted the expected wallet");
 	}
 
 	private static int nativeRpcCount(PirateUnifiedLoopbackLightwalletd lightwalletd) {
