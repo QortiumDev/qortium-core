@@ -54,6 +54,21 @@ contains the upstream bug unfixed; and before them the official
 predates the verified spending-key import. The pin file is
 `tools/pirate-unified-artifact.properties`.
 
+## Published QDN bundle
+
+The reviewed official v1.1.9 runtime bundle is published on Qortium Previewnet
+as `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` at immutable
+transaction signature
+`3QtMvKDTMUG6V48SKPCwMTPgiqNYdaCwyXfpssfuGD13d7ZL31kk48cuRpuzxy8qnSGg4qgZKEUJ8zYJ7UDQ9aBk`.
+It confirmed at height `111063` with fee zero and MemoryPoW nonce `767`.
+
+Regxa and Netcup independently reached `READY` at 693/693 chunks. On both
+nodes, the signature-keyed encrypted transaction payload matched the on-chain
+data hash, and every file in the authenticated/decrypted bundle matched the
+reviewed staged artifact. Core pins this transaction as the default bundle
+source while retaining `pirateChainWalletUnified=false`; carrying the pin does
+not load the library, start a wallet, or enable ARRR.
+
 ## Closed gate: legacy address reads after a recovery
 
 Core reads Unified balances through the typed `get_balance` request, which does

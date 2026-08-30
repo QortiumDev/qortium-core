@@ -21,6 +21,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class PirateUnifiedWalletSettingsTests {
+	private static final String PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE =
+			"3QtMvKDTMUG6V48SKPCwMTPgiqNYdaCwyXfpssfuGD13d7ZL31kk48cuRpuzxy8qnSGg4qgZKEUJ8zYJ7UDQ9aBk";
+
 	static {
 		if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)
 			Security.insertProviderAt(new BouncyCastleProvider(), 1);
@@ -39,7 +42,8 @@ public class PirateUnifiedWalletSettingsTests {
 		loadSettings("{\"storagePolicy\":\"FOLLOWED\"}");
 
 		assertFalse(Settings.getInstance().isPirateChainWalletUnified());
-		assertNull(Settings.getInstance().getPirateChainWalletQdnSignature());
+		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE,
+				Settings.getInstance().getPirateChainWalletQdnSignature());
 		assertFalse(Settings.getInstance().isPirateChainWalletDebugLogging());
 		assertFalse(PirateChain.WALLET_CONFIG.isUnifiedWalletEnabled());
 		assertNull(PirateChain.WALLET_CONFIG.getUnifiedQdnWalletSignature());
@@ -47,9 +51,34 @@ public class PirateUnifiedWalletSettingsTests {
 	}
 
 	@Test
-	public void testUnifiedWalletRequiresPinnedQdnSignature() throws Exception {
+	public void testUnifiedWalletUsesReviewedDefaultPin() throws Exception {
+		loadSettings("{\"storagePolicy\":\"FOLLOWED\",\"pirateChainWalletUnified\":true}");
+
+		assertTrue(Settings.getInstance().isPirateChainWalletUnified());
+		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE,
+				Settings.getInstance().getPirateChainWalletQdnSignature());
+		assertTrue(PirateChain.WALLET_CONFIG.isUnifiedWalletEnabled());
+		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE,
+				PirateChain.WALLET_CONFIG.getUnifiedQdnWalletSignature());
+	}
+
+	@Test
+	public void testLegacyNullPinUsesReviewedDefault() throws Exception {
+		loadSettings("{\"storagePolicy\":\"FOLLOWED\",\"pirateChainWalletUnified\":true,"
+				+ "\"pirateChainWalletQdnSignature\":null}");
+
+		assertTrue(Settings.getInstance().isPirateChainWalletUnified());
+		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE,
+				Settings.getInstance().getPirateChainWalletQdnSignature());
+		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE,
+				PirateChain.WALLET_CONFIG.getUnifiedQdnWalletSignature());
+	}
+
+	@Test
+	public void testUnifiedWalletRejectsBlankPin() throws Exception {
 		RuntimeException exception = assertThrows(RuntimeException.class,
-				() -> loadSettings("{\"storagePolicy\":\"FOLLOWED\",\"pirateChainWalletUnified\":true}"));
+				() -> loadSettings("{\"storagePolicy\":\"FOLLOWED\",\"pirateChainWalletUnified\":true,"
+						+ "\"pirateChainWalletQdnSignature\":\"\"}"));
 
 		assertTrue(exception.getMessage().contains("pirateChainWalletQdnSignature is required"));
 	}
