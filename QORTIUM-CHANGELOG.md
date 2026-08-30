@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-29 - feat(gateway): add asset and identity reads
+
+Adds four public, read-only app capabilities to the Core gateway: asset
+information, asset balances, asset transfers, and batched account identity
+resolution. Requests receive the same strict asset and address validation used
+by Home, identity batches are de-duplicated and capped at 500 addresses, and no
+more than eight address lookups run at once. Avatar results are same-origin
+legacy hints rather than downloaded images. The expanded gateway contract is
+advertised as version 1.1.0, route revision v2.
+
 ### 2026-08-29 - fix(crosschain): keep server-info reads passive
 
 Stops the foreign-chain server-information endpoint from starting network

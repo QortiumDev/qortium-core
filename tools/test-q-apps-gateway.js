@@ -354,13 +354,15 @@ async function main() {
   check(
     "host info identifies the read-only gateway without claiming Home compatibility",
     hostInfo.hostName === "qortium-gateway" &&
+      hostInfo.hostVersion === "1.1.0" &&
       hostInfo.platform === "gateway" &&
       hostInfo.platformVersion === "0.0" &&
       hostInfo.protocol === "qdnRequest" &&
       hostInfo.network === "qortium" &&
       hostInfo.readOnly === true &&
       hostInfo.route.configuredKind === "public" &&
-      hostInfo.route.reachable === true,
+      hostInfo.route.reachable === true &&
+      hostInfo.route.revision === "qortium-gateway-read-only-v2",
     JSON.stringify(hostInfo),
   );
 
@@ -465,6 +467,170 @@ async function main() {
     } catch (e) {
       check(label, message.test(e.message), e.message);
     }
+  }
+
+  console.log("\n[12] asset reads preserve Home's validated Core paths");
+  check(
+    "advertises the three asset reads",
+    ["GET_ASSET_INFO", "GET_ASSET_BALANCES", "GET_ASSET_TRANSFERS"].every(
+      (action) => advertised.includes(action),
+    ),
+  );
+
+  setResponder((url) => response({ json: { url: url } }));
+  await qdnRequest({ action: "GET_ASSET_INFO", assetId: 5, assetName: "ignored" });
+  check("asset id wins over asset name", lastUrl().endsWith("/assets/info?assetId=5"), lastUrl());
+  await qdnRequest({ action: "GET_ASSET_INFO", payload: { assetName: "MY ASSET/ONE" } });
+  check(
+    "asset names are encoded from nested payloads",
+    lastUrl().endsWith("/assets/info?assetName=MY%20ASSET%2FONE"),
+    lastUrl(),
+  );
+  await qdnRequest({
+    action: "GET_ASSET_BALANCES",
+    address: mintingAddress,
+    assetId: "5",
+    excludeZero: false,
+    limit: 0,
+  });
+  check(
+    "asset balance filters stay bounded to their documented query",
+    lastUrl().endsWith(
+      "/assets/balances?address=" + mintingAddress + "&assetid=5&excludeZero=false&limit=0",
+    ),
+    lastUrl(),
+  );
+  await qdnRequest({
+    action: "GET_ASSET_TRANSFERS",
+    payload: { assetId: 5, address: mintingAddress, limit: 20, reverse: false },
+  });
+  check(
+    "asset transfer filters preserve Home's path contract",
+    lastUrl().endsWith(
+      "/assets/transfers/5?address=" + mintingAddress + "&limit=20&reverse=false",
+    ),
+    lastUrl(),
+  );
+
+  for (const [label, request, message] of [
+    ["asset info requires a selector", { action: "GET_ASSET_INFO" }, /either assetId or assetName/],
+    [
+      "asset balances require a filter",
+      { action: "GET_ASSET_BALANCES" },
+      /either an address or an assetId/,
+    ],
+    [
+      "malformed asset ids cannot widen a balance query",
+      { action: "GET_ASSET_BALANCES", address: mintingAddress, assetId: "invalid" },
+      /non-negative safe integer/,
+    ],
+    [
+      "asset transfers reject fractional ids",
+      { action: "GET_ASSET_TRANSFERS", assetId: 1.5 },
+      /non-negative safe integer/,
+    ],
+    [
+      "asset reads validate addresses before path construction",
+      { action: "GET_ASSET_BALANCES", address: "../admin" },
+      /Address is invalid/,
+    ],
+  ]) {
+    try {
+      await qdnRequest(request);
+      check(label, false);
+    } catch (e) {
+      check(label, message.test(e.message), e.message);
+    }
+  }
+
+  console.log("\n[13] identity resolution is validated, ordered and concurrency-bounded");
+  check("advertises RESOLVE_IDENTITIES", advertised.includes("RESOLVE_IDENTITIES"));
+  const identityAlice = "Q" + "A".repeat(24);
+  const identityBob = "Q" + "B".repeat(24);
+  setResponder((url) => {
+    if (url.endsWith("/names/primary/" + identityAlice))
+      return response({ json: { name: "Alice", owner: identityAlice } });
+    if (url.endsWith("/names/primary/" + identityBob))
+      return response({ json: { name: null, owner: identityBob } });
+    if (url.endsWith("/names/address/" + identityBob + "?limit=0"))
+      return response({ json: [{ name: "Bob", owner: identityBob }] });
+    return response({ status: 404 });
+  });
+  const identities = await qdnRequest({
+    action: "RESOLVE_IDENTITIES",
+    payload: { addresses: [identityAlice, identityBob, identityAlice] },
+  });
+  check(
+    "identity resolution de-duplicates while preserving first-seen order",
+    identities.length === 2 &&
+      identities[0].address === identityAlice &&
+      identities[0].name === "Alice" &&
+      identities[1].address === identityBob &&
+      identities[1].name === "Bob",
+    JSON.stringify(identities),
+  );
+  check(
+    "identity avatar hints remain same-origin and explicitly legacy",
+    identities[0].avatarSrc ===
+      ORIGIN + "/arbitrary/THUMBNAIL/Alice/avatar?async=true" &&
+      identities[0].avatarContract === "LEGACY_NAMED_THUMBNAIL",
+    JSON.stringify(identities[0]),
+  );
+
+  const identityAlphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const concurrentAddresses = Array.from(
+    { length: 12 },
+    (_value, index) => "Q" + "A".repeat(22) + identityAlphabet[index] + "B",
+  );
+  let activeIdentityReads = 0;
+  let maximumIdentityReads = 0;
+  setResponder((url) => {
+    if (url.includes("/names/primary/")) {
+      activeIdentityReads++;
+      maximumIdentityReads = Math.max(maximumIdentityReads, activeIdentityReads);
+      return new Promise((resolve) =>
+        setTimeout(() => {
+          activeIdentityReads--;
+          resolve(response({ json: { name: "Resolved" } }));
+        }, 2),
+      );
+    }
+    return response({ status: 404 });
+  });
+  const concurrentIdentities = await qdnRequest({
+    action: "RESOLVE_IDENTITIES",
+    addresses: concurrentAddresses,
+  });
+  check(
+    "identity fan-out uses at most eight concurrent node reads",
+    concurrentIdentities.length === concurrentAddresses.length && maximumIdentityReads === 8,
+    "maximum concurrency " + maximumIdentityReads,
+  );
+
+  try {
+    await qdnRequest({ action: "RESOLVE_IDENTITIES", addresses: ["Q0invalid"] });
+    check("identity resolution validates every address", false);
+  } catch (e) {
+    check("identity resolution validates every address", /Address is invalid/.test(e.message), e.message);
+  }
+
+  const tooManyAddresses = Array.from(
+    { length: 501 },
+    (_value, index) =>
+      "Q" +
+      "A".repeat(20) +
+      identityAlphabet[Math.floor(index / identityAlphabet.length)] +
+      identityAlphabet[index % identityAlphabet.length],
+  );
+  try {
+    await qdnRequest({ action: "RESOLVE_IDENTITIES", addresses: tooManyAddresses });
+    check("identity resolution enforces the 500 unique-address limit", false);
+  } catch (e) {
+    check(
+      "identity resolution enforces the 500 unique-address limit",
+      /at most 500 addresses/.test(e.message),
+      e.message,
+    );
   }
 
   console.log("\n=== " + passed + " passed, " + failed + " failed ===");

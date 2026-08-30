@@ -1310,6 +1310,9 @@ window.addEventListener("beforeunload", () => {
     "GET_ACCOUNT_RATING",
     "GET_ACTIVE_CHATS",
     "GET_ADMIN_GROUP_JOIN_REQUESTS",
+    "GET_ASSET_BALANCES",
+    "GET_ASSET_INFO",
+    "GET_ASSET_TRANSFERS",
     "GET_BALANCE",
     "GET_GROUP",
     "GET_GROUP_BANS",
@@ -1332,6 +1335,7 @@ window.addEventListener("beforeunload", () => {
     "IS_USING_PUBLIC_NODE",
     "LIST_GROUPS",
     "LIST_QDN_RESOURCES",
+    "RESOLVE_IDENTITIES",
     "SEARCH_CHAT_MESSAGES",
     "SEARCH_GROUPS",
     "SEARCH_QDN_RESOURCES",
@@ -1488,6 +1492,52 @@ window.addEventListener("beforeunload", () => {
     if (!/^Q[1-9A-HJ-NP-Za-km-z]{20,80}$/.test(address))
       throw new Error((label || "Address") + " is invalid.");
     return address;
+  }
+
+  function getSafeInteger(value) {
+    if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+    if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
+      const parsed = Number(value.trim());
+      if (Number.isSafeInteger(parsed)) return parsed;
+    }
+    return undefined;
+  }
+
+  function optionalNonNegativeAssetId(request) {
+    const value = getRequestValue(request, "assetId");
+    if (value === undefined || value === null || (typeof value === "string" && !value.trim()))
+      return undefined;
+
+    const assetId = getSafeInteger(value);
+    if (typeof assetId !== "number" || assetId < 0)
+      throw new Error("Asset id must be a non-negative safe integer.");
+    return assetId;
+  }
+
+  function optionalValidAddress(request) {
+    const value = getRequestValue(request, "address");
+    if (value === undefined || value === null || value === "") return "";
+    if (typeof value !== "string" || !value.trim()) throw new Error("Address is invalid.");
+    const address = value.trim();
+    if (!/^Q[1-9A-HJ-NP-Za-km-z]{20,80}$/.test(address))
+      throw new Error("Address is invalid.");
+    return address;
+  }
+
+  function optionalNonNegativeInteger(request, key) {
+    const value = getRequestValue(request, key);
+    if (value === undefined || value === null || value === "") return undefined;
+    const integer = getSafeInteger(value);
+    if (typeof integer !== "number" || integer < 0)
+      throw new Error(key + " must be a non-negative safe integer.");
+    return integer;
+  }
+
+  function optionalBoolean(request, key) {
+    const value = getRequestValue(request, key);
+    if (value === undefined || value === null || value === "") return undefined;
+    if (typeof value !== "boolean") throw new Error(key + " must be a boolean.");
+    return value;
   }
 
   function requiredGroupId(request, minimumValue) {
@@ -2088,7 +2138,7 @@ window.addEventListener("beforeunload", () => {
     return Promise.resolve({
       hostName: "qortium-gateway",
       // Version the gateway bridge contract independently from the Core JAR.
-      hostVersion: "1.0.0",
+      hostVersion: "1.1.0",
       // The gateway is not a Home implementation and must not claim Home's
       // app-platform compatibility level. Apps should feature-detect via
       // SHOW_ACTIONS while treating this conservative level as pre-Home.
@@ -2102,7 +2152,7 @@ window.addEventListener("beforeunload", () => {
         configuredKind: "public",
         effectiveKind: "public",
         reachable: true,
-        revision: "qortium-gateway-read-only-v1",
+        revision: "qortium-gateway-read-only-v2",
       },
     });
   }
@@ -2134,6 +2184,140 @@ window.addEventListener("beforeunload", () => {
           nodeMintingPossible: null,
         };
       },
+    );
+  }
+
+  // --- Assets / identities --------------------------------------------------
+
+  function buildAssetInfoPath(request) {
+    const assetId = optionalNonNegativeAssetId(request);
+    if (typeof assetId === "number") return "/assets/info?assetId=" + assetId;
+
+    const rawAssetName = getRequestValue(request, "assetName");
+    const assetName = typeof rawAssetName === "string" ? rawAssetName.trim() : "";
+    if (!assetName) throw new Error("Supply either assetId or assetName.");
+    return "/assets/info?assetName=" + encodeURIComponent(assetName);
+  }
+
+  function buildAssetBalancesPath(request) {
+    const address = optionalValidAddress(request);
+    const assetId = optionalNonNegativeAssetId(request);
+    if (!address && typeof assetId !== "number")
+      throw new Error("Supply either an address or an assetId.");
+
+    const queryParams = new URLSearchParams();
+    if (address) queryParams.set("address", address);
+    if (typeof assetId === "number") queryParams.set("assetid", String(assetId));
+    const excludeZero = optionalBoolean(request, "excludeZero");
+    if (typeof excludeZero === "boolean") queryParams.set("excludeZero", String(excludeZero));
+    const limit = optionalNonNegativeInteger(request, "limit");
+    if (typeof limit === "number") queryParams.set("limit", String(limit));
+    return "/assets/balances?" + queryParams.toString();
+  }
+
+  function buildAssetTransfersPath(request) {
+    const assetId = optionalNonNegativeAssetId(request);
+    if (typeof assetId !== "number") throw new Error("Asset id is required.");
+
+    const queryParams = new URLSearchParams();
+    const address = optionalValidAddress(request);
+    if (address) queryParams.set("address", address);
+    const limit = optionalNonNegativeInteger(request, "limit");
+    if (typeof limit === "number") queryParams.set("limit", String(limit));
+    const reverse = optionalBoolean(request, "reverse");
+    if (typeof reverse === "boolean") queryParams.set("reverse", String(reverse));
+    return withQuery("/assets/transfers/" + assetId, queryParams);
+  }
+
+  const MAX_RESOLVE_IDENTITIES = 500;
+  const RESOLVE_IDENTITIES_CONCURRENCY = 8;
+
+  function identityAddresses(request) {
+    const rawAddresses = getRequestValue(request, "addresses");
+    if (!Array.isArray(rawAddresses))
+      throw new Error('RESOLVE_IDENTITIES requires an "addresses" array.');
+
+    const addresses = [];
+    const seen = new Set();
+    for (const value of rawAddresses) {
+      if (typeof value !== "string" || !value.trim()) throw new Error("Address is required.");
+      const address = value.trim();
+      if (!/^Q[1-9A-HJ-NP-Za-km-z]{20,80}$/.test(address))
+        throw new Error("Address is invalid.");
+      if (!seen.has(address)) {
+        seen.add(address);
+        addresses.push(address);
+        if (addresses.length > MAX_RESOLVE_IDENTITIES)
+          throw new Error(
+            "RESOLVE_IDENTITIES accepts at most " + MAX_RESOLVE_IDENTITIES + " addresses.",
+          );
+      }
+    }
+    return addresses;
+  }
+
+  function identityName(value) {
+    if (!value || typeof value !== "object") return null;
+    return typeof value.name === "string" && value.name.trim() ? value.name.trim() : null;
+  }
+
+  function resolveIdentityName(request, address) {
+    return fetchOptionalPayload(
+      request,
+      "/names/primary/" + encodeURIComponent(address),
+      null,
+    ).catch(() => null).then((primary) => {
+      const primaryName = identityName(primary);
+      if (primaryName) return primaryName;
+
+      return fetchOptionalPayload(
+        request,
+        "/names/address/" + encodeURIComponent(address) + "?limit=0",
+        [],
+      ).catch(() => []).then((ownedNames) => {
+        if (!Array.isArray(ownedNames)) return null;
+        for (const ownedName of ownedNames) {
+          const name = identityName(ownedName);
+          if (name) return name;
+        }
+        return null;
+      });
+    });
+  }
+
+  function mapWithConcurrency(values, concurrency, mapper) {
+    const results = new Array(values.length);
+    let nextIndex = 0;
+
+    function runNext() {
+      if (nextIndex >= values.length) return Promise.resolve();
+      const index = nextIndex++;
+      return Promise.resolve(mapper(values[index], index)).then((result) => {
+        results[index] = result;
+        return runNext();
+      });
+    }
+
+    const workers = [];
+    const workerCount = Math.min(concurrency, values.length);
+    for (let index = 0; index < workerCount; ++index) workers.push(runNext());
+    return Promise.all(workers).then(() => results);
+  }
+
+  function resolveIdentities(request) {
+    const addresses = identityAddresses(request);
+    return mapWithConcurrency(addresses, RESOLVE_IDENTITIES_CONCURRENCY, (address) =>
+      resolveIdentityName(request, address).then((name) => ({
+        address: address,
+        name: name,
+        avatarSrc: name
+          ? window.location.origin +
+            "/arbitrary/THUMBNAIL/" +
+            encodeURIComponent(name) +
+            "/avatar?async=true"
+          : null,
+        avatarContract: name ? "LEGACY_NAMED_THUMBNAIL" : null,
+      })),
     );
   }
 
@@ -2327,6 +2511,9 @@ window.addEventListener("beforeunload", () => {
       "/groups/joinrequests/address/" + encodeURIComponent(requiredAddress(request)),
     GET_ACCOUNT_NAMES: (request) =>
       "/names/address/" + encodeURIComponent(requiredAddress(request)),
+    GET_ASSET_BALANCES: buildAssetBalancesPath,
+    GET_ASSET_INFO: buildAssetInfoPath,
+    GET_ASSET_TRANSFERS: buildAssetTransfersPath,
     GET_ACTIVE_CHATS: buildActiveChatsPath,
     GET_ADMIN_GROUP_JOIN_REQUESTS: (request) =>
       "/groups/joinrequests/admin/" + encodeURIComponent(requiredAddress(request)),
@@ -2367,6 +2554,7 @@ window.addEventListener("beforeunload", () => {
     GET_QDN_RESOURCE_URL: getResourceUrl,
     GET_RESOURCE_RATING: getResourceRating,
     IS_USING_PUBLIC_NODE: () => Promise.resolve(true),
+    RESOLVE_IDENTITIES: resolveIdentities,
     SHOW_ACTIONS: () => Promise.resolve(READ_ONLY_ACTIONS.slice()),
     WHICH_UI: () => Promise.resolve("QORTIUM_GATEWAY"),
   };
