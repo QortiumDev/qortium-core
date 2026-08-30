@@ -1314,6 +1314,9 @@ window.addEventListener("beforeunload", () => {
     "GET_ASSET_INFO",
     "GET_ASSET_TRANSFERS",
     "GET_BALANCE",
+    "GET_CROSSCHAIN_BLOCKCHAINS",
+    "GET_CROSSCHAIN_SERVER_INFO",
+    "GET_FOREIGN_FEE",
     "GET_GROUP",
     "GET_GROUP_BANS",
     "GET_GROUP_JOIN_REQUESTS",
@@ -1332,6 +1335,7 @@ window.addEventListener("beforeunload", () => {
     "GET_QDN_RESOURCE_STREAM_URL",
     "GET_QDN_RESOURCE_URL",
     "GET_RESOURCE_RATING",
+    "GET_SERVER_CONNECTION_HISTORY",
     "IS_USING_PUBLIC_NODE",
     "LIST_GROUPS",
     "LIST_QDN_RESOURCES",
@@ -1609,6 +1613,116 @@ window.addEventListener("beforeunload", () => {
         );
       return result.data;
     });
+  }
+
+  // --- Passive cross-chain reads -------------------------------------------
+
+  // Match Home's app-facing read contract exactly. This is deliberately a
+  // strict allowlist rather than a sanitizer because the normalized value is
+  // placed into a URL path segment. GET_CROSSCHAIN_BLOCKCHAINS remains the
+  // source of truth for the broader set the serving Core actually supports.
+  const CROSSCHAIN_COIN_ALIASES = Object.freeze({
+    ARRR: "ARRR",
+    BITCOIN: "BTC",
+    BTC: "BTC",
+    DASH: "DASH",
+    DGB: "DGB",
+    DIGIBYTE: "DGB",
+    DOGE: "DOGE",
+    DOGECOIN: "DOGE",
+    FIRO: "FIRO",
+    LITECOIN: "LTC",
+    LTC: "LTC",
+    NAMECOIN: "NMC",
+    NMC: "NMC",
+    PIRATE: "ARRR",
+    PIRATECHAIN: "ARRR",
+    RAVENCOIN: "RVN",
+    RVN: "RVN",
+  });
+
+  const CROSSCHAIN_COINS = Object.freeze(
+    Array.from(new Set(Object.values(CROSSCHAIN_COIN_ALIASES))).sort(),
+  );
+
+  function getCrosschainCoin(request) {
+    const coinValue = getRequestValue(request, "coin");
+    const raw = coinValue !== undefined && coinValue !== null
+      ? coinValue
+      : getRequestValue(request, "blockchain");
+    const requested = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+    const coin = CROSSCHAIN_COIN_ALIASES[requested];
+    if (!coin) throw new Error("coin must be one of " + CROSSCHAIN_COINS.join(", ") + ".");
+    return coin;
+  }
+
+  function getForeignFeeEndpoint(request) {
+    const feeTypeValue = getRequestValue(request, "feeType");
+    const rawFeeType = feeTypeValue !== undefined && feeTypeValue !== null
+      ? feeTypeValue
+      : getRequestValue(request, "type");
+    const feeType = typeof rawFeeType === "string" ? rawFeeType.trim().toLowerCase() : "";
+    if (
+      !feeType ||
+      feeType === "trade" ||
+      feeType === "send" ||
+      feeType === "feekb" ||
+      feeType === "feeperbyte"
+    )
+      return "feekb";
+    if (feeType === "feeceiling" || feeType === "feerequired") return "feerequired";
+    throw new Error(
+      "type must be TRADE, SEND, FEEKB, FEEPERBYTE, FEECEILING, or FEEREQUIRED.",
+    );
+  }
+
+  function crosschainPath(request, suffix) {
+    return "/crosschain/" + getCrosschainCoin(request).toLowerCase() + "/" + suffix;
+  }
+
+  function atomicAmountToCoinString(value) {
+    const whole = value / 100000000n;
+    const fraction = value % 100000000n;
+    if (fraction === 0n) return whole.toString();
+    return (
+      whole.toString() +
+      "." +
+      fraction.toString().padStart(8, "0").replace(/0+$/, "")
+    );
+  }
+
+  function feePerKbToFeePerByteString(value) {
+    let text;
+    if (typeof value === "string") text = value.trim();
+    else if (typeof value === "bigint") text = value.toString();
+    else if (typeof value === "number" && Number.isSafeInteger(value)) text = String(value);
+    else if (typeof value === "number")
+      throw new Error("Foreign fee number is not an exact integer; send it as a decimal string.");
+    else text = "";
+
+    if (!/^(?:0|[1-9]\d*)$/.test(text))
+      throw new Error("Foreign fee must be a non-negative integer of atomic units.");
+
+    const feePerByte = (BigInt(text) + 999n) / 1000n;
+    if (feePerByte <= 0n) throw new Error("Foreign fee must be greater than zero.");
+    return atomicAmountToCoinString(feePerByte);
+  }
+
+  function getCrosschainServerInfo(request) {
+    return fetchPayload(request, crosschainPath(request, "serverinfos")).then((serverInfo) =>
+      serverInfo && typeof serverInfo === "object" && Array.isArray(serverInfo.servers)
+        ? serverInfo.servers
+        : serverInfo,
+    );
+  }
+
+  function getForeignFee(request) {
+    const endpoint = getForeignFeeEndpoint(request);
+    return fetchPayload(request, crosschainPath(request, endpoint)).then((fee) =>
+      endpoint === "feekb"
+        ? { fee: feePerKbToFeePerByteString(fee), feePerKb: fee }
+        : { fee: fee },
+    );
   }
 
   // --- Account / group avatars ---------------------------------------------
@@ -2138,7 +2252,7 @@ window.addEventListener("beforeunload", () => {
     return Promise.resolve({
       hostName: "qortium-gateway",
       // Version the gateway bridge contract independently from the Core JAR.
-      hostVersion: "1.1.0",
+      hostVersion: "1.2.0",
       // The gateway is not a Home implementation and must not claim Home's
       // app-platform compatibility level. Apps should feature-detect via
       // SHOW_ACTIONS while treating this conservative level as pre-Home.
@@ -2152,7 +2266,7 @@ window.addEventListener("beforeunload", () => {
         configuredKind: "public",
         effectiveKind: "public",
         reachable: true,
-        revision: "qortium-gateway-read-only-v2",
+        revision: "qortium-gateway-read-only-v3",
       },
     });
   }
@@ -2519,6 +2633,7 @@ window.addEventListener("beforeunload", () => {
       "/groups/joinrequests/admin/" + encodeURIComponent(requiredAddress(request)),
     GET_BALANCE: (request) =>
       "/addresses/balance/" + encodeURIComponent(requiredAddress(request)),
+    GET_CROSSCHAIN_BLOCKCHAINS: () => "/crosschain/blockchains",
     GET_GROUP: (request) => "/groups/" + encodeURIComponent(String(requiredGroupId(request, 1))),
     GET_GROUP_BANS: (request) =>
       "/groups/bans/" + encodeURIComponent(String(requiredGroupId(request, 1))),
@@ -2548,12 +2663,16 @@ window.addEventListener("beforeunload", () => {
     FETCH_ACCOUNT_AVATAR: fetchAccountAvatar,
     FETCH_GROUP_AVATAR: fetchGroupAvatar,
     GET_ACCOUNT_RATING: getAccountRating,
+    GET_CROSSCHAIN_SERVER_INFO: getCrosschainServerInfo,
+    GET_FOREIGN_FEE: getForeignFee,
     GET_HOST_INFO: getHostInfo,
     GET_MINTING_STATUS: getMintingStatus,
     GET_QDN_RESOURCE_STREAM_URL: getResourceStreamUrl,
     GET_QDN_RESOURCE_URL: getResourceUrl,
     GET_RESOURCE_RATING: getResourceRating,
     IS_USING_PUBLIC_NODE: () => Promise.resolve(true),
+    GET_SERVER_CONNECTION_HISTORY: (request) =>
+      fetchPayload(request, crosschainPath(request, "serverconnectionhistory")),
     RESOLVE_IDENTITIES: resolveIdentities,
     SHOW_ACTIONS: () => Promise.resolve(READ_ONLY_ACTIONS.slice()),
     WHICH_UI: () => Promise.resolve("QORTIUM_GATEWAY"),
