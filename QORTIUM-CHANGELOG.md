@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-29 - fix(crosschain): keep server-info reads passive
+
+Stops the foreign-chain server-information endpoint from starting network
+probes and connection management simply to choose a current server. It now
+reports the provider's existing cached state honestly, including the normal
+case where no current server has been selected yet, so a public read cannot
+turn into a multi-minute scan of hundreds of remote servers.
+
 ### 2026-08-29 - chore(arrr): pin the official Pirate Unified v1.1.9 wallet
 
 Replaces the temporary Qortium-built Pirate wallet artifact with Pirate
