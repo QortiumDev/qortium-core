@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-29 - feat(gateway): add passive cross-chain reads
+
+Adds four public, read-only cross-chain app capabilities to the Core gateway:
+node-supported blockchain discovery, configured server information, foreign
+fees, and server connection history. Coin values use Home's strict app-facing
+allowlist, fee values keep Home's existing units and round-up behavior, and all
+requests remain same-origin GETs. Discovery reports Core's actual metadata
+without inventing a QORT entry or claiming Home wallet capabilities. The
+expanded gateway contract is advertised as version 1.2.0, route revision v3.
+
 ### 2026-08-29 - feat(gateway): add asset and identity reads
 
 Adds four public, read-only app capabilities to the Core gateway: asset

@@ -354,7 +354,7 @@ async function main() {
   check(
     "host info identifies the read-only gateway without claiming Home compatibility",
     hostInfo.hostName === "qortium-gateway" &&
-      hostInfo.hostVersion === "1.1.0" &&
+      hostInfo.hostVersion === "1.2.0" &&
       hostInfo.platform === "gateway" &&
       hostInfo.platformVersion === "0.0" &&
       hostInfo.protocol === "qdnRequest" &&
@@ -362,7 +362,7 @@ async function main() {
       hostInfo.readOnly === true &&
       hostInfo.route.configuredKind === "public" &&
       hostInfo.route.reachable === true &&
-      hostInfo.route.revision === "qortium-gateway-read-only-v2",
+      hostInfo.route.revision === "qortium-gateway-read-only-v3",
     JSON.stringify(hostInfo),
   );
 
@@ -629,6 +629,130 @@ async function main() {
     check(
       "identity resolution enforces the 500 unique-address limit",
       /at most 500 addresses/.test(e.message),
+      e.message,
+    );
+  }
+
+  console.log("\n[14] cross-chain reads stay passive, strict and gateway-honest");
+  check(
+    "advertises all four passive cross-chain reads",
+    [
+      "GET_CROSSCHAIN_BLOCKCHAINS",
+      "GET_CROSSCHAIN_SERVER_INFO",
+      "GET_FOREIGN_FEE",
+      "GET_SERVER_CONNECTION_HISTORY",
+    ].every((action) => advertised.includes(action)),
+  );
+
+  const coreBlockchains = [
+    { name: "BITCOIN", currencyCode: "BTC", walletEnabled: true },
+    { name: "PIRATECHAIN", currencyCode: "ARRR", walletEnabled: false },
+  ];
+  setResponder((url) => {
+    if (url.endsWith("/crosschain/blockchains")) return response({ json: coreBlockchains });
+    return response({ status: 404 });
+  });
+  const discoveredBlockchains = await qdnRequest({ action: "GET_CROSSCHAIN_BLOCKCHAINS" });
+  check(
+    "blockchain discovery returns Core metadata without a synthetic QORT or Home-wallet row",
+    discoveredBlockchains.length === 2 &&
+      discoveredBlockchains[0].currencyCode === "BTC" &&
+      discoveredBlockchains[1].currencyCode === "ARRR" &&
+      !discoveredBlockchains.some((blockchain) => blockchain.currencyCode === "QORT"),
+    JSON.stringify(discoveredBlockchains),
+  );
+
+  const servers = [{ hostName: "electrum.example", port: 50002 }];
+  setResponder((url) => {
+    if (url.endsWith("/crosschain/arrr/serverinfos"))
+      return response({ json: { servers: servers, currentServer: null } });
+    if (url.endsWith("/crosschain/ltc/serverconnectionhistory"))
+      return response({ json: [{ address: "electrum.example", success: true }] });
+    return response({ status: 404 });
+  });
+  const serverInfo = await qdnRequest({
+    action: "GET_CROSSCHAIN_SERVER_INFO",
+    payload: { blockchain: "PirateChain" },
+  });
+  check(
+    "server info accepts Home's ARRR alias and unwraps the server array",
+    Array.isArray(serverInfo) &&
+      serverInfo.length === 1 &&
+      serverInfo[0].hostName === "electrum.example" &&
+      lastUrl().endsWith("/crosschain/arrr/serverinfos"),
+    JSON.stringify(serverInfo),
+  );
+  const history = await qdnRequest({
+    action: "GET_SERVER_CONNECTION_HISTORY",
+    coin: "Litecoin",
+  });
+  check(
+    "connection history uses the normalized same-origin Core path",
+    history.length === 1 &&
+      history[0].success === true &&
+      lastUrl().endsWith("/crosschain/ltc/serverconnectionhistory"),
+    JSON.stringify(history),
+  );
+
+  setResponder((url) => {
+    if (url.endsWith("/crosschain/btc/feekb")) return response({ body: "1001" });
+    if (url.endsWith("/crosschain/arrr/feerequired")) return response({ body: "12000" });
+    return response({ status: 404 });
+  });
+  const tradeFee = await qdnRequest({ action: "GET_FOREIGN_FEE", coin: "Bitcoin", type: "TRADE" });
+  check(
+    "fee-per-KB reads preserve the raw value and round the per-byte fee up",
+    tradeFee.fee === "0.00000002" &&
+      tradeFee.feePerKb === "1001" &&
+      lastUrl().endsWith("/crosschain/btc/feekb"),
+    JSON.stringify(tradeFee),
+  );
+  const requiredFee = await qdnRequest({
+    action: "GET_FOREIGN_FEE",
+    payload: { coin: "ARRR", feeType: "FEECEILING" },
+  });
+  check(
+    "fee-required reads keep Core's atomic-unit value unchanged",
+    requiredFee.fee === "12000" &&
+      requiredFee.feePerKb === undefined &&
+      lastUrl().endsWith("/crosschain/arrr/feerequired"),
+    JSON.stringify(requiredFee),
+  );
+
+  for (const [label, request, message] of [
+    [
+      "cross-chain paths reject traversal instead of encoding it",
+      { action: "GET_CROSSCHAIN_SERVER_INFO", coin: "../admin" },
+      /coin must be one of/,
+    ],
+    [
+      "cross-chain paths reject unsupported Core-only coin aliases",
+      { action: "GET_SERVER_CONNECTION_HISTORY", coin: "BCH" },
+      /coin must be one of/,
+    ],
+    [
+      "foreign fee reads reject unknown fee modes",
+      { action: "GET_FOREIGN_FEE", coin: "BTC", type: "withdraw" },
+      /type must be TRADE/,
+    ],
+  ]) {
+    const fetchCount = fetched.length;
+    try {
+      await qdnRequest(request);
+      check(label, false);
+    } catch (e) {
+      check(label, message.test(e.message) && fetched.length === fetchCount, e.message);
+    }
+  }
+
+  setResponder(() => response({ body: "0" }));
+  try {
+    await qdnRequest({ action: "GET_FOREIGN_FEE", coin: "BTC" });
+    check("zero foreign fees are rejected before an app can under-fee a trade", false);
+  } catch (e) {
+    check(
+      "zero foreign fees are rejected before an app can under-fee a trade",
+      /must be greater than zero/.test(e.message),
       e.message,
     );
   }
