@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - feat(arrr): enable Pirate Unified for Previewnet 1.8.0
+
+Enables ARRR through Pirate Unified v1.1.9 in the normal Previewnet participant
+profile while keeping both managed seed profiles wallet-disabled. Fresh
+participants use the independently verified immutable QDN bundle immediately,
+and managed upgrades follow the new default when their wallet map was untouched.
+An older profile without a template snapshot advances only when ARRR is the sole
+wallet-default change; any other operator wallet customization remains intact.
+The Core application version advances to 1.8.0, with release-candidate status
+carried by the release tag rather than the application version.
+
 ### 2026-08-30 - chore(arrr): pin the published Pirate Unified QDN bundle
 
 Pins the independently verified Qortium Previewnet publication of Pirate

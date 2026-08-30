@@ -141,6 +141,83 @@ public class MergeSettingsTests {
 	}
 
 	@Test
+	public void testMigrationWithoutSnapshotEnablesArrrInUntouchedWalletMap() throws Exception {
+		String oldWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":false}";
+		String newWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":true}";
+		writeJson(settingsPath, "{\"wallets\":" + oldWallets + "}");
+		writeJson(templatePath, "{\"wallets\":" + newWallets + ","
+				+ "\"pirateChainWalletUnified\":true,\"pirateChainWalletQdnSignature\":\"signature\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(MAPPER.readValue(newWallets, Object.class), merged.get("wallets"));
+		assertEquals(Boolean.TRUE, merged.get("pirateChainWalletUnified"));
+		assertEquals("signature", merged.get("pirateChainWalletQdnSignature"));
+		assertFalse(result.preserved.contains("wallets"));
+	}
+
+	@Test
+	public void testMigrationWithoutSnapshotPreservesCustomizedWalletMap() throws Exception {
+		String customWallets = "{\"BTC\":false,\"LTC\":true,\"ARRR\":false}";
+		String newWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":true}";
+		writeJson(settingsPath, "{\"wallets\":" + customWallets + "}");
+		writeJson(templatePath, "{\"wallets\":" + newWallets + "}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue(customWallets, Object.class), readJson(settingsPath).get("wallets"));
+		assertTrue(result.preserved.contains("wallets"));
+	}
+
+	@Test
+	public void testMigrationWithoutSnapshotPreservesWalletMapThatPredatesArrr() throws Exception {
+		String oldWallets = "{\"BTC\":true,\"LTC\":true}";
+		String newWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":true}";
+		writeJson(settingsPath, "{\"wallets\":" + oldWallets + "}");
+		writeJson(templatePath, "{\"wallets\":" + newWallets + "}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue(oldWallets, Object.class), readJson(settingsPath).get("wallets"));
+		assertTrue(result.preserved.contains("wallets"));
+	}
+
+	@Test
+	public void testMigrationWithoutSnapshotKeepsAlreadyEnabledArrr() throws Exception {
+		String enabledWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":true}";
+		writeJson(settingsPath, "{\"wallets\":" + enabledWallets + "}");
+		writeJson(templatePath, "{\"wallets\":" + enabledWallets + "}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue(enabledWallets, Object.class), readJson(settingsPath).get("wallets"));
+		assertFalse(result.preserved.contains("wallets"));
+	}
+
+	@Test
+	public void testSnapshotUpgradeEnablesArrrUnlessWalletMapWasCustomized() throws Exception {
+		String oldWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":false}";
+		String newWallets = "{\"BTC\":true,\"LTC\":true,\"ARRR\":true}";
+		writeJson(snapshotPath, "{\"wallets\":" + oldWallets + "}");
+		writeJson(settingsPath, "{\"wallets\":" + oldWallets + "}");
+		writeJson(templatePath, "{\"wallets\":" + newWallets + "}");
+
+		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue(newWallets, Object.class), readJson(settingsPath).get("wallets"));
+
+		writeJson(snapshotPath, "{\"wallets\":" + oldWallets + "}");
+		writeJson(settingsPath, "{\"wallets\":{\"BTC\":false,\"LTC\":true,\"ARRR\":false}}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(MAPPER.readValue("{\"BTC\":false,\"LTC\":true,\"ARRR\":false}", Object.class),
+				readJson(settingsPath).get("wallets"));
+		assertTrue(result.preserved.contains("wallets"));
+	}
+
+	@Test
 	public void testUpgradeAddsPublicGroupBuildersToUntouchedPublicApiPaths() throws Exception {
 		String oldPaths = "[\"GET /admin/status\",\"POST /chat/public/build\",\"POST /transactions/process\"]";
 		String newPaths = "[\"GET /admin/status\",\"POST /chat/public/build\","
