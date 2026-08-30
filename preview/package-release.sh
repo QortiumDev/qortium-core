@@ -142,5 +142,11 @@ else
 	exit 1
 fi
 
-echo "Preview package created: ${OUTPUT_PATH}"
+if ! "${SCRIPT_DIR}/verify-release-package.sh" --package="${OUTPUT_PATH}" --jar="${JAR_PATH}"; then
+	rm -f "${OUTPUT_PATH}"
+	echo "Removed release package after verification failure: ${OUTPUT_PATH}"
+	exit 1
+fi
+
+echo "Preview package created and verified: ${OUTPUT_PATH}"
 echo "Included jar: ${JAR_PATH}"

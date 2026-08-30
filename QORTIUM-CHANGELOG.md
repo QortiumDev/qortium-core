@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - fix(build): prevent stale Previewnet release packages
+
+Prevents an older Previewnet release ZIP from surviving a successful Maven
+build with a fresh timestamp. Maven now removes any existing tester ZIP before
+building, and the explicit release packager verifies that its inner jar exactly
+matches the current build, embeds the current full source commit, and carries
+the current chain configuration from a clean checkout. A disagreement or dirty
+source tree removes the ZIP and stops the release workflow instead of leaving a
+misleading deployment artifact.
+
 ### 2026-08-29 - fix(api): honor segment wildcards in public routes
 
 Makes configured public routes with a wildcard in the middle work as intended,
