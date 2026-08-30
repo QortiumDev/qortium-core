@@ -23,6 +23,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.qortium.crosschain.PirateWallet.EndpointSelectionOutcome.APPLIED;
 import static org.qortium.crosschain.PirateWallet.EndpointSelectionOutcome.ENDPOINT_REJECTED;
@@ -103,6 +104,86 @@ public class PirateUnifiedWalletStorageTests {
 		assertEquals(PirateUnifiedWalletStorage.State.MIGRATING,
 				wallet.getUnifiedStorage().read().getState());
 		assertFalse(wallet.getUnifiedStorage().read().isSyncValidated());
+	}
+
+	@Test
+	public void testKnownNewInitializationPersistsExactTipBeforeNativeCreation() throws Exception {
+		ZcashFamilyWalletConfig config = this.config();
+		byte[] entropy = entropy(31);
+		PirateWallet wallet = new PirateWallet(config, entropy, false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+
+		assertEquals(4_200_000, wallet.resolveUnifiedBirthday(4_200_000));
+		PirateUnifiedWalletStorage.Snapshot snapshot = wallet.getUnifiedStorage().read();
+		assertEquals(PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP, snapshot.getInitializationMode());
+		assertEquals(Integer.valueOf(4_200_000), snapshot.getInitializationBirthdayHeight());
+		assertFalse(wallet.getUnifiedStorage().hasNativeRegistry());
+
+		FakeAdapter adapter = new FakeAdapter();
+		adapter.walletHeight = 4_200_000;
+		assertTrue(wallet.initializeUnified(adapter, "https://light.example:443/", 4_200_000));
+		assertEquals("4200000", adapter.lastBirthday);
+
+		PirateWallet reopened = new PirateWallet(config, entropy, false, false);
+		assertEquals(4_200_000, reopened.resolveUnifiedBirthday(null));
+		assertTrue(reopened.isKnownNewInitialization());
+		assertEquals(4_200_000, reopened.getInitializationBirthdayHeight());
+	}
+
+	@Test
+	public void testKnownNewRetryReusesOriginalTipAfterPartialNativeFailure() throws Exception {
+		ZcashFamilyWalletConfig config = this.config();
+		byte[] entropy = entropy(32);
+		PirateWallet first = new PirateWallet(config, entropy, false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+		assertEquals(4_200_000, first.resolveUnifiedBirthday(4_200_000));
+		FakeAdapter failingAdapter = new FakeAdapter();
+		failingAdapter.failure = "configure";
+		assertFalse(first.initializeUnified(failingAdapter, "https://light.example:443/", 4_200_000));
+
+		PirateWallet retry = new PirateWallet(config, entropy, false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+		assertEquals(4_200_000, retry.resolveUnifiedBirthday(4_300_000));
+		assertEquals(PirateUnifiedWalletStorage.State.FAILED_RECOVERABLE,
+				retry.getUnifiedStorage().read().getState());
+		assertEquals(Integer.valueOf(4_200_000),
+				retry.getUnifiedStorage().read().getInitializationBirthdayHeight());
+	}
+
+	@Test
+	public void testKnownNewInitializationFailsClosedForExistingNamespaceOrMissingTip() throws Exception {
+		ZcashFamilyWalletConfig config = this.config();
+		byte[] entropy = entropy(33);
+		PirateWallet conservative = new PirateWallet(config, entropy, false, false);
+		assertTrue(conservative.initializeUnified(new FakeAdapter(), "https://light.example:443/", DEFAULT_BIRTHDAY));
+
+		PirateWallet existing = new PirateWallet(config, entropy, false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+		IOException existingError = assertThrows(IOException.class,
+				() -> existing.resolveUnifiedBirthday(4_200_000));
+		assertTrue(existingError.getMessage().contains("unused wallet namespace"));
+
+		PirateWallet missingTip = new PirateWallet(config, entropy(34), false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+		IOException missingTipError = assertThrows(IOException.class,
+				() -> missingTip.resolveUnifiedBirthday(null));
+		assertTrue(missingTipError.getMessage().contains("validated Pirate Chain tip"));
+	}
+
+	@Test
+	public void testKnownNewInitializationRejectsLegacyAndCorruptState() throws Exception {
+		ZcashFamilyWalletConfig config = this.config();
+		PirateWallet legacy = new PirateWallet(config, entropy(35), false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+		writeLegacyInputs(config, legacy, "legacy".getBytes(StandardCharsets.UTF_8));
+		assertThrows(IOException.class, () -> legacy.resolveUnifiedBirthday(4_200_000));
+
+		PirateWallet corrupt = new PirateWallet(config, entropy(36), false, false,
+				PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+		Files.createDirectories(corrupt.getUnifiedStorage().getStorageDirectory());
+		Files.writeString(corrupt.getUnifiedStorage().getStorageDirectory()
+				.resolve(PirateUnifiedWalletStorage.STATE_FILENAME), "not-json");
+		assertThrows(IOException.class, () -> corrupt.resolveUnifiedBirthday(4_200_000));
 	}
 
 	@Test
@@ -618,6 +699,7 @@ public class PirateUnifiedWalletStorageTests {
 		private String nativeChainName = "main";
 		private final Map<String, String> nativeChainNamesByEndpoint = new HashMap<>();
 		private long nativeNodeHeight = DEFAULT_BIRTHDAY;
+		private int walletHeight = DEFAULT_BIRTHDAY;
 		private Boolean nativeTlsEnabledOverride;
 		private long syncTargetHeight;
 		private String endpointReadback;
@@ -745,7 +827,7 @@ public class PirateUnifiedWalletStorageTests {
 			if ("balance".equals(command))
 				return "{\"z_addresses\":[{\"address\":\"" + this.legacyAddress + "\"}]}";
 			if ("height".equals(command))
-				return "{\"height\":" + ("height".equals(this.failure) ? 0 : DEFAULT_BIRTHDAY) + "}";
+				return "{\"height\":" + ("height".equals(this.failure) ? 0 : this.walletHeight) + "}";
 			if ("info".equals(command))
 				return "{\"latest_block_height\":" + DEFAULT_BIRTHDAY + "}";
 			if ("syncStatus".equals(command))

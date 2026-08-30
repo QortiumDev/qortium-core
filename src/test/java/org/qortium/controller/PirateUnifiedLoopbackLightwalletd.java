@@ -65,6 +65,7 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	private final AtomicInteger unexpectedRpcCount = new AtomicInteger();
 	private final AtomicInteger activationProbeCount = new AtomicInteger();
 	private final AtomicInteger subtreeProbeCount = new AtomicInteger();
+	private final AtomicInteger treeStateProbeCount = new AtomicInteger();
 	private final AtomicInteger cashCompleteRangeCount = new AtomicInteger();
 	private final AtomicInteger pirateCompleteRangeCount = new AtomicInteger();
 	private final AtomicInteger pirateTipRangeCount = new AtomicInteger();
@@ -184,6 +185,10 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		return this.subtreeProbeCount.get();
 	}
 
+	int treeStateProbeCount() {
+		return this.treeStateProbeCount.get();
+	}
+
 	@Override
 	public void close() throws InterruptedException {
 		this.server.shutdownNow();
@@ -214,6 +219,10 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 		if (PIRATE_SERVICE.equals(service) && "GetSubtreeRoots".equals(method)) {
 			this.subtreeProbeCount.incrementAndGet();
+			return;
+		}
+		if (PIRATE_SERVICE.equals(service) && "GetTreeState".equals(method)) {
+			this.treeStateProbeCount.incrementAndGet();
 			return;
 		}
 

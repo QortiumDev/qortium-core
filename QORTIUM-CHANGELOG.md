@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - feat(arrr): initialize confirmed-new wallets at the current tip
+
+Adds an authenticated, loopback-only Pirate wallet initialization operation for
+the one case where the caller can explicitly confirm that an account-derived
+wallet is new and has no historical receipts. Core selects a validated
+lightwalletd tip, writes that exact birthday and policy to the wallet's isolated
+namespace before native storage is created, and reuses the retained height on
+retries and restarts instead of sampling a later tip. The operation fails closed
+for existing native namespaces, legacy wallet caches, corrupt state, missing
+validated heights, and any mode other than `NEW_AT_CURRENT_TIP`. Ordinary wallet
+access remains unchanged and continues to use the conservative configured
+birthday so restoring an account on another computer cannot silently hide older
+funds.
+The same change closes a controller-recovery gap found by packaged testing: if
+the native library remains loaded across a wallet-only stop and start, the
+replacement controller now explicitly re-arms its background sync loop instead
+of leaving the reopened wallet stuck at `Initializing wallet...`.
+
 ### 2026-08-30 - feat(arrr): stop wallet scans without stopping Core
 
 Adds an authenticated Pirate wallet stop operation so a long initial or restore

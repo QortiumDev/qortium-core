@@ -29,6 +29,11 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private static final Logger LOGGER = LogManager.getLogger(PirateWallet.class);
 	private static final String UNIFIED_NATIVE_CHAIN = "main";
 
+	public enum InitializationMode {
+		CONSERVATIVE,
+		NEW_AT_CURRENT_TIP
+	}
+
 	enum EndpointSelectionOutcome {
 		APPLIED,
 		RETRYABLE_FAILURE,
@@ -51,6 +56,8 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 	private final boolean unifiedWallet;
 	private final PirateUnifiedWalletStorage unifiedStorage;
+	private final InitializationMode requestedInitializationMode;
+	private volatile String initializationFailureMessage;
 	private ZcashFamilyLightClient.ValidatedServerSelection appliedServerSelection;
 	private volatile boolean freshSynchronizationRequired;
 	private long synchronizationAcceptedGeneration = -1L;
@@ -72,13 +79,24 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private volatile Long recoveryIdleGraceOverrideNanos;
 
 	public PirateWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
-		this(PirateChain.WALLET_CONFIG, entropyBytes, isNullSeedWallet, true);
+		this(PirateChain.WALLET_CONFIG, entropyBytes, isNullSeedWallet, true, InitializationMode.CONSERVATIVE);
+	}
+
+	public PirateWallet(byte[] entropyBytes, boolean isNullSeedWallet, InitializationMode initializationMode)
+			throws IOException {
+		this(PirateChain.WALLET_CONFIG, entropyBytes, isNullSeedWallet, true, initializationMode);
 	}
 
 	PirateWallet(ZcashFamilyWalletConfig config, byte[] entropyBytes, boolean isNullSeedWallet,
 			boolean initializeImmediately) throws IOException {
+		this(config, entropyBytes, isNullSeedWallet, initializeImmediately, InitializationMode.CONSERVATIVE);
+	}
+
+	PirateWallet(ZcashFamilyWalletConfig config, byte[] entropyBytes, boolean isNullSeedWallet,
+			boolean initializeImmediately, InitializationMode initializationMode) throws IOException {
 		super(config, entropyBytes, isNullSeedWallet, !config.isUnifiedWalletEnabled(), false);
 		this.unifiedWallet = config.isUnifiedWalletEnabled();
+		this.requestedInitializationMode = Objects.requireNonNull(initializationMode);
 		this.unifiedStorage = isNullSeedWallet
 				? (this.unifiedWallet ? PirateUnifiedWalletStorage.transientWallet(config, this.getCurrentWalletPath()) : null)
 				: PirateUnifiedWalletStorage.persistent(config, this.getEntropyHash58(), this.getCurrentWalletPath());
@@ -89,6 +107,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 	@Override
 	protected boolean initialize(ZcashFamilyNativeAdapter nativeAdapter) {
+		this.initializationFailureMessage = null;
 		if (!this.unifiedWallet) {
 			boolean initialized = super.initialize(nativeAdapter);
 			if (initialized && !this.isNullSeedWallet() && !this.captureLegacyIdentity(nativeAdapter))
@@ -114,25 +133,28 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 				String serverUri = selection.getEndpointUri();
 				Integer currentHeight = null;
-				if (this.isNullSeedWallet()) {
+				if (this.isNullSeedWallet() || this.requiresCurrentTipForInitialization()) {
 					try {
 						currentHeight = provider.getCurrentHeight();
 					} catch (ForeignBlockchainException e) {
+						if (!this.isNullSeedWallet())
+							return false;
 						// A transient wallet may fall back to the conservative birthday.
 					}
 				}
-				int birthday = chooseUnifiedBirthday(
-						this.config.getDefaultBirthday(), this.isNullSeedWallet(), currentHeight);
+				int birthday = this.resolveUnifiedBirthday(currentHeight);
 
 				return this.initializeUnified(nativeAdapter, serverUri, birthday);
 			});
 		} catch (Exception | UnsatisfiedLinkError e) {
+			this.initializationFailureMessage = e.getMessage();
 			return false;
 		}
 	}
 
 	boolean initializeUnified(ZcashFamilyNativeAdapter nativeAdapter, String serverUri, int birthday) {
 		String identityHash = null;
+		PirateUnifiedWalletStorage.Snapshot initializationSnapshot = this.unifiedStorage.read();
 		boolean nativeRegistryExisted = false;
 		boolean configureAttempted = false;
 		boolean storageConfigured = false;
@@ -143,6 +165,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 				throw new IOException("Unified wallet entropy is missing");
 
 			PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+			initializationSnapshot = snapshot;
 			nativeRegistryExisted = this.unifiedStorage.hasNativeRegistry();
 			identityHash = snapshot.getIdentityHash();
 
@@ -218,6 +241,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 			return true;
 		} catch (IOException | UnsatisfiedLinkError | RuntimeException e) {
+			this.initializationFailureMessage = e.getMessage();
 			if (configureAttempted && !storageConfigured) {
 				try {
 					if (this.unifiedStorage.isTransientWallet())
@@ -228,10 +252,64 @@ public class PirateWallet extends ZcashFamilyWallet {
 					// Preserve the original failed namespace if it cannot be archived safely.
 				}
 			}
-			this.failRecoverably(identityHash);
+			this.failRecoverably(identityHash, initializationSnapshot);
 			LOGGER.info("Unable to initialize Pirate Unified wallet: {}", e.getMessage());
 			return false;
 		}
+	}
+
+	private boolean requiresCurrentTipForInitialization() {
+		if (this.requestedInitializationMode != InitializationMode.NEW_AT_CURRENT_TIP
+				|| this.unifiedStorage == null || this.unifiedStorage.isTransientWallet())
+			return false;
+		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+		return snapshot.getInitializationMode() == null;
+	}
+
+	int resolveUnifiedBirthday(Integer currentHeight) throws IOException {
+		if (this.isNullSeedWallet())
+			return chooseUnifiedBirthday(this.config.getDefaultBirthday(), true, currentHeight);
+
+		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+		if (snapshot.isCorrupt())
+			throw new IOException("Pirate wallet initialization state is corrupt");
+
+		if (snapshot.getInitializationMode() == InitializationMode.NEW_AT_CURRENT_TIP) {
+			Integer birthday = snapshot.getInitializationBirthdayHeight();
+			if (birthday == null || birthday < 1)
+				throw new IOException("Pirate wallet initialization birthday is missing");
+			return birthday;
+		}
+
+		if (this.requestedInitializationMode != InitializationMode.NEW_AT_CURRENT_TIP)
+			return this.config.getDefaultBirthday();
+
+		if (this.unifiedStorage.hasNativeRegistry() || this.unifiedStorage.hasLegacyWallet()
+				|| this.unifiedStorage.hasStateFile())
+			throw new IOException("Known-new initialization requires an unused wallet namespace");
+		if (currentHeight == null || currentHeight < 1)
+			throw new IOException("A validated Pirate Chain tip is required for known-new initialization");
+
+		this.unifiedStorage.write(PirateUnifiedWalletStorage.State.MIGRATING, false, null, null, null,
+				InitializationMode.NEW_AT_CURRENT_TIP, currentHeight);
+		return currentHeight;
+	}
+
+	public boolean isKnownNewInitialization() {
+		return this.unifiedWallet && !this.isNullSeedWallet()
+				&& this.unifiedStorage.read().getInitializationMode() == InitializationMode.NEW_AT_CURRENT_TIP;
+	}
+
+	public int getInitializationBirthdayHeight() throws IOException {
+		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
+		if (snapshot.isCorrupt() || snapshot.getInitializationMode() != InitializationMode.NEW_AT_CURRENT_TIP
+				|| snapshot.getInitializationBirthdayHeight() == null)
+			throw new IOException("Known-new wallet initialization is not recorded");
+		return snapshot.getInitializationBirthdayHeight();
+	}
+
+	public String getInitializationFailureMessage() {
+		return this.initializationFailureMessage;
 	}
 
 	boolean captureLegacyIdentity(ZcashFamilyNativeAdapter nativeAdapter) {
@@ -268,11 +346,21 @@ public class PirateWallet extends ZcashFamilyWallet {
 	}
 
 	private void failRecoverably(String identityHash) {
+		this.failRecoverably(identityHash, this.unifiedStorage == null ? null : this.unifiedStorage.read());
+	}
+
+	private void failRecoverably(String identityHash, PirateUnifiedWalletStorage.Snapshot initializationSnapshot) {
 		if (this.unifiedStorage == null || this.unifiedStorage.isTransientWallet())
 			return;
 
 		try {
-			this.unifiedStorage.write(PirateUnifiedWalletStorage.State.FAILED_RECOVERABLE, false, identityHash);
+			if (initializationSnapshot != null && initializationSnapshot.getInitializationMode() != null)
+				this.unifiedStorage.write(PirateUnifiedWalletStorage.State.FAILED_RECOVERABLE, false, identityHash,
+						initializationSnapshot.getSelectedServerUri(), initializationSnapshot.getRecoveryRescanFromHeight(),
+						initializationSnapshot.getInitializationMode(),
+						initializationSnapshot.getInitializationBirthdayHeight());
+			else
+				this.unifiedStorage.write(PirateUnifiedWalletStorage.State.FAILED_RECOVERABLE, false, identityHash);
 		} catch (IOException e) {
 			// The legacy wallet remains untouched even if recovery metadata cannot be updated.
 		}
