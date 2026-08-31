@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-30 - fix(preview): preserve wallet state across managed updates
+
+Keeps Previewnet wallet registries under the persistent runtime directory
+instead of the replaceable application install tree. The Unix and Windows
+launchers share one migration implementation: it recognizes only the former
+default wallet location, checks the complete source and destination for
+conflicts, copies and byte-verifies every wallet file before changing the
+setting, and then removes redundant legacy copies. Existing custom wallet paths
+remain untouched, conflicting files stop startup without choosing a winner, and
+the Previewnet reset command deliberately retains wallet registries.
+
 ### 2026-08-30 - feat(arrr): initialize confirmed-new wallets at the current tip
 
 Adds an authenticated, loopback-only Pirate wallet initialization operation for

@@ -173,7 +173,16 @@ template generated it; delete both files to start fresh from the template. By
 default, generated runtime files stay under `preview/` for
 source checkouts and extracted release zips. Supplying `--runtime-dir=PATH` or
 setting `QORTIUM_PREVIEW_RUNTIME_DIR` stores the generated settings, database,
-QDN data, logs, PID file, keystore, and API key under that runtime root instead.
+QDN data, wallet registries, logs, PID file, keystore, and API key under that
+runtime root instead.
+
+Managed launchers keep `walletsPath` at `<runtime>/wallets`. On the first start
+after upgrading from an older Previewnet package, the launcher recognizes only
+the former install-relative `wallets` default, copies and byte-verifies that
+tree before switching the setting, and then removes the redundant install-tree
+copy. A custom `walletsPath` is preserved unchanged. Conflicting files fail
+startup without changing the setting or either copy; resolve the conflict
+manually rather than deleting one side on assumption.
 
 Managed desktop builds should use a stable runtime root such as
 `$HOME/.config/qortium-core`. The Qortium Home desktop app can keep its own data
@@ -190,6 +199,7 @@ Generated runtime files include:
 - `settings-preview-seed-netcup-local.template.json`
 - `db-preview/`
 - `data-preview/`
+- `wallets/`
 - `qortium-backup/`
 - `qortium-backup-preview/`
 - `run.log`
@@ -202,9 +212,11 @@ Generated runtime files include:
 - `QortiumKeyStore.jks`
 - `apikey.txt`
 
-These files are ignored by git and can be removed with `./preview/reset.sh`.
-With a custom runtime directory, reset only removes files from that runtime
-directory when called with the matching `--runtime-dir` value.
+These files are ignored by git. `./preview/reset.sh` removes rebuildable chain,
+QDN, settings, and log state, but deliberately retains `wallets/`; wallet
+registries can represent account history that a restore must not silently
+discard. With a custom runtime directory, reset only removes files from that
+runtime directory when called with the matching `--runtime-dir` value.
 
 ## Build A Preview Release Zip
 
