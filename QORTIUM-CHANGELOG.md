@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-31 - test(arrr): add inspect-only legacy wallet acceptance
+
+Adds an explicitly opt-in Linux x86_64 acceptance tool for examining copied,
+unfunded Pirate Lite/Qortal serialization-v8 wallets without importing keys or
+starting Core. The exact reviewed legacy library must recover the wallet-wide
+birthday and one nonempty Sapling spending-key candidate associated with the
+source-reviewed v8 default row from two encrypted fixtures and one unencrypted
+fixture; a wrong password must fail closed. Inputs and fixture hashes are
+pinned and snapshotted, passwords travel only through inherited descriptors,
+source files stay byte-identical, native access is confined to a loopback-only
+fixture, and process outputs and raw evidence files are secret-scanned and
+deleted before a redacted receipt is retained. Core's later verified-import
+boundary remains responsible for authoritative address ownership, index, and
+spendability checks.
+
 ### 2026-08-31 - test(arrr): add packaged real-v8 migration acceptance
 
 Adds an explicitly opt-in Linux x86_64 acceptance runner for one protected,

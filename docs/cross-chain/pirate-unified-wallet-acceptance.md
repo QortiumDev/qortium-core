@@ -145,6 +145,7 @@ Always-on tests use synthetic bytes and never load native code:
 /bin/sh -n tools/stage-pirate-unified-bundle.sh tools/run-pirate-unified-acceptance.sh \
   tools/run-pirate-unified-packaged-loader-acceptance.sh \
   tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
+  tools/run-pirate-legacy-v8-inspection-acceptance.sh \
   tools/run-pirate-unified-packaged-real-legacy-migration-acceptance.sh
 mvn -DskipTests=false \
   -Dtest='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,PirateUnifiedLoopbackLightwalletdTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests' \
@@ -543,6 +544,68 @@ migration, transient endpoint-failure recovery, switching during an active
 sync, production
 lightwalletd interoperability, funds, QDN publication, deployment, default
 enablement, or Home behavior.
+
+## Inspect-only legacy-v8 wallet acceptance
+
+Before connecting arbitrary external wallet files to Core's verified recovery
+endpoint, a narrower opt-in Linux x86_64 gate proves that the exact reviewed
+legacy library can inspect the three protected, unfunded serialization-v8
+fixtures without starting Core or importing a key:
+
+```sh
+tools/run-pirate-legacy-v8-inspection-acceptance.sh \
+  /absolute/path/qortium.jar \
+  /absolute/path/reviewed-legacy-bundle \
+  /absolute/path/protected-v8-fixture-directory \
+  /absolute/new/path/pirate-legacy-v8-inspection-receipt.md
+```
+
+The reviewed legacy bundle is a flat directory containing the exact pinned
+Linux x86_64 JNI library, `coinparams.json`, `saplingoutput_base64`, and
+`saplingspend_base64`. Their hashes are enforced before native loading. The
+fixture directory remains private and contains the two encrypted and one
+unencrypted fixture metadata/file pairs described by the wallet-import test
+plan; none are shipped with Core.
+
+The runner pins the exact metadata and wallet hashes for all three fixtures,
+snapshots every executable input into its private work directory, and compiles
+the standalone inspector and test lightwalletd against the snapshotted packaged
+JAR with the newly compiled helper classes first on the classpath. It then
+creates a rootless network namespace with only IPv4 loopback, copies each
+source wallet into a private disposable directory, and uses one JVM/native
+instance per file. For the Qortal-derived encrypted test fixtures, an
+acceptance-only helper derives the known fixture password from protected
+metadata and writes it to an inherited file descriptor. Passwords, entropy,
+wallet bytes, keys, and addresses are never command arguments, environment
+values, receipt fields, or ordinary stdout.
+
+Each successful inspection must recover the wallet's own conservative birthday
+and exactly one nonempty mainnet Sapling spending-key candidate associated with
+the source-reviewed v8 default row. Serialization v8 rebuilds that row's
+address from the stored full viewing key and does not persist the later
+diversified-address list. The inspector requires the export to match the
+wallet's shielded-address set and fails closed on duplicate or ambiguous key
+groups. It emits only an address hash, pool, count,
+`suggestedAddressIndex=0`, and `selectionBasis=legacy-v8-default-row`; it does
+not persist or emit the spending key outside transient JVM memory. Those fields
+do not prove ownership, index, or spendability—the later Core verified-import
+boundary does. A separate wrong-password JVM must return the dedicated
+rejection status without creating a result or changing its copied wallet.
+
+Acceptance also requires every protected source and disposable copy to remain
+byte-identical, zero transaction or unexpected fixture RPCs, zero network
+egress, and a passing scan of all raw outputs for fixture entropy,
+seed/key/address fields, shielded addresses, spending-key prefixes, or the
+exact protected fixture secrets. Exact-secret matching uses a mode-0600 pattern
+file rather than secret-bearing process arguments. Raw evidence and temporary
+password files are deleted before the sanitized receipt and log are retained.
+
+This is an inspect-only proof, not an end-user importer or a mutation-free
+simulation of Core's verified import. It does not call
+`POST /crosschain/arrr/recovery/import`, mutate a Unified registry, accept a
+live user-selected password from a terminal, prove funded recovery, or parse a
+full-node BerkeleyDB `wallet.dat`. Full-node support remains limited to a later
+adapter for explicit `z_exportkey`/`z_exportwallet` text exports.
 
 ## Packaged real-v8 legacy migration acceptance
 
