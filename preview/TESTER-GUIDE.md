@@ -39,6 +39,11 @@ Qortium creates stable chain and QDN/data I2P destination keys under the local
 runtime directory, using `i2p/chain.keys` and `i2p/data.keys` by default. Do not
 share those key files.
 
+Wallet registries also live under the persistent runtime directory at
+`wallets/`. The launcher migrates the exact former install-relative default on
+upgrade, but preserves any custom `walletsPath`. The reset command deliberately
+does not delete wallet registries.
+
 ## Easy Path: Download The Preview Zip
 
 1. Download `qortium-preview.zip` from the GitHub pre-release.

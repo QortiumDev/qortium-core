@@ -15,7 +15,7 @@ function Show-Usage {
     Write-Host "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
     Write-Host "  --headless     force Java headless mode"
     Write-Host "  --gui          force Java GUI mode"
-    Write-Host "  --runtime-dir  store generated settings, DB, QDN data, logs, pid, and API key under PATH"
+    Write-Host "  --runtime-dir  store settings, DB, QDN data, wallets, logs, pid, and API key under PATH"
     Write-Host ""
     Write-Host "QORTIUM_PREVIEW_RUNTIME_DIR can also set the runtime directory."
 }
@@ -267,6 +267,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Set-RuntimeSettingPaths -SettingsPath $SettingsLocal
+& java -cp $JarPath org.qortium.PreviewRuntimeWallets $ScriptDir $RuntimeDir $SettingsLocal
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Could not prepare persistent Previewnet wallet storage."
+    Write-Host "Resolve the reported path conflict without deleting either wallet tree, then try again."
+    exit 1
+}
 Move-LegacyLists
 Set-AutoUpdateMode -SettingsPath $SettingsLocal -Mode $env:QORTIUM_PREVIEW_AUTO_UPDATE_MODE
 $AutoUpdateModeEffective = Get-AutoUpdateMode -SettingsPath $SettingsLocal

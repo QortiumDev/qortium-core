@@ -21,7 +21,7 @@ usage() {
 	echo "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
 	echo "  --headless     force Java headless mode"
 	echo "  --gui          force Java GUI mode"
-	echo "  --runtime-dir  store generated settings, DB, QDN data, logs, pid, and API key under PATH"
+	echo "  --runtime-dir  store settings, DB, QDN data, wallets, logs, pid, and API key under PATH"
 	echo
 	echo "By default, the launcher uses headless mode only when no desktop display"
 	echo "is detected."
@@ -333,6 +333,12 @@ if ! java -cp "${JAR_PATH}" org.qortium.MergeSettings \
 	exit 1
 fi
 configure_runtime_settings "${SETTINGS_LOCAL}"
+if ! java -cp "${JAR_PATH}" org.qortium.PreviewRuntimeWallets \
+		"${SCRIPT_DIR}" "${RUNTIME_DIR}" "${SETTINGS_LOCAL}"; then
+	echo "Could not prepare persistent Previewnet wallet storage."
+	echo "Resolve the reported path conflict without deleting either wallet tree, then try again."
+	exit 1
+fi
 migrate_legacy_lists
 if [ -n "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE:-}" ]; then
 	apply_auto_update_mode "${SETTINGS_LOCAL}" "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE}"
