@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-08-31 - test(arrr): add packaged real-v8 migration acceptance
+
+Adds an explicitly opt-in Linux x86_64 acceptance runner for one protected,
+encrypted, unfunded Qortal-format Pirate wallet. Three separately packaged Core
+processes must decode the real serialization-v8 file with the reviewed legacy
+library, migrate the same one-way identity through the authenticated Unified
+v1.1.9 QDN bundle, reopen it as ready, preserve the source and disposable legacy
+copies, avoid transaction RPCs and network egress, and shut down cleanly. Secret-
+capable runtime evidence is scanned and deleted; only a sanitized receipt is
+retained. This gate does not make arbitrary wallet import a supported interface.
+
 ### 2026-08-30 - fix(preview): preserve wallet state across managed updates
 
 Keeps Previewnet wallet registries under the persistent runtime directory

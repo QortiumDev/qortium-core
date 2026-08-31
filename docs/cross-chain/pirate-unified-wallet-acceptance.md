@@ -144,7 +144,8 @@ Always-on tests use synthetic bytes and never load native code:
 ```sh
 /bin/sh -n tools/stage-pirate-unified-bundle.sh tools/run-pirate-unified-acceptance.sh \
   tools/run-pirate-unified-packaged-loader-acceptance.sh \
-  tools/run-pirate-unified-packaged-lifecycle-acceptance.sh
+  tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
+  tools/run-pirate-unified-packaged-real-legacy-migration-acceptance.sh
 mvn -DskipTests=false \
   -Dtest='PirateUnifiedArtifactPinTests,PirateUnifiedWalletBundleTests,PirateUnifiedLoopbackLightwalletdTests,LiteWalletJniSurfaceTests,ZcashFamilyWalletControllerQdnTests' \
   test
@@ -543,6 +544,52 @@ sync, production
 lightwalletd interoperability, funds, QDN publication, deployment, default
 enablement, or Home behavior.
 
+## Packaged real-v8 legacy migration acceptance
+
+The lifecycle gate uses a newly created synthetic wallet. A stricter opt-in
+Linux x86_64 gate can instead exercise the complete Core migration state
+machine with one protected, unfunded, encrypted Qortal-format serialization-v8
+fixture:
+
+```sh
+tools/run-pirate-unified-packaged-real-legacy-migration-acceptance.sh \
+  /absolute/path/qortium.jar \
+  /absolute/path/pirate-unified-v1.1.9 \
+  /absolute/path/pirate-unified-local-qdn-fixture \
+  /absolute/path/reviewed-legacy-bundle \
+  /absolute/path/protected-v8-metadata.json \
+  /absolute/new/path/pirate-unified-packaged-real-v8-migration-receipt.md
+```
+
+This runner is deliberately fixture-gated rather than suitable for arbitrary
+wallet files. It requires metadata identifying an encrypted, unfunded version-8
+fixture; exact reviewed hashes for the legacy Linux JNI, coin parameters, and
+Sapling parameter files; the authenticated v1.1.9 staged bundle; and the
+disposable local-QDN resource. Secret material is read from a protected local
+file, never accepted on the command line, and copied only into a mode-0700
+temporary runtime beside the new receipt. The source wallet is hash-checked
+before and after the run and is never opened in place.
+
+Inside a rootless loopback-only network namespace, the runner starts the same
+packaged Core JAR three times. The legacy phase must map the reviewed legacy JNI,
+log an actual serialization-v8 decode, preserve the wallet file, reach `READY`,
+and persist `LEGACY` without a Unified registry. The first Unified phase must
+resolve and map v1.1.9 through the local-QDN fixture, retain the same namespace,
+one-way identity hash, and wallet-address hash, synchronize to the deterministic
+fixture, and persist validated `MIGRATING`. A third clean process must reopen the
+same registry and promote it to `UNIFIED_READY`. All three processes must shut
+down gracefully, and the loopback fixture must record compact-block and subtree
+activity with zero transaction or unexpected RPCs.
+
+Raw Core, JNI, API, fixture, and wallet-state evidence is scanned for the
+fixture entropy, ephemeral API key, seed/key/address-shaped JSON, and shielded
+addresses, then deleted. The retained receipt contains only hashes, one-way
+continuity results, counters, and sanitized diagnostics. A pass proves this one
+protected Qortal-format v8 fixture migrates through the packaged Core state
+machine on Linux x86_64. It does not prove arbitrary legacy/full-node/Unified
+wallet import, password handling, funded behavior, production-network history,
+other platforms, QDN publication, deployment, or Home behavior.
+
 ## Acceptance matrix
 
 Artifact presence is `STAGED`, not runtime acceptance. Loopback JNI and isolated
@@ -558,8 +605,8 @@ FreeBSD acceptance.
 | macOS aarch64 | NOT_RUN | NOT_RUN | NOT_RUN |
 | Windows x86_64 | NOT_RUN | NOT_RUN | NOT_RUN |
 
-G2 must later cover real legacy migration, A/B account switching during sync,
-failover and bad-height servers, disable/re-enable, production-network recovery,
+G2 must later cover additional legacy fixtures, A/B account switching during
+sync, failover and bad-height servers, production-network recovery,
 funded balance/spend behavior, and other platforms. G3 separately covers publication by an approved QDN
 identity, retrieval by immutable transaction signature, byte comparison,
 controlled receive/send, and ARRR HTLC/P2SH fund/redeem/refund recovery.
