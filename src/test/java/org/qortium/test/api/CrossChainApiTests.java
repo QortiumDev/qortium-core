@@ -4,7 +4,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.ApiError;
 import org.qortium.api.model.CrossChainTradeLedgerEntry;
+import org.qortium.api.model.crosschain.BitcoinyRawTransactionRequest;
 import org.qortium.api.model.crosschain.SupportedBlockchainInfo;
+import org.qortium.api.resource.CrossChainBitcoinyResource;
 import org.qortium.api.resource.CrossChainResource;
 import org.qortium.api.resource.CrossChainUtils;
 import org.qortium.crosschain.BitcoinyChainConfig;
@@ -38,6 +40,32 @@ public class CrossChainApiTests extends ApiCommon {
 	@Before
 	public void buildResource() {
 		this.crossChainResource = (CrossChainResource) ApiCommon.buildResource(CrossChainResource.class);
+	}
+
+	@Test
+	public void testPreparedSendBroadcastBindsExpectedChain() {
+		ApiCommon.installTestApiKey();
+		try {
+			CrossChainBitcoinyResource authenticatedResource = (CrossChainBitcoinyResource)
+					ApiCommon.buildResource(CrossChainBitcoinyResource.class, ApiCommon.TEST_API_KEY);
+			ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BTC");
+			BitcoinyRawTransactionRequest request = new BitcoinyRawTransactionRequest();
+			request.rawTransactionHex = "not-hex";
+
+			request.expectedChainId = "bip122:" + "00".repeat(16);
+			assertApiError(ApiError.INVALID_CRITERIA,
+					() -> authenticatedResource.broadcastPreparedSend(ApiCommon.TEST_API_KEY, bitcoin.name(), request));
+
+			request.expectedChainId = bitcoin.getActiveChainId();
+			assertApiError(ApiError.INVALID_DATA,
+					() -> authenticatedResource.broadcastPreparedSend(ApiCommon.TEST_API_KEY, bitcoin.name(), request));
+
+			request.expectedChainId = null;
+			assertApiError(ApiError.INVALID_DATA,
+					() -> authenticatedResource.broadcastPreparedSend(ApiCommon.TEST_API_KEY, bitcoin.name(), request));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
 	}
 
 	@Test

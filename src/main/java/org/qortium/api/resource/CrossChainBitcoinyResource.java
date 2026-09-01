@@ -343,7 +343,7 @@ public class CrossChainBitcoinyResource {
 		Security.checkApiCallAllowed(request);
 
 		BitcoinyPreparedSend preparedSend = prepareSend(blockchain, bitcoinySendRequest);
-		return broadcastPreparedSend(blockchain, preparedSend.rawTransactionHex);
+		return broadcastRawTransaction(blockchain, preparedSend.rawTransactionHex, null);
 	}
 
 	@POST
@@ -379,7 +379,7 @@ public class CrossChainBitcoinyResource {
 					@ApiResponse(content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string", description = "transaction hash")))
 			}
 	)
-	@ApiErrors({ApiError.INVALID_DATA, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.INVALID_DATA, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
 	@SecurityRequirement(name = "apiKey")
 	public String broadcastPreparedSend(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
 			@PathParam("blockchain") String blockchain, BitcoinyRawTransactionRequest rawTransactionRequest) {
@@ -389,7 +389,8 @@ public class CrossChainBitcoinyResource {
 				|| rawTransactionRequest.rawTransactionHex.trim().isEmpty())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
 
-		return broadcastPreparedSend(blockchain, rawTransactionRequest.rawTransactionHex);
+		return broadcastRawTransaction(blockchain, rawTransactionRequest.rawTransactionHex,
+				rawTransactionRequest.expectedChainId);
 	}
 
 	private BitcoinyPreparedSend prepareSend(String blockchain, BitcoinySendRequest bitcoinySendRequest) {
@@ -450,8 +451,24 @@ public class CrossChainBitcoinyResource {
 				HashCode.fromBytes(spendPreview.getRawTransaction()).toString());
 	}
 
-	private String broadcastPreparedSend(String blockchain, String rawTransactionHex) {
-		Bitcoiny bitcoiny = getBitcoiny(blockchain);
+	private String broadcastRawTransaction(String blockchain, String rawTransactionHex, String expectedChainId) {
+		ForeignBlockchainRegistry.Entry entry = getBitcoinyEntry(blockchain);
+		String normalizedExpectedChainId = null;
+		if (expectedChainId != null && !expectedChainId.trim().isEmpty()) {
+			if (!PUBLIC_SPEND_CONTEXT_CURRENCIES.contains(entry.getCurrencyCode())
+					|| entry.getBitcoinySpec().getTransactionFormat() != BitcoinyTransactionFormat.LEGACY)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+			try {
+				normalizedExpectedChainId = Bip122ChainId.normalize(expectedChainId.trim());
+			} catch (IllegalArgumentException e) {
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+			}
+			if (!normalizedExpectedChainId.equals(entry.getActiveChainId()))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		}
+		Bitcoiny bitcoiny = entry.getBitcoinyInstance();
+		if (bitcoiny == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
 		byte[] rawTransaction;
 
 		try {
@@ -461,6 +478,8 @@ public class CrossChainBitcoinyResource {
 		}
 
 		try {
+			if (normalizedExpectedChainId != null && !normalizedExpectedChainId.equals(entry.getActiveChainId()))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 			return bitcoiny.broadcastRawTransaction(rawTransaction);
 		} catch (ForeignBlockchainException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE,
