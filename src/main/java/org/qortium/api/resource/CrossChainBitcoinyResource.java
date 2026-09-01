@@ -18,9 +18,14 @@ import org.qortium.api.model.crosschain.BitcoinyPreparedSend;
 import org.qortium.api.model.crosschain.BitcoinyRawTransactionRequest;
 import org.qortium.api.model.crosschain.BitcoinySendRequest;
 import org.qortium.api.model.crosschain.ForeignCoinStatus;
+import org.qortium.api.model.crosschain.ForeignWalletSpendContext;
+import org.qortium.api.model.crosschain.ForeignWalletSpendContextRequest;
+import org.qortium.api.model.crosschain.ForeignWalletSpendContextUtxo;
 import org.qortium.crosschain.AddressInfo;
 import org.qortium.crosschain.Bitcoiny;
 import org.qortium.crosschain.BitcoinySpendPreview;
+import org.qortium.crosschain.BitcoinyTransactionFormat;
+import org.qortium.crosschain.Bip122ChainId;
 import org.qortium.crosschain.ChainableServer;
 import org.qortium.crosschain.ElectrumX;
 import org.qortium.crosschain.ForeignBlockchainException;
@@ -29,6 +34,7 @@ import org.qortium.crosschain.ServerConfigurationInfo;
 import org.qortium.crosschain.ServerConnectionInfo;
 import org.qortium.crosschain.ServerInfo;
 import org.qortium.crosschain.SimpleTransaction;
+import org.qortium.crosschain.WalletSpendContext;
 import org.qortium.settings.Settings;
 
 import javax.servlet.http.HttpServletRequest;
@@ -39,11 +45,21 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Path("/crosschain/{blockchain: " + CrossChainPathPatterns.BITCOINY_BLOCKCHAIN_SEGMENT + "}")
 @Tag(name = "Cross-Chain (Bitcoiny)")
 public class CrossChainBitcoinyResource {
+	private static final int MAXIMUM_PUBLIC_WALLET_KEYS = 200;
+	private static final int MAXIMUM_PUBLIC_WALLET_OUTPUTS = 1_000;
+	private static final int MAXIMUM_PUBLIC_PREVIOUS_TRANSACTION_BYTES = 1_000_000;
+	private static final int MAXIMUM_PUBLIC_PREVIOUS_TRANSACTIONS_BYTES = 8_000_000;
+	private static final Set<String> PUBLIC_SPEND_CONTEXT_CURRENCIES = Set.of(
+			"BTC", "LTC", "DOGE", "DGB", "RVN", "DASH", "NMC", "FIRO");
 
 	@Context
 	HttpServletRequest request;
@@ -62,6 +78,88 @@ public class CrossChainBitcoinyResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
 
 		return bitcoiny;
+	}
+
+	@POST
+	@Path("/wallet/public/spend-context")
+	@Operation(
+			summary = "Returns confirmed watch-only wallet outputs for client-side transaction construction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = ForeignWalletSpendContextRequest.class))),
+			responses = {
+					@ApiResponse(content = @Content(mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = ForeignWalletSpendContext.class)))
+			}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.INVALID_DATA, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public ForeignWalletSpendContext getPublicWalletSpendContext(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			@PathParam("blockchain") String blockchain,
+			ForeignWalletSpendContextRequest spendContextRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (spendContextRequest == null || spendContextRequest.xpub58 == null
+				|| spendContextRequest.expectedChainId == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		if (!spendContextRequest.xpub58.matches("[1-9A-HJ-NP-Za-km-z]{100,128}"))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		ForeignBlockchainRegistry.Entry entry = getBitcoinyEntry(blockchain);
+		if (!PUBLIC_SPEND_CONTEXT_CURRENCIES.contains(entry.getCurrencyCode())
+				|| entry.getBitcoinySpec().getTransactionFormat() != BitcoinyTransactionFormat.LEGACY)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		String expectedChainId;
+		try {
+			expectedChainId = Bip122ChainId.normalize(spendContextRequest.expectedChainId);
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		}
+
+		String activeChainId = entry.getActiveChainId();
+		if (!expectedChainId.equals(activeChainId))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		Bitcoiny bitcoiny = entry.getBitcoinyInstance();
+		if (bitcoiny == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
+		if (!bitcoiny.isValidDeterministicPublicKey(spendContextRequest.xpub58))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		try {
+			WalletSpendContext spendContext = bitcoiny.getWalletSpendContext(
+					spendContextRequest.xpub58, MAXIMUM_PUBLIC_WALLET_KEYS, MAXIMUM_PUBLIC_WALLET_OUTPUTS,
+					MAXIMUM_PUBLIC_PREVIOUS_TRANSACTION_BYTES, MAXIMUM_PUBLIC_PREVIOUS_TRANSACTIONS_BYTES);
+			List<ForeignWalletSpendContextUtxo> outputs = spendContext.getOutputs()
+					.stream()
+					.map(ForeignWalletSpendContextUtxo::new)
+					.collect(Collectors.toList());
+			Map<String, String> previousTransactions = new LinkedHashMap<>();
+			spendContext.getPreviousTransactions().forEach((txHash, rawTransaction) ->
+					previousTransactions.put(txHash, HashCode.fromBytes(rawTransaction).toString()));
+
+			return new ForeignWalletSpendContext(
+					1,
+					entry.name(),
+					entry.getCurrencyCode(),
+					Settings.getInstance().getBitcoinyNetworkName(entry.getCurrencyCode()),
+					activeChainId,
+					bitcoiny.getBlockchainHeight(),
+					true,
+					BitcoinyTransactionFormat.LEGACY.name(),
+					1,
+					1,
+					0xffffffffL,
+					0L,
+						Long.toString(bitcoiny.getMinNonDustOutput().value),
+						Long.toString(bitcoiny.getSpendFeePerByte(null)),
+						previousTransactions,
+						outputs);
+		} catch (ForeignBlockchainException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
+		}
 	}
 
 	@GET

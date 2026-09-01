@@ -17,6 +17,7 @@ import org.qortium.utils.Amounts;
 import org.qortium.utils.BitTwiddling;
 import org.qortium.utils.NTP;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -155,6 +156,117 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 		} catch (IllegalArgumentException e) {
 			return false;
 		}
+	}
+
+	public boolean isValidDeterministicPublicKey(String key58) {
+		try {
+			BitcoinyDeterministicKey key = BitcoinyDeterministicKey.fromBase58(this.params, key58);
+			return !key.hasPrivateKey()
+					&& key.getDepth() == 0
+					&& key.getParentFingerprint() == 0
+					&& key.getChildNumber() == 0;
+		} catch (IllegalArgumentException e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Returns confirmed P2PKH wallet outputs with their derivation paths and raw
+	 * previous transactions. This method never accepts or derives private keys.
+	 */
+	public WalletSpendContext getWalletSpendContext(String xpub58, int maximumKeys, int maximumOutputs,
+			int maximumPreviousTransactionBytes, int maximumTotalPreviousTransactionBytes)
+			throws ForeignBlockchainException {
+		if (!isValidDeterministicPublicKey(xpub58))
+			throw new IllegalArgumentException("Expected a root extended public key");
+		if (maximumKeys <= 0 || maximumOutputs <= 0 || maximumPreviousTransactionBytes <= 0
+				|| maximumTotalPreviousTransactionBytes <= 0)
+			throw new IllegalArgumentException("Spend-context limits must be positive");
+
+		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(xpub58, EXECUTOR, maximumKeys);
+
+		List<BitcoinyDeterministicKey> sortedKeys = new ArrayList<>(walletKeys);
+		sortedKeys.sort(Comparator.comparing(BitcoinyDeterministicKey::getPathAsString));
+		Map<String, byte[]> previousTransactions = new LinkedHashMap<>();
+		Map<String, BitcoinyTransaction> parsedPreviousTransactions = new HashMap<>();
+		Set<String> seenOutpoints = new HashSet<>();
+		List<WalletSpendContextUtxo> outputs = new ArrayList<>();
+		long totalPreviousTransactionBytes = 0;
+
+		for (BitcoinyDeterministicKey key : sortedKeys) {
+			byte[] expectedScript = BitcoinyScript.p2pkhScript(key.getPublicKeyHash());
+			String address = pkhToAddress(key.getPublicKeyHash());
+			List<UnspentOutput> unspentOutputs = this.blockchainProvider.getUnspentOutputs(expectedScript,
+					BitcoinyBlockchainProvider.EXCLUDE_UNCONFIRMED);
+
+			for (UnspentOutput unspentOutput : unspentOutputs) {
+				if (unspentOutput.height <= 0)
+					continue;
+
+				Optional<UnspentOutput> resolvedOutput = resolveUnspentOutput(unspentOutput);
+				if (resolvedOutput.isEmpty())
+					throw new ForeignBlockchainException(String.format("Unable to resolve spendable output %s:%d",
+							HashCode.fromBytes(unspentOutput.hash), unspentOutput.index));
+
+				UnspentOutput resolved = resolvedOutput.get();
+				if (!Arrays.equals(expectedScript, resolved.script) || !isSpendableOutput(resolved))
+					continue;
+
+				if (outputs.size() >= maximumOutputs)
+					throw new ForeignBlockchainException("Wallet UTXO discovery exceeded the public limit");
+
+				String txHash = HashCode.fromBytes(resolved.hash).toString();
+				String outpoint = txHash + ":" + resolved.index;
+				if (!seenOutpoints.add(outpoint))
+					throw new ForeignBlockchainException("Wallet UTXO discovery returned a duplicate outpoint");
+
+				byte[] previousTransaction = previousTransactions.get(txHash);
+				BitcoinyTransaction parsedPreviousTransaction = parsedPreviousTransactions.get(txHash);
+				if (previousTransaction == null) {
+					previousTransaction = this.blockchainProvider.getRawTransaction(resolved.hash);
+					if (previousTransaction.length > maximumPreviousTransactionBytes)
+						throw new ForeignBlockchainException("Previous transaction exceeded the public per-transaction limit");
+
+					totalPreviousTransactionBytes += previousTransaction.length;
+					if (totalPreviousTransactionBytes > maximumTotalPreviousTransactionBytes)
+						throw new ForeignBlockchainException("Previous transactions exceeded the public response limit");
+
+					parsedPreviousTransaction = deserializeRawTransaction(previousTransaction);
+					if (!txHash.equals(parsedPreviousTransaction.txHash))
+						throw new ForeignBlockchainException(String.format(
+								"Raw previous transaction hash mismatch for %s", txHash));
+
+					previousTransactions.put(txHash, previousTransaction);
+					parsedPreviousTransactions.put(txHash, parsedPreviousTransaction);
+				}
+
+				if (resolved.index < 0 || resolved.index >= parsedPreviousTransaction.outputs.size())
+					throw new ForeignBlockchainException(String.format(
+							"Output index %d out of range for transaction %s", resolved.index, txHash));
+
+				BitcoinyTransaction.Output rawOutput = parsedPreviousTransaction.outputs.get(resolved.index);
+				byte[] rawOutputScript;
+				try {
+					rawOutputScript = HashCode.fromString(rawOutput.scriptPubKey).asBytes();
+				} catch (IllegalArgumentException e) {
+					throw new ForeignBlockchainException(String.format(
+							"Invalid script for output %d of transaction %s", resolved.index, txHash));
+				}
+
+				if (rawOutput.value != resolved.value || !Arrays.equals(rawOutputScript, expectedScript))
+					throw new ForeignBlockchainException(String.format(
+							"Raw previous transaction output mismatch for %s:%d", txHash, resolved.index));
+
+				outputs.add(new WalletSpendContextUtxo(address, resolved.height, key.getPath(), key.getPathAsString(),
+						expectedScript, resolved.hash, resolved.index, resolved.value));
+			}
+		}
+
+		outputs.sort(Comparator
+				.comparingInt(WalletSpendContextUtxo::getHeight)
+				.thenComparing(output -> new BigInteger(1, output.getTransactionHash()))
+				.thenComparingInt(WalletSpendContextUtxo::getOutputIndex));
+		return new WalletSpendContext(outputs, previousTransactions);
 	}
 
 	public String normalizeAddress(String address) {
@@ -1178,11 +1290,19 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 * @throws ForeignBlockchainException
 	 */
 	public Set<BitcoinyDeterministicKey> getWalletKeysWithExecutor(String key58, ExecutorService executor) throws ForeignBlockchainException {
+		return getWalletKeysWithExecutor(key58, executor, Integer.MAX_VALUE);
+	}
+
+	private Set<BitcoinyDeterministicKey> getWalletKeysWithExecutor(String key58, ExecutorService executor,
+			int maximumKeys) throws ForeignBlockchainException {
+		if (maximumKeys <= 0)
+			throw new IllegalArgumentException("Wallet key limit must be positive");
+
 		BitcoinyDeterministicKeyChain keyChain = BitcoinyDeterministicKeyChain.fromBase58(this.params, key58);
 
 		// the return value
 		Set<BitcoinyDeterministicKey> keySet = processKeysOnly(executor, keyChain.getInitialLeafKeys(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT),
-				keyChain, 0, 0);
+				keyChain, 0, 0, maximumKeys);
 
 		return keySet;
 	}
@@ -1206,7 +1326,10 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 * @throws ForeignBlockchainException
 	 */
 	private Set<BitcoinyDeterministicKey> processKeysOnly(ExecutorService executor, List<BitcoinyDeterministicKey> keys,
-			BitcoinyDeterministicKeyChain keyChain, int unusedCounter, int existingLeafKeyCount) throws ForeignBlockchainException {
+			BitcoinyDeterministicKeyChain keyChain, int unusedCounter, int existingLeafKeyCount, int maximumKeys)
+			throws ForeignBlockchainException {
+		if ((long) existingLeafKeyCount + keys.size() > maximumKeys)
+			throw new ForeignBlockchainException("Wallet address discovery exceeded the public limit");
 
 		Set<BitcoinyDeterministicKey> keySet = new HashSet<>();
 
@@ -1231,13 +1354,14 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		int processedLeafKeyCount = existingLeafKeyCount + keys.size();
 
 		if( needToProcessAdditionalKeys || anyTrue( executor, transactionChecks, RETRIES )) {
-			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain, processedLeafKeyCount), keyChain, 0, processedLeafKeyCount));
+			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain, processedLeafKeyCount), keyChain, 0,
+					processedLeafKeyCount, maximumKeys));
 		}
 		// if no additional keys were already processed and the if the gap limit held, then process additional keys
 		else if ( unusedCounter < Settings.getInstance().getGapLimit()) {
 
 			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain, processedLeafKeyCount), keyChain,
-					unusedCounter + WALLET_KEY_LOOKAHEAD_INCREMENT, processedLeafKeyCount));
+					unusedCounter + WALLET_KEY_LOOKAHEAD_INCREMENT, processedLeafKeyCount, maximumKeys));
 		}
 
 		return keySet;
