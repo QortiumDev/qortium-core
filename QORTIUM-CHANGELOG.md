@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-01 - feat(wallet): add keyless foreign spend context
+
+Adds an authenticated watch-only contract for BTC, LTC, DOGE, DGB, RVN, DASH,
+NMC, and FIRO so a trusted client can construct a transaction without sending
+an extended private key to Core. The request accepts only a root extended
+public key and the expected active chain identity. Discovery is confirmed-only
+and bounded; each returned path, outpoint, value, and script is tied to a
+deduplicated raw funding transaction whose transaction ID and referenced output
+Core independently verifies. Raw transaction sizes are bounded per item and in
+aggregate. The route is not in public-node policy, and this change does not add
+a raw-broadcast route or expose foreign sending to QDN apps.
+
 ### 2026-08-31 - test(arrr): add inspect-only legacy wallet acceptance
 
 Adds an explicitly opt-in Linux x86_64 acceptance tool for examining copied,
