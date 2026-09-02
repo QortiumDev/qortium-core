@@ -20,6 +20,11 @@ public class ElectrumServer {
     private Scanner scanner;
     private int nextId = 1;
     private String clientName;
+    /**
+     * The protocol version this connection negotiated, which decides which method family its RPCs use.
+     * Volatile because connections are handed between the pool's threads.
+     */
+    private volatile ElectrumProtocolVersion negotiatedProtocolVersion;
 
     private ChainableServerConnectionRecorder recorder;
 
@@ -69,6 +74,20 @@ public class ElectrumServer {
 
     public int incrementNextId() {
         return nextId++;
+    }
+
+    /** @return the protocol version negotiated on this connection, or null before negotiation completed */
+    public ElectrumProtocolVersion getNegotiatedProtocolVersion() {
+        return this.negotiatedProtocolVersion;
+    }
+
+    public void setNegotiatedProtocolVersion(ElectrumProtocolVersion negotiatedProtocolVersion) {
+        this.negotiatedProtocolVersion = negotiatedProtocolVersion;
+    }
+
+    /** @return the method family this connection must use, chosen from its negotiated protocol version */
+    public ElectrumMethods getMethods() {
+        return ElectrumMethods.forVersion(this.negotiatedProtocolVersion);
     }
 
     public String getClientName() {

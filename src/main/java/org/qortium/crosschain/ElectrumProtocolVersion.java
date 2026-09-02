@@ -36,6 +36,11 @@ public final class ElectrumProtocolVersion implements Comparable<ElectrumProtoco
 		return new ElectrumProtocolVersion(major, minor, 0, false);
 	}
 
+	/** A three-component version, e.g. <code>of(1, 4, 2)</code> for exactly 1.4.2. */
+	public static ElectrumProtocolVersion of(int major, int minor, int patch) {
+		return new ElectrumProtocolVersion(major, minor, patch, true);
+	}
+
 	/**
 	 * Parse <code>major.minor</code> or <code>major.minor.patch</code>.
 	 *
