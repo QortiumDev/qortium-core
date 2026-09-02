@@ -1,7 +1,6 @@
 package org.qortium.notification;
 
 import com.google.common.hash.HashCode;
-import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.ee8.websocket.api.Session;
@@ -11,12 +10,13 @@ import org.qortium.crosschain.BitcoinyDeterministicKeyChain;
 import org.qortium.crosschain.BitcoinyNetwork;
 import org.qortium.crosschain.BitcoinyScript;
 import org.qortium.crosschain.BitcoinyTransaction;
+import org.qortium.crosschain.ElectrumMethods;
 import org.qortium.crosschain.ElectrumProtocolVersion;
+import org.qortium.crosschain.ElectrumRequest;
 import org.qortium.crosschain.ElectrumServerList;
 import org.qortium.crosschain.ElectrumX;
 import org.qortium.crosschain.ElectrumXPushClient;
 import org.qortium.crosschain.ForeignBlockchainRegistry;
-import org.qortium.crypto.Crypto;
 import org.qortium.settings.Settings;
 
 import java.io.IOException;
@@ -49,13 +49,11 @@ final class ForeignPaymentNotificationService {
 	static final Set<String> FILTER_KEYS = Set.of("coin", "xpub");
 
 	private static final Logger LOGGER = LogManager.getLogger(ForeignPaymentNotificationService.class);
-	private static final String SCRIPTHASH_SUBSCRIBE = "blockchain.scripthash.subscribe";
-	private static final String SCRIPTHASH_HISTORY = "blockchain.scripthash.get_history";
 	private static final String HEADERS_SUBSCRIBE = "blockchain.headers.subscribe";
 	private static final String CLIENT_NAME = "Qortium-Notifications";
-	// ElectrumX 2.0's protocol 1.5+ dropped the blockchain.scripthash.* methods this service subscribes to,
-	// so never negotiate above the highest protocol Core actually speaks. The range is shared with ElectrumX
-	// so the push connections and the pooled connections cannot drift apart.
+	// The negotiated range is shared with ElectrumX so the push connections and the pooled connections
+	// cannot drift apart, and the subscription methods are picked per connection from what it negotiated:
+	// protocol 1.7 serves blockchain.scriptpubkey.* in place of blockchain.scripthash.*.
 	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(
 			ElectrumX.MIN_PROTOCOL_VERSION.toString(), ElectrumX.MAX_PROTOCOL_VERSION.toString());
 	private static final int INITIAL_LOOKAHEAD_INCREMENT = 3;
@@ -265,6 +263,14 @@ final class ForeignPaymentNotificationService {
 	 * pooled ElectrumX connections compare them, so a 1.4.x server is accepted by both and 1.10 by neither.
 	 */
 	static void validateNegotiatedVersion(Object response) throws IOException {
+		parseNegotiatedVersion(response);
+	}
+
+	/**
+	 * Validate a <code>server.version</code> reply and return what the server settled on, so the caller can
+	 * pick the matching method family for the life of that connection.
+	 */
+	static ElectrumProtocolVersion parseNegotiatedVersion(Object response) throws IOException {
 		if (!(response instanceof List<?>))
 			throw new IOException("ElectrumX server did not negotiate a protocol version");
 
@@ -277,6 +283,8 @@ final class ForeignPaymentNotificationService {
 
 		if (!negotiated.isWithin(ElectrumX.MIN_PROTOCOL_VERSION, ElectrumX.MAX_PROTOCOL_VERSION))
 			throw new IOException("ElectrumX server negotiated an unsupported protocol version");
+
+		return negotiated;
 	}
 
 	private static final class Registration {
@@ -297,6 +305,8 @@ final class ForeignPaymentNotificationService {
 		private final ThreadPoolExecutor worker;
 		private final ElectrumXPushClient client;
 		private final Map<String, AddressWatch> watchesByScripthash = new LinkedHashMap<>();
+		/** Protocol version negotiated on the current push connection; decides the subscription method family. */
+		private volatile ElectrumProtocolVersion negotiatedVersion;
 		private final Map<String, BitcoinyTransaction> transactionCache =
 				new LinkedHashMap<String, BitcoinyTransaction>(TRANSACTION_CACHE_SIZE + 1, 0.75F, true) {
 					@Override
@@ -378,9 +388,10 @@ final class ForeignPaymentNotificationService {
 			for (BitcoinyDeterministicKey key : keys) {
 				String address = this.bitcoiny.pkhToAddress(key.getPublicKeyHash());
 				String scriptPubKey = HashCode.fromBytes(BitcoinyScript.p2pkhScript(key.getPublicKeyHash())).toString();
-				String scripthash = toScripthash(key);
+				byte[] script = BitcoinyScript.p2pkhScript(key.getPublicKeyHash());
+				String scripthash = ElectrumMethods.subscriptionKey(script);
 				AddressWatch watch = this.watchesByScripthash.computeIfAbsent(
-						scripthash, ignored -> new AddressWatch(scripthash));
+						scripthash, ignored -> new AddressWatch(scripthash, script));
 				watch.rules.add(rule);
 				rule.watches.add(watch);
 				rule.addresses.add(address);
@@ -392,12 +403,6 @@ final class ForeignPaymentNotificationService {
 			rule.batches.add(batch);
 		}
 
-		private static String toScripthash(BitcoinyDeterministicKey key) {
-			byte[] script = BitcoinyScript.p2pkhScript(key.getPublicKeyHash());
-			byte[] digest = Crypto.digest(script);
-			Bytes.reverse(digest);
-			return HashCode.fromBytes(digest).toString();
-		}
 
 		private boolean subscribeAndAdvance(WatchRule rule) {
 			try {
@@ -457,7 +462,8 @@ final class ForeignPaymentNotificationService {
 			if (watch.subscribedGeneration == this.connectionGeneration)
 				return;
 
-			Object result = this.client.request(SCRIPTHASH_SUBSCRIBE, watch.scripthash);
+			ElectrumRequest subscribeRequest = methods().subscribe(watch.script);
+			Object result = this.client.request(subscribeRequest.getMethod(), subscribeRequest.getParams());
 			watch.subscribedGeneration = this.connectionGeneration;
 			String checkpoint = parseCheckpoint(result);
 			if (!watch.initialized) {
@@ -481,7 +487,7 @@ final class ForeignPaymentNotificationService {
 
 		private void baseline(AddressWatch watch) throws IOException {
 			if (watch.checkpoint != null)
-				watch.history.baseline(fetchHistory(watch.scripthash));
+				watch.history.baseline(fetchHistory(watch));
 			watch.baselineComplete = true;
 		}
 
@@ -491,7 +497,7 @@ final class ForeignPaymentNotificationService {
 
 			try {
 				this.connectionGeneration++;
-				validateNegotiatedVersion(this.client.request(
+				this.negotiatedVersion = parseNegotiatedVersion(this.client.request(
 						"server.version", CLIENT_NAME, SUPPORTED_PROTOCOL_VERSIONS));
 				Object features = this.client.request("server.features");
 				if (!(features instanceof Map<?, ?>))
@@ -519,7 +525,9 @@ final class ForeignPaymentNotificationService {
 					return;
 				}
 
-				if (!SCRIPTHASH_SUBSCRIBE.equals(method) || params.size() < 2 || !(params.get(0) instanceof String))
+				// 1.7 renamed the notification to blockchain.scriptpubkey.subscribe but kept its payload: the
+				// first parameter is still the scripthash, so watches stay keyed by scripthash either way.
+				if (!ElectrumMethods.isSubscriptionNotification(method) || params.size() < 2 || !(params.get(0) instanceof String))
 					return;
 
 				AddressWatch watch = this.watchesByScripthash.get(params.get(0));
@@ -550,7 +558,7 @@ final class ForeignPaymentNotificationService {
 				return;
 
 			String previousCheckpoint = watch.checkpoint;
-			List<ForeignPaymentHistoryDelta.Entry> added = watch.history.candidates(fetchHistory(watch.scripthash));
+			List<ForeignPaymentHistoryDelta.Entry> added = watch.history.candidates(fetchHistory(watch));
 			watch.checkpoint = checkpoint;
 			watch.retryPending = false;
 			if (checkpoint != null) {
@@ -575,8 +583,13 @@ final class ForeignPaymentNotificationService {
 					}
 		}
 
-		private List<ForeignPaymentHistoryDelta.Entry> fetchHistory(String scripthash) throws IOException {
-			return parseHistory(this.client.request(SCRIPTHASH_HISTORY, scripthash));
+		private ElectrumMethods methods() {
+			return ElectrumMethods.forVersion(this.negotiatedVersion);
+		}
+
+		private List<ForeignPaymentHistoryDelta.Entry> fetchHistory(AddressWatch watch) throws IOException {
+			ElectrumRequest historyRequest = methods().getHistory(watch.script);
+			return parseHistory(this.client.request(historyRequest.getMethod(), historyRequest.getParams()));
 		}
 
 		private boolean handleNewTransaction(AddressWatch watch, ForeignPaymentHistoryDelta.Entry historyEntry,
@@ -742,6 +755,8 @@ final class ForeignPaymentNotificationService {
 
 	private static final class AddressWatch {
 		private final String scripthash;
+		/** The output script itself, needed as the parameter for the 1.7 blockchain.scriptpubkey.* family. */
+		private final byte[] script;
 		private final Set<WatchRule> rules = new LinkedHashSet<>();
 		private final ForeignPaymentHistoryDelta history =
 				new ForeignPaymentHistoryDelta(MAX_HISTORY_ENTRIES_PER_SCRIPTHASH);
@@ -751,8 +766,9 @@ final class ForeignPaymentNotificationService {
 		private boolean retryPending;
 		private long subscribedGeneration = -1L;
 
-		private AddressWatch(String scripthash) {
+		private AddressWatch(String scripthash, byte[] script) {
 			this.scripthash = scripthash;
+			this.script = script;
 		}
 	}
 
@@ -764,9 +780,11 @@ final class ForeignPaymentNotificationService {
 	}
 
 	static List<ForeignPaymentHistoryDelta.Entry> parseHistory(Object result) throws IOException {
-		if (!(result instanceof List<?>))
+		// 1.7 wraps the same entries in {"history": [...]}; accept either shape.
+		Object unwrapped = result instanceof Map<?, ?> ? ((Map<?, ?>) result).get("history") : result;
+		if (!(unwrapped instanceof List<?>))
 			throw new IOException("Unexpected ElectrumX scripthash history response");
-		List<?> history = (List<?>) result;
+		List<?> history = (List<?>) unwrapped;
 		if (history.size() > MAX_HISTORY_ENTRIES_PER_SCRIPTHASH)
 			throw new IOException("ElectrumX scripthash history exceeds "
 					+ MAX_HISTORY_ENTRIES_PER_SCRIPTHASH + " entries");

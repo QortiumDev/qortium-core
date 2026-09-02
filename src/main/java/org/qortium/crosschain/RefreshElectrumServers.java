@@ -44,9 +44,8 @@ import java.util.stream.Collectors;
 
 public final class RefreshElectrumServers {
 
-	// Shared with ElectrumX so the generator probes servers exactly the way Core will use them: negotiating
-	// above 1.4 makes ElectrumX 2.0 servers select a protocol without the blockchain.scripthash.* methods,
-	// so the wallet probe below would reject perfectly usable servers.
+	// Shared with ElectrumX so the generator probes servers exactly the way Core will use them, including
+	// picking the blockchain.scripthash.* or blockchain.scriptpubkey.* family from the negotiated version.
 	private static final ElectrumProtocolVersion MIN_PROTOCOL_VERSION = ElectrumX.MIN_PROTOCOL_VERSION;
 	private static final ElectrumProtocolVersion MAX_PROTOCOL_VERSION = ElectrumX.MAX_PROTOCOL_VERSION;
 	private static final String DEFAULT_OUTPUT_PATH = "src/main/resources/" + ElectrumServerList.RESOURCE_PATH;
@@ -461,6 +460,8 @@ public final class RefreshElectrumServers {
 			if (versionRejectionNote.isPresent())
 				throw new IOException(versionRejectionNote.get());
 
+			electrumServer.setNegotiatedProtocolVersion(ElectrumX.negotiatedProtocolVersion(versionResponse).orElse(null));
+
 			Object features = rpc(electrumServer, "server.features");
 			if (!(features instanceof JSONObject))
 				throw new IOException("missing server.features result");
@@ -485,8 +486,12 @@ public final class RefreshElectrumServers {
 				if (!(height instanceof Number) || ((Number) height).longValue() <= 0)
 					throw new IOException("invalid blockchain height " + height);
 
-				Object history = rpc(electrumServer, "blockchain.scripthash.get_history", ElectrumX.WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
-				Object unspent = rpc(electrumServer, "blockchain.scripthash.listunspent", ElectrumX.WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
+				ElectrumMethods methods = electrumServer.getMethods();
+				ElectrumRequest historyRequest = methods.getHistory(ElectrumX.WALLET_CAPABILITY_PROBE_SCRIPT);
+				ElectrumRequest unspentRequest = methods.listUnspent(ElectrumX.WALLET_CAPABILITY_PROBE_SCRIPT);
+
+				Object history = rpc(electrumServer, historyRequest.getMethod(), historyRequest.getParams());
+				Object unspent = rpc(electrumServer, unspentRequest.getMethod(), unspentRequest.getParams());
 				ElectrumX.validateWalletRpcResponses(history, unspent);
 			}
 

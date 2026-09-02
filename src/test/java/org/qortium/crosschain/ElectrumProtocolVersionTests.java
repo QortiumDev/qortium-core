@@ -12,8 +12,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Protocol negotiation must stay within the range Core actually implements: ElectrumX 2.0 servers
- * offer protocol 1.5+, which no longer serves the blockchain.scripthash.* methods Core relies on.
+ * Protocol negotiation must stay within the range Core actually implements. Core speaks 1.4 through 1.7,
+ * switching method families per connection, so anything outside that range is refused.
  */
 public class ElectrumProtocolVersionTests {
 
@@ -94,29 +94,28 @@ public class ElectrumProtocolVersionTests {
 	// --- ElectrumX negotiation ---
 
 	@Test
-	public void testSupportedRangeIsOneTwoToTheOneFourFamily() {
-		assertEquals(ElectrumProtocolVersion.of(1, 2), ElectrumX.MIN_PROTOCOL_VERSION);
-		assertEquals(ElectrumProtocolVersion.of(1, 4), ElectrumX.MAX_PROTOCOL_VERSION);
+	public void testSupportedRangeIsOneFourToTheOneSevenFamily() {
+		assertEquals(ElectrumProtocolVersion.of(1, 4), ElectrumX.MIN_PROTOCOL_VERSION);
+		assertEquals(ElectrumProtocolVersion.of(1, 7), ElectrumX.MAX_PROTOCOL_VERSION);
 	}
 
 	@Test
-	public void testVersionRequestAsksForOneTwoToOneFour() {
-		assertEquals(List.of("1.2", "1.4"), ElectrumX.buildVersionParams());
+	public void testVersionRequestAsksForOneFourToOneSeven() {
+		assertEquals(List.of("1.4", "1.7"), ElectrumX.buildVersionParams());
 	}
 
 	@Test
-	public void testSupportedNegotiatedVersionsAreAccepted() {
-		assertTrue(ElectrumX.isNegotiatedVersionSupported("1.2"));
-		assertTrue(ElectrumX.isNegotiatedVersionSupported("1.3"));
-		assertTrue(ElectrumX.isNegotiatedVersionSupported("1.4"));
-		assertTrue(ElectrumX.isNegotiatedVersionSupported("1.4.2"));
+	public void testEverySpokenProtocolIsAccepted() {
+		// 1.5 was skipped by the specification, but some servers advertise a 1.5.x maximum and behave like 1.4.
+		for (String version : List.of("1.4", "1.4.1", "1.4.2", "1.4.3", "1.5.2", "1.5.3", "1.6", "1.6.0", "1.7", "1.7.0"))
+			assertTrue(version, ElectrumX.isNegotiatedVersionSupported(version));
 	}
 
 	@Test
 	public void testNegotiatedVersionsOutsideTheRangeAreNotSupported() {
 		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.1"));
-		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.5"));
-		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.7.0"));
+		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.3"));
+		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.8"));
 		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.10"));
 		assertFalse(ElectrumX.isNegotiatedVersionSupported("1.20"));
 		assertFalse(ElectrumX.isNegotiatedVersionSupported("2.0"));
@@ -126,34 +125,47 @@ public class ElectrumProtocolVersionTests {
 
 	@Test
 	public void testNegotiatedVersionAboveMaximumIsRejected() {
-		Optional<String> note = ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 2.0.0", "1.7.0"));
+		Optional<String> note = ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 3.0.0", "1.8.0"));
 
 		assertTrue(note.isPresent());
-		assertEquals("negotiated protocol 1.7.0 outside supported 1.2-1.4", note.get());
+		assertEquals("negotiated protocol 1.8.0 outside supported 1.4-1.7", note.get());
 	}
 
 	@Test
 	public void testDecimalLookalikeNegotiatedVersionsAreRejected() {
-		assertEquals(Optional.of("negotiated protocol 1.10 outside supported 1.2-1.4"),
+		// Read as decimals these look like 1.1 and 1.2 and would be waved through as old servers.
+		assertEquals(Optional.of("negotiated protocol 1.10 outside supported 1.4-1.7"),
 				ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 2.1.0", "1.10")));
-		assertEquals(Optional.of("negotiated protocol 1.20 outside supported 1.2-1.4"),
+		assertEquals(Optional.of("negotiated protocol 1.20 outside supported 1.4-1.7"),
 				ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 2.1.0", "1.20")));
-		assertEquals(Optional.of("negotiated protocol 2.0 outside supported 1.2-1.4"),
+		assertEquals(Optional.of("negotiated protocol 2.0 outside supported 1.4-1.7"),
 				ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 2.1.0", "2.0")));
 	}
 
 	@Test
 	public void testNegotiatedVersionBelowMinimumIsRejected() {
-		Optional<String> note = ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 1.8.7", "1.1"));
+		Optional<String> note = ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 1.8.7", "1.3"));
 
 		assertTrue(note.isPresent());
-		assertEquals("negotiated protocol 1.1 outside supported 1.2-1.4", note.get());
+		assertEquals("negotiated protocol 1.3 outside supported 1.4-1.7", note.get());
 	}
 
 	@Test
 	public void testSupportedNegotiatedVersionIsNotRejected() {
 		assertEquals(Optional.empty(), ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 1.16.0", "1.4")));
-		assertEquals(Optional.empty(), ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 1.16.0", "1.4.2")));
+		assertEquals(Optional.empty(), ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 1.19.0", "1.6.0")));
+		assertEquals(Optional.empty(), ElectrumX.negotiatedVersionRejectionNote(versionResponse("ElectrumX 2.0.0", "1.7")));
+	}
+
+	@Test
+	public void testNegotiatedVersionIsParsedForTheConnection() {
+		// The stored version is what picks the method family for every later RPC on that connection.
+		assertEquals(Optional.of(ElectrumProtocolVersion.parse("1.7").orElseThrow()),
+				ElectrumX.negotiatedProtocolVersion(versionResponse("ElectrumX 2.0.0", "1.7")));
+		assertEquals(Optional.of(ElectrumProtocolVersion.parse("1.4.2").orElseThrow()),
+				ElectrumX.negotiatedProtocolVersion(versionResponse("ElectrumX 1.15.0", "1.4.2")));
+		assertEquals(Optional.empty(), ElectrumX.negotiatedProtocolVersion(versionResponse("ElectrumX 3.0.0", "1.8")));
+		assertEquals(Optional.empty(), ElectrumX.negotiatedProtocolVersion(null));
 	}
 
 	@Test
@@ -189,11 +201,11 @@ public class ElectrumProtocolVersionTests {
 
 	@Test
 	public void testProtocolMinAboveMaximumIsRejected() {
-		assertEquals(Optional.of("new version: protocol_min = 1.5 > MAX_PROTOCOL_VERSION = 1.4"),
-				ElectrumX.protocolMinRejectionNote(features("1.5")));
-		assertEquals(Optional.of("new version: protocol_min = 1.10 > MAX_PROTOCOL_VERSION = 1.4"),
+		assertEquals(Optional.of("new version: protocol_min = 1.8 > MAX_PROTOCOL_VERSION = 1.7"),
+				ElectrumX.protocolMinRejectionNote(features("1.8")));
+		assertEquals(Optional.of("new version: protocol_min = 1.10 > MAX_PROTOCOL_VERSION = 1.7"),
 				ElectrumX.protocolMinRejectionNote(features("1.10")));
-		assertEquals(Optional.of("new version: protocol_min = 2.0 > MAX_PROTOCOL_VERSION = 1.4"),
+		assertEquals(Optional.of("new version: protocol_min = 2.0 > MAX_PROTOCOL_VERSION = 1.7"),
 				ElectrumX.protocolMinRejectionNote(features("2.0")));
 	}
 
@@ -207,9 +219,10 @@ public class ElectrumProtocolVersionTests {
 
 	@Test
 	public void testSupportedProtocolMinIsAccepted() {
-		assertEquals(Optional.empty(), ElectrumX.protocolMinRejectionNote(features("1.2")));
 		assertEquals(Optional.empty(), ElectrumX.protocolMinRejectionNote(features("1.4")));
 		assertEquals(Optional.empty(), ElectrumX.protocolMinRejectionNote(features("1.4.2")));
+		assertEquals(Optional.empty(), ElectrumX.protocolMinRejectionNote(features("1.6")));
+		assertEquals(Optional.empty(), ElectrumX.protocolMinRejectionNote(features("1.7")));
 	}
 
 	@Test
