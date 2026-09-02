@@ -102,4 +102,24 @@ public class ElectrumXPushClientTests {
 			}
 		};
 	}
+
+	@Test
+	public void testRpcErrorCodesSurviveTheJsonRpcReply() {
+		// Protocol 1.7 standardised 10001 for "history too large". Discarding the code leaves the caller
+		// unable to tell one unservable address from a broken connection, so it reconnects forever.
+		java.io.IOException withCode = ElectrumXPushClient.toRpcException(
+				java.util.Map.of("code", 10001L, "message", "history too large"));
+
+		org.junit.Assert.assertTrue(withCode instanceof ElectrumXPushClient.RpcException);
+		org.junit.Assert.assertEquals(10001, ((ElectrumXPushClient.RpcException) withCode).getCode());
+		org.junit.Assert.assertTrue(withCode.getMessage().contains("history too large"));
+	}
+
+	@Test
+	public void testNonObjectRpcErrorsStillFail() {
+		java.io.IOException withoutCode = ElectrumXPushClient.toRpcException("server exploded");
+
+		org.junit.Assert.assertFalse(withoutCode instanceof ElectrumXPushClient.RpcException);
+		org.junit.Assert.assertTrue(withoutCode.getMessage().contains("server exploded"));
+	}
 }

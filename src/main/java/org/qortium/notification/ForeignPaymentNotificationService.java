@@ -287,6 +287,67 @@ final class ForeignPaymentNotificationService {
 		return negotiated;
 	}
 
+	/**
+	 * Which protocol family the push connection negotiated, and which connection it negotiated it on.
+	 * <p>
+	 * The push client reconnects on its own and the watcher's work is queued, so a task created against a
+	 * 1.4 server can run after the client has moved to a 1.7 server. Pairing the version with the epoch it
+	 * was negotiated on makes that detectable: work whose epoch no longer matches is refused rather than
+	 * being sent with the wrong method family, and no protocol-dependent request can be sent at all before
+	 * negotiation has completed.
+	 */
+	static final class NegotiatedFamily {
+		private volatile ElectrumProtocolVersion version;
+		private volatile long epoch = -1L;
+
+		void negotiated(long epoch, ElectrumProtocolVersion version) {
+			this.version = version;
+			this.epoch = epoch;
+		}
+
+		/** Called when the connection drops, so nothing can keep using the family it had negotiated. */
+		void cleared() {
+			this.version = null;
+			this.epoch = -1L;
+		}
+
+		ElectrumProtocolVersion getVersion() {
+			return this.version;
+		}
+
+		/**
+		 * @param epoch the connection epoch the caller's work was created for
+		 * @param currentEpoch the connection epoch the client is on now
+		 * @return the method family to use
+		 * @throws IOException when negotiation has not completed, or the connection has changed underneath
+		 */
+		ElectrumMethods require(long epoch, long currentEpoch) throws IOException {
+			ElectrumProtocolVersion negotiatedVersion = this.version;
+			if (negotiatedVersion == null || this.epoch != epoch)
+				throw new IOException("ElectrumX push connection has not negotiated a protocol version");
+
+			if (epoch != currentEpoch)
+				throw new IOException("ElectrumX push connection changed before the request was sent");
+
+			return ElectrumMethods.forVersion(negotiatedVersion);
+		}
+	}
+
+	/** Protocol 1.7's standard code for a history the server refuses to serve because it is too large. */
+	static final int HISTORY_TOO_LARGE_ERROR_CODE = 10001;
+
+	/**
+	 * @return true when this failure is one busy address rather than a broken connection. Reconnecting
+	 * cannot fix it, and doing so would cycle the whole per-coin watcher over one address.
+	 */
+	static boolean isHistoryTooLarge(Throwable failure) {
+		if (failure instanceof ElectrumXPushClient.RpcException)
+			return ((ElectrumXPushClient.RpcException) failure).getCode() == HISTORY_TOO_LARGE_ERROR_CODE;
+
+		String message = failure == null ? null : failure.getMessage();
+		return message != null && message.toLowerCase(Locale.ROOT).contains("history too large");
+	}
+
 	private static final class Registration {
 		private final CoinWatcher watcher;
 		private final WatchRule rule;
@@ -305,8 +366,8 @@ final class ForeignPaymentNotificationService {
 		private final ThreadPoolExecutor worker;
 		private final ElectrumXPushClient client;
 		private final Map<String, AddressWatch> watchesByScripthash = new LinkedHashMap<>();
-		/** Protocol version negotiated on the current push connection; decides the subscription method family. */
-		private volatile ElectrumProtocolVersion negotiatedVersion;
+		/** Protocol family negotiated on the current push connection, tied to that connection's epoch. */
+		private final NegotiatedFamily negotiatedFamily = new NegotiatedFamily();
 		private final Map<String, BitcoinyTransaction> transactionCache =
 				new LinkedHashMap<String, BitcoinyTransaction>(TRANSACTION_CACHE_SIZE + 1, 0.75F, true) {
 					@Override
@@ -331,16 +392,20 @@ final class ForeignPaymentNotificationService {
 					new ElectrumXPushClient.Listener() {
 						@Override
 						public void onConnected() {
-							execute(CoinWatcher.this::resubscribeAll);
+							long epoch = CoinWatcher.this.client.currentEpoch();
+							execute(() -> resubscribeAll(epoch));
 						}
 
 						@Override
 						public void onNotification(String method, List<?> params) {
-							execute(() -> handlePushNotification(method, params));
+							long epoch = CoinWatcher.this.client.currentEpoch();
+							execute(() -> handlePushNotification(epoch, method, params));
 						}
 
 						@Override
 						public void onDisconnected() {
+							// Nothing may keep using the family this connection negotiated.
+							CoinWatcher.this.negotiatedFamily.cleared();
 						}
 					});
 			this.client.start();
@@ -376,8 +441,10 @@ final class ForeignPaymentNotificationService {
 				return;
 
 			addBatch(rule, rule.keyChain.getInitialLeafKeys(INITIAL_LOOKAHEAD_INCREMENT));
-			if (this.client.isConnected())
-				subscribeAndAdvance(rule);
+			// Only subscribe once this connection has negotiated: before that there is no method family to
+			// choose, and the rule is picked up by the next resubscribeAll anyway.
+			if (this.client.isConnected() && this.negotiatedFamily.getVersion() != null)
+				subscribeAndAdvance(this.client.currentEpoch(), rule);
 		}
 
 		private void addBatch(WatchRule rule, List<BitcoinyDeterministicKey> keys) {
@@ -404,22 +471,43 @@ final class ForeignPaymentNotificationService {
 		}
 
 
-		private boolean subscribeAndAdvance(WatchRule rule) {
+		private boolean subscribeAndAdvance(long epoch, WatchRule rule) {
+			if (rule.historyTooLarge)
+				// Already retired: retrying only earns the same refusal.
+				return true;
+
 			try {
 				for (List<AddressWatch> batch : rule.batches)
 					for (AddressWatch watch : batch)
-						ensureSubscribed(watch);
+						ensureSubscribed(epoch, watch);
 
-				advanceDiscovery(rule);
+				advanceDiscovery(epoch, rule);
 				return true;
 			} catch (Exception e) {
+				// One address the server refuses to serve is not a reason to cycle the whole coin's
+				// connection; retire that watch and carry on.
+				if (isHistoryTooLarge(e)) {
+					retireOversizedWatches(rule);
+					return true;
+				}
+
 				LOGGER.debug("{} foreign-payment watch initialization failed: {}", this.coin, e.getMessage());
 				this.client.reconnect();
 				return false;
 			}
 		}
 
-		private void advanceDiscovery(WatchRule rule) throws IOException {
+		/** Mark the rule's watches that the server refuses to serve, logging once per rule. */
+		private void retireOversizedWatches(WatchRule rule) {
+			if (rule.historyTooLarge)
+				return;
+
+			rule.historyTooLarge = true;
+			LOGGER.info("{} foreign-payment watch retired: ElectrumX refuses to serve this address's history"
+					+ " (error {}); no further notifications will be sent for it", this.coin, HISTORY_TOO_LARGE_ERROR_CODE);
+		}
+
+		private void advanceDiscovery(long epoch, WatchRule rule) throws IOException {
 			while (rule.active && rule.processedBatchCount < rule.batches.size()) {
 				List<AddressWatch> batch = rule.batches.get(rule.processedBatchCount);
 				if (batch.stream().anyMatch(watch -> !watch.initialized))
@@ -439,7 +527,7 @@ final class ForeignPaymentNotificationService {
 				if (!addNextBatch(rule))
 					return;
 				for (AddressWatch watch : rule.batches.get(rule.batches.size() - 1))
-					ensureSubscribed(watch);
+					ensureSubscribed(epoch, watch);
 			}
 		}
 
@@ -458,23 +546,23 @@ final class ForeignPaymentNotificationService {
 			return true;
 		}
 
-		private void ensureSubscribed(AddressWatch watch) throws IOException {
+		private void ensureSubscribed(long epoch, AddressWatch watch) throws IOException {
 			if (watch.subscribedGeneration == this.connectionGeneration)
 				return;
 
-			ElectrumRequest subscribeRequest = methods().subscribe(watch.script);
-			Object result = this.client.request(subscribeRequest.getMethod(), subscribeRequest.getParams());
+			ElectrumRequest subscribeRequest = methods(epoch).subscribe(watch.script);
+			Object result = this.client.request(epoch, subscribeRequest.getMethod(), subscribeRequest.getParams());
 			watch.subscribedGeneration = this.connectionGeneration;
 			String checkpoint = parseCheckpoint(result);
 			if (!watch.initialized) {
 				watch.initialized = true;
 				watch.checkpoint = checkpoint;
-				baseline(watch);
+				baseline(epoch, watch);
 				return;
 			}
 
 			if (!Objects.equals(watch.checkpoint, checkpoint) || !watch.baselineComplete || watch.retryPending)
-				processStatusChange(watch, checkpoint);
+				processStatusChange(epoch, watch, checkpoint);
 		}
 
 		private static String parseCheckpoint(Object value) throws IOException {
@@ -485,30 +573,32 @@ final class ForeignPaymentNotificationService {
 			throw new IOException("Unexpected ElectrumX scripthash status response");
 		}
 
-		private void baseline(AddressWatch watch) throws IOException {
+		private void baseline(long epoch, AddressWatch watch) throws IOException {
 			if (watch.checkpoint != null)
-				watch.history.baseline(fetchHistory(watch));
+				watch.history.baseline(fetchHistory(epoch, watch));
 			watch.baselineComplete = true;
 		}
 
-		private void resubscribeAll() {
+		private void resubscribeAll(long epoch) {
 			if (this.closed)
 				return;
 
 			try {
 				this.connectionGeneration++;
-				this.negotiatedVersion = parseNegotiatedVersion(this.client.request(
-						"server.version", CLIENT_NAME, SUPPORTED_PROTOCOL_VERSIONS));
-				Object features = this.client.request("server.features");
+				// Every call below is bound to this epoch, so a resubscribe left over from a previous
+				// connection cannot write anything to the current one.
+				this.negotiatedFamily.negotiated(epoch, parseNegotiatedVersion(this.client.request(
+						epoch, "server.version", CLIENT_NAME, SUPPORTED_PROTOCOL_VERSIONS)));
+				Object features = this.client.request(epoch, "server.features");
 				if (!(features instanceof Map<?, ?>))
 					throw new IOException("ElectrumX server did not return features");
 				Object genesisHash = ((Map<?, ?>) features).get("genesis_hash");
 				if (!Objects.equals(this.network.getGenesisHash(), genesisHash))
 					throw new IOException("ElectrumX server reported the wrong genesis hash");
-				updateHeight(this.client.request(HEADERS_SUBSCRIBE));
+				updateHeight(this.client.request(epoch, HEADERS_SUBSCRIBE));
 				boolean subscriptionsReady = true;
 				for (WatchRule rule : new ArrayList<>(this.rules))
-					subscriptionsReady &= subscribeAndAdvance(rule);
+					subscriptionsReady &= subscribeAndAdvance(epoch, rule);
 				if (subscriptionsReady)
 					this.client.markReady();
 			} catch (Exception e) {
@@ -517,7 +607,7 @@ final class ForeignPaymentNotificationService {
 			}
 		}
 
-		private void handlePushNotification(String method, List<?> params) {
+		private void handlePushNotification(long epoch, String method, List<?> params) {
 			try {
 				if (HEADERS_SUBSCRIBE.equals(method)) {
 					if (!params.isEmpty())
@@ -531,8 +621,20 @@ final class ForeignPaymentNotificationService {
 					return;
 
 				AddressWatch watch = this.watchesByScripthash.get(params.get(0));
-				if (watch != null)
-					processStatusChange(watch, parseCheckpoint(params.get(1)));
+				if (watch == null)
+					return;
+
+				try {
+					processStatusChange(epoch, watch, parseCheckpoint(params.get(1)));
+				} catch (Exception e) {
+					// A history the server refuses to serve is a property of that address, not of the
+					// connection: reconnecting would cycle the whole coin's watcher over one busy address.
+					if (!isHistoryTooLarge(e))
+						throw e;
+
+					for (WatchRule rule : new ArrayList<>(watch.rules))
+						retireOversizedWatches(rule);
+				}
 			} catch (Exception e) {
 				LOGGER.debug("{} foreign-payment push handling failed: {}", this.coin, e.getMessage());
 				this.client.reconnect();
@@ -547,10 +649,10 @@ final class ForeignPaymentNotificationService {
 				this.currentHeight = ((Number) height).intValue();
 		}
 
-		private void processStatusChange(AddressWatch watch, String checkpoint) throws IOException {
+		private void processStatusChange(long epoch, AddressWatch watch, String checkpoint) throws IOException {
 			if (!watch.baselineComplete) {
 				watch.checkpoint = checkpoint;
-				baseline(watch);
+				baseline(epoch, watch);
 				return;
 			}
 
@@ -558,7 +660,7 @@ final class ForeignPaymentNotificationService {
 				return;
 
 			String previousCheckpoint = watch.checkpoint;
-			List<ForeignPaymentHistoryDelta.Entry> added = watch.history.candidates(fetchHistory(watch));
+			List<ForeignPaymentHistoryDelta.Entry> added = watch.history.candidates(fetchHistory(epoch, watch));
 			watch.checkpoint = checkpoint;
 			watch.retryPending = false;
 			if (checkpoint != null) {
@@ -579,17 +681,18 @@ final class ForeignPaymentNotificationService {
 						rule.terminalBatch = null;
 						rule.unusedCounter = 0;
 						if (addNextBatch(rule))
-							subscribeAndAdvance(rule);
+							subscribeAndAdvance(epoch, rule);
 					}
 		}
 
-		private ElectrumMethods methods() {
-			return ElectrumMethods.forVersion(this.negotiatedVersion);
+		/** @throws IOException when this epoch's connection has not negotiated, or is no longer current */
+		private ElectrumMethods methods(long epoch) throws IOException {
+			return this.negotiatedFamily.require(epoch, this.client.currentEpoch());
 		}
 
-		private List<ForeignPaymentHistoryDelta.Entry> fetchHistory(AddressWatch watch) throws IOException {
-			ElectrumRequest historyRequest = methods().getHistory(watch.script);
-			return parseHistory(this.client.request(historyRequest.getMethod(), historyRequest.getParams()));
+		private List<ForeignPaymentHistoryDelta.Entry> fetchHistory(long epoch, AddressWatch watch) throws IOException {
+			ElectrumRequest historyRequest = methods(epoch).getHistory(watch.script);
+			return parseHistory(this.client.request(epoch, historyRequest.getMethod(), historyRequest.getParams()));
 		}
 
 		private boolean handleNewTransaction(AddressWatch watch, ForeignPaymentHistoryDelta.Entry historyEntry,
@@ -739,6 +842,8 @@ final class ForeignPaymentNotificationService {
 		private final Set<String> seenTransactionHashes = new LinkedHashSet<>();
 		private final List<List<AddressWatch>> batches = new ArrayList<>();
 		private volatile boolean active = true;
+		/** Set when the server refuses to serve this rule's history, so it is retired instead of retried. */
+		private boolean historyTooLarge;
 		private int processedLeafKeyCount;
 		private int processedBatchCount;
 		private int unusedCounter;
