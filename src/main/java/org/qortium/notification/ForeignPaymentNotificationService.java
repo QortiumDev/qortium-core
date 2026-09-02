@@ -52,7 +52,9 @@ final class ForeignPaymentNotificationService {
 	private static final String SCRIPTHASH_HISTORY = "blockchain.scripthash.get_history";
 	private static final String HEADERS_SUBSCRIBE = "blockchain.headers.subscribe";
 	private static final String CLIENT_NAME = "Qortium-Notifications";
-	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of("1.2", "2.0");
+	// ElectrumX 2.0's protocol 1.5+ dropped the blockchain.scripthash.* methods this service subscribes
+	// to, so never negotiate above the highest protocol Core actually speaks. See ElectrumX.MAX_PROTOCOL_VERSION.
+	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of("1.2", "1.4");
 	private static final int INITIAL_LOOKAHEAD_INCREMENT = 3;
 	private static final int WORK_QUEUE_CAPACITY = 256;
 	private static final int MAX_INPUTS_PER_TRANSACTION = 500;

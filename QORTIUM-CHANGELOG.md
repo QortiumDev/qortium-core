@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-01 - fix(crosschain): cap Electrum protocol at 1.4 and refresh server pins
+
+Fixed authenticated wallet reads that were failing with API error 1201 for Digibyte, Namecoin and Firo while Litecoin kept working. Two separate causes were found on a live node.
+
+First, Core told every ElectrumX server it could speak protocol versions 1.2 through 2.0, even though it only implements the 1.4 methods. Servers running the new ElectrumX 2.0 release happily selected protocol 1.7, and at that version the `blockchain.scripthash.get_history`, `listunspent` and `get_balance` calls Core depends on no longer exist, so every wallet read against those servers came back as an unknown method. Core now asks for 1.2 through 1.4 — the range it genuinely supports — and additionally refuses, with a clear connection note, any server that answers with a protocol outside that range or that only speaks something newer. The same cap was applied to the background foreign-payment notification service and to the Electrum server refresh tool, which were negotiating the same unusable range.
+
+Second, the bundled Electrum server list was regenerated. Firo's three servers had rotated their TLS certificates since the list was last built in July, so Core was rejecting them outright as untrusted; their pins are now current and verified against the live certificates. The refresh tool itself was also taught to re-pin a server whose certificate has rotated instead of keeping the stale pin — previously a rotation silently dropped the server from the regenerated list, which is how Firo, Komodo, Verus, Zcash and Verge lost all of their default servers on an intermediate run.
+
+The observable effect is that Digibyte, Namecoin and Firo wallet reads work again against current ElectrumX servers, and the shipped list is freshly verified: 356 Bitcoin, 36 Bitcoin Cash, 25 Litecoin, 4 Dogecoin, 2 Digibyte, 3 Ravencoin, 4 Dash, 3 Namecoin, 3 Firo and 2 each for Komodo, Zcash and Verge, plus 5 Verus and 1 Peercoin, with 134 rotated certificate pins refreshed. LBC keeps its single plaintext TCP seed, still gated behind the existing opt-in setting.
+
 ### 2026-09-01 - feat(wallet): add keyless foreign spend context
 
 Adds an authenticated watch-only contract for BTC, LTC, DOGE, DGB, RVN, DASH,

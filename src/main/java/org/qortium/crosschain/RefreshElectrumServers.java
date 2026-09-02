@@ -34,6 +34,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -45,7 +46,10 @@ import java.util.stream.Collectors;
 public final class RefreshElectrumServers {
 
 	private static final double MIN_PROTOCOL_VERSION = 1.2;
-	private static final double MAX_PROTOCOL_VERSION = 2.0;
+	// Must match ElectrumX.MAX_PROTOCOL_VERSION: negotiating above 1.4 makes ElectrumX 2.0 servers
+	// select a protocol without the blockchain.scripthash.* methods, so the wallet probe below would
+	// reject perfectly usable servers.
+	private static final double MAX_PROTOCOL_VERSION = ElectrumX.MAX_PROTOCOL_VERSION;
 	private static final String DEFAULT_OUTPUT_PATH = "src/main/resources/" + ElectrumServerList.RESOURCE_PATH;
 
 	private static final Map<ConnectionType, Integer> DEFAULT_ELECTRUMX_PORTS = new EnumMap<>(ConnectionType.class);
@@ -224,20 +228,34 @@ public final class RefreshElectrumServers {
 	}
 
 	/**
-	 * For an SSL server with no pinned fingerprint, capture its current leaf certificate fingerprint and return a
-	 * pinned copy of the server. This lets the generated list ship explicit pins, and lets self-signed servers pass
-	 * the subsequent strict-by-default verification handshake instead of being dropped.
+	 * For an SSL server, capture its current leaf certificate fingerprint and return a pinned copy of the server.
+	 * This lets the generated list ship explicit pins, and lets self-signed servers pass the subsequent
+	 * strict-by-default verification handshake instead of being dropped.
+	 * <p>
+	 * A seed entry whose pin no longer matches the live leaf is re-pinned rather than kept: server certificates
+	 * rotate, and keeping the stale pin makes verification fail and silently drops a healthy server from the
+	 * generated list (which is how FIRO lost every default server after its certificates rotated).
 	 */
 	private static Server pinSslServerIfNeeded(Server server, int timeoutMs) {
-		if (server.getConnectionType() != ConnectionType.SSL || server.getCertificateSha256Fingerprint() != null)
+		if (server.getConnectionType() != ConnectionType.SSL)
 			return server;
 
 		try {
 			String fingerprint = ElectrumSSLSocketFactory.probeCertificateSha256Fingerprint(server.getHostName(), server.getPort(), timeoutMs);
-			if (fingerprint != null)
-				return new Server(server.getHostName(), server.getConnectionType(), server.getPort(), fingerprint);
+			if (fingerprint == null)
+				return server;
+
+			String existingFingerprint = server.getCertificateSha256Fingerprint();
+			if (fingerprint.equalsIgnoreCase(existingFingerprint))
+				return server;
+
+			if (existingFingerprint != null)
+				System.out.printf("%s:%d: certificate rotated, re-pinning %s -> %s%n",
+						server.getHostName(), server.getPort(), existingFingerprint, fingerprint);
+
+			return new Server(server.getHostName(), server.getConnectionType(), server.getPort(), fingerprint);
 		} catch (IOException e) {
-			// Leave the server unpinned; verification still applies the active trust policy.
+			// Leave the existing pin in place; verification still applies the active trust policy.
 		}
 
 		return server;
@@ -264,7 +282,11 @@ public final class RefreshElectrumServers {
 		try {
 			electrumServer.setClientName("QortiumRefresh");
 
-			rpc(electrumServer, "server.version");
+			Object versionResponse = rpc(electrumServer, "server.version");
+			Optional<String> versionRejectionNote = ElectrumX.negotiatedVersionRejectionNote(versionResponse);
+			if (versionRejectionNote.isPresent())
+				throw new IOException(versionRejectionNote.get());
+
 			Object features = rpc(electrumServer, "server.features");
 			if (!(features instanceof JSONObject))
 				throw new IOException("missing server.features result");
@@ -273,6 +295,8 @@ public final class RefreshElectrumServers {
 			double protocolMin = CrossChainUtils.getVersionDecimal(featuresJson, "protocol_min");
 			if (protocolMin < MIN_PROTOCOL_VERSION)
 				throw new IOException("old protocol_min " + protocolMin);
+			if (protocolMin > MAX_PROTOCOL_VERSION)
+				throw new IOException("new protocol_min " + protocolMin);
 
 			Object genesisHash = featuresJson.get("genesis_hash");
 			if (coinConfig.genesisHash != null && !coinConfig.genesisHash.equals(genesisHash))
