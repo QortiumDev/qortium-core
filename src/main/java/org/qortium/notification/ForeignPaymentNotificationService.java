@@ -11,6 +11,7 @@ import org.qortium.crosschain.BitcoinyDeterministicKeyChain;
 import org.qortium.crosschain.BitcoinyNetwork;
 import org.qortium.crosschain.BitcoinyScript;
 import org.qortium.crosschain.BitcoinyTransaction;
+import org.qortium.crosschain.ElectrumProtocolVersion;
 import org.qortium.crosschain.ElectrumServerList;
 import org.qortium.crosschain.ElectrumX;
 import org.qortium.crosschain.ElectrumXPushClient;
@@ -52,9 +53,11 @@ final class ForeignPaymentNotificationService {
 	private static final String SCRIPTHASH_HISTORY = "blockchain.scripthash.get_history";
 	private static final String HEADERS_SUBSCRIBE = "blockchain.headers.subscribe";
 	private static final String CLIENT_NAME = "Qortium-Notifications";
-	// ElectrumX 2.0's protocol 1.5+ dropped the blockchain.scripthash.* methods this service subscribes
-	// to, so never negotiate above the highest protocol Core actually speaks. See ElectrumX.MAX_PROTOCOL_VERSION.
-	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of("1.2", "1.4");
+	// ElectrumX 2.0's protocol 1.5+ dropped the blockchain.scripthash.* methods this service subscribes to,
+	// so never negotiate above the highest protocol Core actually speaks. The range is shared with ElectrumX
+	// so the push connections and the pooled connections cannot drift apart.
+	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(
+			ElectrumX.MIN_PROTOCOL_VERSION.toString(), ElectrumX.MAX_PROTOCOL_VERSION.toString());
 	private static final int INITIAL_LOOKAHEAD_INCREMENT = 3;
 	private static final int WORK_QUEUE_CAPACITY = 256;
 	private static final int MAX_INPUTS_PER_TRANSACTION = 500;
@@ -254,6 +257,26 @@ final class ForeignPaymentNotificationService {
 	private static String coinCode(NotificationSubscription subscription) {
 		Object coin = subscription.getFilters().get("coin");
 		return coin instanceof String ? ((String) coin).trim().toUpperCase(Locale.ROOT) : "";
+	}
+
+	/**
+	 * Reject a <code>server.version</code> reply that did not settle on a protocol this service can speak.
+	 * Versions are compared component by component through {@link ElectrumProtocolVersion}, the same way the
+	 * pooled ElectrumX connections compare them, so a 1.4.x server is accepted by both and 1.10 by neither.
+	 */
+	static void validateNegotiatedVersion(Object response) throws IOException {
+		if (!(response instanceof List<?>))
+			throw new IOException("ElectrumX server did not negotiate a protocol version");
+
+		List<?> values = (List<?>) response;
+		if (values.size() < 2 || !(values.get(0) instanceof String) || !(values.get(1) instanceof String))
+			throw new IOException("ElectrumX server returned an invalid version response");
+
+		ElectrumProtocolVersion negotiated = ElectrumProtocolVersion.parse((String) values.get(1))
+				.orElseThrow(() -> new IOException("ElectrumX server returned an invalid protocol version"));
+
+		if (!negotiated.isWithin(ElectrumX.MIN_PROTOCOL_VERSION, ElectrumX.MAX_PROTOCOL_VERSION))
+			throw new IOException("ElectrumX server negotiated an unsupported protocol version");
 	}
 
 	private static final class Registration {
@@ -506,49 +529,6 @@ final class ForeignPaymentNotificationService {
 				LOGGER.debug("{} foreign-payment push handling failed: {}", this.coin, e.getMessage());
 				this.client.reconnect();
 			}
-		}
-
-		private static void validateNegotiatedVersion(Object response) throws IOException {
-			if (!(response instanceof List<?>))
-				throw new IOException("ElectrumX server did not negotiate a protocol version");
-
-			List<?> values = (List<?>) response;
-			if (values.size() < 2 || !(values.get(0) instanceof String) || !(values.get(1) instanceof String))
-				throw new IOException("ElectrumX server returned an invalid version response");
-
-			int[] negotiated = parseProtocolVersion((String) values.get(1));
-			int[] minimum = parseProtocolVersion(SUPPORTED_PROTOCOL_VERSIONS.get(0));
-			int[] maximum = parseProtocolVersion(SUPPORTED_PROTOCOL_VERSIONS.get(1));
-			if (compareProtocolVersions(negotiated, minimum) < 0
-					|| compareProtocolVersions(negotiated, maximum) > 0)
-				throw new IOException("ElectrumX server negotiated an unsupported protocol version");
-		}
-
-		private static int[] parseProtocolVersion(String value) throws IOException {
-			String[] parts = value.split("\\.", -1);
-			if (parts.length < 2 || parts.length > 3)
-				throw new IOException("ElectrumX server returned an invalid protocol version");
-
-			int[] version = new int[3];
-			try {
-				for (int index = 0; index < parts.length; index++) {
-					if (parts[index].isEmpty() || !parts[index].chars().allMatch(Character::isDigit))
-						throw new NumberFormatException();
-					version[index] = Integer.parseInt(parts[index]);
-				}
-			} catch (NumberFormatException e) {
-				throw new IOException("ElectrumX server returned an invalid protocol version", e);
-			}
-			return version;
-		}
-
-		private static int compareProtocolVersions(int[] left, int[] right) {
-			for (int index = 0; index < left.length; index++) {
-				int comparison = Integer.compare(left[index], right[index]);
-				if (comparison != 0)
-					return comparison;
-			}
-			return 0;
 		}
 
 		private void updateHeight(Object headerValue) {

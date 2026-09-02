@@ -5,7 +5,6 @@ import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import org.qortium.api.resource.CrossChainUtils;
 import org.qortium.crosschain.ChainableServer.ConnectionType;
 import org.qortium.crosschain.ElectrumServerDiscovery.CandidateServer;
 import org.qortium.crosschain.ElectrumX.Server;
@@ -45,12 +44,18 @@ import java.util.stream.Collectors;
 
 public final class RefreshElectrumServers {
 
-	private static final double MIN_PROTOCOL_VERSION = 1.2;
-	// Must match ElectrumX.MAX_PROTOCOL_VERSION: negotiating above 1.4 makes ElectrumX 2.0 servers
-	// select a protocol without the blockchain.scripthash.* methods, so the wallet probe below would
-	// reject perfectly usable servers.
-	private static final double MAX_PROTOCOL_VERSION = ElectrumX.MAX_PROTOCOL_VERSION;
+	// Shared with ElectrumX so the generator probes servers exactly the way Core will use them: negotiating
+	// above 1.4 makes ElectrumX 2.0 servers select a protocol without the blockchain.scripthash.* methods,
+	// so the wallet probe below would reject perfectly usable servers.
+	private static final ElectrumProtocolVersion MIN_PROTOCOL_VERSION = ElectrumX.MIN_PROTOCOL_VERSION;
+	private static final ElectrumProtocolVersion MAX_PROTOCOL_VERSION = ElectrumX.MAX_PROTOCOL_VERSION;
 	private static final String DEFAULT_OUTPUT_PATH = "src/main/resources/" + ElectrumServerList.RESOURCE_PATH;
+	private static final String DEFAULT_ROTATIONS_MANIFEST_PATH = "target/electrum-servers.rotations.json";
+
+	/** Certificate rotations accepted during this run, recorded for the audit manifest. */
+	private static final List<PinRotation> ACCEPTED_ROTATIONS = Collections.synchronizedList(new ArrayList<>());
+	/** Certificate rotations refused during this run because --accept-rotated-pins was not given. */
+	private static final List<PinRotation> REJECTED_ROTATIONS = Collections.synchronizedList(new ArrayList<>());
 
 	private static final Map<ConnectionType, Integer> DEFAULT_ELECTRUMX_PORTS = new EnumMap<>(ConnectionType.class);
 	static {
@@ -131,6 +136,27 @@ public final class RefreshElectrumServers {
 
 		writeGeneratedServers(options.outputPath, generatedServers);
 		System.out.printf("Wrote generated Electrum server list to %s%n", options.outputPath);
+
+		reportPinRotations(options);
+	}
+
+	private static void reportPinRotations(Options options) throws IOException {
+		List<PinRotation> acceptedRotations = new ArrayList<>(ACCEPTED_ROTATIONS);
+		if (!acceptedRotations.isEmpty()) {
+			Path manifestPath = options.rotationsManifestPath;
+			if (manifestPath.getParent() != null)
+				Files.createDirectories(manifestPath.getParent());
+
+			Files.write(manifestPath, rotationsManifestJson(acceptedRotations).getBytes(StandardCharsets.UTF_8));
+			System.out.printf("Accepted %d rotated certificate pin(s); audit manifest written to %s%n",
+					acceptedRotations.size(), manifestPath);
+		}
+
+		int rejectedRotations = REJECTED_ROTATIONS.size();
+		if (rejectedRotations > 0)
+			System.out.printf("Dropped %d server(s) whose pinned certificate had rotated; "
+					+ "review the old -> new fingerprints above and rerun with --accept-rotated-pins to re-pin them%n",
+					rejectedRotations);
 	}
 
 	private static List<CandidateServer> fetch1209kServers(CoinConfig coinConfig, Options options) {
@@ -178,7 +204,7 @@ public final class RefreshElectrumServers {
 		ElectrumServer electrumServer = null;
 
 		try {
-			Server pinnedSeed = pinSslServerIfNeeded(seedServer, options.timeoutMs);
+			Server pinnedSeed = pinSslServerIfNeeded(seedServer, options.timeoutMs, options.acceptRotatedPins);
 			electrumServer = openValidatedConnection(coinConfig, pinnedSeed, options.timeoutMs, false);
 			Object peers = rpc(electrumServer, "server.peers.subscribe");
 			Set<Server> peerServers = ElectrumServerDiscovery.parsePeerServers(peers, DEFAULT_ELECTRUMX_PORTS);
@@ -203,7 +229,7 @@ public final class RefreshElectrumServers {
 				Callable<CandidateServer> task = () -> {
 					// Pin SSL servers to their current leaf certificate first, so self-signed servers can be
 					// verified (and shipped) instead of being rejected by strict validation.
-					Server server = pinSslServerIfNeeded(candidate.getServer(), options.timeoutMs);
+					Server server = pinSslServerIfNeeded(candidate.getServer(), options.timeoutMs, options.acceptRotatedPins);
 					long responseTime = validateServer(coinConfig, server, options.timeoutMs);
 					CandidateServer verified = new CandidateServer(server, candidate.getSources());
 					verified.setResponseTimeMillis(responseTime);
@@ -227,38 +253,186 @@ public final class RefreshElectrumServers {
 		}
 	}
 
+	/** What to do with an SSL candidate once its live leaf certificate has been probed. */
+	enum PinOutcome {
+		/** Not an SSL server, or the probe failed: keep whatever pin the candidate already carried. */
+		UNCHANGED,
+		/** Previously unpinned: adopt the live fingerprint so the generated list ships an explicit pin. */
+		PINNED,
+		/** The pin no longer matches and the operator asked for rotations to be accepted. */
+		ROTATION_ACCEPTED,
+		/** The pin no longer matches and rotations were not accepted, so the server is dropped. */
+		ROTATION_REJECTED
+	}
+
+	static final class PinDecision {
+		private final PinOutcome outcome;
+		private final Server server;
+		private final String oldFingerprint;
+		private final String newFingerprint;
+
+		private PinDecision(PinOutcome outcome, Server server, String oldFingerprint, String newFingerprint) {
+			this.outcome = outcome;
+			this.server = server;
+			this.oldFingerprint = oldFingerprint;
+			this.newFingerprint = newFingerprint;
+		}
+
+		PinOutcome getOutcome() {
+			return this.outcome;
+		}
+
+		/** @return the server to verify, or null when the candidate must be dropped */
+		Server getServer() {
+			return this.server;
+		}
+
+		String getOldFingerprint() {
+			return this.oldFingerprint;
+		}
+
+		String getNewFingerprint() {
+			return this.newFingerprint;
+		}
+	}
+
+	/** One accepted or refused certificate rotation, as written to the audit manifest. */
+	static final class PinRotation {
+		private final String host;
+		private final int port;
+		private final String oldFingerprint;
+		private final String newFingerprint;
+		private final Instant probedAt;
+
+		PinRotation(String host, int port, String oldFingerprint, String newFingerprint, Instant probedAt) {
+			this.host = host;
+			this.port = port;
+			this.oldFingerprint = oldFingerprint;
+			this.newFingerprint = newFingerprint;
+			this.probedAt = probedAt;
+		}
+
+		String getHost() {
+			return this.host;
+		}
+
+		int getPort() {
+			return this.port;
+		}
+
+		String getOldFingerprint() {
+			return this.oldFingerprint;
+		}
+
+		String getNewFingerprint() {
+			return this.newFingerprint;
+		}
+
+		Instant getProbedAt() {
+			return this.probedAt;
+		}
+	}
+
+	/**
+	 * Decide how to pin an SSL candidate given the fingerprint its live leaf certificate presents.
+	 * <p>
+	 * Adopting a pin for a previously unpinned server is the tool's existing trust-on-first-use step. Silently
+	 * adopting a <em>changed</em> pin is not: it would turn every refresh into a fresh trust decision with no
+	 * record, so a rotation is only accepted when the operator explicitly asks for it with
+	 * <code>--accept-rotated-pins</code>, and is written to an audit manifest when it is. Without the flag the
+	 * candidate is dropped, exactly as it was before rotations were handled at all.
+	 *
+	 * @param liveFingerprint the fingerprint the server currently presents, or null when the probe failed
+	 */
+	static PinDecision decidePin(Server server, String liveFingerprint, boolean acceptRotatedPins) {
+		String existingFingerprint = server.getCertificateSha256Fingerprint();
+
+		if (server.getConnectionType() != ConnectionType.SSL || liveFingerprint == null)
+			return new PinDecision(PinOutcome.UNCHANGED, server, existingFingerprint, liveFingerprint);
+
+		if (existingFingerprint == null)
+			return new PinDecision(PinOutcome.PINNED, pinnedCopy(server, liveFingerprint), null, liveFingerprint);
+
+		if (existingFingerprint.equalsIgnoreCase(liveFingerprint))
+			return new PinDecision(PinOutcome.UNCHANGED, server, existingFingerprint, liveFingerprint);
+
+		if (!acceptRotatedPins)
+			return new PinDecision(PinOutcome.ROTATION_REJECTED, null, existingFingerprint, liveFingerprint);
+
+		return new PinDecision(PinOutcome.ROTATION_ACCEPTED, pinnedCopy(server, liveFingerprint), existingFingerprint, liveFingerprint);
+	}
+
+	private static Server pinnedCopy(Server server, String fingerprint) {
+		return new Server(server.getHostName(), server.getConnectionType(), server.getPort(), fingerprint);
+	}
+
 	/**
 	 * For an SSL server, capture its current leaf certificate fingerprint and return a pinned copy of the server.
 	 * This lets the generated list ship explicit pins, and lets self-signed servers pass the subsequent
 	 * strict-by-default verification handshake instead of being dropped.
-	 * <p>
-	 * A seed entry whose pin no longer matches the live leaf is re-pinned rather than kept: server certificates
-	 * rotate, and keeping the stale pin makes verification fail and silently drops a healthy server from the
-	 * generated list (which is how FIRO lost every default server after its certificates rotated).
+	 *
+	 * @throws IOException when the server's pinned certificate has rotated and rotations were not accepted
 	 */
-	private static Server pinSslServerIfNeeded(Server server, int timeoutMs) {
+	private static Server pinSslServerIfNeeded(Server server, int timeoutMs, boolean acceptRotatedPins) throws IOException {
 		if (server.getConnectionType() != ConnectionType.SSL)
 			return server;
 
+		String liveFingerprint = null;
 		try {
-			String fingerprint = ElectrumSSLSocketFactory.probeCertificateSha256Fingerprint(server.getHostName(), server.getPort(), timeoutMs);
-			if (fingerprint == null)
-				return server;
-
-			String existingFingerprint = server.getCertificateSha256Fingerprint();
-			if (fingerprint.equalsIgnoreCase(existingFingerprint))
-				return server;
-
-			if (existingFingerprint != null)
-				System.out.printf("%s:%d: certificate rotated, re-pinning %s -> %s%n",
-						server.getHostName(), server.getPort(), existingFingerprint, fingerprint);
-
-			return new Server(server.getHostName(), server.getConnectionType(), server.getPort(), fingerprint);
+			liveFingerprint = ElectrumSSLSocketFactory.probeCertificateSha256Fingerprint(server.getHostName(), server.getPort(), timeoutMs);
 		} catch (IOException e) {
 			// Leave the existing pin in place; verification still applies the active trust policy.
 		}
 
-		return server;
+		PinDecision decision = decidePin(server, liveFingerprint, acceptRotatedPins);
+
+		switch (decision.getOutcome()) {
+			case ROTATION_ACCEPTED:
+				ACCEPTED_ROTATIONS.add(new PinRotation(server.getHostName(), server.getPort(),
+						decision.getOldFingerprint(), decision.getNewFingerprint(), Instant.now()));
+				System.out.printf("%s:%d: certificate rotated, re-pinning %s -> %s%n",
+						server.getHostName(), server.getPort(), decision.getOldFingerprint(), decision.getNewFingerprint());
+				break;
+
+			case ROTATION_REJECTED:
+				REJECTED_ROTATIONS.add(new PinRotation(server.getHostName(), server.getPort(),
+						decision.getOldFingerprint(), decision.getNewFingerprint(), Instant.now()));
+				System.out.printf("%s:%d: certificate rotated, dropping server (pinned %s, server presents %s)%n",
+						server.getHostName(), server.getPort(), decision.getOldFingerprint(), decision.getNewFingerprint());
+				throw new IOException("certificate rotated: pinned " + decision.getOldFingerprint()
+						+ " but server presents " + decision.getNewFingerprint());
+
+			default:
+				break;
+		}
+
+		return decision.getServer();
+	}
+
+	/** Serialise the accepted rotations as the audit manifest written next to the generated list. */
+	static String rotationsManifestJson(List<PinRotation> rotations) {
+		StringBuilder builder = new StringBuilder();
+		builder.append("{\n");
+		builder.append("  \"generatedAt\": \"").append(JSONValue.escape(Instant.now().toString())).append("\",\n");
+		builder.append("  \"acceptedRotations\": [\n");
+
+		int index = 0;
+		for (PinRotation rotation : rotations) {
+			if (index++ > 0)
+				builder.append(",\n");
+
+			builder.append("    {");
+			builder.append("\"host\": \"").append(JSONValue.escape(rotation.getHost())).append("\", ");
+			builder.append("\"port\": ").append(rotation.getPort()).append(", ");
+			builder.append("\"oldFingerprint\": \"").append(JSONValue.escape(rotation.getOldFingerprint())).append("\", ");
+			builder.append("\"newFingerprint\": \"").append(JSONValue.escape(rotation.getNewFingerprint())).append("\", ");
+			builder.append("\"probedAt\": \"").append(JSONValue.escape(rotation.getProbedAt().toString())).append("\"");
+			builder.append("}");
+		}
+
+		builder.append("\n  ]\n");
+		builder.append("}\n");
+		return builder.toString();
 	}
 
 	private static long validateServer(CoinConfig coinConfig, Server server, int timeoutMs) throws Exception {
@@ -292,11 +466,11 @@ public final class RefreshElectrumServers {
 				throw new IOException("missing server.features result");
 
 			JSONObject featuresJson = (JSONObject) features;
-			double protocolMin = CrossChainUtils.getVersionDecimal(featuresJson, "protocol_min");
-			if (protocolMin < MIN_PROTOCOL_VERSION)
-				throw new IOException("old protocol_min " + protocolMin);
-			if (protocolMin > MAX_PROTOCOL_VERSION)
-				throw new IOException("new protocol_min " + protocolMin);
+			// Only an unreachable floor disqualifies a server; the negotiated version above already proved
+			// that this server and Core settled on a protocol both speak.
+			Optional<String> protocolMinRejectionNote = ElectrumX.protocolMinRejectionNote(featuresJson);
+			if (protocolMinRejectionNote.isPresent())
+				throw new IOException(protocolMinRejectionNote.get());
 
 			Object genesisHash = featuresJson.get("genesis_hash");
 			if (coinConfig.genesisHash != null && !coinConfig.genesisHash.equals(genesisHash))
@@ -338,8 +512,7 @@ public final class RefreshElectrumServers {
 		if ("server.version".equals(method)) {
 			requestParams.add("QortiumRefresh");
 			JSONArray versions = new JSONArray();
-			versions.add(String.format(Locale.ROOT, "%.1f", MIN_PROTOCOL_VERSION));
-			versions.add(String.format(Locale.ROOT, "%.1f", MAX_PROTOCOL_VERSION));
+			versions.addAll(ElectrumX.buildVersionParams());
 			requestParams.add(versions);
 		}
 
@@ -644,6 +817,8 @@ public final class RefreshElectrumServers {
 		System.out.println("  --skip-1209k           Do not scrape 1209k.com");
 		System.out.println("  --skip-peers           Do not query Electrum server.peers.subscribe");
 		System.out.println("  --skip-verify          Keep discovered servers without live genesis/height checks");
+		System.out.println("  --accept-rotated-pins  Re-pin servers whose certificate changed (default: drop them)");
+		System.out.println("  --rotations-manifest <path>  Audit manifest for accepted rotations (default: " + DEFAULT_ROTATIONS_MANIFEST_PATH + ")");
 		System.out.println("  Existing output JSON is used as the seed list when present");
 		System.out.println("  --timeout-ms <ms>      Network timeout per request (default: 5000)");
 		System.out.println("  --max-peer-seeds <n>   Number of seeds per coin to ask for peers (default: 8)");
@@ -678,10 +853,13 @@ public final class RefreshElectrumServers {
 		private final int timeoutMs;
 		private final int maxPeerSeeds;
 		private final int threads;
+		private final boolean acceptRotatedPins;
+		private final Path rotationsManifestPath;
 		private final boolean help;
 
 		private Options(Path outputPath, Set<String> coinCodes, Set<String> networkNames, boolean skip1209k, boolean skipPeerDiscovery,
-				boolean verify, int timeoutMs, int maxPeerSeeds, int threads, boolean help) {
+				boolean verify, int timeoutMs, int maxPeerSeeds, int threads, boolean acceptRotatedPins, Path rotationsManifestPath,
+				boolean help) {
 			this.outputPath = outputPath;
 			this.coinCodes = coinCodes;
 			this.networkNames = networkNames;
@@ -691,6 +869,8 @@ public final class RefreshElectrumServers {
 			this.timeoutMs = timeoutMs;
 			this.maxPeerSeeds = maxPeerSeeds;
 			this.threads = threads;
+			this.acceptRotatedPins = acceptRotatedPins;
+			this.rotationsManifestPath = rotationsManifestPath;
 			this.help = help;
 		}
 
@@ -704,6 +884,8 @@ public final class RefreshElectrumServers {
 			int timeoutMs = 5000;
 			int maxPeerSeeds = 8;
 			int threads = 12;
+			boolean acceptRotatedPins = false;
+			Path rotationsManifestPath = Paths.get(DEFAULT_ROTATIONS_MANIFEST_PATH);
 			boolean help = false;
 
 			for (int index = 0; index < args.length; index++) {
@@ -738,6 +920,14 @@ public final class RefreshElectrumServers {
 						verify = false;
 						break;
 
+					case "--accept-rotated-pins":
+						acceptRotatedPins = true;
+						break;
+
+					case "--rotations-manifest":
+						rotationsManifestPath = Paths.get(requireValue(args, ++index, arg));
+						break;
+
 					case "--timeout-ms":
 						timeoutMs = parsePositiveInt(requireValue(args, ++index, arg), arg);
 						break;
@@ -755,7 +945,8 @@ public final class RefreshElectrumServers {
 				}
 			}
 
-			return new Options(outputPath, coinCodes, networkNames, skip1209k, skipPeerDiscovery, verify, timeoutMs, maxPeerSeeds, threads, help);
+			return new Options(outputPath, coinCodes, networkNames, skip1209k, skipPeerDiscovery, verify, timeoutMs, maxPeerSeeds, threads,
+					acceptRotatedPins, rotationsManifestPath, help);
 		}
 
 		private static String requireValue(String[] args, int index, String option) {

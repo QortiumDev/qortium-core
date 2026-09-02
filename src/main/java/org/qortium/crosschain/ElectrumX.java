@@ -18,8 +18,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,9 +39,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private static final Random RANDOM = new Random();
 
 	// See: https://electrumx.readthedocs.io/en/latest/protocol-changes.html
-	private static final double MIN_PROTOCOL_VERSION = 1.2;
+	public static final ElectrumProtocolVersion MIN_PROTOCOL_VERSION = ElectrumProtocolVersion.of(1, 2);
 	/**
-	 * Highest ElectrumX protocol version Core actually implements.
+	 * Highest ElectrumX protocol version Core actually implements, as a family ceiling: the whole 1.4.x
+	 * range is acceptable, 1.5 and anything beyond it is not.
 	 * <p>
 	 * ElectrumX 2.0 servers advertise protocol 1.5+ and that protocol removed/renamed the
 	 * <code>blockchain.scripthash.*</code> methods Core relies on (<code>get_history</code>,
@@ -52,7 +51,9 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 * speak, which surfaces as API error 1201 on authenticated wallet reads. Keep this at the highest
 	 * protocol Core speaks, not at a hopeful future version.
 	 */
-	static final double MAX_PROTOCOL_VERSION = 1.4;
+	public static final ElectrumProtocolVersion MAX_PROTOCOL_VERSION = ElectrumProtocolVersion.of(1, 4);
+	/** Connection note recorded when a server's <code>server.version</code> reply cannot be understood at all. */
+	static final String MALFORMED_VERSION_RESPONSE_NOTE = "server.version response malformed";
 	private static final int MIN_TARGET_CONNECTIONS = 2;
 	private static final int DEFAULT_TARGET_CONNECTIONS = 3;
 	private static final double TARGET_CONNECTIONS_FRACTION = 0.75d;
@@ -1391,6 +1392,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		LOGGER.debug(() -> String.format("Connecting to %s %s", server, this.getCurrencyCodeForLogging()));
 
 		ElectrumServer electrumServer = null;
+		// Every early return below leaves the socket open unless it is closed on the way out, so track
+		// whether the connection actually joined the pool and close it in the finally block if not.
+		boolean added = false;
+
 		try {
 			SocketAddress endpoint = new InetSocketAddress(server.getHostName(), server.getPort());
 			int timeout = 5000; // ms
@@ -1434,16 +1439,18 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			LOGGER.debug(() -> String.format("Connected to %s %s", server, this.getCurrencyCodeForLogging()));
 			this.connections.add(electrumServer);
 			this.availableConnections.add(electrumServer);
+			added = true;
 			return Optional.of( this.recorder.recordConnection( server, requestedBy, true, true, EMPTY) );
 		} catch (IOException | ForeignBlockchainException | ClassCastException | NullPointerException e) {
 			// Didn't work, try another server...
 			recordFailure(server);
-			if (electrumServer != null)
-				electrumServer.closeServer(this.getClass().getSimpleName(), "wallet capability or connection validation failure");
 			return Optional.of( this.recorder.recordConnection( server, requestedBy, true, false, CrossChainUtils.getNotes(e)));
 		} catch( Exception e ) {
 			LOGGER.error(e.getMessage(), e);
 			return Optional.empty();
+		} finally {
+			if (electrumServer != null && !added)
+				electrumServer.closeServer(this.getClass().getSimpleName(), "wallet capability or connection validation failure");
 		}
 	}
 
@@ -1452,34 +1459,29 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 * or empty when Core can speak a protocol this server supports.
 	 */
 	static Optional<String> protocolMinRejectionNote(JSONObject featuresJson) {
-		try {
-			double protocol_min = CrossChainUtils.getVersionDecimal(featuresJson, "protocol_min");
-
-			if (protocol_min < MIN_PROTOCOL_VERSION)
-				return Optional.of("old version: protocol_min = " + protocol_min + " < MIN_PROTOCOL_VERSION = " + MIN_PROTOCOL_VERSION);
-
-			if (protocol_min > MAX_PROTOCOL_VERSION)
-				return Optional.of("new version: protocol_min = " + protocol_min + " > MAX_PROTOCOL_VERSION = " + MAX_PROTOCOL_VERSION);
-
-			return Optional.empty();
-		} catch (NumberFormatException e) {
-			return Optional.of(featuresJson.get("protocol_min").toString() + " is not a valid version");
-		} catch (NullPointerException e) {
+		Object rawProtocolMin = featuresJson.get("protocol_min");
+		if (rawProtocolMin == null)
 			return Optional.of("server version not available: protocol_min");
-		}
+
+		Optional<ElectrumProtocolVersion> protocolMin = ElectrumProtocolVersion.parse(String.valueOf(rawProtocolMin));
+		if (protocolMin.isEmpty())
+			return Optional.of(rawProtocolMin + " is not a valid version");
+
+		// Only an unreachable floor disqualifies a server: a server whose protocol_min sits above what Core
+		// speaks can never meet us. A low protocol_min is fine — protocol_max is what decides the outcome,
+		// and the negotiated version is checked separately.
+		if (protocolMin.get().isAbove(MAX_PROTOCOL_VERSION))
+			return Optional.of("new version: protocol_min = " + protocolMin.get() + " > MAX_PROTOCOL_VERSION = " + MAX_PROTOCOL_VERSION);
+
+		return Optional.empty();
 	}
 
 	/** Protocol version range sent as the second <code>server.version</code> parameter, lowest first. */
 	static List<String> buildVersionParams() {
 		List<String> versions = new ArrayList<>();
-		versions.add(formatProtocolVersion(MIN_PROTOCOL_VERSION));
-		versions.add(formatProtocolVersion(MAX_PROTOCOL_VERSION));
+		versions.add(MIN_PROTOCOL_VERSION.toString());
+		versions.add(MAX_PROTOCOL_VERSION.toString());
 		return versions;
-	}
-
-	static String formatProtocolVersion(double protocolVersion) {
-		DecimalFormat df = new DecimalFormat("#.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
-		return df.format(protocolVersion);
 	}
 
 	/** Extract the protocol version the server selected, i.e. <code>result[1]</code> of <code>server.version</code>. */
@@ -1500,29 +1502,30 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 	/** @return true if the server-selected protocol version is one Core can actually speak */
 	static boolean isNegotiatedVersionSupported(String negotiatedVersion) {
-		if (negotiatedVersion == null)
-			return false;
-
-		try {
-			double version = Double.parseDouble(CrossChainUtils.reduceDelimeters(negotiatedVersion.trim(), 1, '.'));
-			return version >= MIN_PROTOCOL_VERSION && version <= MAX_PROTOCOL_VERSION;
-		} catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
-			return false;
-		}
+		return ElectrumProtocolVersion.parse(negotiatedVersion)
+				.filter(version -> version.isWithin(MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION))
+				.isPresent();
 	}
 
 	/**
-	 * @return note explaining why the negotiated protocol version makes this connection unusable,
-	 * or empty when the version is supported (or the server did not report one).
+	 * @return note explaining why the negotiated protocol version makes this connection unusable, or empty
+	 * when the server selected a version Core speaks. A reply we cannot read at all is rejected rather than
+	 * waved through: an unreadable negotiation is not evidence that the connection is usable.
 	 */
 	static Optional<String> negotiatedVersionRejectionNote(Object versionResponse) {
 		Optional<String> negotiatedVersion = extractNegotiatedVersion(versionResponse);
+		if (negotiatedVersion.isEmpty())
+			return Optional.of(MALFORMED_VERSION_RESPONSE_NOTE);
 
-		if (negotiatedVersion.isEmpty() || isNegotiatedVersionSupported(negotiatedVersion.get()))
-			return Optional.empty();
+		Optional<ElectrumProtocolVersion> parsedVersion = ElectrumProtocolVersion.parse(negotiatedVersion.get());
+		if (parsedVersion.isEmpty())
+			return Optional.of("negotiated protocol " + negotiatedVersion.get() + " is not a valid version");
 
-		return Optional.of("negotiated protocol " + negotiatedVersion.get() + " outside supported "
-				+ formatProtocolVersion(MIN_PROTOCOL_VERSION) + "-" + formatProtocolVersion(MAX_PROTOCOL_VERSION));
+		if (!parsedVersion.get().isWithin(MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION))
+			return Optional.of("negotiated protocol " + parsedVersion.get() + " outside supported "
+					+ MIN_PROTOCOL_VERSION + "-" + MAX_PROTOCOL_VERSION);
+
+		return Optional.empty();
 	}
 
 	private void validateWalletRpcSupport(ElectrumServer electrumServer) throws ForeignBlockchainException {
