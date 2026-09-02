@@ -420,23 +420,27 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				.orElseThrow(() -> new ForeignBlockchainException.NetworkException(
 						"Missing/invalid 'count' with 'headers' or 'hex' entries in JSON from ElectrumX blockchain.block.headers RPC"));
 
-		if (headers.isSplit()) {
-			List<String> headerHexes = headers.getHeaderHexes();
-			if (headerHexes.size() != headers.getCount())
-				throw new ForeignBlockchainException.NetworkException("Unexpected header count in JSON from ElectrumX blockchain.block.headers RPC");
+		// Deliberately re-join the 1.6 headers array rather than returning its elements: a server header is
+		// not always the canonical 80-byte header this method must return (Namecoin AuxPoW headers are
+		// ~1156 bytes, Firo's are 120), and the chain-specific splitter is what turns raw bytes into
+		// canonical headers. Feeding both shapes through the same splitter makes them byte-identical by
+		// construction instead of by hope.
+		byte[] raw = headers.isSplit()
+				? concatenateBlockHeaders(headers.getHeaderHexes())
+				: HashCode.fromString(headers.getConcatenatedHex()).asBytes();
 
-			List<byte[]> rawBlockHeaders = new ArrayList<>(headerHexes.size());
-			for (String headerHex : headerHexes)
-				rawBlockHeaders.add(HashCode.fromString(headerHex).asBytes());
-
-			return rawBlockHeaders;
-		}
-
-		byte[] raw = HashCode.fromString(headers.getConcatenatedHex()).asBytes();
 		if (this.blockchain != null)
 			return this.blockchain.splitRawBlockHeaders(raw, headers.getCount());
 
 		return splitFixedLengthBlockHeaders(raw, headers.getCount());
+	}
+
+	static byte[] concatenateBlockHeaders(List<String> headerHexes) {
+		StringBuilder concatenated = new StringBuilder();
+		for (String headerHex : headerHexes)
+			concatenated.append(headerHex);
+
+		return HashCode.fromString(concatenated.toString()).asBytes();
 	}
 
 	private static List<byte[]> splitFixedLengthBlockHeaders(byte[] raw, int count) throws ForeignBlockchainException.NetworkException {

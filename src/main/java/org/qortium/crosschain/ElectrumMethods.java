@@ -37,6 +37,25 @@ public final class ElectrumMethods {
 	/** Unsubscribing was only added in 1.4.2. */
 	static final ElectrumProtocolVersion UNSUBSCRIBE_FROM = ElectrumProtocolVersion.of(1, 4, 2);
 
+	/**
+	 * Sanity ceiling on the number of entries in a history or unspent-output reply. Real addresses can be
+	 * busy — one probe script has 16,426 unspent outputs on Namecoin — so this only has to be far above any
+	 * legitimate answer; its job is to stop an unbounded or hostile reply from being walked at all.
+	 */
+	public static final int MAX_SCRIPT_RESULT_ENTRIES = 250_000;
+	/** ElectrumX serves at most 2016 headers per request; allow a margin for chains that raise it. */
+	public static final int MAX_BLOCK_HEADERS = 2016 * 4;
+	/** Chunks in a 1.6 headers array. Headers can be far longer than 80 bytes, so allow generous chunking. */
+	public static final int MAX_BLOCK_HEADER_CHUNKS = 200_000;
+	private static final int MAX_BLOCK_HEADER_HEX_LENGTH = 16 * 1024;
+	private static final int TX_HASH_HEX_LENGTH = 64;
+	/**
+	 * Lowest height a server may report. get_history uses 0 for an unconfirmed transaction and get_mempool
+	 * uses -1 for one whose parents are also unconfirmed, so -1 is legitimate and must survive validation.
+	 */
+	private static final long MIN_REPORTED_HEIGHT = -1L;
+	private static final long MAX_REPORTED_HEIGHT = Integer.MAX_VALUE;
+
 	private static final String SCRIPTHASH_PREFIX = "blockchain.scripthash.";
 	private static final String SCRIPTPUBKEY_PREFIX = "blockchain.scriptpubkey.";
 
@@ -154,51 +173,155 @@ public final class ElectrumMethods {
 	// --- result normalisation ---
 
 	/**
-	 * Normalise a history or mempool result to the array both families ultimately carry.
+	 * Normalise a history or mempool result to the array both families ultimately carry, rejecting any
+	 * reply whose entries are not well formed.
+	 * <p>
+	 * Validation is not cosmetic: callers walk these entries with unchecked casts, and an empty result here
+	 * is turned into a server-attributed network failure, which evicts the server and retries elsewhere.
+	 * A reply that says the right thing in the wrong shape is a broken server, not usable data.
 	 *
-	 * @return the history entries, or empty when the response is neither shape
+	 * @return the history entries, or empty when the response is not a well-formed history
 	 */
 	public static Optional<JSONArray> normalizeHistory(Object response) {
-		return unwrapArray(response, "history");
+		return unwrapArray(response, "history").filter(ElectrumMethods::isValidHistory);
 	}
 
 	/**
-	 * Normalise an unspent-output result to the array both families ultimately carry.
+	 * Normalise an unspent-output result to the array both families ultimately carry, rejecting any reply
+	 * whose entries are not well formed.
 	 *
-	 * @return the unspent outputs, or empty when the response is neither shape
+	 * @return the unspent outputs, or empty when the response is not a well-formed unspent-output list
 	 */
 	public static Optional<JSONArray> normalizeUnspentOutputs(Object response) {
-		return unwrapArray(response, "utxos");
+		return unwrapArray(response, "utxos").filter(ElectrumMethods::isValidUnspentOutputs);
 	}
 
-	/** get_balance answers with the same object in both families, so this only checks the shape. */
+	/** get_balance answers with the same object in both families; its amounts still have to make sense. */
 	public static Optional<JSONObject> normalizeBalance(Object response) {
-		return response instanceof JSONObject ? Optional.of((JSONObject) response) : Optional.empty();
+		if (!(response instanceof JSONObject))
+			return Optional.empty();
+
+		JSONObject balance = (JSONObject) response;
+
+		Long confirmed = integerValue(balance.get("confirmed"));
+		if (confirmed == null || confirmed < 0L)
+			return Optional.empty();
+
+		// The mempool delta is legitimately negative when unconfirmed coins are being spent, so it is only
+		// required to be an integer.
+		if (integerValue(balance.get("unconfirmed")) == null)
+			return Optional.empty();
+
+		return Optional.of(balance);
+	}
+
+	private static boolean isValidHistory(JSONArray history) {
+		if (history.size() > MAX_SCRIPT_RESULT_ENTRIES)
+			return false;
+
+		for (Object entry : history) {
+			if (!(entry instanceof JSONObject))
+				return false;
+
+			JSONObject historyEntry = (JSONObject) entry;
+			if (!isTransactionHash(historyEntry.get("tx_hash")) || !isReportedHeight(historyEntry.get("height")))
+				return false;
+		}
+
+		return true;
+	}
+
+	private static boolean isValidUnspentOutputs(JSONArray unspentOutputs) {
+		if (unspentOutputs.size() > MAX_SCRIPT_RESULT_ENTRIES)
+			return false;
+
+		for (Object entry : unspentOutputs) {
+			if (!(entry instanceof JSONObject))
+				return false;
+
+			JSONObject unspentOutput = (JSONObject) entry;
+			if (!isTransactionHash(unspentOutput.get("tx_hash")) || !isReportedHeight(unspentOutput.get("height")))
+				return false;
+
+			Long outputIndex = integerValue(unspentOutput.get("tx_pos"));
+			if (outputIndex == null || outputIndex < 0L || outputIndex > Integer.MAX_VALUE)
+				return false;
+
+			Long value = integerValue(unspentOutput.get("value"));
+			if (value == null || value < 0L)
+				return false;
+		}
+
+		return true;
+	}
+
+	private static boolean isTransactionHash(Object value) {
+		return value instanceof String && isHex((String) value, TX_HASH_HEX_LENGTH);
+	}
+
+	private static boolean isReportedHeight(Object value) {
+		Long height = integerValue(value);
+		return height != null && height >= MIN_REPORTED_HEIGHT && height <= MAX_REPORTED_HEIGHT;
 	}
 
 	/**
-	 * Normalise a blockchain.block.headers result to the list of raw header hex strings.
+	 * @return the value as a long when it is a JSON integer. json-simple parses integers as Long and falls
+	 * back to Double once they no longer fit, so requiring Long also rejects overflowing amounts and heights.
+	 */
+	private static Long integerValue(Object value) {
+		return value instanceof Long ? (Long) value : null;
+	}
+
+	private static boolean isHex(String value, int expectedLength) {
+		if (value.length() != expectedLength)
+			return false;
+
+		for (int index = 0; index < value.length(); index++) {
+			char character = value.charAt(index);
+			boolean isHexDigit = (character >= '0' && character <= '9')
+					|| (character >= 'a' && character <= 'f')
+					|| (character >= 'A' && character <= 'F');
+			if (!isHexDigit)
+				return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Normalise a blockchain.block.headers result.
 	 * <p>
-	 * Below 1.6 the headers arrive as one concatenated <code>hex</code> string, which cannot be split here
-	 * because header length varies by chain; that shape is returned unsplit as a single element and the
-	 * caller splits it. From 1.6 the server has already split them into a <code>headers</code> array.
+	 * Below 1.6 the headers arrive as one concatenated <code>hex</code> string; from 1.6 the same bytes
+	 * arrive as a <code>headers</code> array of fixed-size chunks. Neither shape can be split into block
+	 * headers here, because header length varies by chain — Namecoin's AuxPoW headers and Firo's 120-byte
+	 * headers are not the canonical 80 bytes — so both are handed to the caller for the chain-specific
+	 * splitter to divide. <code>count</code> is the number of block headers, not the number of chunks.
 	 */
 	public static Optional<BlockHeadersResult> normalizeBlockHeaders(Object response) {
 		if (!(response instanceof JSONObject))
 			return Optional.empty();
 
 		JSONObject headersJson = (JSONObject) response;
-		Object countObj = headersJson.get("count");
-		if (!(countObj instanceof Number))
+
+		Long reportedCount = integerValue(headersJson.get("count"));
+		if (reportedCount == null || reportedCount < 0L || reportedCount > MAX_BLOCK_HEADERS)
 			return Optional.empty();
 
-		int count = ((Number) countObj).intValue();
+		int count = reportedCount.intValue();
 
 		Object headersObj = headersJson.get("headers");
 		if (headersObj instanceof JSONArray) {
-			List<String> headerHexes = new ArrayList<>();
-			for (Object headerHex : (JSONArray) headersObj) {
-				if (!(headerHex instanceof String))
+			// Verified live against Namecoin (AuxPoW) and Firo: the 1.6 'headers' array is the same bytes
+			// the older 'hex' string carried, chunked at a fixed size that has nothing to do with 'count'.
+			// A Namecoin reply for 2 headers arrives as 18 chunks. Treat the array as chunks, never as a
+			// list of block headers, and never require its length to match 'count'.
+			JSONArray headersArray = (JSONArray) headersObj;
+			if (headersArray.size() > MAX_BLOCK_HEADER_CHUNKS)
+				return Optional.empty();
+
+			List<String> headerHexes = new ArrayList<>(headersArray.size());
+			for (Object headerHex : headersArray) {
+				if (!isBlockHeaderHex(headerHex))
 					return Optional.empty();
 
 				headerHexes.add((String) headerHex);
@@ -208,7 +331,7 @@ public final class ElectrumMethods {
 		}
 
 		Object hexObj = headersJson.get("hex");
-		if (hexObj instanceof String)
+		if (isBlockHeaderHex(hexObj) || (count == 0 && "".equals(hexObj)))
 			return Optional.of(BlockHeadersResult.ofConcatenatedHex(count, (String) hexObj));
 
 		return Optional.empty();
@@ -220,15 +343,28 @@ public final class ElectrumMethods {
 	 */
 	public static Optional<Double> normalizeRelayFee(Object response) {
 		if (response instanceof Number)
-			return Optional.of(((Number) response).doubleValue());
+			return validRelayFee(((Number) response).doubleValue());
 
 		if (response instanceof JSONObject) {
 			Object minRelayFee = ((JSONObject) response).get("minrelaytxfee");
 			if (minRelayFee instanceof Number)
-				return Optional.of(((Number) minRelayFee).doubleValue());
+				return validRelayFee(((Number) minRelayFee).doubleValue());
 		}
 
 		return Optional.empty();
+	}
+
+	private static Optional<Double> validRelayFee(double relayFee) {
+		return Double.isFinite(relayFee) && relayFee >= 0.0d ? Optional.of(relayFee) : Optional.empty();
+	}
+
+	private static boolean isBlockHeaderHex(Object value) {
+		if (!(value instanceof String))
+			return false;
+
+		String headerHex = (String) value;
+		return !headerHex.isEmpty() && headerHex.length() <= MAX_BLOCK_HEADER_HEX_LENGTH
+				&& (headerHex.length() & 1) == 0 && isHex(headerHex, headerHex.length());
 	}
 
 	private static Optional<JSONArray> unwrapArray(Object response, String key) {

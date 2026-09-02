@@ -168,8 +168,8 @@ public class ElectrumMethodsTests {
 
 	@Test
 	public void testUnspentOutputsNormaliseFromBothShapes() {
-		Object legacyResponse = json("[{\"tx_hash\":\"9f2c45a1\",\"tx_pos\":0,\"height\":437146,\"value\":45318048}]");
-		Object modernResponse = json("{\"utxos\":[{\"tx_hash\":\"9f2c45a1\",\"tx_pos\":0,\"height\":437146,\"value\":45318048}]}");
+		Object legacyResponse = json("[{\"tx_hash\":\"acc3758bd2a26f869fcc67d48ff30b96464d476bca82c1cd6656e7d506816412\",\"tx_pos\":0,\"height\":437146,\"value\":45318048}]");
+		Object modernResponse = json("{\"utxos\":[{\"tx_hash\":\"acc3758bd2a26f869fcc67d48ff30b96464d476bca82c1cd6656e7d506816412\",\"tx_pos\":0,\"height\":437146,\"value\":45318048}]}");
 
 		JSONArray fromLegacy = ElectrumMethods.normalizeUnspentOutputs(legacyResponse).orElseThrow();
 		JSONArray fromModern = ElectrumMethods.normalizeUnspentOutputs(modernResponse).orElseThrow();
