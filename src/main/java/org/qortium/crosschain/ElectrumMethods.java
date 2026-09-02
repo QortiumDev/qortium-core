@@ -6,6 +6,7 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.qortium.crypto.Crypto;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -207,9 +208,12 @@ public final class ElectrumMethods {
 		if (confirmed == null || confirmed < 0L)
 			return Optional.empty();
 
-		// The mempool delta is legitimately negative when unconfirmed coins are being spent, so it is only
-		// required to be an integer.
-		if (integerValue(balance.get("unconfirmed")) == null)
+		// The mempool delta is only validated when the server sends it: Core reads the confirmed balance
+		// and nothing else, so refusing a server for omitting a field we never look at would be gratuitous.
+		// When it is present it must still be an integer, though it is legitimately negative when
+		// unconfirmed coins are being spent.
+		Object unconfirmed = balance.get("unconfirmed");
+		if (unconfirmed != null && integerValue(unconfirmed) == null)
 			return Optional.empty();
 
 		return Optional.of(balance);
@@ -265,11 +269,45 @@ public final class ElectrumMethods {
 	}
 
 	/**
-	 * @return the value as a long when it is a JSON integer. json-simple parses integers as Long and falls
-	 * back to Double once they no longer fit, so requiring Long also rejects overflowing amounts and heights.
+	 * @return the value as a long when it is a whole number that fits in one.
+	 * <p>
+	 * Any integral {@link Number} is accepted, because a JSON integer does not always arrive as a Long:
+	 * json-simple parses them as Long but other producers use Integer or BigInteger. What is rejected is a
+	 * value that is not a whole number, or one too large to hold — json-simple falls back to Double once an
+	 * integer no longer fits, so an overflowing amount or height is caught by the range check.
 	 */
 	private static Long integerValue(Object value) {
-		return value instanceof Long ? (Long) value : null;
+		if (value instanceof Long || value instanceof Integer || value instanceof Short || value instanceof Byte)
+			return ((Number) value).longValue();
+
+		if (value instanceof BigInteger) {
+			BigInteger bigInteger = (BigInteger) value;
+			return bigInteger.bitLength() < Long.SIZE ? bigInteger.longValue() : null;
+		}
+
+		if (value instanceof Number) {
+			double numeric = ((Number) value).doubleValue();
+			if (Double.isFinite(numeric) && numeric == Math.rint(numeric)
+					&& numeric >= -9.223372036854775E18d && numeric <= 9.223372036854775E18d)
+				return (long) numeric;
+		}
+
+		return null;
+	}
+
+	/**
+	 * The header count, which some servers send as a numeric string rather than a JSON number. Core has
+	 * always tolerated that, and a server sending "2" instead of 2 is not a server worth refusing.
+	 */
+	private static Long headerCountValue(Object value) {
+		if (value instanceof String)
+			try {
+				return Long.parseLong(((String) value).trim());
+			} catch (NumberFormatException e) {
+				return null;
+			}
+
+		return integerValue(value);
 	}
 
 	private static boolean isHex(String value, int expectedLength) {
@@ -303,7 +341,7 @@ public final class ElectrumMethods {
 
 		JSONObject headersJson = (JSONObject) response;
 
-		Long reportedCount = integerValue(headersJson.get("count"));
+		Long reportedCount = headerCountValue(headersJson.get("count"));
 		if (reportedCount == null || reportedCount < 0L || reportedCount > MAX_BLOCK_HEADERS)
 			return Optional.empty();
 

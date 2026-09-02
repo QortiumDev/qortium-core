@@ -18,6 +18,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.Assume.assumeTrue;
 import static org.junit.Assert.*;
@@ -251,6 +252,89 @@ public class ElectrumXTests {
 	}
 
 	@Test
+	public void testProtocolOneSevenReadsUseTheScriptPubKeyFamily() throws ForeignBlockchainException {
+		// The same reads a 1.4 server answers with bare arrays arrive from a 1.7 server as wrapped objects
+		// under different method names. Both must produce identical results to the caller.
+		JSONObject balance = new JSONObject();
+		balance.put("confirmed", 123456789L);
+		balance.put("unconfirmed", 0L);
+
+		JSONObject unspentOutput = new JSONObject();
+		unspentOutput.put("height", 100L);
+		unspentOutput.put("tx_hash", "cc".repeat(32));
+		unspentOutput.put("tx_pos", 1L);
+		unspentOutput.put("value", 5000L);
+		JSONArray unspentOutputs = new JSONArray();
+		unspentOutputs.add(unspentOutput);
+		JSONObject wrappedUnspentOutputs = new JSONObject();
+		wrappedUnspentOutputs.put("utxos", unspentOutputs);
+
+		JSONObject historyEntry = new JSONObject();
+		historyEntry.put("height", 200L);
+		historyEntry.put("tx_hash", "aa".repeat(32));
+		JSONArray history = new JSONArray();
+		history.add(historyEntry);
+		JSONObject wrappedHistory = new JSONObject();
+		wrappedHistory.put("history", history);
+
+		Map<String, Object> responses = new HashMap<>();
+		responses.put("blockchain.scriptpubkey.get_balance", balance);
+		responses.put("blockchain.scriptpubkey.listunspent", wrappedUnspentOutputs);
+		responses.put("blockchain.scriptpubkey.get_history", wrappedHistory);
+
+		ElectrumX electrumX = new MockElectrumX(responses, ElectrumProtocolVersion.of(1, 7));
+
+		assertEquals(123456789L, electrumX.getConfirmedBalance(new byte[] { 0x01, 0x02 }));
+
+		List<UnspentOutput> confirmedOutputs = electrumX.getUnspentOutputs(new byte[] { 0x01, 0x02 }, false);
+		assertEquals(1, confirmedOutputs.size());
+		assertArrayEquals(HashCode.fromString("cc".repeat(32)).asBytes(), confirmedOutputs.get(0).hash);
+		assertEquals(5000L, confirmedOutputs.get(0).value);
+
+		List<TransactionHash> transactionHashes = electrumX.getAddressTransactions(new byte[] { 0x01, 0x02 }, false);
+		assertEquals(1, transactionHashes.size());
+		assertEquals("aa".repeat(32), transactionHashes.get(0).txHash);
+	}
+
+	@Test
+	public void testProtocolOneSevenServerAnsweringWithTheOldFamilyIsRejected() {
+		// A 1.7 connection asks blockchain.scriptpubkey.*; a server that only answers the old names leaves
+		// the new one unanswered, which must fail rather than be read as an empty wallet.
+		JSONArray emptyArray = new JSONArray();
+
+		ElectrumX electrumX = new MockElectrumX(
+				Collections.singletonMap("blockchain.scripthash.listunspent", emptyArray), ElectrumProtocolVersion.of(1, 7));
+
+		try {
+			electrumX.getUnspentOutputs(new byte[] { 0x01, 0x02 }, false);
+			fail("A 1.7 connection must not fall back to the scripthash family");
+		} catch (ForeignBlockchainException e) {
+			assertTrue(e.getMessage(), e.getMessage().contains("listunspent"));
+		}
+	}
+
+	@Test
+	public void testRawBlockHeadersAcceptsProtocolOneSixHeadersArray() throws ForeignBlockchainException {
+		// From 1.6 the same bytes arrive as an array of fixed-size chunks rather than one hex string.
+		JSONArray chunks = new JSONArray();
+		chunks.add("00".repeat(80));
+		chunks.add("00".repeat(80));
+
+		JSONObject response = new JSONObject();
+		response.put("count", 2L);
+		response.put("max", 2016L);
+		response.put("headers", chunks);
+
+		ElectrumX electrumX = new MockElectrumX(
+				Collections.singletonMap("blockchain.block.headers", response), ElectrumProtocolVersion.of(1, 6));
+		List<byte[]> rawBlockHeaders = electrumX.getRawBlockHeaders(1, 2);
+
+		assertEquals(2, rawBlockHeaders.size());
+		assertEquals(80, rawBlockHeaders.get(0).length);
+		assertEquals(80, rawBlockHeaders.get(1).length);
+	}
+
+	@Test
 	public void testGetUnspentOutputsRejectsMalformedResponse() {
 		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.scripthash.listunspent", "not-an-array"));
 
@@ -258,7 +342,7 @@ public class ElectrumXTests {
 			electrumX.getUnspentOutputs(new byte[] { 0x01, 0x02 }, false);
 			fail("Malformed unspent output response should fail");
 		} catch (ForeignBlockchainException e) {
-			assertTrue(e.getMessage().contains("Expected array output"));
+			assertTrue(e.getMessage(), e.getMessage().contains("listunspent"));
 		}
 	}
 
@@ -416,14 +500,25 @@ public class ElectrumXTests {
 	private static class MockElectrumX extends ElectrumX {
 
 		private final Map<String, Object> responsesByMethod;
+		/** The protocol this mock server pretends to have negotiated, which picks the method family. */
+		private final ElectrumProtocolVersion protocolVersion;
 
 		private MockElectrumX(Map<String, Object> responsesByMethod) {
 			this(responsesByMethod, 8);
 		}
 
 		private MockElectrumX(Map<String, Object> responsesByMethod, int coinDecimalPlaces) {
+			this(responsesByMethod, coinDecimalPlaces, ElectrumProtocolVersion.of(1, 4));
+		}
+
+		private MockElectrumX(Map<String, Object> responsesByMethod, ElectrumProtocolVersion protocolVersion) {
+			this(responsesByMethod, 8, protocolVersion);
+		}
+
+		private MockElectrumX(Map<String, Object> responsesByMethod, int coinDecimalPlaces, ElectrumProtocolVersion protocolVersion) {
 			super("mock", null, Collections.emptyList(), DEFAULT_ELECTRUMX_PORTS, coinDecimalPlaces);
 			this.responsesByMethod = new HashMap<>(responsesByMethod);
+			this.protocolVersion = protocolVersion;
 		}
 
 		@Override
@@ -433,6 +528,17 @@ public class ElectrumXTests {
 				throw (ForeignBlockchainException) response;
 
 			return new ElectrumServerResponse(null, response);
+		}
+
+		/**
+		 * Version-dependent calls resolve their method name from the protocol this mock claims to speak,
+		 * exactly as a real connection does, and are then answered from the canned responses by name.
+		 */
+		@Override
+		protected ElectrumServerResponse rpc(Function<ElectrumMethods, ElectrumRequest> requestBuilder, String description)
+				throws ForeignBlockchainException {
+			ElectrumRequest request = requestBuilder.apply(ElectrumMethods.forVersion(this.protocolVersion));
+			return rpc(request.getMethod(), request.getParams());
 		}
 	}
 

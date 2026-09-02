@@ -137,7 +137,10 @@ public class ElectrumResponseValidationTests {
 		assertEquals(Optional.empty(), ElectrumMethods.normalizeBalance(json("{\"confirmed\":-1,\"unconfirmed\":0}")));
 		assertEquals(Optional.empty(), ElectrumMethods.normalizeBalance(json("{\"confirmed\":1.5,\"unconfirmed\":0}")));
 		assertEquals(Optional.empty(), ElectrumMethods.normalizeBalance(json("{\"confirmed\":\"10\",\"unconfirmed\":0}")));
-		assertEquals(Optional.empty(), ElectrumMethods.normalizeBalance(json("{\"confirmed\":10}")));
+		// Core reads only the confirmed balance, so an absent mempool delta must not condemn a server;
+		// a present one still has to be an integer.
+		assertTrue(ElectrumMethods.normalizeBalance(json("{\"confirmed\":10}")).isPresent());
+		assertEquals(Optional.empty(), ElectrumMethods.normalizeBalance(json("{\"confirmed\":10,\"unconfirmed\":\"x\"}")));
 		assertEquals(Optional.empty(), ElectrumMethods.normalizeBalance(json("{\"confirmed\":1e300,\"unconfirmed\":0}")));
 	}
 

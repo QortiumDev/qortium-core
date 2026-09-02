@@ -467,20 +467,6 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		return true;
 	}
 
-	private Long parseJsonLong(Object value) {
-		if (value instanceof Number)
-			return ((Number) value).longValue();
-
-		if (value instanceof String)
-			try {
-				return Long.parseLong((String) value);
-			} catch (NumberFormatException e) {
-				return null;
-			}
-
-		return null;
-	}
-
 	/**
 	 * Returns list of raw block timestamps, starting from <tt>startHeight</tt> inclusive.
 	 * <p>
