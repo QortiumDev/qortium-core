@@ -1,7 +1,6 @@
 package org.qortium.notification;
 
 import com.google.common.hash.HashCode;
-import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.ee8.websocket.api.Session;
@@ -11,11 +10,13 @@ import org.qortium.crosschain.BitcoinyDeterministicKeyChain;
 import org.qortium.crosschain.BitcoinyNetwork;
 import org.qortium.crosschain.BitcoinyScript;
 import org.qortium.crosschain.BitcoinyTransaction;
+import org.qortium.crosschain.ElectrumMethods;
+import org.qortium.crosschain.ElectrumProtocolVersion;
+import org.qortium.crosschain.ElectrumRequest;
 import org.qortium.crosschain.ElectrumServerList;
 import org.qortium.crosschain.ElectrumX;
 import org.qortium.crosschain.ElectrumXPushClient;
 import org.qortium.crosschain.ForeignBlockchainRegistry;
-import org.qortium.crypto.Crypto;
 import org.qortium.settings.Settings;
 
 import java.io.IOException;
@@ -48,11 +49,13 @@ final class ForeignPaymentNotificationService {
 	static final Set<String> FILTER_KEYS = Set.of("coin", "xpub");
 
 	private static final Logger LOGGER = LogManager.getLogger(ForeignPaymentNotificationService.class);
-	private static final String SCRIPTHASH_SUBSCRIBE = "blockchain.scripthash.subscribe";
-	private static final String SCRIPTHASH_HISTORY = "blockchain.scripthash.get_history";
 	private static final String HEADERS_SUBSCRIBE = "blockchain.headers.subscribe";
 	private static final String CLIENT_NAME = "Qortium-Notifications";
-	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of("1.2", "2.0");
+	// The negotiated range is shared with ElectrumX so the push connections and the pooled connections
+	// cannot drift apart, and the subscription methods are picked per connection from what it negotiated:
+	// protocol 1.7 serves blockchain.scriptpubkey.* in place of blockchain.scripthash.*.
+	private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(
+			ElectrumX.MIN_PROTOCOL_VERSION.toString(), ElectrumX.MAX_PROTOCOL_VERSION.toString());
 	private static final int INITIAL_LOOKAHEAD_INCREMENT = 3;
 	private static final int WORK_QUEUE_CAPACITY = 256;
 	private static final int MAX_INPUTS_PER_TRANSACTION = 500;
@@ -254,6 +257,97 @@ final class ForeignPaymentNotificationService {
 		return coin instanceof String ? ((String) coin).trim().toUpperCase(Locale.ROOT) : "";
 	}
 
+	/**
+	 * Reject a <code>server.version</code> reply that did not settle on a protocol this service can speak.
+	 * Versions are compared component by component through {@link ElectrumProtocolVersion}, the same way the
+	 * pooled ElectrumX connections compare them, so a 1.4.x server is accepted by both and 1.10 by neither.
+	 */
+	static void validateNegotiatedVersion(Object response) throws IOException {
+		parseNegotiatedVersion(response);
+	}
+
+	/**
+	 * Validate a <code>server.version</code> reply and return what the server settled on, so the caller can
+	 * pick the matching method family for the life of that connection.
+	 */
+	static ElectrumProtocolVersion parseNegotiatedVersion(Object response) throws IOException {
+		if (!(response instanceof List<?>))
+			throw new IOException("ElectrumX server did not negotiate a protocol version");
+
+		List<?> values = (List<?>) response;
+		if (values.size() < 2 || !(values.get(0) instanceof String) || !(values.get(1) instanceof String))
+			throw new IOException("ElectrumX server returned an invalid version response");
+
+		ElectrumProtocolVersion negotiated = ElectrumProtocolVersion.parse((String) values.get(1))
+				.orElseThrow(() -> new IOException("ElectrumX server returned an invalid protocol version"));
+
+		if (!negotiated.isWithin(ElectrumX.MIN_PROTOCOL_VERSION, ElectrumX.MAX_PROTOCOL_VERSION))
+			throw new IOException("ElectrumX server negotiated an unsupported protocol version");
+
+		return negotiated;
+	}
+
+	/**
+	 * Which protocol family the push connection negotiated, and which connection it negotiated it on.
+	 * <p>
+	 * The push client reconnects on its own and the watcher's work is queued, so a task created against a
+	 * 1.4 server can run after the client has moved to a 1.7 server. Pairing the version with the epoch it
+	 * was negotiated on makes that detectable: work whose epoch no longer matches is refused rather than
+	 * being sent with the wrong method family, and no protocol-dependent request can be sent at all before
+	 * negotiation has completed.
+	 */
+	static final class NegotiatedFamily {
+		private volatile ElectrumProtocolVersion version;
+		private volatile long epoch = -1L;
+
+		void negotiated(long epoch, ElectrumProtocolVersion version) {
+			this.version = version;
+			this.epoch = epoch;
+		}
+
+		/** Called when the connection drops, so nothing can keep using the family it had negotiated. */
+		void cleared() {
+			this.version = null;
+			this.epoch = -1L;
+		}
+
+		ElectrumProtocolVersion getVersion() {
+			return this.version;
+		}
+
+		/**
+		 * @param epoch the connection epoch the caller's work was created for
+		 * @param currentEpoch the connection epoch the client is on now
+		 * @return the method family to use
+		 * @throws IOException when negotiation has not completed, or the connection has changed underneath
+		 */
+		ElectrumMethods require(long epoch, long currentEpoch) throws IOException {
+			ElectrumProtocolVersion negotiatedVersion = this.version;
+			if (negotiatedVersion == null || this.epoch != epoch)
+				throw new IOException("ElectrumX push connection has not negotiated a protocol version");
+
+			if (epoch != currentEpoch)
+				throw new IOException("ElectrumX push connection changed before the request was sent");
+
+			return ElectrumMethods.forVersion(negotiatedVersion);
+		}
+	}
+
+	/** Protocol 1.7's standard code for a history the server refuses to serve because it is too large. */
+	static final int HISTORY_TOO_LARGE_ERROR_CODE = 10001;
+
+	/**
+	 * @return true when this failure is one busy address rather than a broken connection. Reconnecting
+	 * cannot fix it, and doing so would cycle the whole per-coin watcher over one address.
+	 */
+	static boolean isHistoryTooLarge(Throwable failure) {
+		if (failure instanceof ElectrumXPushClient.RpcException)
+			return ((ElectrumXPushClient.RpcException) failure).getCode() == HISTORY_TOO_LARGE_ERROR_CODE;
+
+		String message = failure == null ? null : failure.getMessage();
+		return message != null && message.toLowerCase(Locale.ROOT).contains("history too large");
+	}
+
 	private static final class Registration {
 		private final CoinWatcher watcher;
 		private final WatchRule rule;
@@ -272,6 +366,8 @@ final class ForeignPaymentNotificationService {
 		private final ThreadPoolExecutor worker;
 		private final ElectrumXPushClient client;
 		private final Map<String, AddressWatch> watchesByScripthash = new LinkedHashMap<>();
+		/** Protocol family negotiated on the current push connection, tied to that connection's epoch. */
+		private final NegotiatedFamily negotiatedFamily = new NegotiatedFamily();
 		private final Map<String, BitcoinyTransaction> transactionCache =
 				new LinkedHashMap<String, BitcoinyTransaction>(TRANSACTION_CACHE_SIZE + 1, 0.75F, true) {
 					@Override
@@ -296,16 +392,20 @@ final class ForeignPaymentNotificationService {
 					new ElectrumXPushClient.Listener() {
 						@Override
 						public void onConnected() {
-							execute(CoinWatcher.this::resubscribeAll);
+							long epoch = CoinWatcher.this.client.currentEpoch();
+							execute(() -> resubscribeAll(epoch));
 						}
 
 						@Override
 						public void onNotification(String method, List<?> params) {
-							execute(() -> handlePushNotification(method, params));
+							long epoch = CoinWatcher.this.client.currentEpoch();
+							execute(() -> handlePushNotification(epoch, method, params));
 						}
 
 						@Override
 						public void onDisconnected() {
+							// Nothing may keep using the family this connection negotiated.
+							CoinWatcher.this.negotiatedFamily.cleared();
 						}
 					});
 			this.client.start();
@@ -341,8 +441,10 @@ final class ForeignPaymentNotificationService {
 				return;
 
 			addBatch(rule, rule.keyChain.getInitialLeafKeys(INITIAL_LOOKAHEAD_INCREMENT));
-			if (this.client.isConnected())
-				subscribeAndAdvance(rule);
+			// Only subscribe once this connection has negotiated: before that there is no method family to
+			// choose, and the rule is picked up by the next resubscribeAll anyway.
+			if (this.client.isConnected() && this.negotiatedFamily.getVersion() != null)
+				subscribeAndAdvance(this.client.currentEpoch(), rule);
 		}
 
 		private void addBatch(WatchRule rule, List<BitcoinyDeterministicKey> keys) {
@@ -353,9 +455,10 @@ final class ForeignPaymentNotificationService {
 			for (BitcoinyDeterministicKey key : keys) {
 				String address = this.bitcoiny.pkhToAddress(key.getPublicKeyHash());
 				String scriptPubKey = HashCode.fromBytes(BitcoinyScript.p2pkhScript(key.getPublicKeyHash())).toString();
-				String scripthash = toScripthash(key);
+				byte[] script = BitcoinyScript.p2pkhScript(key.getPublicKeyHash());
+				String scripthash = ElectrumMethods.subscriptionKey(script);
 				AddressWatch watch = this.watchesByScripthash.computeIfAbsent(
-						scripthash, ignored -> new AddressWatch(scripthash));
+						scripthash, ignored -> new AddressWatch(scripthash, script));
 				watch.rules.add(rule);
 				rule.watches.add(watch);
 				rule.addresses.add(address);
@@ -367,29 +470,44 @@ final class ForeignPaymentNotificationService {
 			rule.batches.add(batch);
 		}
 
-		private static String toScripthash(BitcoinyDeterministicKey key) {
-			byte[] script = BitcoinyScript.p2pkhScript(key.getPublicKeyHash());
-			byte[] digest = Crypto.digest(script);
-			Bytes.reverse(digest);
-			return HashCode.fromBytes(digest).toString();
-		}
 
-		private boolean subscribeAndAdvance(WatchRule rule) {
+		private boolean subscribeAndAdvance(long epoch, WatchRule rule) {
+			if (rule.historyTooLarge)
+				// Already retired: retrying only earns the same refusal.
+				return true;
+
 			try {
 				for (List<AddressWatch> batch : rule.batches)
 					for (AddressWatch watch : batch)
-						ensureSubscribed(watch);
+						ensureSubscribed(epoch, watch);
 
-				advanceDiscovery(rule);
+				advanceDiscovery(epoch, rule);
 				return true;
 			} catch (Exception e) {
+				// One address the server refuses to serve is not a reason to cycle the whole coin's
+				// connection; retire that watch and carry on.
+				if (isHistoryTooLarge(e)) {
+					retireOversizedWatches(rule);
+					return true;
+				}
+
 				LOGGER.debug("{} foreign-payment watch initialization failed: {}", this.coin, e.getMessage());
 				this.client.reconnect();
 				return false;
 			}
 		}
 
-		private void advanceDiscovery(WatchRule rule) throws IOException {
+		/** Mark the rule's watches that the server refuses to serve, logging once per rule. */
+		private void retireOversizedWatches(WatchRule rule) {
+			if (rule.historyTooLarge)
+				return;
+
+			rule.historyTooLarge = true;
+			LOGGER.info("{} foreign-payment watch retired: ElectrumX refuses to serve this address's history"
+					+ " (error {}); no further notifications will be sent for it", this.coin, HISTORY_TOO_LARGE_ERROR_CODE);
+		}
+
+		private void advanceDiscovery(long epoch, WatchRule rule) throws IOException {
 			while (rule.active && rule.processedBatchCount < rule.batches.size()) {
 				List<AddressWatch> batch = rule.batches.get(rule.processedBatchCount);
 				if (batch.stream().anyMatch(watch -> !watch.initialized))
@@ -409,7 +527,7 @@ final class ForeignPaymentNotificationService {
 				if (!addNextBatch(rule))
 					return;
 				for (AddressWatch watch : rule.batches.get(rule.batches.size() - 1))
-					ensureSubscribed(watch);
+					ensureSubscribed(epoch, watch);
 			}
 		}
 
@@ -428,22 +546,23 @@ final class ForeignPaymentNotificationService {
 			return true;
 		}
 
-		private void ensureSubscribed(AddressWatch watch) throws IOException {
+		private void ensureSubscribed(long epoch, AddressWatch watch) throws IOException {
 			if (watch.subscribedGeneration == this.connectionGeneration)
 				return;
 
-			Object result = this.client.request(SCRIPTHASH_SUBSCRIBE, watch.scripthash);
+			ElectrumRequest subscribeRequest = methods(epoch).subscribe(watch.script);
+			Object result = this.client.request(epoch, subscribeRequest.getMethod(), subscribeRequest.getParams());
 			watch.subscribedGeneration = this.connectionGeneration;
 			String checkpoint = parseCheckpoint(result);
 			if (!watch.initialized) {
 				watch.initialized = true;
 				watch.checkpoint = checkpoint;
-				baseline(watch);
+				baseline(epoch, watch);
 				return;
 			}
 
 			if (!Objects.equals(watch.checkpoint, checkpoint) || !watch.baselineComplete || watch.retryPending)
-				processStatusChange(watch, checkpoint);
+				processStatusChange(epoch, watch, checkpoint);
 		}
 
 		private static String parseCheckpoint(Object value) throws IOException {
@@ -454,30 +573,32 @@ final class ForeignPaymentNotificationService {
 			throw new IOException("Unexpected ElectrumX scripthash status response");
 		}
 
-		private void baseline(AddressWatch watch) throws IOException {
+		private void baseline(long epoch, AddressWatch watch) throws IOException {
 			if (watch.checkpoint != null)
-				watch.history.baseline(fetchHistory(watch.scripthash));
+				watch.history.baseline(fetchHistory(epoch, watch));
 			watch.baselineComplete = true;
 		}
 
-		private void resubscribeAll() {
+		private void resubscribeAll(long epoch) {
 			if (this.closed)
 				return;
 
 			try {
 				this.connectionGeneration++;
-				validateNegotiatedVersion(this.client.request(
-						"server.version", CLIENT_NAME, SUPPORTED_PROTOCOL_VERSIONS));
-				Object features = this.client.request("server.features");
+				// Every call below is bound to this epoch, so a resubscribe left over from a previous
+				// connection cannot write anything to the current one.
+				this.negotiatedFamily.negotiated(epoch, parseNegotiatedVersion(this.client.request(
+						epoch, "server.version", CLIENT_NAME, SUPPORTED_PROTOCOL_VERSIONS)));
+				Object features = this.client.request(epoch, "server.features");
 				if (!(features instanceof Map<?, ?>))
 					throw new IOException("ElectrumX server did not return features");
 				Object genesisHash = ((Map<?, ?>) features).get("genesis_hash");
 				if (!Objects.equals(this.network.getGenesisHash(), genesisHash))
 					throw new IOException("ElectrumX server reported the wrong genesis hash");
-				updateHeight(this.client.request(HEADERS_SUBSCRIBE));
+				updateHeight(this.client.request(epoch, HEADERS_SUBSCRIBE));
 				boolean subscriptionsReady = true;
 				for (WatchRule rule : new ArrayList<>(this.rules))
-					subscriptionsReady &= subscribeAndAdvance(rule);
+					subscriptionsReady &= subscribeAndAdvance(epoch, rule);
 				if (subscriptionsReady)
 					this.client.markReady();
 			} catch (Exception e) {
@@ -486,7 +607,7 @@ final class ForeignPaymentNotificationService {
 			}
 		}
 
-		private void handlePushNotification(String method, List<?> params) {
+		private void handlePushNotification(long epoch, String method, List<?> params) {
 			try {
 				if (HEADERS_SUBSCRIBE.equals(method)) {
 					if (!params.isEmpty())
@@ -494,59 +615,30 @@ final class ForeignPaymentNotificationService {
 					return;
 				}
 
-				if (!SCRIPTHASH_SUBSCRIBE.equals(method) || params.size() < 2 || !(params.get(0) instanceof String))
+				// 1.7 renamed the notification to blockchain.scriptpubkey.subscribe but kept its payload: the
+				// first parameter is still the scripthash, so watches stay keyed by scripthash either way.
+				if (!ElectrumMethods.isSubscriptionNotification(method) || params.size() < 2 || !(params.get(0) instanceof String))
 					return;
 
 				AddressWatch watch = this.watchesByScripthash.get(params.get(0));
-				if (watch != null)
-					processStatusChange(watch, parseCheckpoint(params.get(1)));
+				if (watch == null)
+					return;
+
+				try {
+					processStatusChange(epoch, watch, parseCheckpoint(params.get(1)));
+				} catch (Exception e) {
+					// A history the server refuses to serve is a property of that address, not of the
+					// connection: reconnecting would cycle the whole coin's watcher over one busy address.
+					if (!isHistoryTooLarge(e))
+						throw e;
+
+					for (WatchRule rule : new ArrayList<>(watch.rules))
+						retireOversizedWatches(rule);
+				}
 			} catch (Exception e) {
 				LOGGER.debug("{} foreign-payment push handling failed: {}", this.coin, e.getMessage());
 				this.client.reconnect();
 			}
-		}
-
-		private static void validateNegotiatedVersion(Object response) throws IOException {
-			if (!(response instanceof List<?>))
-				throw new IOException("ElectrumX server did not negotiate a protocol version");
-
-			List<?> values = (List<?>) response;
-			if (values.size() < 2 || !(values.get(0) instanceof String) || !(values.get(1) instanceof String))
-				throw new IOException("ElectrumX server returned an invalid version response");
-
-			int[] negotiated = parseProtocolVersion((String) values.get(1));
-			int[] minimum = parseProtocolVersion(SUPPORTED_PROTOCOL_VERSIONS.get(0));
-			int[] maximum = parseProtocolVersion(SUPPORTED_PROTOCOL_VERSIONS.get(1));
-			if (compareProtocolVersions(negotiated, minimum) < 0
-					|| compareProtocolVersions(negotiated, maximum) > 0)
-				throw new IOException("ElectrumX server negotiated an unsupported protocol version");
-		}
-
-		private static int[] parseProtocolVersion(String value) throws IOException {
-			String[] parts = value.split("\\.", -1);
-			if (parts.length < 2 || parts.length > 3)
-				throw new IOException("ElectrumX server returned an invalid protocol version");
-
-			int[] version = new int[3];
-			try {
-				for (int index = 0; index < parts.length; index++) {
-					if (parts[index].isEmpty() || !parts[index].chars().allMatch(Character::isDigit))
-						throw new NumberFormatException();
-					version[index] = Integer.parseInt(parts[index]);
-				}
-			} catch (NumberFormatException e) {
-				throw new IOException("ElectrumX server returned an invalid protocol version", e);
-			}
-			return version;
-		}
-
-		private static int compareProtocolVersions(int[] left, int[] right) {
-			for (int index = 0; index < left.length; index++) {
-				int comparison = Integer.compare(left[index], right[index]);
-				if (comparison != 0)
-					return comparison;
-			}
-			return 0;
 		}
 
 		private void updateHeight(Object headerValue) {
@@ -557,10 +649,10 @@ final class ForeignPaymentNotificationService {
 				this.currentHeight = ((Number) height).intValue();
 		}
 
-		private void processStatusChange(AddressWatch watch, String checkpoint) throws IOException {
+		private void processStatusChange(long epoch, AddressWatch watch, String checkpoint) throws IOException {
 			if (!watch.baselineComplete) {
 				watch.checkpoint = checkpoint;
-				baseline(watch);
+				baseline(epoch, watch);
 				return;
 			}
 
@@ -568,7 +660,7 @@ final class ForeignPaymentNotificationService {
 				return;
 
 			String previousCheckpoint = watch.checkpoint;
-			List<ForeignPaymentHistoryDelta.Entry> added = watch.history.candidates(fetchHistory(watch.scripthash));
+			List<ForeignPaymentHistoryDelta.Entry> added = watch.history.candidates(fetchHistory(epoch, watch));
 			watch.checkpoint = checkpoint;
 			watch.retryPending = false;
 			if (checkpoint != null) {
@@ -589,12 +681,18 @@ final class ForeignPaymentNotificationService {
 						rule.terminalBatch = null;
 						rule.unusedCounter = 0;
 						if (addNextBatch(rule))
-							subscribeAndAdvance(rule);
+							subscribeAndAdvance(epoch, rule);
 					}
 		}
 
-		private List<ForeignPaymentHistoryDelta.Entry> fetchHistory(String scripthash) throws IOException {
-			return parseHistory(this.client.request(SCRIPTHASH_HISTORY, scripthash));
+		/** @throws IOException when this epoch's connection has not negotiated, or is no longer current */
+		private ElectrumMethods methods(long epoch) throws IOException {
+			return this.negotiatedFamily.require(epoch, this.client.currentEpoch());
+		}
+
+		private List<ForeignPaymentHistoryDelta.Entry> fetchHistory(long epoch, AddressWatch watch) throws IOException {
+			ElectrumRequest historyRequest = methods(epoch).getHistory(watch.script);
+			return parseHistory(this.client.request(epoch, historyRequest.getMethod(), historyRequest.getParams()));
 		}
 
 		private boolean handleNewTransaction(AddressWatch watch, ForeignPaymentHistoryDelta.Entry historyEntry,
@@ -744,6 +842,8 @@ final class ForeignPaymentNotificationService {
 		private final Set<String> seenTransactionHashes = new LinkedHashSet<>();
 		private final List<List<AddressWatch>> batches = new ArrayList<>();
 		private volatile boolean active = true;
+		/** Set when the server refuses to serve this rule's history, so it is retired instead of retried. */
+		private boolean historyTooLarge;
 		private int processedLeafKeyCount;
 		private int processedBatchCount;
 		private int unusedCounter;
@@ -760,6 +860,8 @@ final class ForeignPaymentNotificationService {
 
 	private static final class AddressWatch {
 		private final String scripthash;
+		/** The output script itself, needed as the parameter for the 1.7 blockchain.scriptpubkey.* family. */
+		private final byte[] script;
 		private final Set<WatchRule> rules = new LinkedHashSet<>();
 		private final ForeignPaymentHistoryDelta history =
 				new ForeignPaymentHistoryDelta(MAX_HISTORY_ENTRIES_PER_SCRIPTHASH);
@@ -769,8 +871,9 @@ final class ForeignPaymentNotificationService {
 		private boolean retryPending;
 		private long subscribedGeneration = -1L;
 
-		private AddressWatch(String scripthash) {
+		private AddressWatch(String scripthash, byte[] script) {
 			this.scripthash = scripthash;
+			this.script = script;
 		}
 	}
 
@@ -782,9 +885,11 @@ final class ForeignPaymentNotificationService {
 	}
 
 	static List<ForeignPaymentHistoryDelta.Entry> parseHistory(Object result) throws IOException {
-		if (!(result instanceof List<?>))
+		// 1.7 wraps the same entries in {"history": [...]}; accept either shape.
+		Object unwrapped = result instanceof Map<?, ?> ? ((Map<?, ?>) result).get("history") : result;
+		if (!(unwrapped instanceof List<?>))
 			throw new IOException("Unexpected ElectrumX scripthash history response");
-		List<?> history = (List<?>) result;
+		List<?> history = (List<?>) unwrapped;
 		if (history.size() > MAX_HISTORY_ENTRIES_PER_SCRIPTHASH)
 			throw new IOException("ElectrumX scripthash history exceeds "
 					+ MAX_HISTORY_ENTRIES_PER_SCRIPTHASH + " entries");

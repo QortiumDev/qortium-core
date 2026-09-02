@@ -66,6 +66,13 @@ public final class ElectrumXPushClient implements AutoCloseable {
 	private final Object writeLock = new Object();
 	private final ScheduledExecutorService heartbeatExecutor;
 
+	/**
+	 * Incremented for every connection this client makes. Work queued against one connection carries the
+	 * epoch it was created for, so a task that runs after a reconnect can be refused instead of being
+	 * written to a socket that negotiated a different protocol.
+	 */
+	private final AtomicLong connectionEpoch = new AtomicLong();
+
 	private volatile boolean stopping;
 	private volatile boolean connected;
 	private volatile boolean ready;
@@ -110,6 +117,16 @@ public final class ElectrumXPushClient implements AutoCloseable {
 		return this.connected;
 	}
 
+	/** @return the epoch of the current connection; compare against the epoch a queued task was created for */
+	public long currentEpoch() {
+		return this.connectionEpoch.get();
+	}
+
+	/** @return true once the owner has confirmed this connection negotiated and verified successfully */
+	public boolean isReady() {
+		return this.ready;
+	}
+
 	/** Marks a negotiated, chain-verified connection so later reconnect backoff can restart at its initial delay. */
 	public void markReady() {
 		if (this.connected)
@@ -128,6 +145,23 @@ public final class ElectrumXPushClient implements AutoCloseable {
 
 	@SuppressWarnings("unchecked")
 	public Object request(String method, Object... params) throws IOException {
+		return request(currentEpoch(), method, params);
+	}
+
+	/**
+	 * Send a request that belongs to one particular connection.
+	 * <p>
+	 * A protocol-dependent request built for the connection at <code>epoch</code> must never reach a later
+	 * connection: the newer server may have negotiated a different method family, so the request would ask
+	 * for methods it does not serve. The epoch is checked before writing and again under the write lock.
+	 *
+	 * @param epoch the connection epoch this request was built for
+	 */
+	@SuppressWarnings("unchecked")
+	public Object request(long epoch, String method, Object... params) throws IOException {
+		if (epoch != currentEpoch())
+			throw new IOException("ElectrumX push connection changed before request " + method);
+
 		BufferedWriter activeWriter = this.writer;
 		if (!this.connected || activeWriter == null)
 			throw new IOException("ElectrumX push connection is not connected");
@@ -147,7 +181,7 @@ public final class ElectrumXPushClient implements AutoCloseable {
 
 		try {
 			synchronized (this.writeLock) {
-				if (!this.connected || this.writer != activeWriter)
+				if (!this.connected || this.writer != activeWriter || epoch != currentEpoch())
 					throw new IOException("ElectrumX push connection changed before request write");
 				activeWriter.write(request.toJSONString());
 				activeWriter.newLine();
@@ -188,6 +222,9 @@ public final class ElectrumXPushClient implements AutoCloseable {
 
 				this.socket = connectedSocket;
 				this.writer = connectedWriter;
+				// Claim the new epoch before anything can observe the connection, so onConnected() and any
+				// work it queues see the epoch they are actually running against.
+				this.connectionEpoch.incrementAndGet();
 				this.connected = true;
 				this.ready = false;
 				this.listener.onConnected();
@@ -358,7 +395,7 @@ public final class ElectrumXPushClient implements AutoCloseable {
 
 			Object error = message.get("error");
 			if (error != null)
-				future.completeExceptionally(new IOException("ElectrumX RPC error: " + error));
+				future.completeExceptionally(toRpcException(error));
 			else
 				future.complete(message.get("result"));
 			return;
@@ -368,6 +405,40 @@ public final class ElectrumXPushClient implements AutoCloseable {
 		Object params = message.get("params");
 		if (method instanceof String && params instanceof List<?>)
 			this.listener.onNotification((String) method, (List<?>) params);
+	}
+
+	/**
+	 * Turn a JSON-RPC error object into an exception that keeps its numeric code.
+	 * <p>
+	 * The code matters: protocol 1.7 standardised 10001 for "history too large", which is a permanent
+	 * property of one address rather than a fault of the connection, so the caller must be able to tell it
+	 * apart from a transport failure instead of reconnecting over and over.
+	 */
+	static IOException toRpcException(Object error) {
+		if (error instanceof Map<?, ?>) {
+			Map<?, ?> errorMap = (Map<?, ?>) error;
+			Object code = errorMap.get("code");
+			if (code instanceof Number)
+				return new RpcException(((Number) code).intValue(), String.valueOf(errorMap.get("message")));
+		}
+
+		return new IOException("ElectrumX RPC error: " + error);
+	}
+
+	/** A JSON-RPC error reply, carrying the server's numeric error code. */
+	public static final class RpcException extends IOException {
+		private static final long serialVersionUID = 1L;
+
+		private final int code;
+
+		public RpcException(int code, String message) {
+			super("ElectrumX RPC error " + code + ": " + message);
+			this.code = code;
+		}
+
+		public int getCode() {
+			return this.code;
+		}
 	}
 
 	private void disconnect() {

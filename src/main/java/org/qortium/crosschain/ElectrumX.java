@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,6 +27,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -40,8 +40,27 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private static final Random RANDOM = new Random();
 
 	// See: https://electrumx.readthedocs.io/en/latest/protocol-changes.html
-	private static final double MIN_PROTOCOL_VERSION = 1.2;
-	private static final double MAX_PROTOCOL_VERSION = 2.0; // Higher than current latest, for hopeful future-proofing
+	/**
+	 * Lowest protocol version Core will accept. Every ElectrumX in the wild advertises
+	 * <code>protocol_min</code> 1.4, and a survey of all 466 bundled servers found none whose
+	 * <code>protocol_max</code> was below 1.4, so nothing is lost by refusing older dialects.
+	 */
+	public static final ElectrumProtocolVersion MIN_PROTOCOL_VERSION = ElectrumProtocolVersion.of(1, 4);
+	/**
+	 * Highest ElectrumX protocol version Core implements, as a family ceiling: the whole 1.7.x range is
+	 * acceptable, 1.8 and beyond is not.
+	 * <p>
+	 * Core speaks every protocol in between, choosing the method family per connection from the version
+	 * the server selected — see {@link ElectrumMethods}. 1.6 removed <code>blockchain.relayfee</code> and
+	 * changed <code>blockchain.block.headers</code> to return a <code>headers</code> array, and 1.7
+	 * replaced the whole <code>blockchain.scripthash.*</code> family with <code>blockchain.scriptpubkey.*</code>
+	 * (asking for those methods at 1.7 answers JSON-RPC -32601 "unknown method", which used to surface as
+	 * API error 1201 on authenticated wallet reads). Protocol 1.5 was skipped by the specification and
+	 * never defined, but some servers advertise a 1.5.x maximum; those behave like 1.4 and are supported.
+	 */
+	public static final ElectrumProtocolVersion MAX_PROTOCOL_VERSION = ElectrumProtocolVersion.of(1, 7);
+	/** Connection note recorded when a server's <code>server.version</code> reply cannot be understood at all. */
+	static final String MALFORMED_VERSION_RESPONSE_NOTE = "server.version response malformed";
 	private static final int MIN_TARGET_CONNECTIONS = 2;
 	private static final int DEFAULT_TARGET_CONNECTIONS = 3;
 	private static final double TARGET_CONNECTIONS_FRACTION = 0.75d;
@@ -65,7 +84,17 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private static final long IDLE_DISCONNECT_MS = 2 * 60 * 1000L;
 	private static final long ACQUIRE_SERVER_TIMEOUT_MS = 3000L;
 	private static final int MAX_BROADCAST_ATTEMPTS = 3;
-	static final String WALLET_CAPABILITY_PROBE_SCRIPT_HASH = "00".repeat(32);
+	/**
+	 * Output script used to probe wallet support: P2PKH paying the first 20 bytes of
+	 * <code>sha256("Qortium ElectrumX capability probe")</code>.
+	 * <p>
+	 * It has to be a real, well-formed script because 1.7 passes the script itself rather than its hash, and
+	 * it has to be a script nobody uses: the obvious all-zero hash160 has thousands of outputs on some chains
+	 * (16,426 unspent on Namecoin), and asking a server to list them makes the probe time out and condemn a
+	 * perfectly good server. This one has no history on any chain, so the probe stays cheap and its answer is
+	 * always an empty list.
+	 */
+	static final byte[] WALLET_CAPABILITY_PROBE_SCRIPT = HashCode.fromString("76a914e9310ed032af96579e8d680ffa72c7dd132fdbdf88ac").asBytes();
 
 	// Multi-server height corroboration: cross-check the chain tip across connected servers so a single
 	// malicious/lagging server cannot skew height-based refund/locktime decisions.
@@ -385,26 +414,33 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	}
 
 	private List<byte[]> parseRawBlockHeaders(Object blockObj, int count) throws ForeignBlockchainException {
-		if (!(blockObj instanceof JSONObject))
-			throw new ForeignBlockchainException.NetworkException("Unexpected output from ElectrumX blockchain.block.headers RPC");
+		// Protocol 1.6 replaced the single concatenated 'hex' string with a 'headers' array of hex strings.
+		// Both shapes are accepted so a pooled connection speaking 1.4 and another speaking 1.7 behave alike.
+		ElectrumMethods.BlockHeadersResult headers = ElectrumMethods.normalizeBlockHeaders(blockObj)
+				.orElseThrow(() -> new ForeignBlockchainException.NetworkException(
+						"Missing/invalid 'count' with 'headers' or 'hex' entries in JSON from ElectrumX blockchain.block.headers RPC"));
 
-		JSONObject blockJson = (JSONObject) blockObj;
+		// Deliberately re-join the 1.6 headers array rather than returning its elements: a server header is
+		// not always the canonical 80-byte header this method must return (Namecoin AuxPoW headers are
+		// ~1156 bytes, Firo's are 120), and the chain-specific splitter is what turns raw bytes into
+		// canonical headers. Feeding both shapes through the same splitter makes them byte-identical by
+		// construction instead of by hope.
+		byte[] raw = headers.isSplit()
+				? concatenateBlockHeaders(headers.getHeaderHexes())
+				: HashCode.fromString(headers.getConcatenatedHex()).asBytes();
 
-		Object countObj = blockJson.get("count");
-		Object hexObj = blockJson.get("hex");
-		Long parsedReturnedCount = parseJsonLong(countObj);
-
-		if (parsedReturnedCount == null || !(hexObj instanceof String))
-			throw new ForeignBlockchainException.NetworkException("Missing/invalid 'count' or 'hex' entries in JSON from ElectrumX blockchain.block.headers RPC");
-
-		long returnedCount = parsedReturnedCount;
-		String hex = (String) hexObj;
-
-		byte[] raw = HashCode.fromString(hex).asBytes();
 		if (this.blockchain != null)
-			return this.blockchain.splitRawBlockHeaders(raw, (int) returnedCount);
+			return this.blockchain.splitRawBlockHeaders(raw, headers.getCount());
 
-		return splitFixedLengthBlockHeaders(raw, (int) returnedCount);
+		return splitFixedLengthBlockHeaders(raw, headers.getCount());
+	}
+
+	static byte[] concatenateBlockHeaders(List<String> headerHexes) {
+		StringBuilder concatenated = new StringBuilder();
+		for (String headerHex : headerHexes)
+			concatenated.append(headerHex);
+
+		return HashCode.fromString(concatenated.toString()).asBytes();
 	}
 
 	private static List<byte[]> splitFixedLengthBlockHeaders(byte[] raw, int count) throws ForeignBlockchainException.NetworkException {
@@ -431,20 +467,6 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		return true;
 	}
 
-	private Long parseJsonLong(Object value) {
-		if (value instanceof Number)
-			return ((Number) value).longValue();
-
-		if (value instanceof String)
-			try {
-				return Long.parseLong((String) value);
-			} catch (NumberFormatException e) {
-				return null;
-			}
-
-		return null;
-	}
-
 	/**
 	 * Returns list of raw block timestamps, starting from <tt>startHeight</tt> inclusive.
 	 * <p>
@@ -464,21 +486,17 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 */
 	@Override
 	public long getConfirmedBalance(byte[] script) throws ForeignBlockchainException {
-		byte[] scriptHash = Crypto.digest(script);
-		Bytes.reverse(scriptHash);
+		Object balanceObj = this.rpc(methods -> methods.getBalance(script), "get_balance").getResponse();
 
-		Object balanceObj = this.rpc("blockchain.scripthash.get_balance", HashCode.fromBytes(scriptHash).toString()).getResponse();
-		if (!(balanceObj instanceof JSONObject))
-			throw new ForeignBlockchainException.NetworkException("Unexpected output from ElectrumX blockchain.scripthash.get_balance RPC");
-
-		JSONObject balanceJson = (JSONObject) balanceObj;
+		JSONObject balanceJson = ElectrumMethods.normalizeBalance(balanceObj)
+				.orElseThrow(() -> new ForeignBlockchainException.NetworkException("Unexpected output from ElectrumX get_balance RPC"));
 
 		Object confirmedBalanceObj = balanceJson.get("confirmed");
 
 		if (!(confirmedBalanceObj instanceof Long))
-			throw new ForeignBlockchainException.NetworkException("Missing confirmed balance from ElectrumX blockchain.scripthash.get_balance RPC");
+			throw new ForeignBlockchainException.NetworkException("Missing confirmed balance from ElectrumX get_balance RPC");
 
-		return (Long) balanceJson.get("confirmed");
+		return (Long) confirmedBalanceObj;
 	}
 
 	/**
@@ -512,15 +530,13 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 */
 	@Override
 	public List<UnspentOutput> getUnspentOutputs(byte[] script, boolean includeUnconfirmed) throws ForeignBlockchainException {
-		byte[] scriptHash = Crypto.digest(script);
-		Bytes.reverse(scriptHash);
+		Object unspentJson = this.rpc(methods -> methods.listUnspent(script), "listunspent").getResponse();
 
-		Object unspentJson = this.rpc("blockchain.scripthash.listunspent", HashCode.fromBytes(scriptHash).toString()).getResponse();
-		if (!(unspentJson instanceof JSONArray))
-			throw new ForeignBlockchainException("Expected array output from ElectrumX blockchain.scripthash.listunspent RPC");
+		JSONArray unspentArray = ElectrumMethods.normalizeUnspentOutputs(unspentJson)
+				.orElseThrow(() -> new ForeignBlockchainException("Expected unspent outputs from ElectrumX listunspent RPC"));
 
 		List<UnspentOutput> unspentOutputs = new ArrayList<>();
-		for (Object rawUnspent : (JSONArray) unspentJson) {
+		for (Object rawUnspent : unspentArray) {
 			JSONObject unspent = (JSONObject) rawUnspent;
 
 			int height = ((Long) unspent.get("height")).intValue();
@@ -718,17 +734,15 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 */
 	@Override
 	public List<TransactionHash> getAddressTransactions(byte[] script, boolean includeUnconfirmed) throws ForeignBlockchainException {
-		byte[] scriptHash = Crypto.digest(script);
-		Bytes.reverse(scriptHash);
-
-		ElectrumServerResponse serverResponse = this.rpc("blockchain.scripthash.get_history", HashCode.fromBytes(scriptHash).toString());
+		ElectrumServerResponse serverResponse = this.rpc(methods -> methods.getHistory(script), "get_history");
 		Object transactionsJson = serverResponse.getResponse();
-		if (!(transactionsJson instanceof JSONArray))
-			throw new ForeignBlockchainException.NetworkException("Expected array output from ElectrumX blockchain.scripthash.get_history RPC");
+
+		JSONArray historyArray = ElectrumMethods.normalizeHistory(transactionsJson)
+				.orElseThrow(() -> new ForeignBlockchainException.NetworkException("Expected history from ElectrumX get_history RPC"));
 
 		List<TransactionHash> transactionHashes = new ArrayList<>();
 
-		for (Object rawTransactionInfo : (JSONArray) transactionsJson) {
+		for (Object rawTransactionInfo : historyArray) {
 			JSONObject transactionInfo = (JSONObject) rawTransactionInfo;
 
 			Long height = (Long) transactionInfo.get("height");
@@ -1095,6 +1109,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			electrumServer.setClientName(randomClientName());
 
 			Object response = connectedRpc(electrumServer, "server.version");
+			electrumServer.setNegotiatedProtocolVersion(negotiatedProtocolVersion(response).orElse(null));
 			validateWalletRpcSupport(electrumServer);
 			if (response != null) {
 				recordSuccess(server);
@@ -1158,6 +1173,20 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 * @throws ForeignBlockchainException if server returns error or something goes wrong
 	 */
 	protected ElectrumServerResponse rpc(String method, Object...params) throws ForeignBlockchainException {
+		return rpc(methods -> new ElectrumRequest(method, params), method);
+	}
+
+	/**
+	 * Perform an RPC whose method name and parameters depend on the protocol version of whichever server
+	 * ends up serving it.
+	 * <p>
+	 * The request is built once per attempt rather than once per call, because the retry loop can move to
+	 * a different server mid-call and that server may speak a different protocol family.
+	 *
+	 * @param requestBuilder builds the request for a connection's negotiated method family
+	 * @param description method name used in log and error messages
+	 */
+	protected ElectrumServerResponse rpc(Function<ElectrumMethods, ElectrumRequest> requestBuilder, String description) throws ForeignBlockchainException {
 		this.inFlightRpcCount.incrementAndGet();
 		this.lastRpcTimeMs = System.currentTimeMillis();
 		try {
@@ -1174,7 +1203,8 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			while(response == null) {
 
 				try {
-					response = connectedRpc(electrumServer, method, params);
+					ElectrumRequest request = requestBuilder.apply(electrumServer.getMethods());
+					response = connectedRpc(electrumServer, request.getMethod(), request.getParams());
 				} catch (ForeignBlockchainException e) {
 					releaseServer(electrumServer);
 					throw e;
@@ -1207,7 +1237,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 			// Failed to perform RPC - maybe lack of servers?
 			LOGGER.info("Error: No connected Electrum servers when trying to make RPC call");
-			throw new ForeignBlockchainException.NetworkException(String.format("Failed to perform ElectrumX RPC %s", method));
+			throw new ForeignBlockchainException.NetworkException(String.format("Failed to perform ElectrumX RPC %s", description));
 		} finally {
 			this.inFlightRpcCount.decrementAndGet();
 		}
@@ -1380,6 +1410,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		LOGGER.debug(() -> String.format("Connecting to %s %s", server, this.getCurrencyCodeForLogging()));
 
 		ElectrumServer electrumServer = null;
+		// Every early return below leaves the socket open unless it is closed on the way out, so track
+		// whether the connection actually joined the pool and close it in the finally block if not.
+		boolean added = false;
+
 		try {
 			SocketAddress endpoint = new InetSocketAddress(server.getHostName(), server.getPort());
 			int timeout = 5000; // ms
@@ -1388,7 +1422,17 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			electrumServer.setClientName(randomClientName());
 
 			// All connections need to start with a version negotiation
-			this.connectedRpc(electrumServer, "server.version");
+			Object versionResponse = this.connectedRpc(electrumServer, "server.version");
+
+			Optional<String> versionRejectionNote = negotiatedVersionRejectionNote(versionResponse);
+			if (versionRejectionNote.isPresent()) {
+				recordFailure(server);
+				return Optional.of( recorder.recordConnection(server, requestedBy, true, false, versionRejectionNote.get()) );
+			}
+
+			// Remember what this server settled on: every later RPC on this connection picks its method
+			// family from it, because 1.7 servers no longer serve blockchain.scripthash.*.
+			electrumServer.setNegotiatedProtocolVersion(negotiatedProtocolVersion(versionResponse).orElse(null));
 
 			// Check connection is suitable by asking for server features, including genesis block hash
 			JSONObject featuresJson = (JSONObject) this.connectedRpc(electrumServer, "server.features");
@@ -1398,19 +1442,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				return Optional.of( recorder.recordConnection(server, requestedBy, true,  false, MISSING_FEATURES_ERROR) );
 			}
 
-			try {
-				double protocol_min = CrossChainUtils.getVersionDecimal(featuresJson, "protocol_min");
-
-				if (protocol_min < MIN_PROTOCOL_VERSION) {
-					recordFailure(server);
-					return Optional.of( recorder.recordConnection(server, requestedBy, true,  false, "old version: protocol_min = " + protocol_min + " < MIN_PROTOCOL_VERSION = " + MIN_PROTOCOL_VERSION) );
-				}
-			} catch (NumberFormatException e) {
+			Optional<String> protocolMinRejectionNote = protocolMinRejectionNote(featuresJson);
+			if (protocolMinRejectionNote.isPresent()) {
 				recordFailure(server);
-				return Optional.of( recorder.recordConnection(server, requestedBy,true, false,featuresJson.get("protocol_min").toString() + " is not a valid version"));
-			} catch (NullPointerException e) {
-				recordFailure(server);
-				return Optional.of( recorder.recordConnection(server, requestedBy,true, false,"server version not available: protocol_min"));
+				return Optional.of( recorder.recordConnection(server, requestedBy, true, false, protocolMinRejectionNote.get()) );
 			}
 
 			if (this.expectedGenesisHash != null && !((String) featuresJson.get("genesis_hash")).equals(this.expectedGenesisHash)) {
@@ -1426,31 +1461,121 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			LOGGER.debug(() -> String.format("Connected to %s %s", server, this.getCurrencyCodeForLogging()));
 			this.connections.add(electrumServer);
 			this.availableConnections.add(electrumServer);
+			added = true;
 			return Optional.of( this.recorder.recordConnection( server, requestedBy, true, true, EMPTY) );
 		} catch (IOException | ForeignBlockchainException | ClassCastException | NullPointerException e) {
 			// Didn't work, try another server...
 			recordFailure(server);
-			if (electrumServer != null)
-				electrumServer.closeServer(this.getClass().getSimpleName(), "wallet capability or connection validation failure");
 			return Optional.of( this.recorder.recordConnection( server, requestedBy, true, false, CrossChainUtils.getNotes(e)));
 		} catch( Exception e ) {
 			LOGGER.error(e.getMessage(), e);
 			return Optional.empty();
+		} finally {
+			if (electrumServer != null && !added)
+				electrumServer.closeServer(this.getClass().getSimpleName(), "wallet capability or connection validation failure");
 		}
 	}
 
+	/**
+	 * @return note explaining why the server's advertised <code>protocol_min</code> makes it unusable,
+	 * or empty when Core can speak a protocol this server supports.
+	 */
+	static Optional<String> protocolMinRejectionNote(JSONObject featuresJson) {
+		Object rawProtocolMin = featuresJson.get("protocol_min");
+		if (rawProtocolMin == null)
+			return Optional.of("server version not available: protocol_min");
+
+		Optional<ElectrumProtocolVersion> protocolMin = ElectrumProtocolVersion.parse(String.valueOf(rawProtocolMin));
+		if (protocolMin.isEmpty())
+			return Optional.of(rawProtocolMin + " is not a valid version");
+
+		// Only an unreachable floor disqualifies a server: a server whose protocol_min sits above what Core
+		// speaks can never meet us. A low protocol_min is fine — protocol_max is what decides the outcome,
+		// and the negotiated version is checked separately.
+		if (protocolMin.get().isAbove(MAX_PROTOCOL_VERSION))
+			return Optional.of("new version: protocol_min = " + protocolMin.get() + " > MAX_PROTOCOL_VERSION = " + MAX_PROTOCOL_VERSION);
+
+		return Optional.empty();
+	}
+
+	/** Protocol version range sent as the second <code>server.version</code> parameter, lowest first. */
+	static List<String> buildVersionParams() {
+		List<String> versions = new ArrayList<>();
+		versions.add(MIN_PROTOCOL_VERSION.toString());
+		versions.add(MAX_PROTOCOL_VERSION.toString());
+		return versions;
+	}
+
+	/** Extract the protocol version the server selected, i.e. <code>result[1]</code> of <code>server.version</code>. */
+	static Optional<String> extractNegotiatedVersion(Object versionResponse) {
+		if (!(versionResponse instanceof JSONArray))
+			return Optional.empty();
+
+		JSONArray versionArray = (JSONArray) versionResponse;
+		if (versionArray.size() < 2)
+			return Optional.empty();
+
+		Object negotiatedVersion = versionArray.get(1);
+		if (!(negotiatedVersion instanceof String) || ((String) negotiatedVersion).trim().isEmpty())
+			return Optional.empty();
+
+		return Optional.of(((String) negotiatedVersion).trim());
+	}
+
+	/** @return true if the server-selected protocol version is one Core can actually speak */
+	static boolean isNegotiatedVersionSupported(String negotiatedVersion) {
+		return ElectrumProtocolVersion.parse(negotiatedVersion)
+				.filter(version -> version.isWithin(MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION))
+				.isPresent();
+	}
+
+	/** @return the protocol version the server selected, when it is one Core can speak */
+	static Optional<ElectrumProtocolVersion> negotiatedProtocolVersion(Object versionResponse) {
+		return extractNegotiatedVersion(versionResponse)
+				.flatMap(ElectrumProtocolVersion::parse)
+				.filter(version -> version.isWithin(MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION));
+	}
+
+	/**
+	 * @return note explaining why the negotiated protocol version makes this connection unusable, or empty
+	 * when the server selected a version Core speaks. A reply we cannot read at all is rejected rather than
+	 * waved through: an unreadable negotiation is not evidence that the connection is usable.
+	 */
+	static Optional<String> negotiatedVersionRejectionNote(Object versionResponse) {
+		Optional<String> negotiatedVersion = extractNegotiatedVersion(versionResponse);
+		if (negotiatedVersion.isEmpty())
+			return Optional.of(MALFORMED_VERSION_RESPONSE_NOTE);
+
+		Optional<ElectrumProtocolVersion> parsedVersion = ElectrumProtocolVersion.parse(negotiatedVersion.get());
+		if (parsedVersion.isEmpty())
+			return Optional.of("negotiated protocol " + negotiatedVersion.get() + " is not a valid version");
+
+		if (!parsedVersion.get().isWithin(MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION))
+			return Optional.of("negotiated protocol " + parsedVersion.get() + " outside supported "
+					+ MIN_PROTOCOL_VERSION + "-" + MAX_PROTOCOL_VERSION);
+
+		return Optional.empty();
+	}
+
 	private void validateWalletRpcSupport(ElectrumServer electrumServer) throws ForeignBlockchainException {
-		Object historyResponse = connectedRpc(electrumServer, "blockchain.scripthash.get_history", WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
-		Object unspentResponse = connectedRpc(electrumServer, "blockchain.scripthash.listunspent", WALLET_CAPABILITY_PROBE_SCRIPT_HASH);
+		// Probe the family this connection negotiated: a 1.7 server answers -32601 for scripthash.* and a
+		// pre-1.7 server answers -32601 for scriptpubkey.*, so probing the wrong one condemns a good server.
+		ElectrumMethods methods = electrumServer.getMethods();
+
+		ElectrumRequest historyRequest = methods.getHistory(WALLET_CAPABILITY_PROBE_SCRIPT);
+		ElectrumRequest unspentRequest = methods.listUnspent(WALLET_CAPABILITY_PROBE_SCRIPT);
+
+		Object historyResponse = connectedRpc(electrumServer, historyRequest.getMethod(), historyRequest.getParams());
+		Object unspentResponse = connectedRpc(electrumServer, unspentRequest.getMethod(), unspentRequest.getParams());
 		validateWalletRpcResponses(historyResponse, unspentResponse);
 	}
 
 	static void validateWalletRpcResponses(Object historyResponse, Object unspentResponse) throws ForeignBlockchainException.NetworkException {
-		if (!(historyResponse instanceof JSONArray))
-			throw new ForeignBlockchainException.NetworkException("ElectrumX server lacks usable blockchain.scripthash.get_history support");
+		if (ElectrumMethods.normalizeHistory(historyResponse).isEmpty())
+			throw new ForeignBlockchainException.NetworkException("ElectrumX server lacks usable get_history support");
 
-		if (!(unspentResponse instanceof JSONArray))
-			throw new ForeignBlockchainException.NetworkException("ElectrumX server lacks usable blockchain.scripthash.listunspent support");
+		if (ElectrumMethods.normalizeUnspentOutputs(unspentResponse).isEmpty())
+			throw new ForeignBlockchainException.NetworkException("ElectrumX server lacks usable listunspent support");
 	}
 
 	/**
@@ -1480,11 +1605,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				server.setClientName(clientName);
 			}
 			requestParams.add(clientName);
-			List<String> versions = new ArrayList<>();
-			DecimalFormat df = new DecimalFormat("#.#");
-			versions.add(df.format(MIN_PROTOCOL_VERSION));
-			versions.add(df.format(MAX_PROTOCOL_VERSION));
-			requestParams.add(versions);
+			requestParams.add(buildVersionParams());
 		}
 
 		requestJson.put("params", requestParams);
