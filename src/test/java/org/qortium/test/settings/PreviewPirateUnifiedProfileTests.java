@@ -18,8 +18,8 @@ public class PreviewPirateUnifiedProfileTests {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<Map<String, Object>>() {};
-	private static final String PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE =
-			"3QtMvKDTMUG6V48SKPCwMTPgiqNYdaCwyXfpssfuGD13d7ZL31kk48cuRpuzxy8qnSGg4qgZKEUJ8zYJ7UDQ9aBk";
+	private static final String PIRATE_UNIFIED_V1_2_0_QDN_SIGNATURE =
+			"3FEsot2pkqPNwtHKuLGTsaRwMTRpK6Kv6dUVp3mps1BHKoCEq5j3QgwJDjMZRwe2ftpvZouLTqG42JphjfAFVQe3";
 
 	@After
 	public void restoreDefaultSettings() {
@@ -32,12 +32,12 @@ public class PreviewPirateUnifiedProfileTests {
 
 		assertEquals(Boolean.TRUE, walletSettings(settings).get("ARRR"));
 		assertEquals(Boolean.TRUE, settings.get("pirateChainWalletUnified"));
-		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE, settings.get("pirateChainWalletQdnSignature"));
+		assertEquals(PIRATE_UNIFIED_V1_2_0_QDN_SIGNATURE, settings.get("pirateChainWalletQdnSignature"));
 
 		Settings.fileInstance("preview/settings-preview.json");
 		assertTrue(Settings.getInstance().isWalletEnabled("ARRR"));
 		assertTrue(Settings.getInstance().isPirateChainWalletUnified());
-		assertEquals(PIRATE_UNIFIED_V1_1_9_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_0_QDN_SIGNATURE,
 				Settings.getInstance().getPirateChainWalletQdnSignature());
 	}
 
