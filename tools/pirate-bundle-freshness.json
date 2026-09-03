@@ -1,4 +1,4 @@
 {
-  "acknowledgedUpstreamVersion": "v1.1.9",
+  "acknowledgedUpstreamVersion": "v1.2.0",
   "note": "Matches the currently pinned RELEASE_TAG. No upstream gap is being deliberately deferred yet; bump this only when a newer upstream release is reviewed and either adopted (repin RELEASE_TAG to match) or knowingly deferred (bump this ahead of the pin with an updated note explaining why)."
 }
