@@ -54,6 +54,12 @@ jobs:
           python3 tools/check-pirate-bundle-freshness.py > "$OUTPUT_FILE" 2>&1
           status=$?
           cat "$OUTPUT_FILE"
+          # Exit codes: 0 = OK, 1 = UPSTREAM AHEAD (tracking issue territory),
+          # 2 = the check itself could not be completed (repo config problem,
+          # or upstream could not be fetched/parsed). Captured as an output
+          # so later steps can tell 1 and 2 apart -- both fail the job (red
+          # scheduled run), but only 1 should touch the tracking issue.
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit $status
 
       - name: Find existing tracking issue
@@ -70,8 +76,13 @@ jobs:
             --jq "[.[] | select(.title == \"$ISSUE_TITLE\")] | .[0].number // empty")"
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
+      - name: Note undetermined result
+        if: failure() && steps.freshness.outputs.exit_code == '2'
+        run: |
+          echo "::warning::The freshness check could not be completed (exit code 2) -- a repo-configuration problem or an upstream fetch/parse failure. No tracking issue was created or updated; see the 'Run freshness check' step log above for the reason. This is separate from an UPSTREAM AHEAD result (exit code 1)."
+
       - name: Build issue body
-        if: failure() && steps.freshness.outcome == 'failure'
+        if: failure() && steps.freshness.outputs.exit_code == '1'
         run: |
           {
             printf '%s\n\n' "The scheduled Pirate Unified wallet bundle freshness check found that upstream has a newer release than what Core has pinned and/or explicitly acknowledged."
@@ -82,7 +93,7 @@ jobs:
           } > "$BODY_FILE"
 
       - name: Open or update tracking issue
-        if: failure() && steps.freshness.outcome == 'failure'
+        if: failure() && steps.freshness.outputs.exit_code == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
