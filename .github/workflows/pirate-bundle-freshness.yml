@@ -1,0 +1,110 @@
+name: Pirate Unified wallet bundle freshness
+
+# Informational-only watcher. This never runs on pull requests, never gates a
+# build, and has no effect on users -- it only tells developers when the
+# pinned Pirate Unified wallet bundle (see
+# src/main/java/org/qortium/controller/PirateUnifiedWalletBundle.java and
+# docs/cross-chain/pirate-unified-wallet-acceptance.md) has fallen behind the
+# latest upstream PirateNetwork release.
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: pirate-bundle-freshness
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: "Pirate Unified wallet bundle: upstream release newer than the pinned bundle"
+  OUTPUT_FILE: /tmp/pirate-freshness-output.txt
+  BODY_FILE: /tmp/pirate-freshness-issue-body.md
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Ensure the tracking label exists
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create upstream-freshness \
+            --repo "${{ github.repository }}" \
+            --color "5319e7" \
+            --description "Upstream release is ahead of what Qortium has pinned" \
+            || true
+
+      - name: Run freshness check
+        id: freshness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 tools/check-pirate-bundle-freshness.py > "$OUTPUT_FILE" 2>&1
+          status=$?
+          cat "$OUTPUT_FILE"
+          exit $status
+
+      - name: Find existing tracking issue
+        if: always()
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number="$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --label upstream-freshness \
+            --state open \
+            --json number,title \
+            --jq "[.[] | select(.title == \"$ISSUE_TITLE\")] | .[0].number // empty")"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Build issue body
+        if: failure() && steps.freshness.outcome == 'failure'
+        run: |
+          {
+            printf '%s\n\n' "The scheduled Pirate Unified wallet bundle freshness check found that upstream has a newer release than what Core has pinned and/or explicitly acknowledged."
+            printf '```\n'
+            cat "$OUTPUT_FILE"
+            printf '\n```\n\n'
+            printf '%s\n' "This is informational only: it does not block builds, PRs, or releases. See docs/cross-chain/pirate-unified-wallet-acceptance.md and tools/pirate-bundle-freshness.json for the acknowledgement mechanism. This issue stays open (and gets a new comment on each subsequent scheduled run) until the bundle is repinned or the upgrade is explicitly deferred by updating acknowledgedUpstreamVersion."
+          } > "$BODY_FILE"
+
+      - name: Open or update tracking issue
+        if: failure() && steps.freshness.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ steps.existing.outputs.number }}" ]; then
+            gh issue comment "${{ steps.existing.outputs.number }}" \
+              --repo "${{ github.repository }}" \
+              --body-file "$BODY_FILE"
+          else
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "$ISSUE_TITLE" \
+              --label upstream-freshness \
+              --body-file "$BODY_FILE"
+          fi
+
+      - name: Close tracking issue if resolved
+        if: success() && steps.existing.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ steps.existing.outputs.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "resolved: pinned/acknowledged now covers upstream"
+          gh issue close "${{ steps.existing.outputs.number }}" \
+            --repo "${{ github.repository }}"

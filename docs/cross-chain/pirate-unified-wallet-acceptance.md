@@ -54,6 +54,42 @@ contains the upstream bug unfixed; and before them the official
 predates the verified spending-key import. The pin file is
 `tools/pirate-unified-artifact.properties`.
 
+## Upstream freshness watcher
+
+A scheduled, non-gating check (`.github/workflows/pirate-bundle-freshness.yml`,
+running `tools/check-pirate-bundle-freshness.py`) compares the pinned
+`RELEASE_TAG` above against the latest releases published by upstream
+(`PirateNetwork/Pirate-Unified-Light-Wallet`) and by our fork
+(`QortiumDev/Pirate-Unified-Light-Wallet`). It runs weekly via
+`workflow_dispatch`/`schedule` only -- never on pull requests, never as part
+of a build, and it has no effect on users. When upstream is ahead of both the
+pin and the acknowledged version, the scheduled run fails (shows red) and the
+job opens or updates a single tracking issue labeled `upstream-freshness`; it
+never blocks a build or a release.
+
+`tools/pirate-bundle-freshness.json` holds an `acknowledgedUpstreamVersion`,
+the same deliberate-deferral pattern Home uses for its i2pd freshness check.
+It lets maintainers see and consciously accept a known upstream gap (for
+example, while a fork rebase or acceptance pass for the new release is in
+progress) without the scheduled job going red every week for something
+already being worked on. Bump it only when a newer upstream release has been
+reviewed and either the pin is updated to match, or the gap is knowingly
+deferred with an updated `note` explaining why.
+
+Run it locally at any time with:
+
+```
+python3 tools/check-pirate-bundle-freshness.py
+```
+
+Exit code `0` means the pin (or an explicit acknowledgement) already covers
+the latest upstream release; exit code `1` means upstream has moved and lists
+the repin steps (rebase fork, build bundle, run the acceptance harness above,
+republish to QDN byte-exact, repin `RELEASE_TAG`/size/SHA-256/QDN signature,
+bump the acknowledged version). `python3 tools/check-pirate-bundle-freshness.py
+--self-test` runs the comparison logic offline against fixtures with no
+network access.
+
 ## Published QDN bundle
 
 The reviewed official v1.1.9 runtime bundle is published on Qortium Previewnet

@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-02 - ci(arrr): add Pirate Unified wallet bundle freshness watcher
+
+Adds a scheduled, informational-only GitHub Actions job that compares the
+Pirate Unified wallet bundle Core has pinned against the latest release from
+upstream PirateNetwork and from our QortiumDev fork, and opens or updates a
+single tracking issue when upstream has moved past what is pinned. It runs
+weekly (and on manual dispatch) only -- never on pull requests, never as part
+of a build, and it never affects users. An `acknowledgedUpstreamVersion` file
+lets maintainers deliberately defer a known upstream gap, mirroring the
+pattern Home already uses for i2pd release freshness. Tooling-only change; no
+production code, no repin of the bundle itself.
+
 ### 2026-09-02 - feat(crosschain): speak Electrum protocols 1.4 through 1.7
 
 Fixed authenticated wallet reads that were failing with API error 1201 for Digibyte, Namecoin and Firo while Litecoin kept working, and taught Core the newer Electrum protocols rather than avoiding them.
