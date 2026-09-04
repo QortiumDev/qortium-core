@@ -460,6 +460,68 @@ public class ArbitraryApiTests extends ApiCommon {
 		writePublicAttestationFixtureIfRequested(name);
 	}
 
+	@Test
+	public void testAuthenticatedStagedDataEndpointReturnsPrivateBuilderArtifacts() throws Exception {
+		String name = "authenticated-qdn-attestation-test";
+		registerName(name);
+		byte[] source = new byte[org.qortium.arbitrary.ArbitraryDataFile.CHUNK_SIZE + 1];
+		new Random(0x4155544841545445L).nextBytes(source);
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon
+					.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+			String rawTransaction = resource.postBase64EncodedData(
+					ApiCommon.TEST_API_KEY, "APP", name, null, null, null, null,
+					"payload.bin", 0L, false, base64(source));
+			ArbitraryTransactionData transactionData = parseUnsignedArbitraryTransaction(rawTransaction);
+
+			Response mainResponse = resource.getAuthenticatedStagedData(
+					ApiCommon.TEST_API_KEY, Base58.encode(transactionData.getData()));
+			assertStagedArtifact(mainResponse, transactionData.getData());
+			assertNotNull("Chunked publishes should expose a metadata hash", transactionData.getMetadataHash());
+			Response metadataResponse = resource.getAuthenticatedStagedData(
+					ApiCommon.TEST_API_KEY, Base58.encode(transactionData.getMetadataHash()));
+			assertStagedArtifact(metadataResponse, transactionData.getMetadataHash());
+			writeAuthenticatedAttestationFixtureIfRequested(
+					name, source, rawTransaction, transactionData, mainResponse, metadataResponse);
+
+			assertEquals("Authenticated builder artifacts must not become public by hash", 404,
+					resource.getPublicStagedData(Base58.encode(transactionData.getData())).getStatus());
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	private static void writeAuthenticatedAttestationFixtureIfRequested(String name, byte[] source,
+			String rawTransaction, ArbitraryTransactionData transactionData,
+			Response mainResponse, Response metadataResponse) throws Exception {
+		String outputPath = System.getProperty("qortium.authenticatedQdnAttestationFixture");
+		if (outputPath == null || outputPath.isBlank())
+			return;
+
+		JSONObject fixture = new JSONObject();
+		fixture.put("schemaVersion", 1);
+		fixture.put("generatedBy", "ArbitraryApiTests using Core authenticated builder");
+		fixture.put("sourceBase64", base64(source));
+		fixture.put("sourceFilename", "payload.bin");
+		fixture.put("unsignedTransactionBase58", rawTransaction);
+		fixture.put("name", name);
+		fixture.put("identifier", JSONObject.NULL);
+		fixture.put("publicKey58", Base58.encode(transactionData.getSenderPublicKey()));
+		fixture.put("service", transactionData.getServiceInt());
+		fixture.put("txGroupId", transactionData.getTxGroupId());
+		fixture.put("stagedMainBase64", base64(Files.readAllBytes(((File) mainResponse.getEntity()).toPath())));
+		fixture.put("stagedMetadataBase64", base64(Files.readAllBytes(((File) metadataResponse.getEntity()).toPath())));
+		Files.writeString(Path.of(outputPath), fixture.toString(2) + System.lineSeparator(), StandardCharsets.UTF_8);
+	}
+
+	@Test
+	public void testAuthenticatedStagedDataEndpointRequiresApiKey() {
+		assertApiError(ApiError.UNAUTHORIZED,
+				() -> this.arbitraryResource.getAuthenticatedStagedData(null, Base58.encode(new byte[32])));
+	}
+
 	private void writePublicAttestationFixtureIfRequested(String name) throws Exception {
 		String outputPath = System.getProperty("qortium.publicQdnAttestationFixture");
 		if (outputPath == null || outputPath.isBlank())
@@ -565,6 +627,10 @@ public class ArbitraryApiTests extends ApiCommon {
 
 	private void assertPublicStagedArtifact(byte[] expectedHash) throws Exception {
 		Response response = this.arbitraryResource.getPublicStagedData(Base58.encode(expectedHash));
+		assertStagedArtifact(response, expectedHash);
+	}
+
+	private static void assertStagedArtifact(Response response, byte[] expectedHash) throws Exception {
 		assertEquals(200, response.getStatus());
 		assertEquals("no-store", response.getHeaderString("Cache-Control"));
 		assertEquals("nosniff", response.getHeaderString("X-Content-Type-Options"));

@@ -915,6 +915,39 @@ public class ArbitraryResource {
 			}
 	)
 	public Response getPublicStagedData(@PathParam("hash58") String hash58) {
+		return this.getStagedData(hash58, true,
+				publicStagedDataMaxSize(Settings.getInstance().getPublicQdnPublishMaxSize()));
+	}
+
+	@GET
+	@Path("/authenticated/data/{hash58}")
+	@Produces(MediaType.APPLICATION_OCTET_STREAM)
+	@Operation(
+			summary = "Download an exact pre-signature QDN artifact from an authenticated publish builder",
+			description = "Returns a content-addressed artifact staged under data/_misc by an unsigned "
+					+ "authenticated QDN builder. This lets an API-key holder verify the exact content before signing.",
+			responses = {
+				@ApiResponse(
+						description = "Exact staged ciphertext or metadata bytes",
+						content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM)
+				),
+				@ApiResponse(responseCode = "400", description = "Hash is not canonical Base58 SHA-256"),
+				@ApiResponse(responseCode = "401", description = "API key is missing or invalid"),
+				@ApiResponse(responseCode = "404", description = "No pre-signature artifact exists for the hash"),
+				@ApiResponse(responseCode = "409", description = "Stored artifact does not match its content address")
+		}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public Response getAuthenticatedStagedData(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+											 @PathParam("hash58") String hash58) {
+		Security.checkApiCallAllowed(request, apiKey);
+		// qdnPublishMaxSize bounds the uploaded SOURCE. Core may package that
+		// source into a slightly larger ZIP before encryption, so the readback
+		// boundary is the final QDN file ceiling rather than source + 28 bytes.
+		return this.getStagedData(hash58, false, ArbitraryDataFile.MAX_FILE_SIZE);
+	}
+
+	private Response getStagedData(String hash58, boolean requirePublicRegistration, long sizeLimit) {
 		byte[] expectedHash;
 		try {
 			expectedHash = Base58.decode(hash58);
@@ -924,7 +957,7 @@ public class ArbitraryResource {
 
 		if (expectedHash.length != 32 || !Base58.encode(expectedHash).equals(hash58))
 			return publicStagedDataError(Response.Status.BAD_REQUEST, "Invalid SHA-256 content hash");
-		if (!PublicQdnArtifactRegistry.getInstance().contains(hash58))
+		if (requirePublicRegistration && !PublicQdnArtifactRegistry.getInstance().contains(hash58))
 			return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
 
 		try {
@@ -938,7 +971,6 @@ public class ArbitraryResource {
 				return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
 
 			long fileSize = Files.size(realFilePath);
-			long sizeLimit = publicStagedDataMaxSize(Settings.getInstance().getPublicQdnPublishMaxSize());
 			if (fileSize > sizeLimit)
 				return publicStagedDataError(Response.Status.NOT_FOUND, "Pre-signature artifact not found");
 
