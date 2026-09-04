@@ -483,12 +483,37 @@ public class ArbitraryApiTests extends ApiCommon {
 			Response metadataResponse = resource.getAuthenticatedStagedData(
 					ApiCommon.TEST_API_KEY, Base58.encode(transactionData.getMetadataHash()));
 			assertStagedArtifact(metadataResponse, transactionData.getMetadataHash());
+			writeAuthenticatedAttestationFixtureIfRequested(
+					name, source, rawTransaction, transactionData, mainResponse, metadataResponse);
 
 			assertEquals("Authenticated builder artifacts must not become public by hash", 404,
 					resource.getPublicStagedData(Base58.encode(transactionData.getData())).getStatus());
 		} finally {
 			ApiCommon.clearTestApiKey();
 		}
+	}
+
+	private static void writeAuthenticatedAttestationFixtureIfRequested(String name, byte[] source,
+			String rawTransaction, ArbitraryTransactionData transactionData,
+			Response mainResponse, Response metadataResponse) throws Exception {
+		String outputPath = System.getProperty("qortium.authenticatedQdnAttestationFixture");
+		if (outputPath == null || outputPath.isBlank())
+			return;
+
+		JSONObject fixture = new JSONObject();
+		fixture.put("schemaVersion", 1);
+		fixture.put("generatedBy", "ArbitraryApiTests using Core authenticated builder");
+		fixture.put("sourceBase64", base64(source));
+		fixture.put("sourceFilename", "payload.bin");
+		fixture.put("unsignedTransactionBase58", rawTransaction);
+		fixture.put("name", name);
+		fixture.put("identifier", JSONObject.NULL);
+		fixture.put("publicKey58", Base58.encode(transactionData.getSenderPublicKey()));
+		fixture.put("service", transactionData.getServiceInt());
+		fixture.put("txGroupId", transactionData.getTxGroupId());
+		fixture.put("stagedMainBase64", base64(Files.readAllBytes(((File) mainResponse.getEntity()).toPath())));
+		fixture.put("stagedMetadataBase64", base64(Files.readAllBytes(((File) metadataResponse.getEntity()).toPath())));
+		Files.writeString(Path.of(outputPath), fixture.toString(2) + System.lineSeparator(), StandardCharsets.UTF_8);
 	}
 
 	@Test
