@@ -941,8 +941,10 @@ public class ArbitraryResource {
 	public Response getAuthenticatedStagedData(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
 											 @PathParam("hash58") String hash58) {
 		Security.checkApiCallAllowed(request, apiKey);
-		return this.getStagedData(hash58, false,
-				publicStagedDataMaxSize(Settings.getInstance().getQdnPublishMaxSize()));
+		// qdnPublishMaxSize bounds the uploaded SOURCE. Core may package that
+		// source into a slightly larger ZIP before encryption, so the readback
+		// boundary is the final QDN file ceiling rather than source + 28 bytes.
+		return this.getStagedData(hash58, false, ArbitraryDataFile.MAX_FILE_SIZE);
 	}
 
 	private Response getStagedData(String hash58, boolean requirePublicRegistration, long sizeLimit) {
