@@ -526,6 +526,11 @@
 				<version>${maven-surefire-plugin.version}</version>
 				<configuration>
 					<skipTests>${skipTests}</skipTests>
+					<!-- Deterministic, reproducible test ordering across machines and CI runners.
+					     Surefire's default is filesystem order, which differs per runner and made
+					     an order-dependent static-initializer failure appear only on some runs.
+					     This is a diagnostic aid for reproducibility, not a fix in itself. -->
+					<runOrder>alphabetical</runOrder>
 					<systemPropertyVariables>
 						<hsqldb.method_class_names>org.qortium.test.RepositoryTests.*</hsqldb.method_class_names>
 						<java.awt.headless>${test.awt.headless}</java.awt.headless>

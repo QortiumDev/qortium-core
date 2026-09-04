@@ -31,11 +31,22 @@ public class BlockchainCache {
      * Cache Limit
      *
      * If this limit is reached, the cache will be cleared or reduced.
+     * <p>
+     * Held in a lazy holder so that loading this class does not itself require settings to have
+     * been loaded: the limit is read on first cache use instead of in {@code <clinit>}. Behaviour
+     * with settings present is unchanged - the value is still read once and then fixed.
      */
-    private static final int CACHE_LIMIT = Settings.getInstance().getBlockchainCacheLimit();
+    private static final class CacheLimitHolder {
+        static final int CACHE_LIMIT = Settings.getInstance().getBlockchainCacheLimit();
+    }
+
+    /** Cache limit, read from settings on first use. */
+    private static int cacheLimit() {
+        return CacheLimitHolder.CACHE_LIMIT;
+    }
 
     public void addKeyWithHistory(String key) {
-        if( this.keysWithHistory.size() > CACHE_LIMIT ) {
+        if( this.keysWithHistory.size() > cacheLimit() ) {
             this.keysWithHistory.remove();
         }
 
@@ -54,7 +65,7 @@ public class BlockchainCache {
      */
     public void addTransactionByHash( String hash, BitcoinyTransaction transaction ) {
 
-        if( this.transactionByHash.size() > CACHE_LIMIT ) {
+        if( this.transactionByHash.size() > cacheLimit() ) {
             this.transactionByHash.clear();
         }
 

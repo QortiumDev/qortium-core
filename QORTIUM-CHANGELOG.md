@@ -34,6 +34,29 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-03 - fix(test): stop a missing settings file from poisoning the whole test run
+
+Fixes a test failure that only appeared on some machines. Depending on the
+order the test classes happened to run in, a single test could bring down
+roughly 470 unrelated tests with it, so the same code passed on one run and
+failed badly on the next.
+
+The cause was that two crosschain classes read a value out of the settings
+file at the moment the class itself was first loaded, rather than when the
+value was actually needed. If the very first test to touch them had not yet
+loaded a settings file, that load failed permanently -- Java never retries a
+failed class load -- and every later test that needed foreign-blockchain code
+in the same run failed too, with errors that pointed nowhere near the real
+problem.
+
+Both classes now read their setting on first use instead of at load time. When
+settings are present, which is every normal run of the node, nothing changes:
+the same values are read, once, and kept. The test that first triggered it now
+loads the standard test settings up front like its sibling tests already did,
+and the test runner has been told to run classes in a fixed alphabetical order
+so that a result on one machine can be reproduced on another. The ordering is
+a diagnostic aid only; the actual fix is the deferred settings read.
+
 ### 2026-09-03 - chore(arrr): move the pinned Pirate Unified bundle to official v1.2.0
 
 Moves the Pirate Unified native wallet bundle Core pins from Pirate Network's

@@ -75,8 +75,21 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	 * Executor
 	 *
 	 * Executor service to manage all Electrum server access.
+	 * <p>
+	 * Held in a lazy holder so that loading the {@link Bitcoiny} class does not itself require
+	 * settings to have been loaded: the thread count is read - and the pool created - on first
+	 * actual use. Behaviour with settings present is unchanged (same pool, same size, created
+	 * once); it merely moves the {@link Settings#getInstance()} read out of {@code <clinit>},
+	 * where a missing settings file would poison the class for the lifetime of the JVM.
 	 */
-	private static ExecutorService EXECUTOR = Executors.newFixedThreadPool(Settings.getInstance().getElectrumThreadCount());
+	private static final class ExecutorHolder {
+		static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(Settings.getInstance().getElectrumThreadCount());
+	}
+
+	/** Shared Electrum server access executor, created on first use. */
+	private static ExecutorService executor() {
+		return ExecutorHolder.EXECUTOR;
+	}
 
 	// Constructors and instance
 
@@ -183,7 +196,7 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 				|| maximumTotalPreviousTransactionBytes <= 0)
 			throw new IllegalArgumentException("Spend-context limits must be positive");
 
-		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(xpub58, EXECUTOR, maximumKeys);
+		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(xpub58, executor(), maximumKeys);
 
 		List<BitcoinyDeterministicKey> sortedKeys = new ArrayList<>(walletKeys);
 		sortedKeys.sort(Comparator.comparing(BitcoinyDeterministicKey::getPathAsString));
@@ -800,7 +813,7 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 		Long balance = 0L;
 
 		// Get all wallet addresses (via recursive gap-limit logic)
-		Set<String> walletAddresses = this.getWalletAddressesWithExecutor(key58, EXECUTOR);
+		Set<String> walletAddresses = this.getWalletAddressesWithExecutor(key58, executor());
 
 		try {
 			List<Supplier<Optional<Long>>> suppliers = new ArrayList<>();
@@ -810,7 +823,7 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 			}
 
 			// Parallel fetch of unspent values per address
-			balance += getUnspentValueFromSuppliers(suppliers, EXECUTOR, RETRIES);
+			balance += getUnspentValueFromSuppliers(suppliers, executor(), RETRIES);
 		} catch (Exception e) {
 			LOGGER.error("Unexpected error in getWalletBalance: {}", e.getMessage(), e);
 			return null;
@@ -908,9 +921,9 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		List<Supplier<Optional<BitcoinyTransaction>>> suppliers = Collections.synchronizedList(new ArrayList<>());
 
 		// Fetch keys with transaction checks
-		Set<String> keySet =  processKeysWithTransactionFuturesIterative(EXECUTOR, keys, keyChain, suppliers);
+		Set<String> keySet =  processKeysWithTransactionFuturesIterative(executor(), keys, keyChain, suppliers);
 
-		Set<BitcoinyTransaction> walletTransactions = getBitcoinyTransactionsFromSuppliers(suppliers, EXECUTOR, RETRIES);
+		Set<BitcoinyTransaction> walletTransactions = getBitcoinyTransactionsFromSuppliers(suppliers, executor(), RETRIES);
 
 		Comparator<SimpleTransaction> newestTimestampFirstComparator =
 			Comparator.comparingLong(SimpleTransaction::getTimestamp).reversed();
@@ -1128,7 +1141,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	public List<AddressInfo> getWalletAddressInfos(String key58) throws ForeignBlockchainException {
 
 		// generate keys asynchronously
-		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, EXECUTOR);
+		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, executor());
 
 		// collect all address info build tasks
 		List<Supplier<Optional<AddressInfo>>> suppliers = new ArrayList<>(walletKeys.size());
@@ -1138,7 +1151,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 			suppliers.add(() -> buildAddressInfo(key));
 		}
 
-		List<AddressInfo> infos = getAddressInfosFromSuppliers(suppliers, EXECUTOR, RETRIES);
+		List<AddressInfo> infos = getAddressInfosFromSuppliers(suppliers, executor(), RETRIES);
 
 		return infos.stream()
 				.sorted(new PathComparator(1))
@@ -1251,7 +1264,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 	public Set<String> getWalletAddresses(String key58) throws ForeignBlockchainException {
 		// generate keys asynchronously and get the addresses, return value
-		Set<String> addresses = getWalletAddressesWithExecutor(key58, EXECUTOR);
+		Set<String> addresses = getWalletAddressesWithExecutor(key58, executor());
 
 		return addresses;
 	}
@@ -1308,7 +1321,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	}
 
 	Set<BitcoinyDeterministicKey> getWalletKeys(String key58) throws ForeignBlockchainException {
-		return getWalletKeysWithExecutor(key58, EXECUTOR);
+		return getWalletKeysWithExecutor(key58, executor());
 	}
 
 	/**
@@ -1667,7 +1680,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 	private SpendableOutputs getSpendableOutputs(String key58, boolean includeUnconfirmed) {
 		try {
-			Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, EXECUTOR);
+			Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, executor());
 			List<UnspentOutput> spendableOutputs = new ArrayList<>();
 			int highestLeafIndex = 0;
 

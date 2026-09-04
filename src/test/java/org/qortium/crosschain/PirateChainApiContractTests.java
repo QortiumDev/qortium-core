@@ -1,14 +1,26 @@
 package org.qortium.crosschain;
 
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.json.JSONObject;
 import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.api.model.crosschain.PirateChainSendRequest;
+import org.qortium.repository.DataException;
+import org.qortium.test.common.Common;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 public class PirateChainApiContractTests {
+
+	/**
+	 * This class touches {@link PirateChain}, whose {@link Bitcoiny} superclass reads settings.
+	 * Bootstrap settings so the class is exercised the same way regardless of test run order.
+	 */
+	@BeforeClass
+	public static void beforeClass() throws DataException {
+		Common.useDefaultSettings();
+	}
 
 	@Test
 	public void testBalanceParserUsesUpstreamVerifiedBalanceSemantics() throws Exception {
