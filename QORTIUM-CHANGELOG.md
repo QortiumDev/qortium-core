@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-04 - feat(qdn): expose authenticated publish artifacts for pre-signature verification
+
+Adds an API-key-protected, content-addressed download for the encrypted data
+and metadata that Core stages while building an unsigned authenticated QDN
+publish. This lets Home use the larger authenticated publish limit on a node
+the user administers without giving up its rule that the exact packaged bytes
+must be verified before a transaction is signed. The existing keyless public
+artifact endpoint remains registry-gated and unchanged; knowing a hash still
+does not make a private builder artifact publicly downloadable.
+
 ### 2026-09-03 - fix(test): stop a missing settings file from poisoning the whole test run
 
 Fixes a test failure that only appeared on some machines. Depending on the
