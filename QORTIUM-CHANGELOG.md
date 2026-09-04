@@ -34,6 +34,35 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-03 - chore(arrr): move the pinned Pirate Unified bundle to official v1.2.0
+
+Moves the Pirate Unified native wallet bundle Core pins from Pirate Network's
+official `v1.1.9` release to their official `v1.2.0` release, which upstream
+publishes under the new "Stashi Wallet" product name from the same repository
+and signs with the same release key. Only the provenance changes: the release
+tag, asset filename, download URL, byte size, SHA-256, and the immutable
+Qortium Previewnet transaction that carries the reviewed bundle.
+
+The upgrade was checked against Core's side of the interface before it was
+taken. Every native symbol Core loads, every request Core sends, and every
+response field Core reads is unchanged between the two releases, and the
+wallet's own storage migrations only add to what is already there. What
+`v1.2.0` adds -- per-wallet signing envelopes and broadcasts, an explicit
+statement of what a wallet may currently spend, a witness repair fix, and
+keeping the Sapling parameters in memory -- is either invisible to Core or
+opt-in, so no Core code needed to change alongside the pin.
+
+The `v1.2.0` release ZIP and its checksum manifest were verified against
+Pirate Unified's published signing key before use, the archive was rechecked
+against the signed checksum, and the same offline acceptance harness that
+accepted `v1.1.9` was rerun against the new artifact, including the real
+native library on this host. The bundle was then republished to Qortium
+Previewnet as the same stable `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet`
+resource, independently retrieved and byte-compared on a second seed, and its
+transaction signature pinned here. Unified and ARRR remain disabled by
+default; carrying the new pin does not load native code, start a wallet, or
+move funds.
+
 ### 2026-09-02 - ci(arrr): add Pirate Unified wallet bundle freshness watcher
 
 Adds a scheduled, informational-only GitHub Actions job that compares the

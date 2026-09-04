@@ -831,7 +831,7 @@ temporary_log=$work_directory/sanitized.log
 	printf '| Network egress | %s | rootless namespace; non-loopback interfaces `%s`; default routes `%s`; non-loopback routes `%s` |\n' "$network_result" "$non_loopback_interfaces" "$default_routes" "$non_loopback_routes"
 	printf '| Loopback lightwalletd | %s | fixed IPv4 plaintext endpoint; Java service `regtest`, native Pirate service `main` |\n' "$fixture_result"
 	printf '| Real v8 legacy start | %s | packaged Core mapped the reviewed legacy JNI, decoded serialization v8, reached READY, and persisted `LEGACY` identity without a Unified registry |\n' "$legacy_start"
-	printf '| First Unified start | %s | packaged Core mapped the authenticated v1.1.9 QDN library, matched legacy identity, synchronized, and persisted validated `MIGRATING` |\n' "$migration_start"
+	printf '| First Unified start | %s | packaged Core mapped the authenticated pinned QDN library, matched legacy identity, synchronized, and persisted validated `MIGRATING` |\n' "$migration_start"
 	printf '| Unified reopen | %s | a clean third Core process reopened the same registry and promoted it to `UNIFIED_READY` |\n' "$ready_start"
 	printf '| Exact start count | %s | required exactly `3` packaged Core starts |\n' "$packaged_starts"
 	printf '| Namespace and identity continuity | %s | one namespace, one one-way identity hash, and one wallet-address hash across all phases |\n' "$namespace_result"
@@ -840,7 +840,7 @@ temporary_log=$work_directory/sanitized.log
 	printf '| Graceful shutdowns | %s | required `3` packaged Core shutdown confirmations |\n' "$shutdowns"
 	printf '| Secret scan | %s | raw outputs checked before deletion; none retained |\n' "$secret_scan"
 	if [ "$result" = PASS ]; then
-		printf '\nThis receipt proves one unfunded Linux x86_64 packaged migration from an encrypted real Qortal-format serialization-v8 fixture through Core `LEGACY` → `MIGRATING` → `UNIFIED_READY`, with authenticated v1.1.9 loading and deterministic loopback synchronization. It does not prove arbitrary foreign-wallet password extraction, real-network interoperability, funded behavior, QDN publication, deployment, or Home behavior.\n'
+		printf '\nThis receipt proves one unfunded Linux x86_64 packaged migration from an encrypted real Qortal-format serialization-v8 fixture through Core `LEGACY` → `MIGRATING` → `UNIFIED_READY`, with authenticated pinned-bundle loading and deterministic loopback synchronization. It does not prove arbitrary foreign-wallet password extraction, real-network interoperability, funded behavior, QDN publication, deployment, or Home behavior.\n'
 	else
 		printf '\nThis failed receipt proves only the individual boundaries marked `PASS`; it does not establish a complete packaged migration. Raw evidence was still scanned and deleted.\n'
 	fi
