@@ -34,6 +34,35 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-06 - chore(arrr): move the pinned Pirate Unified bundle to official v1.2.1
+
+Moves the Pirate Unified native wallet bundle Core pins from Pirate Network's
+official `v1.2.0` release to their official `v1.2.1` release. Between the two
+releases upstream renamed its repository from `Pirate-Unified-Light-Wallet` to
+`Stashi-Wallet`; the pinned download URL and the freshness watcher now use the
+new path (the old one still redirects), and the release is signed with the same
+key as before. Only the provenance changes: the release tag, asset filename,
+download URL, byte size, and SHA-256.
+
+The upgrade was checked against Core's side of the interface before it was
+taken. The JNI crate Core loads is untouched between the two releases. The
+wallet beneath it gains a durable sync-interruption latch, so after a failed
+synchronization it reports not spendable until an anchor is revalidated; Core
+reads only the boolean spendability fields, so its gate becomes stricter, not
+looser. The wallet also records its known chain tip only from a
+server-validated snapshot; Core's known-new initialization takes its height
+from Core's own light client, so it is unaffected. No Core code needed to
+change alongside the pin.
+
+The `v1.2.1` release ZIP and its checksum manifest were verified against the
+published signing key before use, the archive was rechecked against the signed
+checksum, and the acceptance harness was rerun against the new artifact with
+the real native library on this host. The reviewed-payload table in the
+acceptance document, which had not been refreshed for `v1.2.0`, now lists the
+`v1.2.1` entries. The Qortium Previewnet QDN republication and its transaction
+signature are a separate follow-up; until it lands this pin must not ship to a
+Unified-enabled profile. Unified and ARRR remain disabled by default.
+
 ### 2026-09-05 - feat(qdn): let domain-mapped hosts front apps and link back to the gateway
 
 Core's domain map lets a node operator serve a QDN resource at the root of a

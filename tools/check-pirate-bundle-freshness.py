@@ -11,7 +11,7 @@ release artifacts. Its only job is to compare:
     tools/pirate-bundle-freshness.json (a deliberate, explicit deferral --
     the same pattern Home uses for its i2pd freshness check), and
   * the latest release published by upstream
-    (PirateNetwork/Pirate-Unified-Light-Wallet) and by our fork
+    (PirateNetwork/Stashi-Wallet, formerly Pirate-Unified-Light-Wallet) and by our fork
     (QortiumDev/Pirate-Unified-Light-Wallet).
 
 Exit codes:
@@ -57,7 +57,7 @@ BUNDLE_JAVA_FILE = (
 )
 ACK_FILE = REPO_ROOT / "tools" / "pirate-bundle-freshness.json"
 
-UPSTREAM_REPO = "PirateNetwork/Pirate-Unified-Light-Wallet"
+UPSTREAM_REPO = "PirateNetwork/Stashi-Wallet"
 FORK_REPO = "QortiumDev/Pirate-Unified-Light-Wallet"
 
 RELEASE_TAG_PATTERN = re.compile(
