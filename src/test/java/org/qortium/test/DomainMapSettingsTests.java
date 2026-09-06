@@ -88,6 +88,13 @@ public class DomainMapSettingsTests extends Common {
 		assertRejected("{\"domainMapGatewayUrl\":\"qdn.example\"}", "domainMapGatewayUrl");
 		assertRejected("{\"domainMapGatewayUrl\":\"ftp://qdn.example\"}", "domainMapGatewayUrl");
 		assertRejected("{\"domainMapGatewayUrl\":\"https://qdn.example?x=1\"}", "domainMapGatewayUrl");
+		assertRejected("{\"domainMapGatewayUrl\":\"https://qdn.example#frag\"}", "domainMapGatewayUrl");
+		assertRejected("{\"domainMapGatewayUrl\":\"https://user:pw@qdn.example\"}", "domainMapGatewayUrl");
+		assertRejected("{\"domainMapGatewayUrl\":\"//qdn.example\"}", "domainMapGatewayUrl");
+		// The value ends up inside a Content-Security-Policy header, so no header-breaking characters
+		assertRejected("{\"domainMapGatewayUrl\":\"https://qdn.example\\r\\nX-Injected: 1\"}", "domainMapGatewayUrl");
+		assertRejected("{\"domainMapGatewayUrl\":\"https://qdn.example evil.example\"}", "domainMapGatewayUrl");
+		assertRejected("{\"domainMapGatewayUrl\":\" \"}", "domainMapGatewayUrl");
 	}
 
 	private static void assertRejected(String json, String expectedMessageFragment) throws Exception {
