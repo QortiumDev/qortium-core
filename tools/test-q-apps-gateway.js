@@ -61,7 +61,7 @@ function response(options) {
 }
 
 // Load only the bridge IIFE; the rest of the file needs a full DOM.
-function loadBridge() {
+function loadBridge(pageGlobals) {
   const src = fs.readFileSync(SOURCE, "utf8");
   const start = src.indexOf("(function installReadOnlyQdnBridge()");
 
@@ -69,6 +69,11 @@ function loadBridge() {
 
   const fetched = [];
   let responder = () => response({ json: { status: "READY" } });
+
+  // The _qdn* globals Core's HTMLParser injects into a served page. Absent by
+  // default (a plain gateway page under test); a domainMap page sets them.
+  for (const name of ["_qdnContext", "_qdnGatewayBase"]) delete global[name];
+  for (const [name, value] of Object.entries(pageGlobals || {})) global[name] = value;
 
   global.window = { location: { origin: ORIGIN } };
   global.fetch = function (url, options) {
@@ -85,6 +90,27 @@ function loadBridge() {
       responder = nextResponder;
     },
   };
+}
+
+// Load only the pure URL-building helpers (encodePathSegment .. buildResourceUrl);
+// everything after them needs a DOM. `pageGlobals` are the _qdn* values Core injects.
+function loadLinkBuilder(pageGlobals) {
+  const src = fs.readFileSync(SOURCE, "utf8");
+  const start = src.indexOf("function encodePathSegment(");
+  const end = src.indexOf("function extractComponents(");
+  if (start === -1 || end === -1 || end < start)
+    throw new Error("link builder helpers not found in " + SOURCE);
+
+  const names = ["_qdnContext", "_qdnGatewayBase", "_qdnService", "_qdnName", "_qdnIdentifier",
+    "_qdnTheme", "_qdnLang", "_qdnTextSize", "_qdnAccent", "_qdnUiStyle"];
+  for (const name of names) delete global[name];
+  for (const [name, value] of Object.entries(pageGlobals || {})) global[name] = value;
+  const assigned = [];
+  global.window = { location: { origin: ORIGIN, assign: (target) => assigned.push(target) } };
+
+  const exportsSource = "\n;({ buildResourceUrl: buildResourceUrl, navigateToResource: navigateToResource })";
+  const api = eval(src.slice(start, end) + exportsSource);
+  return { buildResourceUrl: api.buildResourceUrl, navigateToResource: api.navigateToResource, assigned: assigned };
 }
 
 async function main() {
@@ -755,6 +781,77 @@ async function main() {
       /must be greater than zero/.test(e.message),
       e.message,
     );
+  }
+
+  console.log("\n[15] a domain-mapped host renders one resource, so other resources link to the configured gateway");
+  {
+    const gatewayOrigin = "https://public-gateway.example";
+    const domainMapped = loadBridge({ _qdnContext: "domainMap", _qdnGatewayBase: gatewayOrigin + "/" });
+    const url = await domainMapped.qdnRequest({ action: "GET_QDN_RESOURCE_URL", service: "APP", name: "Other", path: "index.html" });
+    check(
+      "GET_QDN_RESOURCE_URL on a domainMap host points at the gateway origin (trailing slash trimmed)",
+      url === gatewayOrigin + "/APP/Other/index.html",
+      url,
+    );
+    check(
+      "the status pre-check still fetches from the serving origin",
+      domainMapped.fetched.length === 1 && domainMapped.fetched[0].startsWith(ORIGIN + "/arbitrary/resource/status/APP/Other"),
+      domainMapped.fetched.join(","),
+    );
+    const streamUrl = await domainMapped.qdnRequest({ action: "GET_QDN_RESOURCE_STREAM_URL", service: "IMAGE", name: "Other", identifier: "pic" });
+    check("GET_QDN_RESOURCE_STREAM_URL follows the same gateway origin", streamUrl === gatewayOrigin + "/IMAGE/Other/pic", streamUrl);
+
+    const unconfigured = loadBridge({ _qdnContext: "domainMap" });
+    const fallbackUrl = await unconfigured.qdnRequest({ action: "GET_QDN_RESOURCE_URL", service: "APP", name: "Other" });
+    check("without domainMapGatewayUrl the serving origin is used as before", fallbackUrl === ORIGIN + "/APP/Other", fallbackUrl);
+
+    const gatewayPage = loadBridge({ _qdnContext: "gateway", _qdnGatewayBase: gatewayOrigin });
+    const gatewayUrl = await gatewayPage.qdnRequest({ action: "GET_QDN_RESOURCE_URL", service: "APP", name: "Other" });
+    check("a gateway page ignores _qdnGatewayBase and stays on its own origin", gatewayUrl === ORIGIN + "/APP/Other", gatewayUrl);
+  }
+
+  console.log("\n[16] in-page links on a domain-mapped host");
+  {
+    const gatewayOrigin = "https://public-gateway.example";
+    // HTMLParser always injects the display globals; null here so no display query params are appended.
+    const display = { _qdnTheme: null, _qdnLang: null, _qdnTextSize: null, _qdnAccent: null, _qdnUiStyle: null };
+    const own = { ...display, _qdnContext: "domainMap", _qdnGatewayBase: gatewayOrigin, _qdnService: "APP", _qdnName: "Mine", _qdnIdentifier: "default" };
+    const page = loadLinkBuilder(own);
+    const link = (service, name, identifier, path) => page.buildResourceUrl(service, name, identifier, path, true);
+    check("a link into the host's own resource stays root-relative",
+      link("APP", "Mine", null, "/docs/page.html") === "/docs/page.html", link("APP", "Mine", null, "/docs/page.html"));
+    check("a bare link to the own resource is /", link("APP", "Mine", "default", "") === "/", link("APP", "Mine", "default", ""));
+    check("a link to another resource goes to the gateway origin",
+      link("APP", "Other", "docs", "/a b.html") === gatewayOrigin + "/APP/Other/docs/a%20b.html", link("APP", "Other", "docs", "/a b.html"));
+    check("a different identifier of the same name is another resource",
+      link("APP", "Mine", "beta", "") === gatewayOrigin + "/APP/Mine/beta", link("APP", "Mine", "beta", ""));
+    check("data (non-link) fetches still use the serving origin's /arbitrary route",
+      page.buildResourceUrl("APP", "Other", null, "x.json", false) === "/arbitrary/APP/Other?filepath=x.json",
+      page.buildResourceUrl("APP", "Other", null, "x.json", false));
+
+    page.navigateToResource("APP", "Other", null, "/");
+    check("navigation to another resource hands off to the gateway origin",
+      page.assigned.length === 1 && page.assigned[0] === gatewayOrigin + "/APP/Other/", page.assigned.join(","));
+    page.navigateToResource("APP", "Mine", null, "/inner");
+    check("navigation within the own resource stays on this origin",
+      page.assigned.length === 2 && page.assigned[1] === "/inner", page.assigned.join(","));
+
+    const unconfigured = loadLinkBuilder({ ...own, _qdnGatewayBase: "" });
+    check("without a configured gateway, other-resource links fall back to same-origin paths",
+      unconfigured.buildResourceUrl("APP", "Other", null, "", true) === "/APP/Other",
+      unconfigured.buildResourceUrl("APP", "Other", null, "", true));
+    check("a path cannot smuggle a third origin into a link (segments are encoded)",
+      unconfigured.buildResourceUrl("APP", "Other", null, "//attacker.example/x", true) === "/APP/Other//attacker.example/x",
+      unconfigured.buildResourceUrl("APP", "Other", null, "//attacker.example/x", true));
+    const gatewayWithBase = loadLinkBuilder({ ...display, _qdnContext: "gateway", _qdnGatewayBase: gatewayOrigin, _qdnService: "APP", _qdnName: "Mine", _qdnIdentifier: "default" });
+    gatewayWithBase.navigateToResource("APP", "Other", null, "/");
+    check("a gateway page never hands navigation off to another origin, even with _qdnGatewayBase set",
+      gatewayWithBase.assigned.length === 1 && gatewayWithBase.assigned[0] === "/APP/Other/", gatewayWithBase.assigned.join(","));
+
+    const gatewayPage = loadLinkBuilder({ ...display, _qdnContext: "gateway", _qdnService: "APP", _qdnName: "Mine", _qdnIdentifier: "default" });
+    check("gateway pages keep their /{service}/{name} links",
+      gatewayPage.buildResourceUrl("APP", "Other", null, "", true) === "/APP/Other",
+      gatewayPage.buildResourceUrl("APP", "Other", null, "", true));
   }
 
   console.log("\n=== " + passed + " passed, " + failed + " failed ===");

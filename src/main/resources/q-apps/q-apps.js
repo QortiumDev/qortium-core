@@ -352,16 +352,48 @@ function appendQueryParam(url, key, value) {
   );
 }
 
+// On a domain-mapped (vanity) host the serving origin renders exactly ONE
+// resource at its root, so it has no /{service}/{name} route. Links to any
+// OTHER resource go to the public gateway origin the node operator configured
+// (Core's domainMapGatewayUrl, injected as _qdnGatewayBase). Returns "" when
+// not configured, so callers fall back to the same-origin behaviour.
+function qdnDomainMapGatewayOrigin() {
+  if (typeof _qdnContext === "undefined" || _qdnContext != "domainMap") return "";
+  if (typeof _qdnGatewayBase !== "string" || _qdnGatewayBase === "") return "";
+  return _qdnGatewayBase.replace(/\/+$/, "");
+}
+
+// True when a link targets the resource this domain-mapped host itself serves,
+// in which case the link stays a plain root-relative path on this origin.
+function qdnIsOwnDomainMapResource(service, name, identifier) {
+  if (typeof _qdnContext === "undefined" || _qdnContext != "domainMap") return false;
+  const ownIdentifier =
+    typeof _qdnIdentifier === "string" && _qdnIdentifier !== "" ? _qdnIdentifier : "default";
+  const wantedIdentifier = identifier != null && identifier !== "" ? identifier : "default";
+  return (
+    String(service || "WEBSITE").toUpperCase() === String(_qdnService).toUpperCase() &&
+    name === _qdnName &&
+    wantedIdentifier === ownIdentifier
+  );
+}
+
 function navigateToResource(service, name, identifier, path) {
   const resourceUrl = buildResourceUrl(service, name, identifier, path, true);
   const targetUrl = new URL(resourceUrl, window.location.origin);
-  if (targetUrl.origin !== window.location.origin) {
-    throw new Error("QDN navigation must stay on the current origin");
+  const gatewayOrigin = qdnDomainMapGatewayOrigin();
+  if (targetUrl.origin === window.location.origin) {
+    window.location.assign(
+      targetUrl.pathname + targetUrl.search + targetUrl.hash,
+    );
+    return;
   }
-
-  window.location.assign(
-    targetUrl.pathname + targetUrl.search + targetUrl.hash,
-  );
+  // A domain-mapped host may hand off to its operator-configured public
+  // gateway; every other cross-origin target is still refused.
+  if (gatewayOrigin !== "" && targetUrl.origin === gatewayOrigin) {
+    window.location.assign(targetUrl.href);
+    return;
+  }
+  throw new Error("QDN navigation must stay on the current origin");
 }
 
 function buildResourceUrl(service, name, identifier, path, isLink) {
@@ -385,9 +417,14 @@ function buildResourceUrl(service, name, identifier, path, isLink) {
     url = "/" + encodedService + "/" + encodedName;
     if (encodedIdentifier != null) url = url.concat("/" + encodedIdentifier);
     url = appendResourcePath(url, path);
+  } else if (qdnIsOwnDomainMapResource(service, name, identifier)) {
+    // domainMap: this host serves this one resource at its root
+    url = appendResourcePath("", path);
+    if (url === "" || url.startsWith("?") || url.startsWith("#")) url = "/" + url;
   } else {
-    // domainMap only serves websites right now
-    url = "/" + encodedName;
+    // domainMap, some other resource: only the public gateway can render it
+    url = qdnDomainMapGatewayOrigin() + "/" + encodedService + "/" + encodedName;
+    if (encodedIdentifier != null) url = url.concat("/" + encodedIdentifier);
     url = appendResourcePath(url, path);
   }
 
@@ -2176,6 +2213,22 @@ window.addEventListener("beforeunload", () => {
       .join("/");
   }
 
+  // Origin that renders /{service}/{name}: this one on the gateway; on a
+  // domain-mapped host (which renders a single resource at its root) the
+  // operator-configured public gateway, when one is set. Kept inside the IIFE
+  // because the bridge is also loaded standalone by tools/test-q-apps-gateway.js.
+  function renderOrigin() {
+    if (
+      typeof _qdnContext !== "undefined" &&
+      _qdnContext === "domainMap" &&
+      typeof _qdnGatewayBase === "string" &&
+      _qdnGatewayBase !== ""
+    ) {
+      return _qdnGatewayBase.replace(/\/+$/, "");
+    }
+    return window.location.origin;
+  }
+
   // Home resolves this against its configured node. On a gateway the serving
   // origin IS the renderer, so use its direct /{service}/{name} route. The
   // normal /render resource lives on Core's authenticated API service and is
@@ -2193,7 +2246,7 @@ window.addEventListener("beforeunload", () => {
       const encodedPath = encodeResourcePath(pathOnly);
 
       return withQuery(
-        window.location.origin +
+        renderOrigin() +
           "/" +
           encodeURIComponent(resource.service) +
           "/" +

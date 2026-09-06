@@ -186,6 +186,14 @@ public class Settings {
 	private boolean domainMapEnabled = false;
 	private boolean domainMapLoggingEnabled = false;
 	private List<DomainMap> domainMap = null;
+	/**
+	 * Public gateway origin (e.g. {@code https://qdn.qortium.app}) that pages served through the domain
+	 * map use to link to QDN resources OTHER than the one mapped to their own host. A domain-mapped host
+	 * renders exactly one resource at its root, so it has no {@code /{service}/{name}} route of its own.
+	 * Optional; when unset, cross-resource links on domain-mapped hosts fall back to the same origin
+	 * (and 404) as before.
+	 */
+	private String domainMapGatewayUrl = null;
 
 	// Gateway
 	private Integer gatewayPort;
@@ -908,8 +916,15 @@ public class Settings {
 
 	// Domain mapping
 	public static class DomainMap {
+		/** Service name used when an entry omits {@code service}: the original websites-only behaviour. */
+		public static final String DEFAULT_SERVICE = "WEBSITE";
+
 		private String domain;
 		private String name;
+		/** QDN service name (e.g. {@code WEBSITE}, {@code APP}); defaults to {@link #DEFAULT_SERVICE}. */
+		private String service = DEFAULT_SERVICE;
+		/** Optional resource identifier; {@code null} means the default resource for service + name. */
+		private String identifier = null;
 
 		private DomainMap() { // makes JAXB happy; will never be invoked
 		}
@@ -928,6 +943,28 @@ public class Settings {
 
 		public void setName(String name) {
 			this.name = name;
+		}
+
+		/** Upper-cased service name; never blank (missing/blank falls back to {@link #DEFAULT_SERVICE}). */
+		public String getService() {
+			if (this.service == null || this.service.isBlank())
+				return DEFAULT_SERVICE;
+			return this.service.trim().toUpperCase(Locale.ROOT);
+		}
+
+		public void setService(String service) {
+			this.service = service;
+		}
+
+		/** Identifier, or {@code null} when absent/blank. */
+		public String getIdentifier() {
+			if (this.identifier == null || this.identifier.isBlank())
+				return null;
+			return this.identifier.trim();
+		}
+
+		public void setIdentifier(String identifier) {
+			this.identifier = identifier;
 		}
 	}
 
@@ -1785,6 +1822,52 @@ public class Settings {
 		}
 	}
 
+	/**
+	 * Domain-map entries are only consulted per request, so a typo (unknown service, blank name) would
+	 * otherwise surface as a 404 on a live vanity host rather than at startup. Validate them here.
+	 */
+	private void validateDomainMapSettings() {
+		if (this.domainMap != null) {
+			for (DomainMap dMap : this.domainMap) {
+				if (dMap == null || dMap.getDomain() == null || dMap.getDomain().isBlank())
+					throwValidationError("domainMap entries must have a domain");
+
+				if (dMap.getName() == null || dMap.getName().isBlank())
+					throwValidationError(String.format("domainMap entry for %s must have a name", dMap.getDomain()));
+
+				try {
+					org.qortium.arbitrary.misc.Service.valueOf(dMap.getService());
+				} catch (IllegalArgumentException e) {
+					throwValidationError(String.format("domainMap entry for %s has unknown service %s",
+							dMap.getDomain(), dMap.getService()));
+				}
+			}
+		}
+
+		if (this.domainMapGatewayUrl != null) {
+			String trimmed = this.domainMapGatewayUrl.trim();
+			// Drop trailing slashes so "https://host/" and "https://host" configure the same origin
+			while (trimmed.endsWith("/"))
+				trimmed = trimmed.substring(0, trimmed.length() - 1);
+
+			java.net.URI uri;
+			try {
+				uri = new java.net.URI(trimmed);
+			} catch (java.net.URISyntaxException e) {
+				uri = null;
+			}
+			boolean isOrigin = uri != null
+					&& ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+					&& uri.getHost() != null && !uri.getHost().isBlank()
+					&& (uri.getRawPath() == null || uri.getRawPath().isEmpty())
+					&& uri.getRawQuery() == null && uri.getRawFragment() == null && uri.getRawUserInfo() == null;
+			if (trimmed.isEmpty() || !isOrigin)
+				throwValidationError("domainMapGatewayUrl must be an http(s) origin such as https://qdn.example, with no path");
+
+			this.domainMapGatewayUrl = trimmed;
+		}
+	}
+
 	public static void throwValidationError(String message) {
 		throw new RuntimeException(message, new UnmarshalException(message));
 	}
@@ -1857,6 +1940,7 @@ public class Settings {
 			throwValidationError("qdnSyncYieldBatchSize must be between 1 and 100");
 
 		validatePirateUnifiedWalletSettings();
+		validateDomainMapSettings();
 
 		if (this.maxDataPeerIdleTime != null && this.maxDataPeerConnectionTime != null
 				&& !this.maxDataPeerIdleTime.equals(this.maxDataPeerConnectionTime))
@@ -2326,17 +2410,31 @@ public class Settings {
 		return this.domainMapLoggingEnabled;
 	}
 
-	public Map<String, String> getSimpleDomainMap() {
-		HashMap<String, String> map = new HashMap<>();
+	/**
+	 * Domain-map entries keyed by lower-cased host name. Hosts are case-insensitive, so callers should
+	 * look up {@code serverName.toLowerCase(Locale.ROOT)}. An apex domain (exactly one dot) also gets a
+	 * {@code www.} alias, matching the original behaviour.
+	 */
+	public Map<String, DomainMap> getDomainMapEntries() {
+		HashMap<String, DomainMap> map = new HashMap<>();
+		if (this.domainMap == null)
+			return map;
+
 		for (DomainMap dMap : this.domainMap) {
-			map.put(dMap.getDomain(), dMap.getName());
+			String domain = dMap.getDomain().trim().toLowerCase(Locale.ROOT);
+			map.put(domain, dMap);
 
 			// If the domain doesn't include a subdomain then add a www. alternative
-			if (dMap.getDomain().chars().filter(c -> c == '.').count() == 1) {
-				map.put("www.".concat(dMap.getDomain()), dMap.getName());
+			if (domain.chars().filter(c -> c == '.').count() == 1) {
+				map.put("www.".concat(domain), dMap);
 			}
 		}
 		return map;
+	}
+
+	/** Configured public gateway origin for domain-mapped pages, without a trailing slash, or {@code null}. */
+	public String getDomainMapGatewayUrl() {
+		return this.domainMapGatewayUrl;
 	}
 
 

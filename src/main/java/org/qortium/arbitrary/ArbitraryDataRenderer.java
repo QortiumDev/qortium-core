@@ -39,6 +39,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Locale;
 import java.util.Set;
 
@@ -211,11 +212,12 @@ public class ArbitraryDataRenderer {
                 } else {
                     encodedResourceId = resourceId;
                 }
-                HTMLParser htmlParser = new HTMLParser(encodedResourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize, accent, uiStyle);
+                String gatewayBase = domainMapGatewayBase();
+                HTMLParser htmlParser = new HTMLParser(encodedResourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize, accent, uiStyle, gatewayBase);
                 htmlParser.addAdditionalHeaderTags();
                 response.addHeader(
                     "Content-Security-Policy",
-                    contentSecurityPolicyForHtml()
+                    contentSecurityPolicyForHtml(gatewayBase)
                 );
                 response.setContentType(context.getMimeType(filename));
                 response.setContentLength(htmlParser.getData().length);
@@ -263,18 +265,42 @@ public class ArbitraryDataRenderer {
      * a bare {@code wss:} source that would permit connections to any secure WebSocket server.</p>
      */
     static String contentSecurityPolicyForHtml() {
+        return contentSecurityPolicyForHtml(null);
+    }
+
+    /**
+     * @param extraMediaOrigin an additional origin permitted for images, media and frames, or null. Used
+     *                         for domain-mapped pages, whose cross-resource URLs point at the configured
+     *                         public gateway rather than their own (single-resource) origin. Scripts,
+     *                         styles and fetches stay same-origin regardless.
+     */
+    static String contentSecurityPolicyForHtml(String extraMediaOrigin) {
+        String extra = extraMediaOrigin != null && !extraMediaOrigin.isBlank() ? " " + extraMediaOrigin.trim() : "";
         return "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
                 "font-src 'self' data:; " +
 
                 // allow localhost for media
-                "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; " +
+                "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*" + extra + "; " +
 
-                "img-src 'self' data: blob:; " +
+                "img-src 'self' data: blob:" + extra + "; " +
+
+                // frames inherit default-src 'self' unless an extra origin is granted
+                (extra.isEmpty() ? "" : "frame-src 'self'" + extra + "; ") +
 
                 // emulator/Emscripten runtimes spawn workers from same-origin or blob URLs
                 "worker-src 'self' blob:; " +
 
                 "connect-src 'self' blob:;";
+    }
+
+    /**
+     * The public gateway origin that domain-mapped pages use for OTHER resources, or null outside the
+     * domainMap context (gateway/render pages already have a {@code /{service}/{name}} route of their own).
+     */
+    private String domainMapGatewayBase() {
+        if (!Objects.equals(this.qdnContext, "domainMap"))
+            return null;
+        return Settings.getInstance().getDomainMapGatewayUrl();
     }
 
     /**
