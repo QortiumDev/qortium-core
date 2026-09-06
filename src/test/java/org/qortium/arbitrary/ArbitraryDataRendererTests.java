@@ -49,6 +49,25 @@ public class ArbitraryDataRendererTests {
     }
 
     @Test
+    public void testHtmlContentSecurityPolicyGrantsOnlyMediaToTheDomainMapGateway() {
+        String csp = ArbitraryDataRenderer.contentSecurityPolicyForHtml("https://qdn.example");
+
+        assertEquals(
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                        "font-src 'self' data:; " +
+                        "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:* https://qdn.example; " +
+                        "img-src 'self' data: blob: https://qdn.example; " +
+                        "frame-src 'self' https://qdn.example; " +
+                        "worker-src 'self' blob:; " +
+                        "connect-src 'self' blob:;",
+                csp);
+        // Scripts and fetches must stay same-origin even when a gateway origin is granted for media
+        assertFalse(csp.contains("connect-src 'self' blob: https://qdn.example"));
+        assertEquals(ArbitraryDataRenderer.contentSecurityPolicyForHtml(), ArbitraryDataRenderer.contentSecurityPolicyForHtml(null));
+        assertEquals(ArbitraryDataRenderer.contentSecurityPolicyForHtml(), ArbitraryDataRenderer.contentSecurityPolicyForHtml("  "));
+    }
+
+    @Test
     public void testNonHtmlFileResponseSetsContentLengthBeforeStreaming() throws Exception {
         byte[] body = "rendered asset body".getBytes(StandardCharsets.UTF_8);
         Path directory = Files.createTempDirectory("qdn-renderer");

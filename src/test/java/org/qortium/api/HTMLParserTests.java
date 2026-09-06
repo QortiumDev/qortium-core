@@ -123,6 +123,94 @@ public class HTMLParserTests {
 		assertEquals("/APP/chat/", gatewayBaseHref("chat", "default"));
 	}
 
+	/**
+	 * A domain-mapped host serves one resource at its root: the base href is root-relative, the
+	 * read-only gateway handler is injected (it is a public node with no account), and the configured
+	 * public gateway origin is exposed so the bridge can link to OTHER resources.
+	 */
+	@Test
+	public void testDomainMapContextIsRootRelativeAndExposesGatewayBase() {
+		HTMLParser htmlParser = new HTMLParser(
+				"7R15M3G157U5",
+				"/index.html",
+				"",
+				false,
+				"<html><head><title>x</title></head><body></body></html>".getBytes(StandardCharsets.UTF_8),
+				"domainMap",
+				Service.APP,
+				null,
+				null,
+				true,
+				null,
+				null,
+				null,
+				null,
+				"https://qdn.example");
+
+		htmlParser.addAdditionalHeaderTags();
+
+		Document document = Jsoup.parse(new String(htmlParser.getData(), StandardCharsets.UTF_8));
+		Element base = document.selectFirst("head base[href]");
+		assertNotNull(base);
+		assertEquals("/", base.attr("href"));
+		assertEquals(1, document.select("head script[src^=/apps/q-apps-gateway.js]").size());
+		assertEquals(1, document.select("head script[src^=/apps/q-apps.js]").size());
+
+		String scriptData = document.selectFirst("head script:not([src])").data();
+		assertTrue(scriptData, scriptData.contains("var _qdnContext=\"domainMap\";"));
+		assertTrue(scriptData, scriptData.contains("var _qdnGatewayBase=\"https://qdn.example\";"));
+	}
+
+	@Test
+	public void testGatewayBaseIsEmptyOutsideDomainMap() {
+		HTMLParser htmlParser = new HTMLParser(
+				"chat",
+				"/index.html",
+				"/APP",
+				true,
+				"<html><head></head><body></body></html>".getBytes(StandardCharsets.UTF_8),
+				"gateway",
+				Service.APP,
+				null,
+				null,
+				true,
+				null,
+				null,
+				null,
+				null);
+
+		htmlParser.addAdditionalHeaderTags();
+
+		Document document = Jsoup.parse(new String(htmlParser.getData(), StandardCharsets.UTF_8));
+		String scriptData = document.selectFirst("head script:not([src])").data();
+		assertTrue(scriptData, scriptData.contains("var _qdnGatewayBase=\"\";"));
+		assertEquals(1, document.select("head script[src^=/apps/q-apps-gateway.js]").size());
+	}
+
+	@Test
+	public void testRenderContextDoesNotInjectGatewayHandler() {
+		HTMLParser htmlParser = new HTMLParser(
+				"chat",
+				"/index.html",
+				"/render/APP",
+				true,
+				"<html><head></head><body></body></html>".getBytes(StandardCharsets.UTF_8),
+				"render",
+				Service.APP,
+				null,
+				null,
+				true,
+				null,
+				null,
+				null,
+				null);
+
+		htmlParser.addAdditionalHeaderTags();
+
+		Document document = Jsoup.parse(new String(htmlParser.getData(), StandardCharsets.UTF_8));
+		assertEquals(0, document.select("head script[src^=/apps/q-apps-gateway.js]").size());
+	}
+
 	private static String gatewayBaseHref(String resourceId, String identifier) {
 		HTMLParser htmlParser = new HTMLParser(
 				resourceId,

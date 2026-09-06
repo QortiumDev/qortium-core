@@ -34,6 +34,29 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-05 - feat(qdn): let domain-mapped hosts front apps and link back to the gateway
+
+Core's domain map lets a node operator serve a QDN resource at the root of a
+real domain name, such as showing a published site at `example.com` instead
+of at a long gateway path. Until now it could only serve websites by name.
+Each entry may now also name a service (for example `APP`) and an
+identifier, so a vanity domain can front an app or any other renderable
+resource; entries are checked when settings load, so a typo fails at startup
+rather than as a mysterious 404 on the live host.
+
+A domain-mapped host renders exactly one resource at its root, so it has no
+way to show other QDN content on its own. A new optional setting,
+`domainMapGatewayUrl`, names the operator's public gateway (for example
+`https://qdn.qortium.app`); pages served through the domain map use it for
+links, images and media that point at other resources, and the page's
+content-security policy allows images, media and frames from that one
+origin only. Scripts and data fetches stay same-origin. Domain-mapped pages
+also get the same read-only "interactive features need Home" handler the
+gateway already injects.
+
+Nothing changes for nodes without domain-map entries, for the gateway, or for
+Home's render path.
+
 ### 2026-09-04 - feat(qdn): expose authenticated publish artifacts for pre-signature verification
 
 Adds an API-key-protected, content-addressed download for the encrypted data

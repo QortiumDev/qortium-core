@@ -30,9 +30,17 @@ public class HTMLParser {
     private String accent;
     private String uiStyle;
     private boolean usingCustomRouting;
+    /** Public gateway origin for cross-resource links on domain-mapped pages; empty elsewhere. */
+    private String gatewayBase;
 
     public HTMLParser(String resourceId, String inPath, String prefix, boolean includeResourceIdInPrefix, byte[] data,
                       String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent, String uiStyle) {
+        this(resourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize, accent, uiStyle, null);
+    }
+
+    public HTMLParser(String resourceId, String inPath, String prefix, boolean includeResourceIdInPrefix, byte[] data,
+                      String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent, String uiStyle,
+                      String gatewayBase) {
         String inPathWithoutFilename = inPath.contains("/") ? inPath.substring(0, inPath.lastIndexOf('/')) : String.format("/%s",inPath);
 
         // For the render and gateway contexts with a non-default identifier, fold the identifier into the
@@ -61,6 +69,12 @@ public class HTMLParser {
         this.accent = accent;
         this.uiStyle = uiStyle;
         this.usingCustomRouting = usingCustomRouting;
+        this.gatewayBase = gatewayBase != null ? gatewayBase : "";
+    }
+
+    /** Contexts served by a public node with no signed-in account: the gateway and any domain-mapped host. */
+    private boolean isPublicReadOnlyContext() {
+        return Objects.equals(this.qdnContext, "gateway") || Objects.equals(this.qdnContext, "domainMap");
     }
 
     public void addAdditionalHeaderTags() {
@@ -75,8 +89,9 @@ public class HTMLParser {
                     .attr("src", String.format("/apps/q-apps.js?time=%d", System.currentTimeMillis()));
             headElement.prependChild(qAppsScriptElement);
 
-            // Add q-apps gateway script tag if in gateway mode
-            if (Objects.equals(this.qdnContext, "gateway")) {
+            // Add q-apps gateway script tag (the "interactive features need Home" handler) when served by a
+            // public node: the gateway itself, or a domain-mapped vanity host in front of it
+            if (isPublicReadOnlyContext()) {
                 Element qAppsGatewayScriptElement = new Element("script")
                         .attr("src", String.format("/apps/q-apps-gateway.js?time=%d", System.currentTimeMillis()));
                 headElement.prependChild(qAppsGatewayScriptElement);
@@ -84,7 +99,7 @@ public class HTMLParser {
 
             // Escape and add vars
             String qdnContextVar = String.format(
-                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnTextSize=%s; var _qdnAccent=%s; var _qdnUiStyle=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s;",
+                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnTextSize=%s; var _qdnAccent=%s; var _qdnUiStyle=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s; var _qdnGatewayBase=%s;",
                 javaScriptStringLiteral(this.qdnContext),
                 javaScriptStringLiteral(this.theme),
                 javaScriptStringLiteral(this.lang),
@@ -96,7 +111,8 @@ public class HTMLParser {
                 javaScriptStringLiteral(this.identifier),
                 javaScriptStringLiteral(this.path),
                 javaScriptStringLiteral(this.qdnBase),
-                javaScriptStringLiteral(this.qdnBaseWithPath)
+                javaScriptStringLiteral(this.qdnBaseWithPath),
+                javaScriptStringLiteral(this.gatewayBase)
               );
             Element qdnContextElement = new Element("script");
             qdnContextElement.appendChild(new DataNode(qdnContextVar));
