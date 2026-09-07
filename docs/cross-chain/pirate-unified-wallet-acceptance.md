@@ -116,28 +116,33 @@ network access.
 
 ## Published QDN bundle
 
-The reviewed official v1.2.0 runtime bundle is the publication currently
-pinned by `Settings.pirateChainWalletQdnSignature`. The `v1.2.1` republication
-of the same stable resource is a separate, gated step: until it lands, a Core
-built from this pin refuses the v1.2.0 QDN bundle because its manifest
-`release-tag` no longer matches `RELEASE_TAG`, so this pin must not ship to a
-Unified-enabled profile before the signature below is replaced.
-
-The v1.2.0 bundle is published on Qortium Previewnet
+The reviewed official v1.2.1 runtime bundle is published on Qortium Previewnet
 as `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` at immutable
 transaction signature
-`3FEsot2pkqPNwtHKuLGTsaRwMTRpK6Kv6dUVp3mps1BHKoCEq5j3QgwJDjMZRwe2ftpvZouLTqG42JphjfAFVQe3`.
-It confirmed at height `116682` with fee zero and MemoryPoW nonce `2674`. This
-supersedes the v1.1.9 publication at
+`bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a`.
+It confirmed at height `119890` with fee zero and MemoryPoW nonce `2802`, and
+its stored payload is `363130291` bytes across `694` chunks. This supersedes
+the v1.2.0 publication at
+`3FEsot2pkqPNwtHKuLGTsaRwMTRpK6Kv6dUVp3mps1BHKoCEq5j3QgwJDjMZRwe2ftpvZouLTqG42JphjfAFVQe3`
+(height `116682`) and the v1.1.9 publication at
 `3QtMvKDTMUG6V48SKPCwMTPgiqNYdaCwyXfpssfuGD13d7ZL31kk48cuRpuzxy8qnSGg4qgZKEUJ8zYJ7UDQ9aBk`
-(height `111063`), which remains immutable on chain but is no longer pinned.
+(height `111063`), both of which remain immutable on chain but are no longer
+pinned.
 
-Regxa and Netcup independently reached `READY` at 694/694 chunks. On both
-nodes, the signature-keyed encrypted transaction payload matched the on-chain
-data hash, and every file in the authenticated/decrypted bundle matched the
-reviewed staged artifact. Core pins this transaction as the default bundle
-source while retaining `pirateChainWalletUnified=false`; carrying the pin does
-not load the library, start a wallet, or enable ARRR.
+The transaction was built from a staging copy of the reviewed bundle on the
+Regxa seed (hash-verified after transfer), its MemoryPoW nonce was computed
+there, the computed bytes were signed on the publishing workstation with the
+established `QortiumHomeTest` identity, and the signed bytes were processed
+through Regxa, in that order. Each stage was decoded before the next; the
+decodes differed only in the nonce and then only in the signature.
+
+Regxa reached `READY` at 694/694. Its complete signature-keyed payload file
+hashes exactly to the decoded on-chain data hash, and every file streamed
+back through its loopback API, including `QORTIUM-MANIFEST.txt`, matched the
+reviewed staged bundle byte for byte. Netcup independently reached `READY` at 694/694 with the identical payload hash and identical streamed file hashes, and a third node (the NAT'd publishing workstation's local node) also retrieved and byte-matched the full resource from Regxa. Core pins this
+transaction as the default bundle source while retaining
+`pirateChainWalletUnified=false`; carrying the pin does not load the library,
+start a wallet, or enable ARRR.
 
 ## Closed gate: legacy address reads after a recovery
 

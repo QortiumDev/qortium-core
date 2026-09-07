@@ -59,9 +59,12 @@ published signing key before use, the archive was rechecked against the signed
 checksum, and the acceptance harness was rerun against the new artifact with
 the real native library on this host. The reviewed-payload table in the
 acceptance document, which had not been refreshed for `v1.2.0`, now lists the
-`v1.2.1` entries. The Qortium Previewnet QDN republication and its transaction
-signature are a separate follow-up; until it lands this pin must not ship to a
-Unified-enabled profile. Unified and ARRR remain disabled by default.
+`v1.2.1` entries. The bundle was then republished to Qortium Previewnet as the
+same stable `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` resource,
+byte-verified on the publishing seed, independently retrieved on a second
+seed, and its transaction signature pinned here as the default bundle source.
+Unified and ARRR remain disabled by default; carrying the new pin does not
+load native code, start a wallet, or move funds.
 
 ### 2026-09-05 - feat(qdn): let domain-mapped hosts front apps and link back to the gateway
 
