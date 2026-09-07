@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-07 - fix(test): make the chat wrong-nonce signature check deterministic
+
+Fixes a rare failure in the chat service test that proves a correctly signed
+message with the wrong proof-of-work nonce is rejected. The test signed a
+message at the current time and left the helper's zero nonce in place, so about
+one run in 256 the zero nonce happened to satisfy the difficulty-8 proof of
+work and the rejection it was asserting did not happen. It now swaps in the
+smallest nonce that provably fails the proof of work for that exact message,
+which the signature does not cover, so the outcome no longer depends on the
+clock. No production code changes.
+
 ### 2026-09-06 - chore(arrr): move the pinned Pirate Unified bundle to official v1.2.1
 
 Moves the Pirate Unified native wallet bundle Core pins from Pirate Network's
