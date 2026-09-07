@@ -4,19 +4,21 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.asset.Asset;
+import org.qortium.block.BlockChain;
 import org.qortium.chat.ChatService;
 import org.qortium.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortium.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortium.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortium.chat.crypto.PrivateGroupChatMembership;
 import org.qortium.chat.crypto.PrivateGroupChatRotationRequest;
+import org.qortium.crypto.MemoryPoW;
 import org.qortium.data.group.GroupAdminData;
 import org.qortium.data.group.GroupData;
 import org.qortium.data.group.GroupMemberData;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.ChatTransactionData;
-import org.qortium.group.Group;
 import org.qortium.group.Group.ApprovalThreshold;
+import org.qortium.group.Group;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -26,7 +28,10 @@ import org.qortium.test.common.GroupUtils;
 import org.qortium.test.common.TestAccount;
 import org.qortium.transaction.ChatTransaction;
 import org.qortium.transaction.Transaction.ValidationResult;
+import org.qortium.transform.TransformationException;
 import org.qortium.transform.Transformer;
+import org.qortium.transform.transaction.ChatTransactionTransformer;
+import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
@@ -87,6 +92,10 @@ public class ChatServiceTests extends Common {
 
 			ChatTransactionData incorrectNonceData = unsignedChat(alice, Group.NO_GROUP, null, "incorrect nonce", now(), null);
 			new ChatTransaction(repository, incorrectNonceData).sign(alice);
+			// The signature does not cover the nonce, so swapping in a nonce that provably fails the
+			// proof of work keeps the signature valid while making the outcome deterministic. Leaving the
+			// helper's zero nonce in place passed the difficulty-8 check about one run in 256.
+			incorrectNonceData.setNonce(nonceFailingProofOfWork(incorrectNonceData));
 			assertFalse(CHAT_SERVICE.isSignatureValid(repository, incorrectNonceData));
 		}
 	}
@@ -459,6 +468,22 @@ public class ChatServiceTests extends Common {
 
 		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, recipient, null,
 				data, isText, isEncrypted);
+	}
+
+	/** Smallest nonce that does not satisfy the chat proof of work for this transaction's signing bytes. */
+	private static int nonceFailingProofOfWork(ChatTransactionData chatData) {
+		byte[] transactionBytes;
+		try {
+			transactionBytes = TransactionTransformer.toBytesForSigning(chatData);
+		} catch (TransformationException e) {
+			throw new AssertionError(e);
+		}
+		ChatTransactionTransformer.clearNonce(transactionBytes);
+		int difficulty = BlockChain.getInstance().getChatPowDifficulty();
+		for (int nonce = 0; nonce < 1024; nonce++)
+			if (!MemoryPoW.verify2(transactionBytes, ChatTransaction.POW_BUFFER_SIZE, difficulty, nonce))
+				return nonce;
+		throw new AssertionError("Every nonce below 1024 satisfies the chat proof of work");
 	}
 
 	private static long now() {
