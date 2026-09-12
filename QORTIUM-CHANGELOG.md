@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-12 - test(arrr): isolate the native upgrade acceptance environment
+
+Runs the disposable release-upgrade check with only its required environment
+and temporary paths, so unrelated wallet, transport, or Java settings cannot
+influence the old-wallet creation and new-library reopen checks.
+
+### 2026-09-12 - chore(arrr): prepare the official Stashi v1.2.3 native bundle
+
+Updates the Pirate native wallet artifact from official 1.2.1 to the bundle
+published with Stashi 1.2.3, which retains its 1.2.2 filename. The shared
+backend improves database migration safety and wallet storage handling.
+Adds a disposable old-wallet upgrade and reopen check and corrects the
+freshness tool to use verified official release bytes. Publishes the reviewed
+bundle to Previewnet, verifies the exact transaction payload and all eight
+files on Regxa and Netcup, and pins its confirmed signature in Core and the
+Previewnet profile. Core defaults remain disabled; the participant profile
+retains its existing enablement.
+
+
 ### 2026-09-07 - fix(test): make the chat wrong-nonce signature check deterministic
 
 Fixes a rare failure in the chat service test that proves a correctly signed
