@@ -179,6 +179,12 @@ public class ArbitraryDataStorageManager extends Thread {
             return false;
         }
 
+        // An explicit immutable-signature retention request overrides follow/view policy,
+        // but never the blocked-resource or public/private restrictions above.
+        if (this.isRetentionRequested(arbitraryTransactionData)) {
+            return true;
+        }
+
         // Check if our storage policy allows us to host data for this resource
         switch (Settings.getInstance().getStoragePolicy()) {
             case FOLLOWED_OR_VIEWED:
@@ -231,6 +237,12 @@ public class ArbitraryDataStorageManager extends Thread {
             return new ArbitraryDataExamination(false, "blocked");
         }
 
+        // Admission still respects the normal storage threshold. This is eligibility only:
+        // the ordinary latest-resource prefetch sweep does not enumerate historical pins.
+        if (this.isRetentionRequested(arbitraryTransactionData)) {
+            return new ArbitraryDataExamination(true, "retained signature");
+        }
+
         switch (Settings.getInstance().getStoragePolicy()) {
             case FOLLOWED:
             case FOLLOWED_OR_VIEWED:
@@ -246,6 +258,17 @@ public class ArbitraryDataStorageManager extends Thread {
             default:
                 return new ArbitraryDataExamination(false, Settings.getInstance().getStoragePolicy().name());
         }
+    }
+
+    /** Whether an operator explicitly requested this exact immutable transaction. */
+    private boolean isRetentionRequested(ArbitraryTransactionData transactionData) {
+        byte[] signature = transactionData.getSignature();
+        return signature != null && Settings.getInstance().getQdnRetainedSignatures().contains(Base58.encode(signature));
+    }
+
+    /** Retention never overrides resource blocks or public/private hosting restrictions. */
+    public boolean isRetained(ArbitraryTransactionData transactionData) {
+        return this.isRetentionRequested(transactionData) && this.canStoreData(transactionData);
     }
 
     /**

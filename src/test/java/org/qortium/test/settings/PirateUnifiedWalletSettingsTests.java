@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
 
 public class PirateUnifiedWalletSettingsTests {
 	private static final String PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE =
-			"3wa1WVvaEnPSsqBiaWpDYiyLBWEKue3sAZPrZptZcfk1XuezVZuw6Ejod943U8x5DJ4VRV6GDPP9F687MkTFZaa4";
+			"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j";
 
 	static {
 		if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)

@@ -105,7 +105,7 @@ public class Settings {
 	private static final Logger LOGGER = LogManager.getLogger(Settings.class);
 	private static final String DEFAULT_SSL_KEYSTORE_PASSWORD = "default";
 	private static final String PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE =
-			"3wa1WVvaEnPSsqBiaWpDYiyLBWEKue3sAZPrZptZcfk1XuezVZuw6Ejod943U8x5DJ4VRV6GDPP9F687MkTFZaa4";
+			"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j";
 	private static final int GENERATED_SSL_KEYSTORE_PASSWORD_BYTES = 32;
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static final String SETTINGS_FILENAME = "settings.json";
@@ -577,6 +577,8 @@ public class Settings {
 
 	/** Storage policy to indicate which data should be hosted */
 	private String storagePolicy = "FOLLOWED_OR_VIEWED";
+	/** Exact dependency payloads protected from automatic cleanup; block policies still take precedence. */
+	private List<String> qdnRetainedSignatures = new ArrayList<>();
 
 	/** Whether, after publishing/holding our own resource, we proactively PUSH it out to a few
 	 * reachable (outbound, push-capable) peers so the data reaches the network even when this node
@@ -1873,6 +1875,7 @@ public class Settings {
 	}
 
 	private void validate() {
+		validateQdnRetainedSignatures();
 		normaliseBitcoinyNetworks();
 		normaliseBitcoinyServers();
 		if (Boolean.TRUE.equals(this.bootstrap) || (this.bootstrapHosts != null && this.bootstrapHosts.length > 0)
@@ -2072,6 +2075,31 @@ public class Settings {
 
 		if (this.maxStorageCapacity != null && this.maxStorageCapacity < 1)
 			throwValidationError("maxStorageCapacity must be at least 1 byte");
+	}
+
+	private void validateQdnRetainedSignatures() {
+		if (this.qdnRetainedSignatures == null)
+			throwValidationError("qdnRetainedSignatures must be an array; use [] to retain none");
+		Set<String> seen = new HashSet<>();
+		for (String value : this.qdnRetainedSignatures) {
+			if (value == null || value.isBlank() || !value.equals(value.trim()))
+				throwValidationError("qdnRetainedSignatures entries must be Base58-encoded transaction signatures");
+			final byte[] decoded;
+			try {
+				decoded = Base58.decode(value);
+			} catch (RuntimeException e) {
+				throwValidationError("qdnRetainedSignatures entries must be Base58-encoded transaction signatures");
+				return;
+			}
+			if (decoded.length != Transformer.SIGNATURE_LENGTH)
+				throwValidationError("qdnRetainedSignatures entries must decode to 64 bytes");
+			if (!seen.add(value))
+				throwValidationError("qdnRetainedSignatures must not contain duplicates");
+		}
+	}
+
+	public List<String> getQdnRetainedSignatures() {
+		return List.copyOf(this.qdnRetainedSignatures);
 	}
 
 	private void validatePirateUnifiedWalletSettings() {

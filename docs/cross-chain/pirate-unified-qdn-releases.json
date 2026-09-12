@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "targetRetainedVersions": 2,
+    "minimumUpgradeWindowDays": 30,
+    "retirementRequiresExplicitSupportEnd": true,
+    "windowStartsAt": "replacement stable Core release publication",
+    "automaticDelete": false
+  },
+  "current": {
+    "walletRelease": "v1.2.3",
+    "identifier": "pirate-unified-wallet-v1.2.3",
+    "signature": "24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j",
+    "blockHeight": 127321,
+    "replacementStableCoreRelease": null
+  },
+  "previous": {
+    "walletRelease": "v1.2.1",
+    "identifier": "pirate-unified-wallet",
+    "signature": "bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a",
+    "requiredByCoreReleases": [
+      "v1.8.0",
+      "v1.8.0-rc.1"
+    ],
+    "retireNotBefore": null
+  },
+  "transition": {
+    "genericDeleteAllowed": false,
+    "reason": "Released participant profiles pin historical data under the generic resource; deploy historical retention before considering retirement."
+  }
+}

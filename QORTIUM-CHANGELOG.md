@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-12 - fix(qdn): retain supported Pirate wallet publications
+
+Publishes the reviewed Stashi 1.2.3 bundle under an immutable version-specific
+identifier and updates its Core pin. Adds explicit signature retention so
+superseding a QDN resource cannot evict a supported wallet dependency. Seed
+profiles retain the new publication and the v1.2.1 signature shipped in Core
+1.8.0. Documents a two-version target with an upgrade window and explicit
+support retirement before deleting older publications. The generic resource
+is preserved because released participant profiles use it; no node deployment
+or DELETE transaction is included.
+
 ### 2026-09-12 - test(arrr): isolate the native upgrade acceptance environment
 
 Runs the disposable release-upgrade check with only its required environment

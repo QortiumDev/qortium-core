@@ -246,15 +246,13 @@ public class ArbitraryDataCleanupManager extends Thread {
 						}
 
 						// Check to see if we have had a more recent replacement
-						if (!mostRecentTransaction) {
+						if (this.deleteSupersededData(arbitraryTransactionData, mostRecentTransaction)) {
 							// There is a more recent transaction than the one we are currently processing.
 							// When a PUT or DELETE is issued, it replaces any layers that would have been there before.
 							// Therefore any data relating to this older transaction is no longer needed.
 							LOGGER.debug(String.format("Newer transaction found for %s %s since transaction %s. " +
 											"Deleting all files associated with the earlier transaction.", arbitraryTransactionData.getService(),
 									arbitraryTransactionData.getName(), Base58.encode(arbitraryTransactionData.getSignature())));
-
-							ArbitraryTransactionUtils.deleteCompleteFileAndChunks(arbitraryTransactionData);
 
 							Optional<ArbitraryTransactionDataHashWrapper> moreRecentPutTransaction
 								= processedTransactions.stream()
@@ -357,6 +355,15 @@ public class ArbitraryDataCleanupManager extends Thread {
 		}
 	}
 
+	/** Delete a superseded payload unless this node explicitly retains its signature. */
+	boolean deleteSupersededData(ArbitraryTransactionData transactionData, boolean mostRecentTransaction) throws DataException {
+		if (mostRecentTransaction || ArbitraryDataStorageManager.getInstance().isRetained(transactionData)) {
+			return false;
+		}
+		ArbitraryTransactionUtils.deleteCompleteFileAndChunks(transactionData);
+		return true;
+	}
+
 	public List<Path> findPathsWithNoAssociatedTransaction(Repository repository) {
 		List<Path> pathList = new ArrayList<>();
 
@@ -376,6 +383,9 @@ public class ArbitraryDataCleanupManager extends Thread {
 				}
 
 				String signature58 = path.getFileName().toString();
+				if (Settings.getInstance().getQdnRetainedSignatures().contains(signature58)) {
+					continue;
+				}
 				byte[] signature = Base58.decode(signature58);
 				TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
 				if (transactionData == null) {
@@ -436,7 +446,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 	 * @param directory - the base directory
 	 * @return boolean - whether a file was deleted
 	 */
-	private boolean deleteRandomFile(Repository repository, File directory, String name) {
+	boolean deleteRandomFile(Repository repository, File directory, String name) {
 		Path tempDataPath = Paths.get(Settings.getInstance().getTempDataPath());
 
 		// Pick a random directory
@@ -467,6 +477,11 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 			// If it's a file, we might be able to delete it
 			if (randomItem.isFile()) {
+
+				// Explicit retention also protects chunks and metadata from capacity eviction.
+				if (this.isRetainedFile(repository, randomItem)) {
+					return false;
+				}
 
 				// If the parent directory contains an ".original" file, don't delete anything
 				// This indicates that the content was originally updated by this node and so
@@ -522,6 +537,25 @@ public class ArbitraryDataCleanupManager extends Thread {
 			}
 		}
 		return false;
+	}
+
+	private boolean isRetainedFile(Repository repository, File file) {
+		String signature58 = file.toPath().toAbsolutePath().getParent().getFileName().toString();
+		if (!Settings.getInstance().getQdnRetainedSignatures().contains(signature58)) {
+			return false;
+		}
+		try {
+			TransactionData transactionData = repository.getTransactionRepository().fromSignature(Base58.decode(signature58));
+			// An unavailable transaction must not turn a configured retention request into data loss.
+			if (transactionData == null) {
+				return true;
+			}
+			return transactionData instanceof ArbitraryTransactionData
+					&& ArbitraryDataStorageManager.getInstance().isRetained((ArbitraryTransactionData) transactionData);
+		} catch (DataException e) {
+			LOGGER.debug("Unable to check retained transaction {} during capacity cleanup", signature58, e);
+			return true;
+		}
 	}
 
 	private void fireRandomItemDeletionNotification(File randomItem, Repository repository, String reason) {

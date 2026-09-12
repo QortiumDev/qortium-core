@@ -9,6 +9,7 @@ import org.qortium.settings.Settings;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -19,7 +20,7 @@ public class PreviewPirateUnifiedProfileTests {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<Map<String, Object>>() {};
 	private static final String PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE =
-			"3wa1WVvaEnPSsqBiaWpDYiyLBWEKue3sAZPrZptZcfk1XuezVZuw6Ejod943U8x5DJ4VRV6GDPP9F687MkTFZaa4";
+			"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j";
 
 	@After
 	public void restoreDefaultSettings() {
@@ -50,6 +51,15 @@ public class PreviewPirateUnifiedProfileTests {
 			Map<String, Object> settings = readSettings(Path.of(profile));
 			assertEquals(profile, Boolean.FALSE, walletSettings(settings).get("ARRR"));
 			assertFalse(profile, Boolean.TRUE.equals(settings.get("pirateChainWalletUnified")));
+		}
+	}
+
+	@Test
+	public void testSeedProfilesRetainCurrentAndSupportedPreviousBundle() throws Exception {
+		for (String profile : new String[] {"preview/settings-preview-seed.json", "preview/settings-preview-seed-netcup.json"}) {
+			Map<String, Object> settings = readSettings(Path.of(profile));
+			assertEquals(profile, List.of(PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE,
+					"bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a"), settings.get("qdnRetainedSignatures"));
 		}
 	}
 
