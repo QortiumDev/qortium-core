@@ -46,9 +46,11 @@ Updates the Pirate native wallet artifact from official 1.2.1 to the bundle
 published with Stashi 1.2.3, which retains its 1.2.2 filename. The shared
 backend improves database migration safety and wallet storage handling.
 Adds a disposable old-wallet upgrade and reopen check and corrects the
-freshness tool to use verified official release bytes. QDN publication and
-its new signature remain a merge prerequisite; the old signature cannot
-load the new bundle. ARRR and Unified remain disabled by default.
+freshness tool to use verified official release bytes. Publishes the reviewed
+bundle to Previewnet, verifies the exact transaction payload and all eight
+files on Regxa and Netcup, and pins its confirmed signature in Core and the
+Previewnet profile. Core defaults remain disabled; the participant profile
+retains its existing enablement.
 
 
 ### 2026-09-07 - fix(test): make the chat wrong-nonce signature check deterministic

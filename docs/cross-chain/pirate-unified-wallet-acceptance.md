@@ -137,14 +137,28 @@ bump the acknowledged version). `python3 tools/check-pirate-bundle-freshness.py
 --self-test` runs the comparison logic offline against fixtures with no
 network access.
 
-## Publication gate for this update
+## Published v1.2.3 QDN bundle
 
-**Do not merge or deploy this pin until the new QDN publication is verified.**
-The existing Settings and Previewnet transaction signature below still names
-the `v1.2.1` bundle. It cannot satisfy the new `v1.2.3` manifest metadata.
-Publish the reviewed staged bundle, verify exact retrieval, then update the
-signature in Settings, preview configuration, and their tests together.
-Native acceptance uses an isolated local fixture and does not publish it.
+The reviewed official v1.2.3 bundle is published on Qortium Previewnet as
+`ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` at immutable signature
+`3wa1WVvaEnPSsqBiaWpDYiyLBWEKue3sAZPrZptZcfk1XuezVZuw6Ejod943U8x5DJ4VRV6GDPP9F687MkTFZaa4`.
+It confirmed at height `127288` with fee zero and MemoryPoW nonce `1584`;
+the stored payload is `363388055` bytes across `695` chunks.
+
+Regxa built the transaction from the reviewed files after independently
+verifying the official ZIP and staged-file hashes. The nonce was computed
+before local signing; only the signed transaction was submitted to Regxa.
+Both Regxa and Netcup retrieved all 695 chunks. Each seed's signature-keyed
+payload matched the on-chain SHA-256; authenticated AES-GCM decryption and
+all eight ZIP file hashes matched the reviewed bundle, including manifest
+`4cb70e5e07dd8130e4b5a81ee7d08d16fb69b3553dc0be87910ad8246478c3b8`.
+Both nodes also served the matching manifest through their QDN APIs.
+
+Settings, the Previewnet profile, and their tests pin this v1.2.3 transaction.
+Core defaults remain disabled; the participant Previewnet profile retains its
+existing enablement. Existing installations with an
+explicit old signature retain that override until their deployment settings
+are updated; this source change does not deploy or enable any node.
 
 ## Previously published QDN bundle
 
@@ -171,7 +185,7 @@ decodes differed only in the nonce and then only in the signature.
 Regxa reached `READY` at 694/694. Its complete signature-keyed payload file
 hashes exactly to the decoded on-chain data hash, and every file streamed
 back through its loopback API, including `QORTIUM-MANIFEST.txt`, matched the
-reviewed staged bundle byte for byte. Netcup independently reached `READY` at 694/694 with the identical payload hash and identical streamed file hashes, and a third node (the NAT'd publishing workstation's local node) also retrieved and byte-matched the full resource from Regxa. Core pins this
+reviewed staged bundle byte for byte. Netcup independently reached `READY` at 694/694 with the identical payload hash and identical streamed file hashes, and a third node (the NAT'd publishing workstation's local node) also retrieved and byte-matched the full resource from Regxa. That update pinned this
 transaction as the default bundle source while retaining
 `pirateChainWalletUnified=false`; carrying the pin does not load the library,
 start a wallet, or enable ARRR.
@@ -208,8 +222,8 @@ archive:
 
 ```sh
 tools/stage-pirate-unified-bundle.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
-  /absolute/new/path/pirate-unified-v1.2.1
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  /absolute/new/path/pirate-unified-v1.2.3
 ```
 
 The script verifies the archive size and SHA-256, refuses to overwrite output,
@@ -266,8 +280,8 @@ and byte-compares every staged payload to the matching archive entry:
 ```sh
 mvn -DskipTests=false \
   -Dqortium.runPirateUnifiedArtifactAcceptanceTests=true \
-  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
-  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.2.1 \
+  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.2.3 \
   -Dtest=PirateUnifiedArtifactAcceptanceTests \
   test
 ```
@@ -337,8 +351,8 @@ termination and secret-capable evidence deletion are both proven:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/new/path/pirate-unified-native-receipt.md \
   --native
 ```
@@ -349,8 +363,8 @@ is approved:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/new/path/pirate-unified-receipt.md
 ```
 
@@ -412,8 +426,8 @@ staged bundle, a new absolute receipt path, and the explicit `--native` marker:
 
 ```sh
 tools/run-pirate-production-native-interoperability-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/new/path/pirate-production-native-receipt.md \
   --native
 ```
@@ -457,8 +471,8 @@ Run the historical gate only from a clean Core commit:
 
 ```sh
 tools/run-pirate-unified-historical-restore-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/new/path/pirate-unified-historical-restore-receipt.md
 ```
 
@@ -506,7 +520,7 @@ anything. Prepare that fixture from an already validated staged bundle:
 
 ```sh
 tools/prepare-pirate-unified-local-qdn-fixture.sh \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/new/path/pirate-unified-local-qdn-fixture
 ```
 
@@ -539,8 +553,8 @@ loader against that fixture without network egress or wallet creation:
 
 ```sh
 tools/run-pirate-unified-packaged-loader-acceptance.sh \
-  /absolute/path/qortium-1.7.2.jar \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/qortium.jar \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-loader-receipt.md
 ```
@@ -574,8 +588,8 @@ bounded wallet-lifecycle gate:
 
 ```sh
 tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
-  /absolute/path/qortium-1.7.2.jar \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/qortium.jar \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-lifecycle-receipt.md
 ```
@@ -724,7 +738,7 @@ fixture:
 ```sh
 tools/run-pirate-unified-packaged-real-legacy-migration-acceptance.sh \
   /absolute/path/qortium.jar \
-  /absolute/path/pirate-unified-v1.2.1 \
+  /absolute/path/pirate-unified-v1.2.3 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/path/reviewed-legacy-bundle \
   /absolute/path/protected-v8-metadata.json \
