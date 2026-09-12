@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-12 - test(arrr): isolate the native upgrade acceptance environment
+
+Runs the disposable release-upgrade check with only its required environment
+and temporary paths, so unrelated wallet, transport, or Java settings cannot
+influence the old-wallet creation and new-library reopen checks.
+
 ### 2026-09-12 - chore(arrr): prepare the official Stashi v1.2.3 native bundle
 
 Updates the Pirate native wallet artifact from official 1.2.1 to the bundle

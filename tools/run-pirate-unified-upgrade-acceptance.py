@@ -43,8 +43,11 @@ def main():
         with tempfile.TemporaryDirectory(prefix=".pirate-upgrade-", dir=args.receipt.parent) as temporary:
             root = Path(temporary)
             (root / "java-home").mkdir()
+            (root / "tmp").mkdir()
             os.chmod(root, 0o700)
-            env = os.environ.copy()
+            # Do not inherit unrelated wallet/transport settings or Java options.
+            # All native storage/cache/config paths and Java's home are explicit.
+            env = {"PATH": os.environ.get("PATH", os.defpath), "LANG": "C.UTF-8"}
             for variable, relative in {
                 "XDG_DATA_HOME": "xdg-data", "XDG_CONFIG_HOME": "xdg-config",
                 "XDG_CACHE_HOME": "xdg-cache", "PIRATE_WALLET_DB_DIR": "native-fallback",
@@ -55,6 +58,7 @@ def main():
                 env[variable] = str(directory)
             env["PIRATE_WALLET_DB_PATH"] = str(root / "native-fallback/wallet.db")
             env["PIRATE_DEBUG_LOG_PATH"] = str(root / "native-debug.log")
+            env["TMPDIR"] = str(root / "tmp")
             for phase in ("create", "upgrade", "reopen"):
                 artifact = args.old_artifact if phase == "create" else args.artifact
                 bundle = args.old_bundle if phase == "create" else args.bundle
@@ -63,6 +67,7 @@ def main():
                            "-Dmaven.repo.local=" + str(maven_repo),
                            "-Dmaven.gitcommitid.nativegit=true",
                            "-Duser.home=" + str(root / "java-home"),
+                           "-Djava.io.tmpdir=" + str(root / "tmp"),
                            "-Dsurefire.reportNameSuffix=" + phase_suffix,
                            "-Dtest=PirateUnifiedUpgradeAcceptanceTests",
                            "-Dqortium.runPirateUnifiedUpgradeAcceptanceTests=true",
