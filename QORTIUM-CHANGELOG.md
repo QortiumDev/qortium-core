@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-12 - chore(arrr): prepare the official Stashi v1.2.3 native bundle
+
+Updates the Pirate native wallet artifact from official 1.2.1 to the bundle
+published with Stashi 1.2.3, which retains its 1.2.2 filename. The shared
+backend improves database migration safety and wallet storage handling.
+Adds a disposable old-wallet upgrade and reopen check and corrects the
+freshness tool to use verified official release bytes. QDN publication and
+its new signature remain a merge prerequisite; the old signature cannot
+load the new bundle. ARRR and Unified remain disabled by default.
+
+
 ### 2026-09-07 - fix(test): make the chat wrong-nonce signature check deterministic
 
 Fixes a rare failure in the chat service test that proves a correctly signed

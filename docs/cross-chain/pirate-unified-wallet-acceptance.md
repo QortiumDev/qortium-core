@@ -7,54 +7,52 @@ transactions, deployment, and default enablement remain separate decisions.
 
 ## Pinned artifact
 
-- Release tag: `v1.2.1`
-- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip`
-- Size: `363257276` bytes
-- SHA-256: `871eafe7d4b18e383f3810a31a95f058e5d10b37cbb8ac101ad01206ac235bef`
-- URL: `https://github.com/PirateNetwork/Stashi-Wallet/releases/download/v1.2.1/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip`
+- Release tag: `v1.2.3`
+- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip`
+- Size: `363529930` bytes
+- SHA-256: `faedb4548903de75c4dd90ac4faff2b938612afaccc3519462408e45a26e982b`
+- URL: `https://github.com/PirateNetwork/Stashi-Wallet/releases/download/v1.2.3/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip`
 
-Provenance: this is the official PirateNetwork `v1.2.1` release artifact,
-built from commit `087db97dc246abd4198f96d4baf86af08e7c4430` by release
-workflow run
-[`33989963044`](https://github.com/PirateNetwork/Stashi-Wallet/actions/runs/33989963044).
-Between `v1.2.0` and `v1.2.1` upstream renamed the repository from
-`PirateNetwork/Pirate-Unified-Light-Wallet` to `PirateNetwork/Stashi-Wallet`
-(the old path redirects) and kept the same release signing key. The release
-ZIP and checksum manifest signatures verify under Pirate Unified's published
-signing fingerprint `E4FB2399AECCF9B9447DED472CE65343401553A6`, the same key
-that signed `v1.1.9` and `v1.2.0`; the upstream release `README` states that
-the fingerprint is the authoritative identifier across the rebrand.
+The official Stashi `v1.2.3` release intentionally reuses the `v1.2.2` JNI
+artifact with its original filename. Release tag and asset version are
+independent: do not rename this asset to `v1.2.3`. The `v1.2.2` and `v1.2.3`
+release assets have the same SHA-256. Release tag `v1.2.3` resolves to commit
+`73560800f0d3c73a0de7932c4cf1e7e2222228d1`; its successful release workflow is
+[`34668376882`](https://github.com/PirateNetwork/Stashi-Wallet/actions/runs/34668376882).
+The established upstream signing fingerprint is
+`E4FB2399AECCF9B9447DED472CE65343401553A6`. Verify both the checksum manifest
+and the artifact's detached signature against that fingerprint before use.
 
-`v1.2.1` does not touch the `pirate-qortal-jni` crate: Core's JNI adapter
-surface, every request Core issues, and every response field Core reads keep
-their names and semantics. What changes beneath it is the wallet service and
-storage: schema `40` -> `41` adds a durable sync-interruption latch to
-`spendability_state`, so after a failed or interrupted synchronization
-`get_spendability_status` reports `spendable=false` (reason
-`ERR_SYNC_FINALIZING`) until an anchor is revalidated -- Core reads only the
-boolean fields, so this makes its spendability gate stricter, never more
-permissive. The recorded known chain tip is now written only from a
-server-validated snapshot, on both the foreground and background sync paths,
-and survives a zero-block sync; a synchronization that fails before reaching
-a server leaves the tip unknown and verified key imports refused. Core's
-known-new initialization takes its height from Core's own light client rather
-than the wallet's recorded tip, so it is unaffected. The rest of the release
-(view-only onboarding protection, restored key-group display, endpoint health
-recovery, desktop update prompts, Windows packaging, SBOM extraction, the
-removed orphaned `pirate-ffi-frb` crate) is invisible to Core.
+The `pirate-qortal-jni` subtree is unchanged from `v1.2.1`, but its shared
+backend dependencies change in `v1.2.2`. Storage schema `41` -> `42` adds an
+encrypted payment-disclosure table. Migration startup serializes concurrent
+upgrades and propagates schema-read failures instead of treating them as a
+new database. Shared service fixes also cover key/disclosure encryption
+rotation and watch-only address derivation. These changes require native
+upgrade and reopen acceptance; unchanged JNI source alone is not sufficient.
+
+The shared sync client's Auto endpoint improvements do not enable automatic
+failover in Core: JNI still configures a single endpoint. No Rust crate
+changes occur between `v1.2.2` and `v1.2.3`; the latter fixes the Stashi desktop
+updater, Android send input focus, and React Native package metadata.
 
 The exact release payloads are:
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
 | `LICENSE-qortal-jni.txt` | 1081 | `5ee51e5067dd67cbf94640328494418539c708c7ec420e8a30c808866b384ab0` |
-| `librust-linux-aarch64.so` | 111942288 | `8c3d5426034ca458b612b0799aad4c907714e58b9ce581172808c4a1ca744daf` |
-| `librust-linux-x86_64.so` | 114428400 | `56fdb33a09d59b6e67a11ad4be49ff09b4630b79262b58498061a53e8c65cab4` |
-| `librust-macos-aarch64.dylib` | 100363552 | `2ed35db7aece795bc7119d177f2f2685ed931b8989203c65bdb9b93ead903078` |
-| `librust-macos-x86_64.dylib` | 102896716 | `ecc8ddf9bcdd10edc23432b6ec43b111fa2aefeccf749bb111da92767bf8c749` |
-| `librust-windows-x86_64.dll` | 104859136 | `1ede91971c6aa0b9b43028a5239075545cdebff650b63b7ca109bd8319e4568f` |
-| `qortal-handoff.md` | 12839 | `bd25c2af9513c16bd31d78cd2913c1f9128e1f749c9672c33dc9e55a35b2d20f` |
 | `LiteWalletJni.java` | 1551 | `2aa1768c72a5d900367b0f068c6f430230d03d63f9df2ab773004c049fe9091e` |
+| `librust-linux-aarch64.so` | 112107736 | `c574171bbc3949d13789aaa6783427f6f4c95ec44da167d0fe5c1f4d48416e22` |
+| `librust-linux-x86_64.so` | 114493504 | `5d39ba7e692a8f1aa8f833477aa6139ad1b287279333195584c0fe0c3ffe5dc7` |
+| `librust-macos-aarch64.dylib` | 100462496 | `af89fcd7e40345b6575bb7f7d570c5de3efae092d5f2c53ffe24cd1253ad2c5e` |
+| `librust-macos-x86_64.dylib` | 103093788 | `ca9165fab57b2d6f142131f9c41efef09e153718692f6d5aacc7c961e623a17c` |
+| `librust-windows-x86_64.dll` | 104994304 | `9b431481fc983cbc74abceb2ce81228e75c56601265f583eb37cb6b969923b3f` |
+| `qortal-handoff.md` | 12839 | `bd25c2af9513c16bd31d78cd2913c1f9128e1f749c9672c33dc9e55a35b2d20f` |
+
+The superseded official `v1.2.1` artifact (size `363257276`, SHA-256
+`871eafe7d4b18e383f3810a31a95f058e5d10b37cbb8ac101ad01206ac235bef`, source
+`087db97dc246abd4198f96d4baf86af08e7c4430`, release workflow `33989963044`)
+is retained for provenance and disposable upgrade acceptance.
 
 The superseded official `v1.2.0` artifact (size `363186519`, SHA-256
 `646fd1ba49641b8b4d5859355fc78d6aba92bb858ab1fc75a388e27ab462f76c`, built
@@ -78,6 +76,31 @@ contains the upstream bug unfixed; and before them the official
 predates the verified spending-key import. The pin file is
 `tools/pirate-unified-artifact.properties`.
 
+## Disposable release upgrade acceptance
+
+On Linux x86_64, run this separately from every other Maven command in the
+same worktree:
+
+```sh
+MAVEN_ARGS=-Dmaven.gitcommitid.nativegit=true python3 tools/run-pirate-unified-upgrade-acceptance.py \
+  --old-artifact /absolute/v1.2.1/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
+  --old-bundle /absolute/v1.2.1/staged-bundle \
+  --artifact /absolute/v1.2.3/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
+  --bundle /absolute/v1.2.3/staged-bundle \
+  --receipt /absolute/new-upgrade-receipt.json --native
+```
+
+The runner executes three independent JVMs: the pinned old library creates
+and syncs a synthetic-note wallet, then the new library opens that existing
+encrypted database twice. It verifies the wallet identity, birthday, key
+identity, key group, synthetic balance and transaction persist without a
+mnemonic restore or history rescan. Artifacts are hash-verified before native
+execution. Disposable wallet state and raw logs are removed; the receipt
+contains only validation evidence. The database uses SQLCipher, so this test
+does not directly query its schema version. The `41` -> `42` transition is
+established by upstream source; persistence is measured by this test.
+Downgrade compatibility and funded transactions are outside its scope.
+
 ## Upstream freshness watcher
 
 A scheduled, non-gating check (`.github/workflows/pirate-bundle-freshness.yml`,
@@ -94,7 +117,7 @@ never blocks a build or a release.
 `tools/pirate-bundle-freshness.json` holds an `acknowledgedUpstreamVersion`,
 the same deliberate-deferral pattern Home uses for its i2pd freshness check.
 It lets maintainers see and consciously accept a known upstream gap (for
-example, while a fork rebase or acceptance pass for the new release is in
+example, while artifact verification or acceptance for the new release is in
 progress) without the scheduled job going red every week for something
 already being worked on. Bump it only when a newer upstream release has been
 reviewed and either the pin is updated to match, or the gap is knowingly
@@ -108,13 +131,22 @@ python3 tools/check-pirate-bundle-freshness.py
 
 Exit code `0` means the pin (or an explicit acknowledgement) already covers
 the latest upstream release; exit code `1` means upstream has moved and lists
-the repin steps (rebase fork, build bundle, run the acceptance harness above,
-republish to QDN byte-exact, repin `RELEASE_TAG`/size/SHA-256/QDN signature,
+the repin steps (verify the official signed artifact and its actual filename,
+run acceptance, stage and republish the official bytes to QDN when authorized, repin `RELEASE_TAG`/size/SHA-256/QDN signature,
 bump the acknowledged version). `python3 tools/check-pirate-bundle-freshness.py
 --self-test` runs the comparison logic offline against fixtures with no
 network access.
 
-## Published QDN bundle
+## Publication gate for this update
+
+**Do not merge or deploy this pin until the new QDN publication is verified.**
+The existing Settings and Previewnet transaction signature below still names
+the `v1.2.1` bundle. It cannot satisfy the new `v1.2.3` manifest metadata.
+Publish the reviewed staged bundle, verify exact retrieval, then update the
+signature in Settings, preview configuration, and their tests together.
+Native acceptance uses an isolated local fixture and does not publish it.
+
+## Previously published QDN bundle
 
 The reviewed official v1.2.1 runtime bundle is published on Qortium Previewnet
 as `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` at immutable
