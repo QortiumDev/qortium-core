@@ -1,4 +1,8 @@
 {
+  "qdnRetainedSignatures": [
+    "24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j",
+    "bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a"
+  ],
   "listenPort": 24892,
   "listenDataPort": 24894,
   "apiPort": 24891,

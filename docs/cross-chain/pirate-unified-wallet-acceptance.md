@@ -140,9 +140,9 @@ network access.
 ## Published v1.2.3 QDN bundle
 
 The reviewed official v1.2.3 bundle is published on Qortium Previewnet as
-`ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` at immutable signature
-`3wa1WVvaEnPSsqBiaWpDYiyLBWEKue3sAZPrZptZcfk1XuezVZuw6Ejod943U8x5DJ4VRV6GDPP9F687MkTFZaa4`.
-It confirmed at height `127288` with fee zero and MemoryPoW nonce `1584`;
+`ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet-v1.2.3` at immutable signature
+`24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j`.
+It confirmed at height `127321` with fee zero and MemoryPoW nonce `315`;
 the stored payload is `363388055` bytes across `695` chunks.
 
 Regxa built the transaction from the reviewed files after independently
@@ -159,6 +159,9 @@ Core defaults remain disabled; the participant Previewnet profile retains its
 existing enablement. Existing installations with an
 explicit old signature retain that override until their deployment settings
 are updated; this source change does not deploy or enable any node.
+
+See [publication and retention policy](pirate-unified-qdn-retention.md) for
+the supported-release window and the generic-resource transition.
 
 ## Previously published QDN bundle
 
