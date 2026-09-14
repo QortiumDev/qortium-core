@@ -56,7 +56,7 @@
 		<maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
 		<maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
 		<maven-package-info-plugin.version>1.1.0</maven-package-info-plugin.version>
-		<versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
+		<versions-maven-plugin.version>2.22.0</versions-maven-plugin.version>
 		<maven-reproducible-build-plugin.version>0.17</maven-reproducible-build-plugin.version>
 		<maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
 		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
