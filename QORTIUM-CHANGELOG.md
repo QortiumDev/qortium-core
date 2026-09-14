@@ -34,6 +34,23 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-14 - feat(arrr): let an interrupted verified key import be retried after restart
+
+A verified Pirate spending-key import that was interrupted (Core stopped,
+recovery cancelled or still pending) can now be retried with the exact same
+request and receive the native wallet's own "already imported / still
+pending" verdict instead of being blocked by the synchronized-wallet gate. The
+wallet remembers which light server it last synchronized against, so a
+restarted node that reselects that server can finish the pending recovery
+without first replaying a full synchronization; a different or merely
+selected server still requires a fresh synchronization. A first import still
+needs a fully synchronized wallet, and balance, history and send stay blocked
+until the recovery replay completes. Adds recovery-barrier tests, storage
+round-trip tests, and an acceptance-only pipe plus script that push an
+encrypted legacy Qortal v8 wallet through a disposable packaged Core's
+loopback import endpoint (secret material stays in memory; receipts are
+redacted).
+
 ### 2026-09-12 - fix(qdn): retain supported Pirate wallet publications
 
 Publishes the reviewed Stashi 1.2.3 bundle under an immutable version-specific

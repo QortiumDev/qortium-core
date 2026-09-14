@@ -6,13 +6,20 @@ import cash.z.wallet.sdk.rpc.Service;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
+import io.grpc.StatusRuntimeException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ClientCalls;
 import org.junit.Test;
 
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -21,6 +28,126 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class PirateUnifiedLoopbackLightwalletdTests {
+
+	@Test
+	public void testRecoveryBarrierCompletesOnlyTheExactReleasedRange() throws Exception {
+		Path control = Files.createTempDirectory("pirate-recovery-release-test");
+		Files.writeString(control.resolve("expected-start"),
+				Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT));
+		Files.createFile(control.resolve("armed"));
+		Files.createFile(control.resolve("release"));
+		try (PirateUnifiedLoopbackLightwalletd fixture =
+				new PirateUnifiedLoopbackLightwalletd(0, "regtest", "main",
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT, control)) {
+			URI endpoint = URI.create(fixture.endpoint());
+			ManagedChannel channel = ManagedChannelBuilder.forAddress(endpoint.getHost(), endpoint.getPort())
+					.usePlaintext().build();
+			try {
+				MethodDescriptor<Service.BlockRange, CompactFormats.CompactBlock> pirateRange =
+						CompactTxStreamerGrpc.getGetBlockRangeMethod().toBuilder()
+								.setFullMethodName(MethodDescriptor.generateFullMethodName(
+										PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetBlockRange"))
+								.setSchemaDescriptor(null)
+								.build();
+				Service.BlockRange exactRange = range(
+						PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT,
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT);
+				Iterator<CompactFormats.CompactBlock> blocks = ClientCalls.blockingServerStreamingCall(
+						channel, pirateRange, io.grpc.CallOptions.DEFAULT, exactRange);
+				int count = 0;
+				while (blocks.hasNext()) {
+					blocks.next();
+					count++;
+				}
+				assertEquals(4, count);
+				assertEquals(1, fixture.recoveryBarrierEntryCount());
+				assertEquals(1, fixture.recoveryBarrierCompletionCount());
+				assertEquals(0, fixture.recoveryBarrierCancellationCount());
+
+				Service.BlockRange wrongRange = range(
+						PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT + 1L,
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT);
+				assertThrows(StatusRuntimeException.class, () -> ClientCalls.blockingServerStreamingCall(
+						channel, pirateRange, io.grpc.CallOptions.DEFAULT, wrongRange).hasNext());
+				assertEquals(1, fixture.recoveryBarrierEntryCount());
+			} finally {
+				channel.shutdownNow();
+				channel.awaitTermination(10, TimeUnit.SECONDS);
+			}
+		} finally {
+			Files.deleteIfExists(control.resolve("release"));
+			Files.deleteIfExists(control.resolve("armed"));
+			Files.deleteIfExists(control.resolve("expected-start"));
+			Files.deleteIfExists(control);
+		}
+	}
+
+	@Test
+	public void testRecoveryBarrierObservesAndCancelsAnEnteredPirateRange() throws Exception {
+		Path control = Files.createTempDirectory("pirate-recovery-barrier-test");
+		Files.writeString(control.resolve("expected-start"),
+				Long.toString(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT));
+		Files.createFile(control.resolve("armed"));
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		try (PirateUnifiedLoopbackLightwalletd fixture =
+				new PirateUnifiedLoopbackLightwalletd(0, "regtest", "main",
+						PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT, control)) {
+			URI endpoint = URI.create(fixture.endpoint());
+			ManagedChannel channel = ManagedChannelBuilder.forAddress(endpoint.getHost(), endpoint.getPort())
+					.usePlaintext().build();
+			try {
+				MethodDescriptor<Service.BlockID, Service.TreeState> pirateTreeState =
+						CompactTxStreamerGrpc.getGetTreeStateMethod().toBuilder()
+								.setFullMethodName(MethodDescriptor.generateFullMethodName(
+										PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetTreeState"))
+								.setSchemaDescriptor(null)
+								.build();
+				Service.TreeState treeState = ClientCalls.blockingUnaryCall(channel, pirateTreeState,
+						io.grpc.CallOptions.DEFAULT, Service.BlockID.newBuilder()
+								.setHeight(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT - 1L)
+								.build());
+				assertEquals(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT - 1L, treeState.getHeight());
+				assertEquals("main", treeState.getNetwork());
+				assertEquals("00", treeState.getTree());
+				long recoveryCheckpoint = PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT - 6L;
+				Service.TreeState recoveryTreeState = ClientCalls.blockingUnaryCall(channel, pirateTreeState,
+						io.grpc.CallOptions.DEFAULT,
+						Service.BlockID.newBuilder().setHeight(recoveryCheckpoint).build());
+				assertEquals(recoveryCheckpoint, recoveryTreeState.getHeight());
+				assertEquals("00", recoveryTreeState.getTree());
+				assertEquals(recoveryCheckpoint, fixture.recoveryTreeStateLastHeight());
+
+				MethodDescriptor<Service.BlockRange, CompactFormats.CompactBlock> pirateRange =
+						CompactTxStreamerGrpc.getGetBlockRangeMethod().toBuilder()
+								.setFullMethodName(MethodDescriptor.generateFullMethodName(
+										PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE, "GetBlockRange"))
+								.setSchemaDescriptor(null)
+								.build();
+				Service.BlockRange range = Service.BlockRange.newBuilder()
+						.setStart(Service.BlockID.newBuilder()
+								.setHeight(PirateUnifiedLoopbackLightwalletd.SAPLING_ACTIVATION_HEIGHT))
+						.setEnd(Service.BlockID.newBuilder()
+								.setHeight(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT))
+						.build();
+				Future<Boolean> blocked = executor.submit(() -> ClientCalls.blockingServerStreamingCall(
+						channel, pirateRange, io.grpc.CallOptions.DEFAULT, range).hasNext());
+				awaitCount(fixture::recoveryBarrierEntryCount, 1);
+				assertEquals(0, fixture.recoveryBarrierCancellationCount());
+				channel.shutdownNow();
+				awaitCount(fixture::recoveryBarrierCancellationCount, 1);
+				assertThrows(ExecutionException.class, () -> blocked.get(10, TimeUnit.SECONDS));
+				assertEquals(0, fixture.pirateScannedBlockCount());
+			} finally {
+				channel.shutdownNow();
+				channel.awaitTermination(10, TimeUnit.SECONDS);
+			}
+		} finally {
+			executor.shutdownNow();
+			Files.deleteIfExists(control.resolve("armed"));
+			Files.deleteIfExists(control.resolve("expected-start"));
+			Files.deleteIfExists(control);
+		}
+	}
 
 	@Test
 	public void testHistoricalModeServesOneWellFormedCompactNote() throws Exception {
@@ -216,5 +343,19 @@ public class PirateUnifiedLoopbackLightwalletdTests {
 		while (blocks.hasNext())
 			assertEquals(expectedHeight++, blocks.next().getHeight());
 		assertEquals(PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT + 1, expectedHeight);
+	}
+
+	private static void awaitCount(java.util.function.IntSupplier supplier, int expected) throws Exception {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+		while (supplier.getAsInt() < expected && System.nanoTime() < deadline)
+			Thread.sleep(10L);
+		assertEquals(expected, supplier.getAsInt());
+	}
+
+	private static Service.BlockRange range(long start, long end) {
+		return Service.BlockRange.newBuilder()
+				.setStart(Service.BlockID.newBuilder().setHeight(start))
+				.setEnd(Service.BlockID.newBuilder().setHeight(end))
+				.build();
 	}
 }

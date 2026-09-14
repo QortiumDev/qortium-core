@@ -17,18 +17,23 @@ import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ServerCalls;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Test-only, loopback-bound lightwalletd fixture shared by the Java Core client
@@ -71,12 +76,20 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 	private final AtomicInteger pirateTipRangeCount = new AtomicInteger();
 	private final AtomicInteger pirateScannedBlockCount = new AtomicInteger();
 	private final AtomicInteger pirateTipBlockCount = new AtomicInteger();
+	private final AtomicInteger recoveryBarrierEntryCount = new AtomicInteger();
+	private final AtomicInteger recoveryBarrierCancellationCount = new AtomicInteger();
+	private final AtomicInteger recoveryBarrierCompletionCount = new AtomicInteger();
+	private final AtomicLong recoveryBarrierLastStart = new AtomicLong(-1L);
+	private final AtomicLong recoveryBarrierLastEnd = new AtomicLong(-1L);
+	private final AtomicLong recoveryTreeStateLastHeight = new AtomicLong(-1L);
 	private final Server server;
 	private final String cashChainName;
 	private final String pirateChainName;
 	private final boolean includeHistoricalNote;
 	private final long tipHeight;
 	private final long ironwoodProbeHeight;
+	private final Path recoveryBarrierDirectory;
+	private final Long recoveryBarrierExpectedStart;
 
 	PirateUnifiedLoopbackLightwalletd() throws IOException {
 		this(0, "main", "main", false, TIP_HEIGHT);
@@ -101,6 +114,16 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 	private PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName,
 			boolean includeHistoricalNote, long tipHeight) throws IOException {
+		this(port, cashChainName, pirateChainName, includeHistoricalNote, tipHeight, null);
+	}
+
+	PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName,
+			long tipHeight, Path recoveryBarrierDirectory) throws IOException {
+		this(port, cashChainName, pirateChainName, false, tipHeight, recoveryBarrierDirectory);
+	}
+
+	private PirateUnifiedLoopbackLightwalletd(int port, String cashChainName, String pirateChainName,
+			boolean includeHistoricalNote, long tipHeight, Path recoveryBarrierDirectory) throws IOException {
 		if (port < 0 || port > 65_535)
 			throw new IllegalArgumentException("Invalid fixture port");
 		if (cashChainName == null || cashChainName.isBlank()
@@ -114,6 +137,8 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 		this.includeHistoricalNote = includeHistoricalNote;
 		this.tipHeight = tipHeight;
 		this.ironwoodProbeHeight = tipHeight - 30L;
+		this.recoveryBarrierDirectory = recoveryBarrierDirectory;
+		this.recoveryBarrierExpectedStart = readRecoveryBarrierExpectedStart(recoveryBarrierDirectory, tipHeight);
 		FixtureService fixtureService = new FixtureService();
 		ServerInterceptor auditInterceptor = this::auditCall;
 		this.server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", port))
@@ -161,6 +186,30 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 	int pirateTipBlockCount() {
 		return this.pirateTipBlockCount.get();
+	}
+
+	int recoveryBarrierEntryCount() {
+		return this.recoveryBarrierEntryCount.get();
+	}
+
+	int recoveryBarrierCancellationCount() {
+		return this.recoveryBarrierCancellationCount.get();
+	}
+
+	int recoveryBarrierCompletionCount() {
+		return this.recoveryBarrierCompletionCount.get();
+	}
+
+	long recoveryBarrierLastStart() {
+		return this.recoveryBarrierLastStart.get();
+	}
+
+	long recoveryBarrierLastEnd() {
+		return this.recoveryBarrierLastEnd.get();
+	}
+
+	long recoveryTreeStateLastHeight() {
+		return this.recoveryTreeStateLastHeight.get();
 	}
 
 	List<String> observedRanges() {
@@ -320,8 +369,24 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 				fail(observer, Status.INVALID_ARGUMENT.withDescription("Range is outside the deterministic fixture"));
 				return;
 			}
-			for (long height = start; height <= end; height++)
+			boolean recoveryBarrierRange = PIRATE_SERVICE.equals(service)
+					&& recoveryBarrierExpectedStart != null
+					&& start == recoveryBarrierExpectedStart && end == tipHeight;
+			if (PIRATE_SERVICE.equals(service) && recoveryBarrierExpectedStart != null
+					&& Files.isRegularFile(recoveryBarrierDirectory.resolve("armed"))
+					&& !recoveryBarrierRange) {
+				fail(observer, Status.FAILED_PRECONDITION.withDescription(
+						"Recovery range does not match the armed deterministic barrier"));
+				return;
+			}
+			if (recoveryBarrierRange && !awaitRecoveryBarrier(start, end, observer))
+				return;
+			for (long height = start; height <= end; height++) {
+				if (recoveryBarrierRange && observer instanceof ServerCallStreamObserver<?> serverObserver
+						&& serverObserver.isCancelled())
+					return;
 				observer.onNext(block(height));
+			}
 			if (start == SAPLING_ACTIVATION_HEIGHT && end == tipHeight) {
 				AtomicInteger counter = PIRATE_SERVICE.equals(service)
 						? pirateCompleteRangeCount : cashCompleteRangeCount;
@@ -329,7 +394,43 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 			}
 			if (PIRATE_SERVICE.equals(service) && end == tipHeight)
 				pirateTipRangeCount.incrementAndGet();
+			if (recoveryBarrierRange && observer instanceof ServerCallStreamObserver<?> serverObserver
+					&& serverObserver.isCancelled())
+				return;
 			observer.onCompleted();
+			if (recoveryBarrierRange)
+				recoveryBarrierCompletionCount.incrementAndGet();
+		}
+
+		private boolean awaitRecoveryBarrier(long start, long end,
+				StreamObserver<CompactFormats.CompactBlock> observer) {
+			if (recoveryBarrierDirectory == null
+					|| !Files.isRegularFile(recoveryBarrierDirectory.resolve("armed")))
+				return true;
+			if (!(observer instanceof ServerCallStreamObserver<?> serverObserver)) {
+				fail(observer, Status.INTERNAL.withDescription("Recovery barrier requires a server observer"));
+				return false;
+			}
+			recoveryBarrierLastStart.set(start);
+			recoveryBarrierLastEnd.set(end);
+			recoveryBarrierEntryCount.incrementAndGet();
+			AtomicBoolean cancellationRecorded = new AtomicBoolean(false);
+			serverObserver.setOnCancelHandler(() -> {
+				if (cancellationRecorded.compareAndSet(false, true))
+					recoveryBarrierCancellationCount.incrementAndGet();
+			});
+			while (!Files.isRegularFile(recoveryBarrierDirectory.resolve("release"))) {
+				if (serverObserver.isCancelled())
+					return false;
+				try {
+					Thread.sleep(25L);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					fail(observer, Status.CANCELLED.withDescription("Recovery barrier interrupted"));
+					return false;
+				}
+			}
+			return !serverObserver.isCancelled();
 		}
 
 		@Override
@@ -366,10 +467,43 @@ public final class PirateUnifiedLoopbackLightwalletd implements AutoCloseable {
 
 		@Override
 		public void getTreeState(Service.BlockID request, StreamObserver<Service.TreeState> observer) {
+			long height = request.getHeight();
+			if (recoveryBarrierDirectory != null && height >= 1L && height < tipHeight) {
+				// The recovery fixture has no shielded outputs, so its exact Sapling
+				// frontier is empty at every in-range height. Frontier v1 encodes that
+				// as a single absent-value byte (00).
+				recoveryTreeStateLastHeight.set(height);
+				respond(observer, Service.TreeState.newBuilder()
+						.setNetwork(pirateChainName)
+						.setHeight(height)
+						.setHash(HashCode.fromBytes(blockHash(height)).toString())
+						.setTime(FIRST_BLOCK_TIME
+								+ Math.toIntExact((height - SAPLING_ACTIVATION_HEIGHT) * 60L))
+						.setTree("00")
+						.build());
+				return;
+			}
 			fail(observer,
 					Status.FAILED_PRECONDITION.withDescription("The activation-boundary fixture must not require a "
 							+ "remote tree state"));
 		}
+	}
+
+	private static Long readRecoveryBarrierExpectedStart(Path directory, long tipHeight) throws IOException {
+		if (directory == null)
+			return null;
+		Path expectedStartPath = directory.resolve("expected-start");
+		if (Files.isSymbolicLink(expectedStartPath) || !Files.isRegularFile(expectedStartPath))
+			throw new IOException("Recovery barrier expected-start file is missing or invalid");
+		long expectedStart;
+		try {
+			expectedStart = Long.parseLong(Files.readString(expectedStartPath).trim());
+		} catch (RuntimeException e) {
+			throw new IOException("Recovery barrier expected-start is invalid", e);
+		}
+		if (expectedStart < SAPLING_ACTIVATION_HEIGHT || expectedStart > tipHeight)
+			throw new IOException("Recovery barrier expected-start is outside the fixture");
+		return expectedStart;
 	}
 
 	private final class UnknownMethodRegistry extends HandlerRegistry {

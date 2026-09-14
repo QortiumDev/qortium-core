@@ -482,6 +482,59 @@ public class PirateUnifiedWalletStorageTests {
 	}
 
 	@Test
+	public void testPendingRecoveryAllowsOnlyTheSpecializedVerifiedImportReadinessGate() throws Exception {
+		ZcashFamilyWalletConfig config = this.config(this.temporaryDirectory.resolve("pending-import"));
+		byte[] entropy = entropy(25);
+		PirateWallet wallet = new PirateWallet(config, entropy, false, false);
+		FakeAdapter adapter = new FakeAdapter();
+		assertTrue(wallet.initializeUnified(adapter, "https://light.example:443/", DEFAULT_BIRTHDAY));
+		ZcashFamilyLightClient.ValidatedServerSelection selection =
+				selection("light.example", DEFAULT_BIRTHDAY, 1);
+		assertEquals(APPLIED, wallet.applyValidatedServerSelection(adapter, selection));
+		adapter.syncTargetHeight = DEFAULT_BIRTHDAY;
+		wallet.recordSynchronizationAccepted(adapter);
+		assertTrue(wallet.isReadyForVerifiedRecoveryImport(adapter));
+		assertEquals("https://light.example:443",
+				wallet.getUnifiedStorage().read().getSynchronizationAcceptedServerUri());
+		adapter.syncInProgress = true;
+		assertFalse("verified import must not race an active native sync",
+				wallet.isReadyForVerifiedRecoveryImport(adapter));
+		adapter.syncInProgress = false;
+
+		PirateUnifiedWalletStorage.Snapshot snapshot = wallet.getUnifiedStorage().read();
+		wallet.getUnifiedStorage().write(snapshot.getState(), snapshot.isSyncValidated(),
+				snapshot.getIdentityHash(), snapshot.getSelectedServerUri(), DEFAULT_BIRTHDAY - 10L);
+		assertTrue(wallet.hasPendingRecovery());
+		assertFalse("ordinary synchronized operations must remain blocked", wallet.isSynchronized());
+		assertTrue("verified import must be able to reach native exact-retry idempotency",
+				wallet.isReadyForVerifiedRecoveryImport(adapter));
+
+		PirateWallet restarted = new PirateWallet(config, entropy, false, false);
+		assertTrue(restarted.initializeUnified(adapter, "https://light.example:443/", DEFAULT_BIRTHDAY));
+		assertEquals(APPLIED, restarted.applyValidatedServerSelection(adapter, selection));
+		assertFalse("the exact persisted recovery endpoint and native target are sufficient after restart",
+				restarted.requiresFreshSynchronization());
+		assertTrue("a restarted exact retry must still reach native idempotency",
+				restarted.isReadyForVerifiedRecoveryImport(adapter));
+
+		ZcashFamilyLightClient.ValidatedServerSelection replacement =
+				selection("other.example", DEFAULT_BIRTHDAY, 2);
+		assertEquals(APPLIED, restarted.applyValidatedServerSelection(adapter, replacement));
+		assertFalse("a fresh endpoint selection must still block the specialized import gate",
+				restarted.isReadyForVerifiedRecoveryImport(adapter));
+		assertEquals("the accepted synchronization endpoint must not follow an unaccepted cutover",
+				"https://light.example:443",
+				restarted.getUnifiedStorage().read().getSynchronizationAcceptedServerUri());
+
+		PirateWallet afterCutoverCrash = new PirateWallet(config, entropy, false, false);
+		assertTrue(afterCutoverCrash.initializeUnified(adapter, "https://other.example:443/", DEFAULT_BIRTHDAY));
+		assertEquals(APPLIED, afterCutoverCrash.applyValidatedServerSelection(adapter, replacement));
+		assertTrue("a same-height endpoint selected before a crash is not synchronization evidence",
+				afterCutoverCrash.requiresFreshSynchronization());
+		assertFalse(afterCutoverCrash.isReadyForVerifiedRecoveryImport(adapter));
+	}
+
+	@Test
 	public void testEveryNativeEndpointCutoverFailureIsClassifiedAndFailsClosed() throws Exception {
 		for (String failure : List.of("node", "chain", "height", "tls", "cancel", "set", "readback", "consensus")) {
 			PirateWallet wallet = new PirateWallet(

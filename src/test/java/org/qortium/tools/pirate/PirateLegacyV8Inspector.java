@@ -5,6 +5,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +35,8 @@ public final class PirateLegacyV8Inspector {
 
 	private static final long MAX_WALLET_BYTES = 256L * 1024L * 1024L;
 	private static final int MAX_PASSWORD_BYTES = 4096;
+	private static final int MAX_CANDIDATES = 16;
+	private static final int MAX_CANDIDATE_ENVELOPE_BYTES = 64 * 1024;
 	private static final Pattern SAPLING_ADDRESS = Pattern.compile(
 			"zs1[023456789acdefghjklmnpqrstuvwxyz]{75}");
 	private static final Pattern SAPLING_SPENDING_KEY = Pattern.compile(
@@ -51,6 +55,20 @@ public final class PirateLegacyV8Inspector {
 			super(code);
 			this.code = code;
 			this.exitCode = exitCode;
+		}
+	}
+
+	private record Candidate(String spendingKey, String address, String addressHash) {
+	}
+
+	private record Inspection(JSONObject redacted, JSONObject candidateEnvelope) {
+	}
+
+	private static int parseDescriptor(String value, String code) throws Exception {
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException e) {
+			throw reject(code);
 		}
 	}
 
@@ -137,21 +155,27 @@ public final class PirateLegacyV8Inspector {
 		if (descriptor < 3)
 			throw reject("password-required");
 		Path descriptorPath = Path.of("/proc/self/fd", Integer.toString(descriptor));
-		byte[] encoded;
+		byte[] buffer = new byte[MAX_PASSWORD_BYTES + 1];
+		int length = 0;
 		try (InputStream input = Files.newInputStream(descriptorPath)) {
-			encoded = input.readNBytes(MAX_PASSWORD_BYTES + 1);
+			while (length < buffer.length) {
+				int read = input.read(buffer, length, buffer.length - length);
+				if (read < 0)
+					break;
+				length += read;
+			}
 		}
-		if (encoded.length > MAX_PASSWORD_BYTES) {
-			java.util.Arrays.fill(encoded, (byte) 0);
+		if (length > MAX_PASSWORD_BYTES) {
+			java.util.Arrays.fill(buffer, (byte) 0);
 			throw reject("password-too-large");
 		}
-		if (encoded.length == 0)
+		if (length == 0)
 			throw reject("password-required");
-		for (byte value : encoded)
-			if (value == 0)
+		for (int i = 0; i < length; i++)
+			if (buffer[i] == 0)
 				throw reject("password-invalid");
-		String decoded = new String(encoded, StandardCharsets.UTF_8);
-		java.util.Arrays.fill(encoded, (byte) 0);
+		String decoded = new String(buffer, 0, length, StandardCharsets.UTF_8);
+		java.util.Arrays.fill(buffer, (byte) 0);
 		return decoded.toCharArray();
 	}
 
@@ -161,10 +185,29 @@ public final class PirateLegacyV8Inspector {
 		Files.createFile(resultPath, PosixFilePermissions.asFileAttribute(
 				PosixFilePermissions.fromString("rw-------")));
 		Files.writeString(resultPath, result.toString() + System.lineSeparator(),
-				StandardOpenOption.TRUNCATE_EXISTING);
+				StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
 	}
 
-	private static JSONObject inspect(String[] args) throws Exception {
+	private static void writeCandidateEnvelope(int descriptor, JSONObject envelope) throws Exception {
+		if (descriptor < 3)
+			throw reject("candidate-fd-invalid");
+		byte[] encoded = envelope.toString().getBytes(StandardCharsets.UTF_8);
+		if (encoded.length > MAX_CANDIDATE_ENVELOPE_BYTES) {
+			java.util.Arrays.fill(encoded, (byte) 0);
+			throw reject("candidate-envelope-too-large");
+		}
+		try (OutputStream output = new FileOutputStream(
+				Path.of("/proc/self/fd", Integer.toString(descriptor)).toFile())) {
+			output.write(encoded);
+			output.write('\n');
+		} catch (java.io.IOException e) {
+			throw reject("candidate-write-failed");
+		} finally {
+			java.util.Arrays.fill(encoded, (byte) 0);
+		}
+	}
+
+	private static Inspection inspect(String[] args) throws Exception {
 		Path library = requireRegularAbsolutePath(args[0], "library-invalid");
 		Path coinParams = requireRegularAbsolutePath(args[1], "coinparams-invalid");
 		Path saplingOutput = requireRegularAbsolutePath(args[2], "sapling-output-invalid");
@@ -173,12 +216,7 @@ public final class PirateLegacyV8Inspector {
 		String serverUri = args[5];
 		if (!serverUri.matches("http://127\\.0\\.0\\.1:[0-9]{1,5}"))
 			throw reject("server-not-loopback");
-		int passwordDescriptor;
-		try {
-			passwordDescriptor = Integer.parseInt(args[6]);
-		} catch (NumberFormatException e) {
-			throw reject("password-fd-invalid");
-		}
+		int passwordDescriptor = parseDescriptor(args[6], "password-fd-invalid");
 
 		long size = Files.size(wallet);
 		if (size < Long.BYTES || size > MAX_WALLET_BYTES)
@@ -195,10 +233,14 @@ public final class PirateLegacyV8Inspector {
 		LiteWalletJni.loadLibrary(library);
 		if (!LiteWalletJni.isLoaded())
 			throw reject("legacy-library-load-failed");
-		String initialized = LiteWalletJni.initfromb64(serverUri,
-				Files.readString(coinParams), Base64.getEncoder().encodeToString(walletBytes),
-				Files.readString(saplingOutput).trim(), Files.readString(saplingSpend).trim());
-		java.util.Arrays.fill(walletBytes, (byte) 0);
+		String initialized;
+		try {
+			initialized = LiteWalletJni.initfromb64(serverUri,
+					Files.readString(coinParams), Base64.getEncoder().encodeToString(walletBytes),
+					Files.readString(saplingOutput).trim(), Files.readString(saplingSpend).trim());
+		} finally {
+			java.util.Arrays.fill(walletBytes, (byte) 0);
+		}
 		requireInitialized(initialized);
 		initialized = null;
 
@@ -277,7 +319,7 @@ public final class PirateLegacyV8Inspector {
 			addressHashes.add(sha256(address));
 		}
 
-		Map<String, String> candidates = new HashMap<>();
+		Map<String, Candidate> candidates = new HashMap<>();
 		for (int i = 0; i < exported.length(); i++) {
 			JSONObject row = exported.optJSONObject(i);
 			if (row == null || !row.has("viewing_key"))
@@ -295,7 +337,8 @@ public final class PirateLegacyV8Inspector {
 			if (!addressHashes.contains(addressHash))
 				throw reject("export-address-not-in-wallet");
 			String keyHash = sha256(spendingKey);
-			String previous = candidates.putIfAbsent(keyHash, addressHash);
+			Candidate previous = candidates.putIfAbsent(keyHash,
+					new Candidate(spendingKey, address, addressHash));
 			if (previous != null)
 				throw reject("ambiguous-v8-address-group");
 			row.remove("address");
@@ -304,7 +347,8 @@ public final class PirateLegacyV8Inspector {
 		}
 		addresses.clear();
 		exported.clear();
-		if (candidates.isEmpty() || candidates.size() != addressHashes.size())
+		if (candidates.isEmpty() || candidates.size() > MAX_CANDIDATES
+				|| candidates.size() != addressHashes.size())
 			throw reject("candidate-set-incomplete");
 
 		if (encrypted) {
@@ -317,7 +361,9 @@ public final class PirateLegacyV8Inspector {
 		if (!beforeHash.equals(afterHash))
 			throw reject("wallet-copy-changed");
 
-		List<String> candidateAddressHashes = new ArrayList<>(candidates.values());
+		List<String> candidateAddressHashes = new ArrayList<>();
+		for (Candidate candidate : candidates.values())
+			candidateAddressHashes.add(candidate.addressHash());
 		candidateAddressHashes.sort(String::compareTo);
 		JSONObject result = new JSONObject();
 		result.put("format", "qortium-pirate-legacy-v8-inspection-v1");
@@ -334,11 +380,27 @@ public final class PirateLegacyV8Inspector {
 		result.put("selectionBasis", "legacy-v8-default-row");
 		result.put("candidateCount", candidates.size());
 		result.put("candidateAddressSha256", new JSONArray(candidateAddressHashes));
-		return result;
+
+		List<Candidate> orderedCandidates = new ArrayList<>(candidates.values());
+		orderedCandidates.sort(java.util.Comparator.comparing(Candidate::address));
+		JSONArray candidateRows = new JSONArray();
+		for (Candidate candidate : orderedCandidates) {
+			candidateRows.put(new JSONObject()
+					.put("pool", "sapling")
+					.put("spendingKey", candidate.spendingKey())
+					.put("expectedAddress", candidate.address())
+					.put("addressIndex", 0));
+		}
+		JSONObject envelope = new JSONObject()
+				.put("format", "qortium-pirate-legacy-v8-candidate-pipe-v1")
+				.put("walletSha256", beforeHash)
+				.put("birthdayHeight", birthday)
+				.put("candidates", candidateRows);
+		return new Inspection(result, envelope);
 	}
 
 	public static void main(String[] args) {
-		if (args.length != 8) {
+		if (args.length != 8 && args.length != 9) {
 			System.err.println("[error] usage-invalid");
 			System.exit(2);
 		}
@@ -346,7 +408,16 @@ public final class PirateLegacyV8Inspector {
 			Path result = Path.of(args[7]);
 			if (!result.isAbsolute())
 				throw reject("result-path-invalid");
-			writeResult(result.normalize(), inspect(args));
+			Integer candidateDescriptor = args.length == 9
+					? parseDescriptor(args[8], "candidate-fd-invalid") : null;
+			int passwordDescriptor = parseDescriptor(args[6], "password-fd-invalid");
+			if (candidateDescriptor != null
+					&& (candidateDescriptor < 3 || candidateDescriptor == passwordDescriptor))
+				throw reject("candidate-fd-invalid");
+			Inspection inspection = inspect(args);
+			writeResult(result.normalize(), inspection.redacted());
+			if (candidateDescriptor != null)
+				writeCandidateEnvelope(candidateDescriptor, inspection.candidateEnvelope());
 			System.out.println("[ok] one legacy v8 wallet inspected; result is redacted");
 		} catch (InspectionFailure e) {
 			System.err.println("[error] " + e.code);
