@@ -24,18 +24,24 @@ public final class PirateUnifiedLoopbackLightwalletdMain {
 
 	public static void main(String[] args) throws Exception {
 		boolean cutoverMode = args.length == 4 && "cutover".equals(args[3]);
-		if (args.length != 2 && !cutoverMode)
+		boolean recoveryMode = args.length == 4 && "recovery".equals(args[3]);
+		if (args.length != 2 && !cutoverMode && !recoveryMode)
 			throw new IllegalArgumentException(
-					"Expected <absolute-ready-file> <absolute-audit-a-file> [<absolute-audit-b-file> cutover]");
+					"Expected <absolute-ready-file> <absolute-audit-a-file> "
+							+ "[<absolute-audit-b-file> cutover|<absolute-control-directory> recovery]");
 
 		Path readyPath = absoluteNewPath(args[0], "ready");
 		Path auditAPath = absoluteNewPath(args[1], "audit A");
 		Path auditBPath = cutoverMode ? absoluteNewPath(args[2], "audit B") : null;
+		Path recoveryControl = recoveryMode ? absoluteDirectory(args[2], "recovery control") : null;
 		CountDownLatch stopped = new CountDownLatch(1);
 		PirateUnifiedLoopbackLightwalletd fixtureA = null;
 		PirateUnifiedLoopbackLightwalletd fixtureB = null;
 		try {
-			fixtureA = new PirateUnifiedLoopbackLightwalletd(REGTEST_PORT, JAVA_CHAIN, NATIVE_CHAIN);
+			fixtureA = recoveryMode
+					? new PirateUnifiedLoopbackLightwalletd(REGTEST_PORT, JAVA_CHAIN, NATIVE_CHAIN,
+							PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT, recoveryControl)
+					: new PirateUnifiedLoopbackLightwalletd(REGTEST_PORT, JAVA_CHAIN, NATIVE_CHAIN);
 			if (!("http://127.0.0.1:" + REGTEST_PORT + "/").equals(fixtureA.endpoint()))
 				throw new IOException("Fixture did not bind its exact IPv4 loopback endpoint");
 			if (cutoverMode) {
@@ -55,19 +61,22 @@ public final class PirateUnifiedLoopbackLightwalletdMain {
 
 		PirateUnifiedLoopbackLightwalletd finalFixtureA = fixtureA;
 		PirateUnifiedLoopbackLightwalletd finalFixtureB = fixtureB;
-		AtomicBoolean snapshotsRunning = new AtomicBoolean(cutoverMode);
+		boolean snapshotMode = cutoverMode || recoveryMode;
+		AtomicBoolean snapshotsRunning = new AtomicBoolean(snapshotMode);
 		AtomicReference<Throwable> snapshotFailure = new AtomicReference<>();
 		Thread snapshotThread = null;
-		if (cutoverMode) {
+		if (snapshotMode) {
 			writeAtomically(auditAPath, audit(finalFixtureA, "RUNNING"));
-			writeAtomically(auditBPath, audit(finalFixtureB, "RUNNING"));
+			if (auditBPath != null)
+				writeAtomically(auditBPath, audit(finalFixtureB, "RUNNING"));
 			snapshotThread = new Thread(() -> {
 				while (snapshotsRunning.get()) {
 					try {
 						Thread.sleep(100L);
 						if (snapshotsRunning.get()) {
 							writeAtomically(auditAPath, audit(finalFixtureA, "RUNNING"));
-							writeAtomically(auditBPath, audit(finalFixtureB, "RUNNING"));
+							if (auditBPath != null)
+								writeAtomically(auditBPath, audit(finalFixtureB, "RUNNING"));
 						}
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
@@ -115,6 +124,9 @@ public final class PirateUnifiedLoopbackLightwalletdMain {
 					+ PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT + "\nportB=" + CUTOVER_PORT + "\ntipB="
 					+ (PirateUnifiedLoopbackLightwalletd.TIP_HEIGHT + 4L) + "\njavaChainName=" + JAVA_CHAIN
 					+ "\nnativeChainName=" + NATIVE_CHAIN + "\n");
+		} else if (recoveryMode) {
+			writeAtomically(readyPath, "mode=recovery\nport=" + REGTEST_PORT + "\njavaChainName="
+					+ JAVA_CHAIN + "\nnativeChainName=" + NATIVE_CHAIN + "\n");
 		} else {
 			writeAtomically(readyPath, "port=" + REGTEST_PORT + "\njavaChainName=" + JAVA_CHAIN
 					+ "\nnativeChainName=" + NATIVE_CHAIN + "\n");
@@ -137,11 +149,19 @@ public final class PirateUnifiedLoopbackLightwalletdMain {
 				+ "nativeRpcCount=" + fixture.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE) + "\n"
 				+ "pirateTipRequests=" + fixture.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE,
 						"GetLatestBlock") + "\n"
+				+ "pirateTreeStateRequests=" + fixture.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE,
+						"GetTreeState") + "\n"
 				+ "pirateCompleteRanges="
 				+ fixture.completeRangeCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE) + "\n"
 				+ "pirateTipRanges=" + fixture.pirateTipRangeCount() + "\n"
 				+ "pirateScannedBlocks=" + fixture.pirateScannedBlockCount() + "\n"
 				+ "pirateTipBlocks=" + fixture.pirateTipBlockCount() + "\n"
+				+ "recoveryBarrierEntries=" + fixture.recoveryBarrierEntryCount() + "\n"
+				+ "recoveryBarrierCancellations=" + fixture.recoveryBarrierCancellationCount() + "\n"
+				+ "recoveryBarrierCompletions=" + fixture.recoveryBarrierCompletionCount() + "\n"
+				+ "recoveryBarrierLastStart=" + fixture.recoveryBarrierLastStart() + "\n"
+				+ "recoveryBarrierLastEnd=" + fixture.recoveryBarrierLastEnd() + "\n"
+				+ "recoveryTreeStateLastHeight=" + fixture.recoveryTreeStateLastHeight() + "\n"
 				+ "cashCompleteRanges="
 				+ fixture.completeRangeCount(PirateUnifiedLoopbackLightwalletd.CASH_SERVICE) + "\n"
 				+ "forbiddenRpcs=" + fixture.forbiddenRpcCount() + "\n"
@@ -170,6 +190,16 @@ public final class PirateUnifiedLoopbackLightwalletdMain {
 		if (Files.exists(path))
 			throw new IOException("Fixture " + label + " path already exists");
 		Files.createDirectories(path.getParent());
+		return path;
+	}
+
+	private static Path absoluteDirectory(String value, String label) throws IOException {
+		Path path = Path.of(value);
+		if (!path.isAbsolute())
+			throw new IOException("Fixture " + label + " path must be absolute");
+		path = path.normalize();
+		if (Files.isSymbolicLink(path) || !Files.isDirectory(path))
+			throw new IOException("Fixture " + label + " path must be an existing non-symlink directory");
 		return path;
 	}
 

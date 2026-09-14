@@ -35,18 +35,21 @@ final class PirateUnifiedWalletStorage {
 		private final boolean syncValidated;
 		private final String identityHash;
 		private final String selectedServerUri;
+		private final String synchronizationAcceptedServerUri;
 		private final Long recoveryRescanFromHeight;
 		private final PirateWallet.InitializationMode initializationMode;
 		private final Integer initializationBirthdayHeight;
 		private final boolean corrupt;
 
 		private Snapshot(State state, boolean syncValidated, String identityHash, String selectedServerUri,
-				Long recoveryRescanFromHeight, PirateWallet.InitializationMode initializationMode,
+				String synchronizationAcceptedServerUri, Long recoveryRescanFromHeight,
+				PirateWallet.InitializationMode initializationMode,
 				Integer initializationBirthdayHeight, boolean corrupt) {
 			this.state = state;
 			this.syncValidated = syncValidated;
 			this.identityHash = identityHash;
 			this.selectedServerUri = selectedServerUri;
+			this.synchronizationAcceptedServerUri = synchronizationAcceptedServerUri;
 			this.recoveryRescanFromHeight = recoveryRescanFromHeight;
 			this.initializationMode = initializationMode;
 			this.initializationBirthdayHeight = initializationBirthdayHeight;
@@ -67,6 +70,10 @@ final class PirateUnifiedWalletStorage {
 
 		String getSelectedServerUri() {
 			return this.selectedServerUri;
+		}
+
+		String getSynchronizationAcceptedServerUri() {
+			return this.synchronizationAcceptedServerUri;
 		}
 
 		/**
@@ -190,11 +197,11 @@ final class PirateUnifiedWalletStorage {
 
 	Snapshot read() {
 		if (this.transientWallet)
-			return new Snapshot(State.LEGACY, false, null, null, null, null, null, false);
+			return new Snapshot(State.LEGACY, false, null, null, null, null, null, null, false);
 
 		Path statePath = this.storageDirectory.resolve(STATE_FILENAME);
 		if (!Files.isRegularFile(statePath))
-			return new Snapshot(State.LEGACY, false, null, null, null, null, null, false);
+			return new Snapshot(State.LEGACY, false, null, null, null, null, null, null, false);
 
 		try {
 			JSONObject json = new JSONObject(Files.readString(statePath, StandardCharsets.UTF_8));
@@ -208,6 +215,9 @@ final class PirateUnifiedWalletStorage {
 			String selectedServerUri = json.optString("selectedServerUri", null);
 			if (selectedServerUri != null && selectedServerUri.isBlank())
 				selectedServerUri = null;
+			String synchronizationAcceptedServerUri = json.optString("synchronizationAcceptedServerUri", null);
+			if (synchronizationAcceptedServerUri != null && synchronizationAcceptedServerUri.isBlank())
+				synchronizationAcceptedServerUri = null;
 			boolean syncValidated = json.optBoolean("syncValidated", false);
 			if ((syncValidated && identityHash == null)
 					|| (state == State.UNIFIED_READY && !syncValidated)
@@ -232,9 +242,10 @@ final class PirateUnifiedWalletStorage {
 			}
 
 			return new Snapshot(state, syncValidated, identityHash, selectedServerUri,
-					recoveryRescanFromHeight, initializationMode, initializationBirthdayHeight, false);
+					synchronizationAcceptedServerUri, recoveryRescanFromHeight, initializationMode,
+					initializationBirthdayHeight, false);
 		} catch (IOException | JSONException | IllegalArgumentException e) {
-			return new Snapshot(State.FAILED_RECOVERABLE, false, null, null, null, null, null, true);
+			return new Snapshot(State.FAILED_RECOVERABLE, false, null, null, null, null, null, null, true);
 		}
 	}
 
@@ -259,6 +270,26 @@ final class PirateUnifiedWalletStorage {
 	void write(State state, boolean syncValidated, String identityHash, String selectedServerUri,
 			Long recoveryRescanFromHeight, PirateWallet.InitializationMode initializationMode,
 			Integer initializationBirthdayHeight) throws IOException {
+		Snapshot current = this.read();
+		this.write(state, syncValidated, identityHash, selectedServerUri,
+				current.getSynchronizationAcceptedServerUri(), recoveryRescanFromHeight,
+				initializationMode, initializationBirthdayHeight);
+	}
+
+	void writeSynchronizationAcceptedServerUri(String synchronizationAcceptedServerUri) throws IOException {
+		Snapshot current = this.read();
+		if (current.isCorrupt())
+			throw new IOException("Wallet state is corrupt");
+		this.write(current.getState(), current.isSyncValidated(), current.getIdentityHash(),
+				current.getSelectedServerUri(), synchronizationAcceptedServerUri,
+				current.getRecoveryRescanFromHeight(), current.getInitializationMode(),
+				current.getInitializationBirthdayHeight());
+	}
+
+	private void write(State state, boolean syncValidated, String identityHash, String selectedServerUri,
+			String synchronizationAcceptedServerUri, Long recoveryRescanFromHeight,
+			PirateWallet.InitializationMode initializationMode,
+			Integer initializationBirthdayHeight) throws IOException {
 		if (this.transientWallet)
 			return;
 		if ((initializationMode == null) != (initializationBirthdayHeight == null)
@@ -282,6 +313,8 @@ final class PirateUnifiedWalletStorage {
 			json.put("identityHash", identityHash);
 		if (selectedServerUri != null)
 			json.put("selectedServerUri", selectedServerUri);
+		if (synchronizationAcceptedServerUri != null)
+			json.put("synchronizationAcceptedServerUri", synchronizationAcceptedServerUri);
 		if (recoveryRescanFromHeight != null) {
 			if (recoveryRescanFromHeight < 1)
 				throw new IOException("Invalid recovery rescan height");

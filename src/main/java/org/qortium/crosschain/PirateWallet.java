@@ -464,6 +464,12 @@ public class PirateWallet extends ZcashFamilyWallet {
 			return EndpointSelectionOutcome.APPLIED;
 		}
 
+		String persistedSynchronizedServerUri = this.unifiedStorage == null
+				? null : this.unifiedStorage.read().getSynchronizationAcceptedServerUri();
+		boolean restoringPendingRecoverySelection = this.hasPendingRecovery()
+				&& Objects.equals(normalizeServerUri(persistedSynchronizedServerUri),
+						normalizeServerUri(selection.getEndpointUri()));
+
 		try {
 			String walletId = this.getActiveWalletId(nativeAdapter);
 			if (walletId == null)
@@ -511,6 +517,16 @@ public class PirateWallet extends ZcashFamilyWallet {
 			this.freshSynchronizationRequired = true;
 			this.synchronizationAcceptedGeneration = -1L;
 			this.synchronizationAcceptedWalletId = null;
+			if (restoringPendingRecoverySelection) {
+				// A restarted recovery controller may reuse the exact endpoint whose last
+				// synchronization acceptance was persisted. Bind the durable native target
+				// to this validated selection so a pending import can reach native
+				// idempotency without waiting for the replay it is itself retrying. A merely
+				// selected or different endpoint still requires a fresh synchronization.
+				this.synchronizationAcceptedGeneration = selection.getGeneration();
+				this.synchronizationAcceptedWalletId = walletId;
+				this.observeFreshSynchronization(nativeAdapter);
+			}
 			return EndpointSelectionOutcome.APPLIED;
 		} catch (UnsatisfiedLinkError | RuntimeException e) {
 			return EndpointSelectionOutcome.RETRYABLE_FAILURE;
@@ -606,6 +622,17 @@ public class PirateWallet extends ZcashFamilyWallet {
 				return false;
 			this.unifiedStorage.write(snapshot.getState(), snapshot.isSyncValidated(), snapshot.getIdentityHash(),
 					normalizeServerUri(serverUri));
+			return true;
+		} catch (IOException | RuntimeException e) {
+			return false;
+		}
+	}
+
+	private boolean persistSynchronizationAcceptedServer(String serverUri) {
+		if (this.unifiedStorage == null || this.unifiedStorage.isTransientWallet())
+			return true;
+		try {
+			this.unifiedStorage.writeSynchronizationAcceptedServerUri(normalizeServerUri(serverUri));
 			return true;
 		} catch (IOException | RuntimeException e) {
 			return false;
@@ -1049,7 +1076,8 @@ public class PirateWallet extends ZcashFamilyWallet {
 			JSONObject result = response.optBoolean("ok", false) ? response.optJSONObject("result") : null;
 			long targetHeight = result == null ? 0L : result.optLong("target_height", 0L);
 			if (targetHeight > 0 && Math.abs(targetHeight - this.appliedServerSelection.getHeight())
-					<= ZcashFamilyLightClient.SERVER_HEIGHT_AGREEMENT_TOLERANCE)
+					<= ZcashFamilyLightClient.SERVER_HEIGHT_AGREEMENT_TOLERANCE
+					&& this.persistSynchronizationAcceptedServer(this.appliedServerSelection.getEndpointUri()))
 				this.freshSynchronizationRequired = false;
 		} catch (UnsatisfiedLinkError | RuntimeException e) {
 			// Keep the fresh-sync requirement until the wallet-bound target can be observed.
@@ -1062,9 +1090,28 @@ public class PirateWallet extends ZcashFamilyWallet {
 			return super.isSynchronized();
 		// A pending verified-import recovery replay means balances and histories are not
 		// final yet, so the wallet must not present itself as synchronized: this blocks
-		// balance/history/send (and further imports) until the replay completes.
-		return !this.freshSynchronizationRequired && !this.hasPendingRecovery()
+		// balance/history/send until the replay completes. The specialized verified-import
+		// gate below may still admit a native-authorized pending operation.
+		return !this.hasPendingRecovery() && this.hasCurrentSynchronizedSelection();
+	}
+
+	/**
+	 * Readiness gate used only by the verified-import operation on the serialized native lane.
+	 * It deliberately ignores the durable pending-recovery marker so the native library can
+	 * recognize an exact retry after interruption, but retains every endpoint and chain-tip
+	 * requirement used for a first import. Ordinary synchronized operations still call
+	 * {@link #isSynchronized()} and remain blocked while recovery is pending.
+	 */
+	boolean isReadyForVerifiedRecoveryImport(ZcashFamilyNativeAdapter nativeAdapter) {
+		return !this.freshSynchronizationRequired && !this.isNativeSyncInProgress(nativeAdapter)
 				&& this.appliedServerSelection != null
+				&& this.isSelectionCurrent(this.appliedServerSelection)
+				&& ZcashFamilyWallet.isHeightSynchronized(this.getHeight(nativeAdapter),
+						this.getChainTip(nativeAdapter), this.synchronizationLagTolerance());
+	}
+
+	private boolean hasCurrentSynchronizedSelection() {
+		return !this.freshSynchronizationRequired && this.appliedServerSelection != null
 				&& this.isSelectionCurrent(this.appliedServerSelection) && super.isSynchronized();
 	}
 

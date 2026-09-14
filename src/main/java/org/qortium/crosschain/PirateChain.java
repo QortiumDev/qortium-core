@@ -361,10 +361,12 @@ public class PirateChain extends Bitcoiny {
 	 * Imports one externally derived spending key through the upstream verified recovery request.
 	 * <p>
 	 * The operation runs as a single coordinator-owned wallet operation bound to the requested
-	 * entropy wallet, requires that wallet to be synchronized (so the native side has a
-	 * persisted known chain tip for birthday validation, and no Core-driven sync is in flight
-	 * when the native import takes the wallet's sync lock), and requires the persistent Unified
-	 * storage backend.
+	 * entropy wallet and requires the persistent Unified storage backend. A first import still
+	 * requires a fully synchronized wallet. An already-pending recovery may re-enter the native
+	 * verified-import operation so an exact retry can receive the native idempotency verdict;
+	 * this callback itself runs on the serialized native lane, so no sync/rescan is active while
+	 * the retry executes. Balance, history, and send operations retain the ordinary synchronized
+	 * gate.
 	 */
 	public PirateChainVerifiedRecoveryResult importVerifiedSpendingKey(
 			PirateChainVerifiedRecoveryRequest recoveryRequest) throws ForeignBlockchainException {
@@ -372,9 +374,11 @@ public class PirateChain extends Bitcoiny {
 		if (walletController == null)
 			throw new ForeignBlockchainException("Pirate Chain wallet is disabled");
 
-		return walletController.withEntropyWallet(recoveryRequest.entropy58, true, (wallet, nativeAdapter) -> {
+		return walletController.withEntropyWallet(recoveryRequest.entropy58, false, (wallet, nativeAdapter) -> {
 			if (!wallet.usesPersistentUnifiedStorage())
 				throw new ForeignBlockchainException("Verified recovery requires the persistent Unified Pirate wallet");
+			if (!wallet.isReadyForVerifiedRecoveryImport(nativeAdapter))
+				throw new ForeignBlockchainException("Wallet isn't synchronized yet");
 			return wallet.importVerifiedSpendingKey(nativeAdapter, recoveryRequest);
 		});
 	}
