@@ -1,23 +1,15 @@
 {
-  "generatedAt": "2026-09-02T03:13:05.836645972Z",
+  "generatedAt": "2026-09-20T20:05:38.662300245Z",
   "servers": {
     "BTC": {
       "MAIN": [
-        {
-          "host": "100.9.39.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2723
-        },
         {
           "host": "104.198.149.61",
           "port": 50002,
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2529
+          "responseTimeMillis": 2695
         },
         {
           "host": "109.127.133.34.bc.googleusercontent.com",
@@ -25,23 +17,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2543
-        },
-        {
-          "host": "109.239.175.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2824
-        },
-        {
-          "host": "115.66.18.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3309
+          "responseTimeMillis": 2831
         },
         {
           "host": "116.203.86.228",
@@ -49,7 +25,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "97ce93fd11c745fb911de4043244566d1a156ede03daaa14850a7dad51fad7c9",
           "source": "1209k,peer",
-          "responseTimeMillis": 1151
+          "responseTimeMillis": 1878
         },
         {
           "host": "121.232.172.34.bc.googleusercontent.com",
@@ -57,7 +33,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2508
+          "responseTimeMillis": 2588
         },
         {
           "host": "128.140.67.192",
@@ -65,7 +41,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0a8c9282df581a632a5bbb0edd566ea2b583422b2f77fc1c011aa14a0a1fe933",
           "source": "1209k,peer",
-          "responseTimeMillis": 1191
+          "responseTimeMillis": 1885
         },
         {
           "host": "129.212.164.62",
@@ -73,31 +49,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "229a6dc5f18e7bbe7515a2cb64452dfe9806a6b902c4babe483dc7ac37f53c77",
           "source": "1209k,peer",
-          "responseTimeMillis": 2655
-        },
-        {
-          "host": "131.36.32.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2857
-        },
-        {
-          "host": "132.220.87.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3892
-        },
-        {
-          "host": "133.177.64.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3700
+          "responseTimeMillis": 2497
         },
         {
           "host": "134.199.136.239",
@@ -105,7 +57,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "40a7d4781aa111d4fe218d3b8c5d714fe8a2ff078dea92e1bfa71708cfd78e28",
           "source": "1209k,peer",
-          "responseTimeMillis": 2683
+          "responseTimeMillis": 2545
         },
         {
           "host": "134.199.142.123",
@@ -113,7 +65,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a37abefd804107ded97defd2f55725c1c827984039b771d9933e7153f9e80bc5",
           "source": "1209k,peer",
-          "responseTimeMillis": 2691
+          "responseTimeMillis": 2553
         },
         {
           "host": "134.93.50.34.bc.googleusercontent.com",
@@ -121,7 +73,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 3830
+          "responseTimeMillis": 3672
         },
         {
           "host": "135.181.36.122",
@@ -129,7 +81,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4fc9bdfaf26cb259ff48cd22e68c870a862a8ba5082bc265832119c8eef94a33",
           "source": "1209k,peer",
-          "responseTimeMillis": 1366
+          "responseTimeMillis": 1985
         },
         {
           "host": "136.107.155.173",
@@ -137,7 +89,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d2450bbd522ee96e882a3a6675c1f1ba1fd4d194289d0631a421c7fa5d8eb434",
           "source": "peer",
-          "responseTimeMillis": 2303
+          "responseTimeMillis": 2738
         },
         {
           "host": "136.107.225.110",
@@ -145,7 +97,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "787008d5b90ee6cc48d8ebd063e0beac889ab25eec06ca683ec6886fe3ba40ae",
           "source": "peer",
-          "responseTimeMillis": 2312
+          "responseTimeMillis": 2778
         },
         {
           "host": "136.107.72.87",
@@ -153,7 +105,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "47f21ea4ccd10c0ccb70a1bcd071a500f43b1fae1c97b7cd68f39be7f849d11f",
           "source": "peer",
-          "responseTimeMillis": 2334
+          "responseTimeMillis": 2728
         },
         {
           "host": "136.110.114.84",
@@ -161,7 +113,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2898606eb795c7ab72396fae13197a76f89a2bedcad67c46217a2567446f24e8",
           "source": "peer",
-          "responseTimeMillis": 3563
+          "responseTimeMillis": 3173
         },
         {
           "host": "136.110.67.212",
@@ -169,7 +121,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d096e8e79aa867b24260e1db8645834a44fdc8ec1365869e46e0213a745b4168",
           "source": "peer",
-          "responseTimeMillis": 3609
+          "responseTimeMillis": 3163
         },
         {
           "host": "136.243.37.119",
@@ -177,7 +129,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b94d6ec7329a209ce7d61efebb6a117f3257fd63006469623dcda2c496fe48ee",
           "source": "peer",
-          "responseTimeMillis": 1048
+          "responseTimeMillis": 1636
         },
         {
           "host": "137.184.125.23",
@@ -185,7 +137,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c2d17758fa24060fb91d2f72c5477d2b100c5045f24ef0a3f5c2e4397ef516e2",
           "source": "1209k,peer",
-          "responseTimeMillis": 855
+          "responseTimeMillis": 704
         },
         {
           "host": "138.233.173.34.bc.googleusercontent.com",
@@ -193,7 +145,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2493
+          "responseTimeMillis": 2856
         },
         {
           "host": "139.59.232.148",
@@ -201,15 +153,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1afcc6ddc772ae264c91276206203f5f4b537696edb8cda856dc7127d22cf785",
           "source": "1209k,peer",
-          "responseTimeMillis": 2221
-        },
-        {
-          "host": "142.147.194.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3612
+          "responseTimeMillis": 2204
         },
         {
           "host": "143.198.108.195",
@@ -217,7 +161,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ee425783831f4005989ea6aaaa2dfd3befd39aff87f3bab99a2f12ce8ce1d431",
           "source": "1209k,peer",
-          "responseTimeMillis": 855
+          "responseTimeMillis": 693
         },
         {
           "host": "146.190.150.164",
@@ -225,15 +169,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "45016b08e372d620d59da116b8e2e25c2a0f0ce09ee1f55bf6e24e1486b8e777",
           "source": "1209k",
-          "responseTimeMillis": 2554
-        },
-        {
-          "host": "147.228.238.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2526
+          "responseTimeMillis": 2527
         },
         {
           "host": "147.93.131.70",
@@ -241,7 +177,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bfa0da71c1536e81ca5b6f9f2ebeed540a115abb87ba0cc23ce4689e20c6a541",
           "source": "peer",
-          "responseTimeMillis": 2442
+          "responseTimeMillis": 2801
         },
         {
           "host": "147.93.188.251",
@@ -249,7 +185,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9ab212a8b444049b8a6a6c7af8dd8b08fb15008ac85127ca6bcc4ae9cfddaaa1",
           "source": "peer",
-          "responseTimeMillis": 2402
+          "responseTimeMillis": 2887
         },
         {
           "host": "15.235.82.102",
@@ -257,7 +193,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b94d6ec7329a209ce7d61efebb6a117f3257fd63006469623dcda2c496fe48ee",
           "source": "peer",
-          "responseTimeMillis": 410
+          "responseTimeMillis": 1166
         },
         {
           "host": "15.250.138.34.bc.googleusercontent.com",
@@ -265,7 +201,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2375
+          "responseTimeMillis": 2759
         },
         {
           "host": "157.230.254.6",
@@ -273,7 +209,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c0167e4a79c0c76c0726cedb0df67886ad83deb8b7eccda1749e4cdf21c45ed9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2234
+          "responseTimeMillis": 1989
         },
         {
           "host": "157.90.212.53",
@@ -281,7 +217,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a7b0afdae557e4185bdeda02f8a6af4382567264e2adb65567d27deb0e79db42",
           "source": "1209k,peer",
-          "responseTimeMillis": 1853
+          "responseTimeMillis": 2465
         },
         {
           "host": "159.223.40.244",
@@ -289,15 +225,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e8cf753030f34d6bfba1531d2a7c3107e3da3aa537070d5fd8fbf47d685add21",
           "source": "1209k,peer",
-          "responseTimeMillis": 2111
-        },
-        {
-          "host": "16.221.221.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3601
+          "responseTimeMillis": 2056
         },
         {
           "host": "160.22.78.151",
@@ -305,15 +233,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "177dd5a25a46e3d8c642d0ea7271231cc70e1c26a72e5e46d697c96690ec9601",
           "source": "peer",
-          "responseTimeMillis": 3453
-        },
-        {
-          "host": "164.75.244.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3951
+          "responseTimeMillis": 3237
         },
         {
           "host": "164.90.247.216",
@@ -321,7 +241,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2edc8cc0263813762b572fb2060c1b079ff5326714cae2fac2e834dbab1a813a",
           "source": "1209k,peer",
-          "responseTimeMillis": 2621
+          "responseTimeMillis": 2497
         },
         {
           "host": "164.92.148.39",
@@ -329,7 +249,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0394ef45c007e8bfd12ff294617e2063c58c3414b69d7c810b06f81ac74c2255",
           "source": "1209k,peer",
-          "responseTimeMillis": 1053
+          "responseTimeMillis": 2619
         },
         {
           "host": "165.22.98.208",
@@ -337,7 +257,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b747a274ef19f49dc48c388ca3103bc6af62d5c760646b1ee02c17f52e9c0497",
           "source": "1209k,peer",
-          "responseTimeMillis": 2450
+          "responseTimeMillis": 2190
+        },
+        {
+          "host": "165.99.131.154",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "8f417369fb109e3d5a4426903de8cc1a1f9b721256f1daf207fbd91fd5d439f0",
+          "source": "peer",
+          "responseTimeMillis": 3623
+        },
+        {
+          "host": "165.99.131.49",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "9eea0ac2491b421e8ffd22bb2b4c1e9ec1ceed7331dda3ec9043cadcb7cb750b",
+          "source": "peer",
+          "responseTimeMillis": 3665
         },
         {
           "host": "167.172.71.79",
@@ -345,7 +281,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5a70ea64d9ac999fc0bfa2259e0b419a2bf7c8e35bc2850331c910df82ec2a78",
           "source": "1209k,peer",
-          "responseTimeMillis": 2281
+          "responseTimeMillis": 2091
         },
         {
           "host": "167.235.9.82",
@@ -353,7 +289,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b31538ba4ad27136b0c4ac85fd8565e87cd894a9db0c3f0953fceedd1585e14d",
           "source": "1209k",
-          "responseTimeMillis": 1133
+          "responseTimeMillis": 1710
         },
         {
           "host": "170.64.183.239",
@@ -361,7 +297,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cae22ca78c4a03c11135f76a7b980ad40c51353a72f8717ea239d37369d9a200",
           "source": "1209k,peer",
-          "responseTimeMillis": 2076
+          "responseTimeMillis": 1794
         },
         {
           "host": "173.249.50.6",
@@ -369,7 +305,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "78c36a61d92fdcef09dac82acd2070a893df7682106c2d71a4f49d818d2edcb9",
           "source": "peer",
-          "responseTimeMillis": 2757
+          "responseTimeMillis": 3309
         },
         {
           "host": "174.160.255.66",
@@ -377,7 +313,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0be08af91895650503cb4e6c81ab2fc58c47ecdbdf05fe3f66c99bc92769bf08",
           "source": "peer",
-          "responseTimeMillis": 933
+          "responseTimeMillis": 779
         },
         {
           "host": "18.195.224.155",
@@ -385,15 +321,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "03a97e9fcba085b3412afa7de79d82d1888f73a0f269ea53419ab5c27120ff1e",
           "source": "1209k",
-          "responseTimeMillis": 970
-        },
-        {
-          "host": "18.75.244.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 4006
+          "responseTimeMillis": 1655
         },
         {
           "host": "185.232.84.105",
@@ -401,23 +329,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6523db03fc3218a420bcdcba32661392937ced0666b969c035e6e1ac60aa7f5a",
           "source": "peer",
-          "responseTimeMillis": 2736
-        },
-        {
-          "host": "187.13.189.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3896
-        },
-        {
-          "host": "189.220.96.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3547
+          "responseTimeMillis": 3135
         },
         {
           "host": "192.206.117.237",
@@ -425,7 +337,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "777ed8e1906dffd9596db743a12e66fdbce62be276984a2f11de712b5947f261",
           "source": "peer",
-          "responseTimeMillis": 3623
+          "responseTimeMillis": 3340
         },
         {
           "host": "192.209.63.180",
@@ -433,15 +345,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b4a3038da431d7ec01d79c8f014f0bfc5a39517d7876ee5939e5ad52309d25a7",
           "source": "peer",
-          "responseTimeMillis": 2253
-        },
-        {
-          "host": "204.68.128.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3798
+          "responseTimeMillis": 3784
         },
         {
           "host": "206.189.83.21",
@@ -449,7 +353,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "040b6cce4eafd60f9be18ce4317b6cb17ccea414a95b8185e88feeef6c057444",
           "source": "1209k,peer",
-          "responseTimeMillis": 2238
+          "responseTimeMillis": 2058
         },
         {
           "host": "209.38.172.84",
@@ -457,15 +361,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "add77478b64c9be573abebc4f629af97189af11238c096dea6f7f2cf9bd52c24",
           "source": "1209k,peer",
-          "responseTimeMillis": 2615
-        },
-        {
-          "host": "209.51.32.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2796
+          "responseTimeMillis": 2503
         },
         {
           "host": "209.97.160.100",
@@ -473,7 +369,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "089b1ed3aa16a61bf42326276a752a9a68c39765b88f9c3a8481ce9e965f4ea1",
           "source": "1209k,peer",
-          "responseTimeMillis": 2220
+          "responseTimeMillis": 2056
         },
         {
           "host": "213.168.183.227",
@@ -481,7 +377,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d6335ffe9ba203ba02cda39b0db73d3a1e39fbe637c1de71a8f561801c8bf38b",
           "source": "1209k",
-          "responseTimeMillis": 1089
+          "responseTimeMillis": 1778
         },
         {
           "host": "213.199.52.222",
@@ -489,7 +385,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "40691813ba838152d24462e63053659db2d7527d15b3d1da70c861ce3872920d",
           "source": "1209k",
-          "responseTimeMillis": 1847
+          "responseTimeMillis": 5497
         },
         {
           "host": "214.22.197.35.bc.googleusercontent.com",
@@ -497,15 +393,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2663
-        },
-        {
-          "host": "215.81.128.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3919
+          "responseTimeMillis": 2665
         },
         {
           "host": "221.170.101.34.bc.googleusercontent.com",
@@ -513,31 +401,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 3977
+          "responseTimeMillis": 3603
         },
         {
           "host": "23.155.96.131",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "dbf693e76efee60e897f3bf8e044b5355f7f525dc7359bd37618936b78fce4f6",
+          "certificateSha256Fingerprint": "18ac08691d93189ba9ab560a9a0d7caa537ddee75432fd8da8fd4212b54b2770",
           "source": "1209k",
-          "responseTimeMillis": 922
-        },
-        {
-          "host": "235.12.32.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2810
-        },
-        {
-          "host": "238.89.244.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3934
+          "responseTimeMillis": 925
         },
         {
           "host": "239.254.116.34.bc.googleusercontent.com",
@@ -545,7 +417,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2904
+          "responseTimeMillis": 3415
         },
         {
           "host": "24.199.71.49",
@@ -553,7 +425,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "45016b08e372d620d59da116b8e2e25c2a0f0ce09ee1f55bf6e24e1486b8e777",
           "source": "1209k,peer",
-          "responseTimeMillis": 2618
+          "responseTimeMillis": 2505
         },
         {
           "host": "244.149.40.34.bc.googleusercontent.com",
@@ -561,15 +433,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 5072
-        },
-        {
-          "host": "244.69.18.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3289
+          "responseTimeMillis": 3162
         },
         {
           "host": "245.210.94.34.bc.googleusercontent.com",
@@ -577,15 +441,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2616
-        },
-        {
-          "host": "252.48.32.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2761
+          "responseTimeMillis": 2488
         },
         {
           "host": "260.whyza.net",
@@ -601,7 +457,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 3794
+          "responseTimeMillis": 3493
         },
         {
           "host": "34.101.39.54",
@@ -609,7 +465,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 3864
+          "responseTimeMillis": 3609
         },
         {
           "host": "34.116.254.239",
@@ -617,7 +473,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2870
+          "responseTimeMillis": 3448
         },
         {
           "host": "34.118.1.54",
@@ -625,7 +481,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2871
+          "responseTimeMillis": 3248
         },
         {
           "host": "34.121.73.82",
@@ -633,23 +489,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2537
-        },
-        {
-          "host": "34.128.68.204",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3542
-        },
-        {
-          "host": "34.128.81.215",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3910
+          "responseTimeMillis": 2743
         },
         {
           "host": "34.13.139.195",
@@ -657,7 +497,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f3a537517ff4e39fac33cc1d84b5dca36f497736a629ee34d1de137cf6be432a",
           "source": "peer",
-          "responseTimeMillis": 2760
+          "responseTimeMillis": 3293
         },
         {
           "host": "34.133.127.109",
@@ -665,7 +505,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2531
+          "responseTimeMillis": 2698
         },
         {
           "host": "34.138.250.15",
@@ -673,7 +513,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2434
+          "responseTimeMillis": 2841
         },
         {
           "host": "34.141.75.29",
@@ -681,7 +521,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "07476c7a993a7b3ac11fedd24d231dd86d187f26a9b8608fdfe85a1d7e938b62",
           "source": "peer",
-          "responseTimeMillis": 2740
+          "responseTimeMillis": 3239
         },
         {
           "host": "34.153.192.8",
@@ -689,7 +529,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2a7dc9509a7cff5304d4b576bf26645db5875a077c508e87d4b9b9b071ddb134",
           "source": "peer",
-          "responseTimeMillis": 3681
+          "responseTimeMillis": 2971
         },
         {
           "host": "34.159.103.181",
@@ -697,7 +537,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f207d994bbccc7c6157ea01a507c7b374c57ffc37eed8fb9ff7ba6e3f9cc77e3",
           "source": "peer",
-          "responseTimeMillis": 2847
+          "responseTimeMillis": 3287
         },
         {
           "host": "34.159.228.34",
@@ -705,15 +545,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bbd5a1b5949439bd6c03236b6da22cfe0e927d73e00d688dcac8b0647bd5db69",
           "source": "peer",
-          "responseTimeMillis": 2809
-        },
-        {
-          "host": "34.171.34.8",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2572
+          "responseTimeMillis": 3071
         },
         {
           "host": "34.172.232.121",
@@ -721,7 +553,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2487
+          "responseTimeMillis": 2754
         },
         {
           "host": "34.173.233.138",
@@ -729,7 +561,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2490
+          "responseTimeMillis": 2655
         },
         {
           "host": "34.174.156.170",
@@ -737,7 +569,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cb1b9a0438f79d28efb8a205322cdde0990954d9e93a5382dd86890527d89a86",
           "source": "peer",
-          "responseTimeMillis": 2539
+          "responseTimeMillis": 2577
         },
         {
           "host": "34.174.158.243",
@@ -745,7 +577,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2d392de070813fa6d33191ef4b7607a30015f285608e538e1c78897aa676574f",
           "source": "peer",
-          "responseTimeMillis": 2551
+          "responseTimeMillis": 2604
         },
         {
           "host": "34.174.167.84",
@@ -753,7 +585,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c11ef7cfbb6cdacb2360edbf6f56798bcb2750a74fc14aa8a8f01c94fdadb871",
           "source": "peer",
-          "responseTimeMillis": 2485
+          "responseTimeMillis": 2677
         },
         {
           "host": "34.174.217.104",
@@ -761,7 +593,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "73eddad29c82b80e33421b6dcad81be42cb79df807cc90cade91b7a7dbc59395",
           "source": "peer",
-          "responseTimeMillis": 2472
+          "responseTimeMillis": 2587
         },
         {
           "host": "34.174.46.235",
@@ -769,15 +601,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9f81438334d2db5965ce262271536205850428e70298f2b8c43389e66d5d2050",
           "source": "peer",
-          "responseTimeMillis": 2531
-        },
-        {
-          "host": "34.175.239.109",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2841
+          "responseTimeMillis": 2615
         },
         {
           "host": "34.179.190.163",
@@ -785,23 +609,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "67411ebb6145e3a21cc1673b84f73681a814e27ddd27e926d19d87ceb2f98de7",
           "source": "peer",
-          "responseTimeMillis": 2816
+          "responseTimeMillis": 3202
         },
         {
-          "host": "34.18.66.115",
+          "host": "34.19.148.24",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3201
-        },
-        {
-          "host": "34.18.69.244",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3264
+          "certificateSha256Fingerprint": "fa0c08fa43f1f9aaa28643b24f17374bf4faf938ffe7125c0035fafff1a68a2c",
+          "source": "peer",
+          "responseTimeMillis": 2752
         },
         {
           "host": "34.19.234.1",
@@ -809,7 +625,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6a198f819ce2068ea98ee38327b6f08b09dae70864993ae3380860059277fe3d",
           "source": "peer",
-          "responseTimeMillis": 2308
+          "responseTimeMillis": 2894
         },
         {
           "host": "34.21.56.132",
@@ -817,15 +633,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "10bf4a1393ea68835510d231b4b15065ff6356c3de59ff462453597e50813d8a",
           "source": "peer",
-          "responseTimeMillis": 2284
-        },
-        {
-          "host": "34.32.12.235",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2845
+          "responseTimeMillis": 2829
         },
         {
           "host": "34.32.226.149",
@@ -833,39 +641,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ec09b58b6600db274c72f41e04af7770ec2477305131c4771e204f4b84014728",
           "source": "peer",
-          "responseTimeMillis": 2706
-        },
-        {
-          "host": "34.32.36.131",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2828
-        },
-        {
-          "host": "34.32.48.252",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2719
-        },
-        {
-          "host": "34.32.48.56",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2840
-        },
-        {
-          "host": "34.32.51.209",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2804
+          "responseTimeMillis": 3155
         },
         {
           "host": "34.38.117.239",
@@ -873,15 +649,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f8b4f601ab364cd16fd4cbeafc2dad876c48b236140d5ef2a7c477a5d38ed1f4",
           "source": "peer",
-          "responseTimeMillis": 2780
-        },
-        {
-          "host": "34.39.9.100",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2747
+          "responseTimeMillis": 3300
         },
         {
           "host": "34.40.149.244",
@@ -889,7 +657,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 3934
+          "responseTimeMillis": 3516
         },
         {
           "host": "34.47.18.226",
@@ -897,7 +665,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1a44aa447103b3698d592612648c9c18dbfddde13fad361a57fe5cf31689515b",
           "source": "peer",
-          "responseTimeMillis": 2311
+          "responseTimeMillis": 2867
         },
         {
           "host": "34.47.183.146",
@@ -905,7 +673,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "dc17cee2474aaac05bda99f10a127536b0cfb6aec4689eea3333839176df7d34",
           "source": "peer",
-          "responseTimeMillis": 3840
+          "responseTimeMillis": 3908
         },
         {
           "host": "34.47.55.201",
@@ -913,7 +681,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5b915518acad41130d54afae83a33a74535462f009f2f66063e2c37193f8f8cb",
           "source": "peer",
-          "responseTimeMillis": 2335
+          "responseTimeMillis": 2875
         },
         {
           "host": "34.48.222.31",
@@ -921,7 +689,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f629d9ad9591add6ff9c376a06ba1bf7c312aa6ee1d5ba85b2dfb4350faaca6a",
           "source": "peer",
-          "responseTimeMillis": 2287
+          "responseTimeMillis": 2801
         },
         {
           "host": "34.50.93.134",
@@ -929,15 +697,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 3819
-        },
-        {
-          "host": "34.64.177.133",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3676
+          "responseTimeMillis": 3605
         },
         {
           "host": "34.7.95.198",
@@ -945,7 +705,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a2e09052c0270900db08d04577f7ade78bdf83370f7a2ae4aac7b67dbd8e50fd",
           "source": "peer",
-          "responseTimeMillis": 2810
+          "responseTimeMillis": 3339
         },
         {
           "host": "34.77.81.160",
@@ -953,7 +713,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c905efbf5bc05ec0f03682d99200d27e85aaa38f6dbabfbe9e2bc224417b45ee",
           "source": "peer",
-          "responseTimeMillis": 2738
+          "responseTimeMillis": 3588
         },
         {
           "host": "34.84.171.172",
@@ -961,31 +721,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "478182ae77aee728a425aa44f79b25429b2e41b028be919559c9a2a251f804f8",
           "source": "peer",
-          "responseTimeMillis": 3618
-        },
-        {
-          "host": "34.87.220.132",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3934
-        },
-        {
-          "host": "34.87.227.41",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3997
-        },
-        {
-          "host": "34.88.214.4",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2954
+          "responseTimeMillis": 3120
         },
         {
           "host": "34.90.51.226",
@@ -993,7 +729,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5644dd599c83ca8952833c69a33c0b97581dfffebb7bb97d5a3b50e46d5cab8e",
           "source": "peer",
-          "responseTimeMillis": 2808
+          "responseTimeMillis": 3301
         },
         {
           "host": "34.93.250.242",
@@ -1001,7 +737,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "601457e4e2bbe146bada76cd41157020383e9980f6a68c31a01c96cbb04306a3",
           "source": "peer",
-          "responseTimeMillis": 3885
+          "responseTimeMillis": 3899
         },
         {
           "host": "34.93.251.171",
@@ -1009,7 +745,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "66e3d249082a5c09e076cb5fc56efdc2eb183ad3cd4d268791386ab1b0f92aea",
           "source": "peer",
-          "responseTimeMillis": 3848
+          "responseTimeMillis": 3928
         },
         {
           "host": "34.94.210.245",
@@ -1017,23 +753,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2661
-        },
-        {
-          "host": "34.96.220.189",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3632
-        },
-        {
-          "host": "35.189.13.187",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 4773
+          "responseTimeMillis": 2462
         },
         {
           "host": "35.190.233.80",
@@ -1041,15 +761,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "864754961064b51a804a19d8c933a5fd20208a29740c7ce8d95a146cf2b4066b",
           "source": "peer",
-          "responseTimeMillis": 3628
-        },
-        {
-          "host": "35.194.147.142",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3568
+          "responseTimeMillis": 3138
         },
         {
           "host": "35.197.22.214",
@@ -1057,15 +769,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k,peer",
-          "responseTimeMillis": 2791
-        },
-        {
-          "host": "35.198.35.60",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3060
+          "responseTimeMillis": 2613
         },
         {
           "host": "35.200.169.149",
@@ -1073,7 +777,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "360e6a54cddbb3243df4c7e13ddcbf89c052995c3ac89048373ea0676c4b4451",
           "source": "peer",
-          "responseTimeMillis": 3846
+          "responseTimeMillis": 3855
         },
         {
           "host": "35.200.205.108",
@@ -1081,7 +785,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2ceab466ebfba063848e45c638e1f1360c4d35910ce5d34eb30a61c191a113ae",
           "source": "peer",
-          "responseTimeMillis": 3776
+          "responseTimeMillis": 3903
         },
         {
           "host": "35.203.107.152",
@@ -1089,7 +793,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8b5fd494296d4597f48bdb4fdfe8ae601de15cdad59644ce93e8cfe1b6931231",
           "source": "peer",
-          "responseTimeMillis": 2300
+          "responseTimeMillis": 2877
         },
         {
           "host": "35.204.93.87",
@@ -1097,7 +801,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "3c923f448e4fcbec04326e61f43906d8c235eec1a8cb2757c90cac0ae4bf28b7",
           "source": "peer",
-          "responseTimeMillis": 2792
+          "responseTimeMillis": 3353
         },
         {
           "host": "35.205.207.213",
@@ -1105,7 +809,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e270d095f8952a0e439490e6ee83d36ec90fed0f9f99c665b8cff17607f5bc23",
           "source": "peer",
-          "responseTimeMillis": 2737
+          "responseTimeMillis": 3163
         },
         {
           "host": "35.205.222.207",
@@ -1113,23 +817,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "77ea37bfdbfa78e73f17cbdea37d54c5c2c3043014e494822214f30f39e90d17",
           "source": "peer",
-          "responseTimeMillis": 2635
-        },
-        {
-          "host": "35.221.221.16",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3615
-        },
-        {
-          "host": "35.225.75.62",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2490
+          "responseTimeMillis": 3086
         },
         {
           "host": "35.233.45.83",
@@ -1137,39 +825,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4124813051c9ab2b0a4e105c0323303811784171c1787cfb8f74906216002855",
           "source": "peer",
-          "responseTimeMillis": 2798
-        },
-        {
-          "host": "35.238.228.147",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 2527
-        },
-        {
-          "host": "35.244.75.164",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 4016
-        },
-        {
-          "host": "35.244.75.18",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 4005
-        },
-        {
-          "host": "35.244.89.238",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 3976
+          "responseTimeMillis": 3261
         },
         {
           "host": "35.246.146.80",
@@ -1177,7 +833,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "58cc7f6faa31c869b39c191af419f35477307b117271c0128572193310606458",
           "source": "peer",
-          "responseTimeMillis": 2817
+          "responseTimeMillis": 3286
         },
         {
           "host": "37.27.18.174",
@@ -1185,23 +841,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bf80d4c50003519bc2bad939e965e1ccd21c12126cdb9b2698be14caeb7b03ef",
           "source": "1209k,peer",
-          "responseTimeMillis": 1153
-        },
-        {
-          "host": "4.214.88.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3066
-        },
-        {
-          "host": "41.227.87.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3932
+          "responseTimeMillis": 1988
         },
         {
           "host": "5.161.104.106",
@@ -1209,7 +849,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "86568eb08dbf23bd13f5b054046882e8b5f545358533f7f5521ab839b4519485",
           "source": "1209k,peer",
-          "responseTimeMillis": 395
+          "responseTimeMillis": 982
         },
         {
           "host": "5.78.65.104",
@@ -1217,7 +857,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c178c196fe3bdcae5840b95a02219080083a25b236b66ff6a83261853c8e0941",
           "source": "1209k,peer",
-          "responseTimeMillis": 990
+          "responseTimeMillis": 896
         },
         {
           "host": "5.78.90.154",
@@ -1225,7 +865,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f8527060d7b18b229e6868fb9229683ec7bd9e9883e04ac635b290ddf20f8b53",
           "source": "1209k,peer",
-          "responseTimeMillis": 973
+          "responseTimeMillis": 815
         },
         {
           "host": "5.9.83.108",
@@ -1241,7 +881,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8ab7743929f6fc199d3caf74576b6cf683504a925903a3d47134c515037e2e55",
           "source": "peer",
-          "responseTimeMillis": 339
+          "responseTimeMillis": 995
         },
         {
           "host": "54.1.118.34.bc.googleusercontent.com",
@@ -1249,7 +889,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2825
+          "responseTimeMillis": 3490
         },
         {
           "host": "54.36.168.56",
@@ -1257,7 +897,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b46531af8fca3d32a9919af5e60f2d87437fdd27aa5f693680f900fe6c3afb99",
           "source": "1209k",
-          "responseTimeMillis": 1153
+          "responseTimeMillis": 1804
         },
         {
           "host": "54.39.101.34.bc.googleusercontent.com",
@@ -1265,23 +905,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 3935
-        },
-        {
-          "host": "56.48.32.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2848
-        },
-        {
-          "host": "60.35.198.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 3035
+          "responseTimeMillis": 3762
         },
         {
           "host": "61.149.198.104.bc.googleusercontent.com",
@@ -1289,15 +913,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2527
-        },
-        {
-          "host": "62.75.225.35.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2559
+          "responseTimeMillis": 2755
         },
         {
           "host": "65.108.146.20",
@@ -1305,7 +921,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8c15fddb2dae642a87fc490d2e1deb407ef8c2b37c990717361f305cea000cc6",
           "source": "1209k,peer",
-          "responseTimeMillis": 1156
+          "responseTimeMillis": 1889
         },
         {
           "host": "78.46.102.70",
@@ -1313,15 +929,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2bcf8fe6d5249ba384241462e55605160effcb04ae2bd025000f3139d469ca64",
           "source": "1209k",
-          "responseTimeMillis": 1059
-        },
-        {
-          "host": "8.34.171.34.bc.googleusercontent.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
-          "source": "1209k",
-          "responseTimeMillis": 2456
+          "responseTimeMillis": 1716
         },
         {
           "host": "81.0.248.23",
@@ -1329,7 +937,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c80b435992f87fbc02a29f0630c723877a38d5a6b27e58155f2039804ae9370b",
           "source": "peer",
-          "responseTimeMillis": 2773
+          "responseTimeMillis": 3131
         },
         {
           "host": "82.73.121.34.bc.googleusercontent.com",
@@ -1337,7 +945,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15e3adf1d13fec9293581f709c85c183505b8adfefff30f31887a8cb416a88b9",
           "source": "1209k",
-          "responseTimeMillis": 2448
+          "responseTimeMillis": 2715
         },
         {
           "host": "84.242.84.78",
@@ -1345,7 +953,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9c097a7fc6001ac0061ba52c049cee40f1665f59fe05faf75fe551e7dbd33f66",
           "source": "1209k",
-          "responseTimeMillis": 992
+          "responseTimeMillis": 1763
         },
         {
           "host": "85.239.236.108",
@@ -1353,7 +961,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e62a1b5fe652e28b40194a3562ef4c2bda19fe23e0e0112ed603f82ab4778c39",
           "source": "peer",
-          "responseTimeMillis": 2692
+          "responseTimeMillis": 2604
         },
         {
           "host": "87.63.200.138",
@@ -1361,7 +969,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "dcaba364e38673b8fe0df13b06b4c1176439304e8b8f720aa7888c98942b870f",
           "source": "1209k",
-          "responseTimeMillis": 1126
+          "responseTimeMillis": 1767
         },
         {
           "host": "88.119.167.62",
@@ -1369,7 +977,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "228dce5bee04472a8764d160425688a66cbbeee88ceb08cf05a1288654d3dd62",
           "source": "peer",
-          "responseTimeMillis": 3766
+          "responseTimeMillis": 4237
         },
         {
           "host": "95.217.179.14",
@@ -1377,7 +985,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d75f5cb677251be103b00e06fd1406e8ddd3e4affb783024eef6631a611668ca",
           "source": "1209k,peer",
-          "responseTimeMillis": 1185
+          "responseTimeMillis": 1976
         },
         {
           "host": "0b111101001101001.freedns.rocks",
@@ -1385,7 +993,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "52d6dce101dc18072918c7b91d8a3aea8a1cb6ab4fbe53632abcae558256ed12",
           "source": "1209k,peer",
-          "responseTimeMillis": 2145
+          "responseTimeMillis": 2417
         },
         {
           "host": "0xrpc.io",
@@ -1401,7 +1009,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "89feec28ceeee5577733bb134588043b010bb046ad19bc0eda221a4ba1fb6162",
           "source": "1209k",
-          "responseTimeMillis": 2205
+          "responseTimeMillis": 1883
         },
         {
           "host": "203-132-94-196.ip4.superloop.au",
@@ -1409,7 +1017,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2835461e2f68ed6c9b53c1c53d393a4fed46ceeee3484e8f922e44214a21620d",
           "source": "1209k",
-          "responseTimeMillis": 2087
+          "responseTimeMillis": 1878
         },
         {
           "host": "2ex.digitaleveryware.com",
@@ -1417,7 +1025,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8f074354c6d1cb03879e66f9e5b5a982766b9e2111159056155a2409217bdaa2",
           "source": "1209k,peer",
-          "responseTimeMillis": 976
+          "responseTimeMillis": 592
         },
         {
           "host": "alviss.coinjoined.com",
@@ -1425,7 +1033,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f54e232a1cb03d01bd8c47def7c7e0670e3ae0fd8d7f84b309d923e49ef8addd",
           "source": "1209k,peer",
-          "responseTimeMillis": 1086
+          "responseTimeMillis": 1675
         },
         {
           "host": "arc20bitworklabs.duckdns.org",
@@ -1433,7 +1041,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cd31495f42f96b83f0dc2b091835b3548235502fa251019ebd669c900b6cccf9",
           "source": "peer",
-          "responseTimeMillis": 1096
+          "responseTimeMillis": 1688
         },
         {
           "host": "b.1209k.com",
@@ -1441,7 +1049,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1ad87cc9d201090d219a46d8416647edc8466b5c7b6e7a327d3c3c3303f44d9d",
           "source": "1209k",
-          "responseTimeMillis": 797
+          "responseTimeMillis": 782
         },
         {
           "host": "b.fem.sh",
@@ -1449,7 +1057,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "11768f4877f4f404efd5acbc1402a55a1ee41f77158e3de6bde2675aa9f05567",
           "source": "1209k,peer",
-          "responseTimeMillis": 999
+          "responseTimeMillis": 1607
+        },
+        {
+          "host": "bastxb.asia",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "eb8cd63515e822e161e37ad11daa3564e6389062b3553ae3509b5be4308dcbf0",
+          "source": "peer",
+          "responseTimeMillis": 2991
         },
         {
           "host": "bitcoin.aranguren.org",
@@ -1457,15 +1073,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2835461e2f68ed6c9b53c1c53d393a4fed46ceeee3484e8f922e44214a21620d",
           "source": "1209k,peer",
-          "responseTimeMillis": 1987
+          "responseTimeMillis": 1843
         },
         {
           "host": "bitcoin.grey.pw",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "68586a816206fbaaa4a56515f75fc38074143c6a145ce7a86bf62ffe5dd6fe1b",
+          "certificateSha256Fingerprint": "c70da772c6a5ed028f44ef7e402c3c1e0f053e954f85f9c3711441a62eed0006",
           "source": "1209k,peer",
-          "responseTimeMillis": 1284
+          "responseTimeMillis": 2867
+        },
+        {
+          "host": "bitcoin.hub-bit.org",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "4a4dc8a5163d85a62c03c5327d68a180e238fd1d1ac5b1ce72c0bbd7ac2bba9e",
+          "source": "peer",
+          "responseTimeMillis": 2225
         },
         {
           "host": "bitcoin.lu.ke",
@@ -1473,7 +1097,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4bcd748eb934a116fd6e8d08d321ac2bbe0350e156b621929cca5518bca7364f",
           "source": "1209k,peer",
-          "responseTimeMillis": 7033
+          "responseTimeMillis": 5402
         },
         {
           "host": "bitcoin.mullvad.net",
@@ -1481,7 +1105,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "77223f52cf4dfdb60834e53e2d8c428d08608c0abe8fbe7c5165429ec0f9fc89",
           "source": "1209k,peer",
-          "responseTimeMillis": 1096
+          "responseTimeMillis": 1840
+        },
+        {
+          "host": "bitcoin.polcoino.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "b047f87781b68c8fecccd203497f65bc7b90d421a61c4d2b2fc5aea1f7c4490e",
+          "source": "peer",
+          "responseTimeMillis": 2356
+        },
+        {
+          "host": "bitcoin.privacy-explorer.net",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "32df9c3f173e495556258f94d6150125b23d224c58956112ab2d8d119cb843c2",
+          "source": "peer",
+          "responseTimeMillis": 3035
         },
         {
           "host": "bitcoin.stackwallet.com",
@@ -1489,7 +1129,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2bcf8fe6d5249ba384241462e55605160effcb04ae2bd025000f3139d469ca64",
           "source": "1209k",
-          "responseTimeMillis": 1012
+          "responseTimeMillis": 1752
         },
         {
           "host": "bitcoinserver.nl",
@@ -1505,7 +1145,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a412f0414579a1fd1fea289dff195a6c8f88e1e1e592fc4e8de2d3f25a528c7a",
           "source": "1209k,peer",
-          "responseTimeMillis": 647
+          "responseTimeMillis": 738
         },
         {
           "host": "block-ex.com",
@@ -1513,23 +1153,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4b48ac778f794ce47765fe07dfb110c39d63accfe0e80ab6059f6bcde5e7098f",
           "source": "1209k,peer",
-          "responseTimeMillis": 5314
+          "responseTimeMillis": 5504
         },
         {
           "host": "blockitall.us",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "152a2e709a6df9cfb6365f393a68253bf817b44879ca1641a14e8c08a301b1bf",
+          "certificateSha256Fingerprint": "92798400dbb0a50b59f95a5467479549e0895f568cc9d16877129c2a6ae1e8da",
           "source": "1209k",
-          "responseTimeMillis": 445
+          "responseTimeMillis": 1015
         },
         {
           "host": "blockstream.info",
           "port": 700,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "dbf693e76efee60e897f3bf8e044b5355f7f525dc7359bd37618936b78fce4f6",
+          "certificateSha256Fingerprint": "18ac08691d93189ba9ab560a9a0d7caa537ddee75432fd8da8fd4212b54b2770",
           "source": "1209k",
-          "responseTimeMillis": 747
+          "responseTimeMillis": 715
         },
         {
           "host": "blog.bitcoinserver.nl",
@@ -1545,7 +1185,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5f34fd83b29f4af9ce90b8445bbf1803d8fbd935219c653dfd652322a2ffd48a",
           "source": "1209k,peer",
-          "responseTimeMillis": 1006
+          "responseTimeMillis": 1776
         },
         {
           "host": "btc-electrum.cakewallet.com",
@@ -1553,7 +1193,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a556c56e90d4397e300c05fbe31db8f100744e03b66e314860b0ad794b9546c0",
           "source": "1209k",
-          "responseTimeMillis": 574
+          "responseTimeMillis": 808
         },
         {
           "host": "btc-main.compumundohipermegared.one",
@@ -1561,7 +1201,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9c097a7fc6001ac0061ba52c049cee40f1665f59fe05faf75fe551e7dbd33f66",
           "source": "1209k,peer",
-          "responseTimeMillis": 1143
+          "responseTimeMillis": 1834
         },
         {
           "host": "btc.accessnodes.com",
@@ -1569,7 +1209,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "db0c273617fda8806908114e2844e2c0e4139bdf1fc13642f419fe938a796fcd",
           "source": "peer",
-          "responseTimeMillis": 525
+          "responseTimeMillis": 1049
         },
         {
           "host": "btc.aftrek.org",
@@ -1577,7 +1217,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "554f5d397da76c311e4296ad4bb0d1bfaae74bfd75a6aacc75ce1250d58d83d4",
           "source": "1209k,peer",
-          "responseTimeMillis": 1155
+          "responseTimeMillis": 1695
+        },
+        {
+          "host": "btc.anoncoins.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "809f3150e9265e6aa57524acdd5b98ffba84ac0021ef1ceedddf4fa988a06a50",
+          "source": "peer",
+          "responseTimeMillis": 1646
         },
         {
           "host": "btc.block-access.com",
@@ -1585,7 +1233,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8146d05fca4e3999f213c6e4c5455fd380f0fed1faecc04134993ccf95afe322",
           "source": "peer",
-          "responseTimeMillis": 447
+          "responseTimeMillis": 1044
         },
         {
           "host": "btc.byte-share.com",
@@ -1593,7 +1241,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b757a2d9f3a45c7c736404aa4723e79a30c3afd36cbe4ab4be8ac907dcdb3158",
           "source": "peer",
-          "responseTimeMillis": 482
+          "responseTimeMillis": 1071
         },
         {
           "host": "btc.electroncash.dk",
@@ -1601,7 +1249,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "dcaba364e38673b8fe0df13b06b4c1176439304e8b8f720aa7888c98942b870f",
           "source": "1209k,peer",
-          "responseTimeMillis": 1183
+          "responseTimeMillis": 1769
         },
         {
           "host": "btc.electrum.bitbitnet.net",
@@ -1609,7 +1257,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c84fea4421e1c6251b24a46d2f1a06aa76a2c81dd08f927ad12968628a2d6724",
           "source": "peer",
-          "responseTimeMillis": 441
+          "responseTimeMillis": 966
         },
         {
           "host": "btc.hashpublic.com",
@@ -1617,7 +1265,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "87d0120c92fbf60ebcf33819a45dd42866f7843c4a603e4d5c310d65cb9a4d48",
           "source": "peer",
-          "responseTimeMillis": 479
+          "responseTimeMillis": 1033
         },
         {
           "host": "btc.hodler.ninja",
@@ -1625,7 +1273,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7ccc758a5b975fbf8011963959886878c63ad0a87b2dfaa3429fae8d3c1ba45e",
           "source": "1209k,peer",
-          "responseTimeMillis": 2214
+          "responseTimeMillis": 1849
+        },
+        {
+          "host": "btc.kaydex.pro",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "64415ed41301d17c6fff3e3b8d64655d3ab1c2369f89dd1033b416b5c78a3ff6",
+          "source": "peer",
+          "responseTimeMillis": 1987
         },
         {
           "host": "btc.ocf.sh",
@@ -1633,7 +1289,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "89feec28ceeee5577733bb134588043b010bb046ad19bc0eda221a4ba1fb6162",
           "source": "1209k,peer",
-          "responseTimeMillis": 2237
+          "responseTimeMillis": 2093
         },
         {
           "host": "btc.openchains.net",
@@ -1641,7 +1297,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "678adfd027527b7851ffb7c36a7aed9646a06963df41fc169be29a4c32ce478a",
           "source": "peer",
-          "responseTimeMillis": 506
+          "responseTimeMillis": 895
         },
         {
           "host": "btc.publicrypto.com",
@@ -1649,7 +1305,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a52bf4f8b28f4fb8805b1f7e744dd7e8c39b2e618898702973ae82f6528e6cca",
           "source": "peer",
-          "responseTimeMillis": 508
+          "responseTimeMillis": 1004
         },
         {
           "host": "btc.reichster.de",
@@ -1657,7 +1313,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "40691813ba838152d24462e63053659db2d7527d15b3d1da70c861ce3872920d",
           "source": "1209k,peer",
-          "responseTimeMillis": 1678
+          "responseTimeMillis": 6977
         },
         {
           "host": "btc2.accessnodes.com",
@@ -1665,7 +1321,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "06b2999ed8d6d251b0013ddee5a0898fa0174d462e320aa270f1fa1e99bc94b0",
           "source": "peer",
-          "responseTimeMillis": 471
+          "responseTimeMillis": 1063
         },
         {
           "host": "btc2.block-access.com",
@@ -1673,7 +1329,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "691d86aaf2aa67b6c6f4451a683e12c203d4a896b46c3e5f48d08b50acdbd34f",
           "source": "peer",
-          "responseTimeMillis": 459
+          "responseTimeMillis": 946
         },
         {
           "host": "btc2.byte-share.com",
@@ -1681,7 +1337,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "33403ffc55389a113457b73ac0cb07d28f54c3d845e767270da5707d83b90140",
           "source": "peer",
-          "responseTimeMillis": 584
+          "responseTimeMillis": 1103
         },
         {
           "host": "btc2.hashpublic.com",
@@ -1689,7 +1345,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7d2e3344f2ca926f2e0e3343c26e6bb42a6f2643cfccdf3fd1c2c573a82714e4",
           "source": "peer",
-          "responseTimeMillis": 474
+          "responseTimeMillis": 952
         },
         {
           "host": "btc2.openchains.net",
@@ -1697,7 +1353,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "92353391e7e0ca723a674ef2aab86ed75b9b9e322938674c691101a56d863c22",
           "source": "peer",
-          "responseTimeMillis": 438
+          "responseTimeMillis": 1067
         },
         {
           "host": "btc2.publicrypto.com",
@@ -1705,7 +1361,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "68e98473fe0159b8e5de53605351dc1966c4992941eed9029e8435f2701d3b3e",
           "source": "peer",
-          "responseTimeMillis": 487
+          "responseTimeMillis": 996
         },
         {
           "host": "btc3.accessnodes.com",
@@ -1713,7 +1369,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "59c4aecf3beebff6a9f39950f7099526edd0be54d828e9edcdcd15710ab8950d",
           "source": "peer",
-          "responseTimeMillis": 449
+          "responseTimeMillis": 883
         },
         {
           "host": "btc3.block-access.com",
@@ -1721,7 +1377,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5e9618ff0ab5d725c021f8c91128c4ee6e0184f491ed92c6fdc86688718d8b98",
           "source": "peer",
-          "responseTimeMillis": 463
+          "responseTimeMillis": 995
         },
         {
           "host": "btc3.byte-share.com",
@@ -1729,7 +1385,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9615668a2ff796ef45154dd4b89041fd018e3ba9b7ceb7dc86eb212b861ef26e",
           "source": "peer",
-          "responseTimeMillis": 456
+          "responseTimeMillis": 942
         },
         {
           "host": "btc3.hashpublic.com",
@@ -1737,7 +1393,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6dc97e236ff44456efcae01d0ee5b65a1840ae0cd7c84cd3e9fb514ba4fa20b9",
           "source": "peer",
-          "responseTimeMillis": 397
+          "responseTimeMillis": 998
         },
         {
           "host": "btc3.openchains.net",
@@ -1745,7 +1401,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "aa04385d26fad11812367a34cbaa2303e32c6a53d3ae0049abc0b439fa3a5d05",
           "source": "peer",
-          "responseTimeMillis": 457
+          "responseTimeMillis": 1064
         },
         {
           "host": "btc3.publicrypto.com",
@@ -1753,7 +1409,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6c4b791aa8e099f6ca4142a79bb2a5dcbc8f8157ff3f0de19e450bed82ba7cb9",
           "source": "peer",
-          "responseTimeMillis": 484
+          "responseTimeMillis": 995
         },
         {
           "host": "btc4.accessnodes.com",
@@ -1761,7 +1417,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "987b44122cd3cf1b64d2847561c798ddf941da7130c358ae460ee7d894f8fda7",
           "source": "peer",
-          "responseTimeMillis": 509
+          "responseTimeMillis": 1015
         },
         {
           "host": "btc4.block-access.com",
@@ -1769,7 +1425,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "31d56bcbc4d4d59c0e0d05590ff398e695f1486054c48b3e2938b683b72398e8",
           "source": "peer",
-          "responseTimeMillis": 446
+          "responseTimeMillis": 1050
         },
         {
           "host": "btc4.byte-share.com",
@@ -1777,7 +1433,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bed83f87df7331d030f07a1167f41ba418982565cbde056af846f904c6e1eb1c",
           "source": "peer",
-          "responseTimeMillis": 434
+          "responseTimeMillis": 980
         },
         {
           "host": "btc4.hashpublic.com",
@@ -1785,7 +1441,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "af3b3febd0a7b3e4b144061c8acd25220acb6ce495eceb214b77b3f6e92fde97",
           "source": "peer",
-          "responseTimeMillis": 441
+          "responseTimeMillis": 1051
         },
         {
           "host": "btc4.openchains.net",
@@ -1793,7 +1449,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2749619b25d163fea4fbc2963a1de17942038626c161ec796e12728664cc8993",
           "source": "peer",
-          "responseTimeMillis": 465
+          "responseTimeMillis": 1055
         },
         {
           "host": "btc4.publicrypto.com",
@@ -1801,7 +1457,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "934874429aa0af24caba47c849bf25115583f162d434fe4c5406944cae975b92",
           "source": "peer",
-          "responseTimeMillis": 365
+          "responseTimeMillis": 1269
         },
         {
           "host": "btc5.publicrypto.com",
@@ -1809,7 +1465,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "225809bd1a0894afe4497e01c40af4f01fff50a9cc96de303d67f1dad35ee2d0",
           "source": "peer",
-          "responseTimeMillis": 487
+          "responseTimeMillis": 1108
         },
         {
           "host": "btce.iiiiiii.biz",
@@ -1817,7 +1473,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "85bb2edb8d82d10ce551b224a0df22a3aed0eb89a34a55ad4b6b1ba879824aec",
           "source": "1209k,peer",
-          "responseTimeMillis": 2352
+          "responseTimeMillis": 2449
         },
         {
           "host": "btce2.iiiiiii.biz",
@@ -1825,7 +1481,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "dd377dedef1b6949303e875b244755ce47fa1c62443cdfbfe6b0967298f00127",
           "source": "peer",
-          "responseTimeMillis": 2241
+          "responseTimeMillis": 2698
+        },
+        {
+          "host": "btcoindood.me",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "c8a378596067fa169c585856efda4536a8ec0a9462ef59f04daf373d94f20640",
+          "source": "peer",
+          "responseTimeMillis": 1880
+        },
+        {
+          "host": "btconoz.com",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "a153a5354c2ff60556a3989e05009f992f6427a0ecaafcf77f8b0dee9df3409f",
+          "source": "peer",
+          "responseTimeMillis": 2677
         },
         {
           "host": "caleb.vegas",
@@ -1833,15 +1505,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d5811e466cdde6a9a52d715643b5619bbc5ef770bcd7a4bd7edf7926212e01b0",
           "source": "1209k,peer",
-          "responseTimeMillis": 412
-        },
-        {
-          "host": "chi.electrum.blockitall.us",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "152a2e709a6df9cfb6365f393a68253bf817b44879ca1641a14e8c08a301b1bf",
-          "source": "peer",
-          "responseTimeMillis": 439
+          "responseTimeMillis": 1068
         },
         {
           "host": "clownshow.fiatfaucet.com",
@@ -1849,7 +1513,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4a02d675e018f4b3b5e49029d9ba4749121a624f90cbcf0f04325e6c288c2f56",
           "source": "1209k,peer",
-          "responseTimeMillis": 1291
+          "responseTimeMillis": 1845
         },
         {
           "host": "coin01.ssdata.dk",
@@ -1857,7 +1521,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d3160ed64d5f83ade32e3d8013739faf007aa690fa8b1552303e45d264c511d5",
           "source": "1209k,peer",
-          "responseTimeMillis": 1060
+          "responseTimeMillis": 1845
+        },
+        {
+          "host": "cryptexplorer.net",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "9c478528fde12e7db68021010cee1ae3cedb210c3119f98c2d0d2d78ce222d64",
+          "source": "peer",
+          "responseTimeMillis": 2699
         },
         {
           "host": "d762li0k0g.d.firewalla.org",
@@ -1865,15 +1537,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9e66afe846644a022ab201bf32233b5e7ff69cc830b2d58390520b2c1f8b340f",
           "source": "1209k,peer",
-          "responseTimeMillis": 761
+          "responseTimeMillis": 994
         },
         {
           "host": "det.electrum.blockitall.us",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "152a2e709a6df9cfb6365f393a68253bf817b44879ca1641a14e8c08a301b1bf",
+          "certificateSha256Fingerprint": "92798400dbb0a50b59f95a5467479549e0895f568cc9d16877129c2a6ae1e8da",
           "source": "1209k,peer",
-          "responseTimeMillis": 454
+          "responseTimeMillis": 1036
         },
         {
           "host": "dijon.anties.org",
@@ -1881,7 +1553,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "781ec94f780af0756b7399081330d8cf07a84ee5d679da4a591c0a005596a9bc",
           "source": "1209k,peer",
-          "responseTimeMillis": 1091
+          "responseTimeMillis": 1742
         },
         {
           "host": "dontwanna.phone-home.org",
@@ -1889,7 +1561,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d072ec439f97246df6a121a93d9a9d93c12d9a73ace94633f9e82bee558498ae",
           "source": "peer,1209k",
-          "responseTimeMillis": 2244
+          "responseTimeMillis": 3557
         },
         {
           "host": "e.keff.org",
@@ -1897,7 +1569,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5daca348375047e8c12b0aeeb11e04a6af518009ef2740ad866f39ed888118a6",
           "source": "1209k,peer",
-          "responseTimeMillis": 1113
+          "responseTimeMillis": 1823
         },
         {
           "host": "e2.keff.org",
@@ -1905,7 +1577,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5daca348375047e8c12b0aeeb11e04a6af518009ef2740ad866f39ed888118a6",
           "source": "1209k",
-          "responseTimeMillis": 1104
+          "responseTimeMillis": 1807
         },
         {
           "host": "eai.coincited.net",
@@ -1913,7 +1585,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "dc237cb144857746ec284a0e591aca406cdf76e63619d85090b39363a871c831",
           "source": "1209k,peer",
-          "responseTimeMillis": 1276
+          "responseTimeMillis": 2007
         },
         {
           "host": "ecdsa.net",
@@ -1921,7 +1593,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "94bc643e7493560ca4fb627a2710b749478e67dc284c3660b24ab10296576fa3",
           "source": "1209k",
-          "responseTimeMillis": 1266
+          "responseTimeMillis": 1910
         },
         {
           "host": "electrum-btc.nicevps.net",
@@ -1929,7 +1601,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "462385ce5cfb0b25e1647beea3a2fb94736a92d42750b675b7952c7399bc734e",
           "source": "peer",
-          "responseTimeMillis": 964
+          "responseTimeMillis": 1762
         },
         {
           "host": "electrum.acinq.co",
@@ -1937,23 +1609,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b4e19e3660ab9455ddc54b6d2d4be972bae3d2b709355c56754d0b22bfe70f03",
           "source": "1209k",
-          "responseTimeMillis": 378
-        },
-        {
-          "host": "electrum.activcloud.eu",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "4b1b0d8515a707dc5bf52e4d722f721db22b3e931111fa932d9f0948df8f5bda",
-          "source": "1209k,peer",
-          "responseTimeMillis": 1420
-        },
-        {
-          "host": "electrum.albertasats.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "454b45c64466d662cc230bd9f27c723855398ef3155bb86bf935bb8884be3f26",
-          "source": "1209k,peer",
-          "responseTimeMillis": 797
+          "responseTimeMillis": 1131
         },
         {
           "host": "electrum.alte.ca",
@@ -1961,7 +1617,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6907206455318dd411afa0832dde0da857470f703d97da23f3f3aec65833e50d",
           "source": "peer,1209k",
-          "responseTimeMillis": 1266
+          "responseTimeMillis": 1125
         },
         {
           "host": "electrum.bitaroo.net",
@@ -1969,31 +1625,39 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4b7ea68d5e91d87ce0df8662079825410a5859c15eaeab3c3184b5e0beb26bd3",
           "source": "1209k,peer",
-          "responseTimeMillis": 1098
+          "responseTimeMillis": 2002
         },
         {
           "host": "electrum.bitrefill.dev",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "a40d204d10c834c51fc39ffb493dde7715e5c7191421f20983f0a9cf4e8fd69f",
+          "certificateSha256Fingerprint": "de6231ee757cdb2f6c41ab3893229e4da3799116eb5585909715fc25cdf3c1ba",
           "source": "peer,1209k",
-          "responseTimeMillis": 963
+          "responseTimeMillis": 1655
         },
         {
-          "host": "electrum.blockitall.us",
+          "host": "electrum.bitshop.online",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "152a2e709a6df9cfb6365f393a68253bf817b44879ca1641a14e8c08a301b1bf",
-          "source": "1209k",
-          "responseTimeMillis": 462
+          "certificateSha256Fingerprint": "5d52a4d6d6078410f3cb2f24815a8c0920e123fbd574188aa948ef6965ae2290",
+          "source": "peer",
+          "responseTimeMillis": 1896
         },
         {
           "host": "electrum.blockstream.info",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "dbf693e76efee60e897f3bf8e044b5355f7f525dc7359bd37618936b78fce4f6",
+          "certificateSha256Fingerprint": "18ac08691d93189ba9ab560a9a0d7caa537ddee75432fd8da8fd4212b54b2770",
           "source": "1209k,peer",
-          "responseTimeMillis": 1085
+          "responseTimeMillis": 1027
+        },
+        {
+          "host": "electrum.brainshome.de",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "85b72189cd4a57a4c229b549ce13c8f38ff693298ba01a362959d3b4323bbd3e",
+          "source": "peer",
+          "responseTimeMillis": 5512
         },
         {
           "host": "electrum.cakewallet.com",
@@ -2001,7 +1665,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a556c56e90d4397e300c05fbe31db8f100744e03b66e314860b0ad794b9546c0",
           "source": "1209k",
-          "responseTimeMillis": 530
+          "responseTimeMillis": 873
         },
         {
           "host": "electrum.coinfinity.co",
@@ -2009,7 +1673,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "be1a47a18e0c1211634ad3a2034cb4115b4612c1c5248bb60ff98f378a2a3906",
           "source": "1209k,peer",
-          "responseTimeMillis": 1047
+          "responseTimeMillis": 1903
         },
         {
           "host": "electrum.coinfroggy.com",
@@ -2017,7 +1681,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ba81182a8faa327154f4610acdd1b15a04a633c87f36eb4d86fca5a0e747f171",
           "source": "1209k,peer",
-          "responseTimeMillis": 1001
+          "responseTimeMillis": 707
         },
         {
           "host": "electrum.degga.net",
@@ -2025,7 +1689,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f981c311e347a84e66a1cd3b9c9bd1bcf211512c52e700a40705ef7f623a54c9",
           "source": "peer",
-          "responseTimeMillis": 519
+          "responseTimeMillis": 963
+        },
+        {
+          "host": "electrum.digitalwhich.info",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "5a9bd9f81f472e210a6a771182ba81f562e402ea78a02b7b4c5f945c66312e40",
+          "source": "peer",
+          "responseTimeMillis": 2617
         },
         {
           "host": "electrum.emzy.de",
@@ -2033,7 +1705,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b25da2929c0f65e016cfec2a24661ffc587fddd832f50aed26e05a2ede4cdf34",
           "source": "1209k,peer",
-          "responseTimeMillis": 5980
+          "responseTimeMillis": 5668
         },
         {
           "host": "electrum.hsmiths.com",
@@ -2041,15 +1713,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b019752b64ba76a7cec64f8b32943428864e96aed6887ca81d4aa239c2a0fdd2",
           "source": "1209k",
-          "responseTimeMillis": 1237
+          "responseTimeMillis": 1947
         },
         {
           "host": "electrum.jhoenicke.de",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "ed44d5812c37b7ed7a821da7bb8f0e49d9e8bf5329f5824dda2ab04fe6d90720",
+          "certificateSha256Fingerprint": "2a066a4a169323bec5847fc092dcd1270864f6448beb8179bed0a5520ff412e8",
           "source": "1209k,peer",
-          "responseTimeMillis": 1011
+          "responseTimeMillis": 1756
         },
         {
           "host": "electrum.kampfschnitzel.at",
@@ -2057,7 +1729,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "25c7e0bac7bb1fc8df47708812f8de63e74034d1d316864d8aea7ff3433e8493",
           "source": "1209k",
-          "responseTimeMillis": 1075
+          "responseTimeMillis": 1895
         },
         {
           "host": "electrum.legalise.it",
@@ -2065,7 +1737,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b4d2bc67d22355b4904e124fe51c68accb8544013c7733fb978e0ab953c13bfe",
           "source": "1209k,peer",
-          "responseTimeMillis": 2094
+          "responseTimeMillis": 1774
         },
         {
           "host": "electrum.loyce.club",
@@ -2073,7 +1745,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c25102e8df6420091bd6a6933b5a4fd50792e0a11a6710b11cba38cb03b96f82",
           "source": "1209k,peer",
-          "responseTimeMillis": 368
+          "responseTimeMillis": 1118
         },
         {
           "host": "electrum.lu.ke",
@@ -2081,15 +1753,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4bcd748eb934a116fd6e8d08d321ac2bbe0350e156b621929cca5518bca7364f",
           "source": "1209k",
-          "responseTimeMillis": 5207
+          "responseTimeMillis": 5401
         },
         {
           "host": "electrum.marat.to",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "cfacc2cf93bed7068477a0391109936712243183ffe6aa51ca0e9c1ed4415760",
+          "certificateSha256Fingerprint": "0bbe0e69ffabf7f312e93903e5723cb9c8b482be3507615b75261a570e898b1c",
           "source": "1209k,peer",
-          "responseTimeMillis": 1593
+          "responseTimeMillis": 1385
         },
         {
           "host": "electrum.no-logs.info",
@@ -2097,7 +1769,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "03093e3136ea2d4e5757ee878bade76abab7bdcb63709e6b5a810ea6ba407bd2",
           "source": "1209k,peer",
-          "responseTimeMillis": 1455
+          "responseTimeMillis": 2003
         },
         {
           "host": "electrum.pabu.io",
@@ -2105,7 +1777,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b6a90517bcec3ff3efe3e3438312e90e4690d0ec2bcbbdc799f5904d7c701079",
           "source": "1209k",
-          "responseTimeMillis": 1108
+          "responseTimeMillis": 1888
         },
         {
           "host": "electrum.petrkr.net",
@@ -2113,7 +1785,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d6335ffe9ba203ba02cda39b0db73d3a1e39fbe637c1de71a8f561801c8bf38b",
           "source": "1209k,peer",
-          "responseTimeMillis": 1083
+          "responseTimeMillis": 1727
+        },
+        {
+          "host": "electrum.platformbit.asia",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "75bc6b9af0954d22c6052712a1a0749fcfe67be320420bea55f06babb7db94cc",
+          "source": "peer",
+          "responseTimeMillis": 2364
         },
         {
           "host": "electrum.qtornado.com",
@@ -2121,23 +1801,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "284bd8e76c1b408f8e5c0a8d48e0dacda6ec0da85f54ae7e3e4456bd54cbf56b",
           "source": "1209k",
-          "responseTimeMillis": 1662
+          "responseTimeMillis": 2480
         },
         {
-          "host": "electrum.sare.red",
+          "host": "electrum.turboblaster.it",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "b106ed953e2d3ff8091c93b9be3360424119e2623e0cbb872dc2457e1460b628",
+          "certificateSha256Fingerprint": "b09b7e2076ea04b3149c7542f86c3bbc8f0a921823a66a6145ef3d4a56ffddb1",
           "source": "peer",
-          "responseTimeMillis": 1085
-        },
-        {
-          "host": "electrum.tjader.xyz",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "d038996c7960e02de4de0a74cde4b9ef1da9c5f9ebd47ff6029e381ed7f5bd66",
-          "source": "1209k",
-          "responseTimeMillis": 1615
+          "responseTimeMillis": 1779
         },
         {
           "host": "electrum1.bluewallet.io",
@@ -2145,15 +1817,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7b15a1c21db15315154f5030da3c77dde560812c8a44f0ed3d83331ff0c04121",
           "source": "1209k",
-          "responseTimeMillis": 2211
+          "responseTimeMillis": 1944
         },
         {
           "host": "electrum1.cipig.net",
           "port": 20000,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1118
+          "responseTimeMillis": 1708
         },
         {
           "host": "electrum2.bluewallet.io",
@@ -2161,15 +1833,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7b15a1c21db15315154f5030da3c77dde560812c8a44f0ed3d83331ff0c04121",
           "source": "1209k",
-          "responseTimeMillis": 1100
+          "responseTimeMillis": 1762
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20000,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1100
+          "responseTimeMillis": 1768
         },
         {
           "host": "electrum2.snel.it",
@@ -2177,7 +1849,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4f90e838de2f7c52ff40ff7333fba970fdabde6e67a0e6a3e6dd4295952727c1",
           "source": "1209k,peer",
-          "responseTimeMillis": 1949
+          "responseTimeMillis": 1551
         },
         {
           "host": "electrum3.bluewallet.io",
@@ -2185,7 +1857,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7b15a1c21db15315154f5030da3c77dde560812c8a44f0ed3d83331ff0c04121",
           "source": "1209k",
-          "responseTimeMillis": 1106
+          "responseTimeMillis": 1924
         },
         {
           "host": "electrum5.hodlister.co",
@@ -2193,7 +1865,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "584b0ffbdd35258a72c84f2ae5f4d888acf70f0ba9e941c617533674a9107cd7",
           "source": "1209k",
-          "responseTimeMillis": 2283
+          "responseTimeMillis": 1931
         },
         {
           "host": "electrumx-btc.cryptonermal.net",
@@ -2201,7 +1873,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cbcbb81caf2136142de1deb9e4d9ca2913ecc9fc06ac749db36f4a673d33a907",
           "source": "1209k,peer",
-          "responseTimeMillis": 413
+          "responseTimeMillis": 975
         },
         {
           "host": "electrumx-node.pro",
@@ -2209,7 +1881,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "43c2486a3b9ee4e83b5667809a2303cdd832652495082ca9f4e83b5f9e25ed16",
           "source": "1209k,peer",
-          "responseTimeMillis": 1419
+          "responseTimeMillis": 1997
+        },
+        {
+          "host": "electrumx.0-logs.me",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "3137bd7d7cb9a57368bd1b622014c90fa7a2eac41fc317c65a85a278bd633f98",
+          "source": "peer",
+          "responseTimeMillis": 2507
         },
         {
           "host": "electrumx.bot.nu",
@@ -2217,7 +1897,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "689b4827410564f011a4665b566cac2a1a54f35ac08e25a686b0d1aeec65d2a7",
           "source": "peer",
-          "responseTimeMillis": 1903
+          "responseTimeMillis": 2448
+        },
+        {
+          "host": "electrumx.btcexplorers.info",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "5bdd7f8c5290f7fd378120df9a1377b264796e752d85fb9651556c3ac1f0077d",
+          "source": "peer",
+          "responseTimeMillis": 1922
+        },
+        {
+          "host": "electrumx.btcsafe.me",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "2bca3ed8beb3a571dc1c2cb3973b23ca38380a6ba68fe669c44d84fc013f0c6b",
+          "source": "peer",
+          "responseTimeMillis": 1809
         },
         {
           "host": "electrumx.dev",
@@ -2225,7 +1921,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a2ed8b9de61b246df69ad120804b3805cc9df7f0f6e5b581d3fbcfaf5ae32949",
           "source": "peer",
-          "responseTimeMillis": 5544
+          "responseTimeMillis": 5467
         },
         {
           "host": "electrumx.osakam.info",
@@ -2233,7 +1929,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "3268f0f19114a893d02bc67cf0bb2e9a490052aa999e26186bfcf068a6421671",
           "source": "peer",
-          "responseTimeMillis": 3732
+          "responseTimeMillis": 3144
         },
         {
           "host": "elecx.net",
@@ -2241,7 +1937,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "857a93a414d812b647c54ae6658df332a30ad09099cb2a0f178716790f2ca636",
           "source": "peer",
-          "responseTimeMillis": 5307
+          "responseTimeMillis": 5507
         },
         {
           "host": "es.keff.org",
@@ -2249,7 +1945,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5daca348375047e8c12b0aeeb11e04a6af518009ef2740ad866f39ed888118a6",
           "source": "1209k",
-          "responseTimeMillis": 1040
+          "responseTimeMillis": 1733
         },
         {
           "host": "explorerbit.net",
@@ -2257,7 +1953,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8491c2e4ed12890103e64545459626df091824d4346df7dce65c64804cca82dc",
           "source": "peer",
-          "responseTimeMillis": 2725
+          "responseTimeMillis": 3376
         },
         {
           "host": "exs.dyshek.org",
@@ -2265,7 +1961,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6a1f741926ec290cdd6390bced884e954d9477efc90ec774de5f0cd15232d84d",
           "source": "1209k,peer",
-          "responseTimeMillis": 1149
+          "responseTimeMillis": 2033
         },
         {
           "host": "exsrv2.ignorelist.com",
@@ -2273,7 +1969,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7c54205d81ed9c0d8ffcbc360a850568b5cb05e52f33e71b9e39749d64e6dcc2",
           "source": "1209k,peer",
-          "responseTimeMillis": 1344
+          "responseTimeMillis": 1980
         },
         {
           "host": "f.keff.org",
@@ -2281,7 +1977,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5daca348375047e8c12b0aeeb11e04a6af518009ef2740ad866f39ed888118a6",
           "source": "1209k",
-          "responseTimeMillis": 1236
+          "responseTimeMillis": 1722
         },
         {
           "host": "fakenews.fiatfaucet.com",
@@ -2289,7 +1985,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "dab1d033166fb5ee64ac42a65d7ba667546116f33de61c938551d623bfdf9bd2",
           "source": "1209k,peer",
-          "responseTimeMillis": 551
+          "responseTimeMillis": 949
         },
         {
           "host": "fortress.qtornado.com",
@@ -2297,7 +1993,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "3db18013afc2e9676ccd904a27ca7bec05f6bce9d802ce6df0538e97f79bb084",
           "source": "1209k,peer",
-          "responseTimeMillis": 1452
+          "responseTimeMillis": 1878
         },
         {
           "host": "fortress.qtornado.com",
@@ -2305,7 +2001,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "3db18013afc2e9676ccd904a27ca7bec05f6bce9d802ce6df0538e97f79bb084",
           "source": "1209k",
-          "responseTimeMillis": 1681
+          "responseTimeMillis": 2195
+        },
+        {
+          "host": "freenodes.info",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "c6f506ecbb327654e66936598f3821a677e4f5cbc76b00ad4f0cc1ee69b873c5",
+          "source": "peer",
+          "responseTimeMillis": 2003
+        },
+        {
+          "host": "fulcrum-btc.chainup.date",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "005d57c35428255b61eeba5185e1853b0c9a14a94242609c3bb8aa40fed47463",
+          "source": "1209k,peer",
+          "responseTimeMillis": 2090
         },
         {
           "host": "fulcrum-core.1209k.com",
@@ -2313,7 +2025,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1ad87cc9d201090d219a46d8416647edc8466b5c7b6e7a327d3c3c3303f44d9d",
           "source": "1209k,peer",
-          "responseTimeMillis": 864
+          "responseTimeMillis": 735
         },
         {
           "host": "fulcrum.bullbitcoin.com",
@@ -2321,23 +2033,31 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0556a25990fbb1ada06e3abe1edb7c3ae0b76c32afacedb599319bdb54721aed",
           "source": "1209k",
-          "responseTimeMillis": 1218
+          "responseTimeMillis": 1729
+        },
+        {
+          "host": "fulcrum.cryptohouse.ddns.net",
+          "port": 51002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "030bb774044c5f017133545e7366a4984794252ba41177c4afeb0a01286e7705",
+          "source": "peer",
+          "responseTimeMillis": 1733
         },
         {
           "host": "fulcrum.grey.pw",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "68586a816206fbaaa4a56515f75fc38074143c6a145ce7a86bf62ffe5dd6fe1b",
+          "certificateSha256Fingerprint": "c70da772c6a5ed028f44ef7e402c3c1e0f053e954f85f9c3711441a62eed0006",
           "source": "1209k",
-          "responseTimeMillis": 1561
+          "responseTimeMillis": 2077
         },
         {
           "host": "fulcrum.grey.pw",
           "port": 51002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "68586a816206fbaaa4a56515f75fc38074143c6a145ce7a86bf62ffe5dd6fe1b",
+          "certificateSha256Fingerprint": "c70da772c6a5ed028f44ef7e402c3c1e0f053e954f85f9c3711441a62eed0006",
           "source": "1209k",
-          "responseTimeMillis": 1385
+          "responseTimeMillis": 2031
         },
         {
           "host": "fulcrum.sethforprivacy.com",
@@ -2345,15 +2065,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4573c11f76136015f4cdab6aeafcc23d1621e2db0244e1a0607f6ea6fa101e91",
           "source": "1209k,peer",
-          "responseTimeMillis": 715
+          "responseTimeMillis": 1192
         },
         {
           "host": "fulcrum.slicksparks.ky",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "0aaaaef3d641f138328838e7efc90767b85cf3093353b10e6dfb668d79fc5e34",
+          "certificateSha256Fingerprint": "45fea9e1264312429967b0c37212837d4fc4b14a56c3cb16348e9110984c11b1",
           "source": "peer",
-          "responseTimeMillis": 654
+          "responseTimeMillis": 823
         },
         {
           "host": "fulcrum.theuplink.net",
@@ -2361,7 +2081,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1b4a2c941c67a2407f1044a87b9e6ce1eaabb61b16d06ad3e9c16dd9a333abb7",
           "source": "1209k,peer",
-          "responseTimeMillis": 448
+          "responseTimeMillis": 1016
         },
         {
           "host": "fulcrum1.getsrt.net",
@@ -2369,7 +2089,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7425e89e6223de088b9ebbb298a2146099ab6ab17bc4b68c78a3842df2a5bcab",
           "source": "1209k,peer",
-          "responseTimeMillis": 451
+          "responseTimeMillis": 990
         },
         {
           "host": "fulcrum2.not.fyi",
@@ -2377,7 +2097,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "160d3e0cadf1d1d352707e9d504125e18fa2e875e111ac0d56fc43e9262f8d3e",
           "source": "1209k,peer",
-          "responseTimeMillis": 713
+          "responseTimeMillis": 578
         },
         {
           "host": "g69.ddns.wtf",
@@ -2385,7 +2105,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "3caa4b62961d59399eb5b09b1612875f6d4b09e1a6c0a2d9831c824d80323445",
           "source": "1209k",
-          "responseTimeMillis": 1099
+          "responseTimeMillis": 1831
         },
         {
           "host": "gods-of-rock.screaminglemur.net",
@@ -2393,7 +2113,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8ab7743929f6fc199d3caf74576b6cf683504a925903a3d47134c515037e2e55",
           "source": "peer",
-          "responseTimeMillis": 408
+          "responseTimeMillis": 1072
         },
         {
           "host": "guichet.centure.cc",
@@ -2401,7 +2121,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ac434c76e9755c46c4343074de1b2ce21ebe11fb196562e4075c92c6b09c6d8c",
           "source": "1209k,peer",
-          "responseTimeMillis": 485
+          "responseTimeMillis": 1563
         },
         {
           "host": "hodl.artyomk13.me",
@@ -2409,23 +2129,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4b2d54ee9cd660fb3b7ddb39ff282b4102deab6bd83dc3575cd5eaa40c9cbd5a",
           "source": "peer",
-          "responseTimeMillis": 1435
+          "responseTimeMillis": 2196
         },
         {
           "host": "honhonhon.ddns.thelost.tech",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "9ea1cd7729737b93144a92f4bfa9d1eae5b6aedd01bdef41240595eaae87854a",
+          "certificateSha256Fingerprint": "95342a7959051c8f582071692ad29c6a5d98133af16223cd738b47bdfb34a3ac",
           "source": "1209k,peer",
-          "responseTimeMillis": 1670
-        },
-        {
-          "host": "ip212-227-150-147.pbiaas.com",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "0c7297730c3bc85da8e253c8e27373ce3279ea1a2562dca69390e5c2bbe9f941",
-          "source": "1209k",
-          "responseTimeMillis": 993
+          "responseTimeMillis": 2387
         },
         {
           "host": "itomori.katawaredoki.net",
@@ -2433,7 +2145,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a7b0afdae557e4185bdeda02f8a6af4382567264e2adb65567d27deb0e79db42",
           "source": "1209k",
-          "responseTimeMillis": 1925
+          "responseTimeMillis": 2646
+        },
+        {
+          "host": "jamboxy.me",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "63c3d9b56366ab255d38e1a4e76bce22db21b868caddd87996bb33951fd0f593",
+          "source": "peer",
+          "responseTimeMillis": 2114
         },
         {
           "host": "kareoke.qoppa.org",
@@ -2441,7 +2161,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0eec326092b606bb1584b344c1d8db3a45ccfc612bbb8473939fa254d5631fca",
           "source": "1209k,peer",
-          "responseTimeMillis": 2262
+          "responseTimeMillis": 1716
         },
         {
           "host": "keepcalmandcarryon.jailhouse.rocks",
@@ -2449,7 +2169,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "97d85cdcf26f744371045035e01c6b521566ef7056e35a9236ad078bb6145746",
           "source": "peer,1209k",
-          "responseTimeMillis": 1754
+          "responseTimeMillis": 2769
         },
         {
           "host": "kirsche.emzy.de",
@@ -2457,7 +2177,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b25da2929c0f65e016cfec2a24661ffc587fddd832f50aed26e05a2ede4cdf34",
           "source": "1209k",
-          "responseTimeMillis": 5958
+          "responseTimeMillis": 5699
         },
         {
           "host": "lille.anties.org",
@@ -2465,7 +2185,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4cf434348c2023c96f04778b9bd20defa95730d67fea18e43f3661070eb7f11c",
           "source": "1209k,peer",
-          "responseTimeMillis": 1105
+          "responseTimeMillis": 1853
         },
         {
           "host": "mail.legalise.it",
@@ -2473,7 +2193,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b4d2bc67d22355b4904e124fe51c68accb8544013c7733fb978e0ab953c13bfe",
           "source": "1209k",
-          "responseTimeMillis": 1042
+          "responseTimeMillis": 1808
         },
         {
           "host": "mail.streetparknyc.com",
@@ -2481,7 +2201,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d5811e466cdde6a9a52d715643b5619bbc5ef770bcd7a4bd7edf7926212e01b0",
           "source": "1209k",
-          "responseTimeMillis": 459
+          "responseTimeMillis": 1080
         },
         {
           "host": "mainnet-0.foundation.xyz",
@@ -2489,7 +2209,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d9cca30378fd92bd8623cf4c7f904bea58f0a481db9304f6481f6bb6e1774c3c",
           "source": "1209k",
-          "responseTimeMillis": 605
+          "responseTimeMillis": 861
         },
         {
           "host": "mainnet.foundationdevices.com",
@@ -2497,15 +2217,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d9cca30378fd92bd8623cf4c7f904bea58f0a481db9304f6481f6bb6e1774c3c",
           "source": "1209k",
-          "responseTimeMillis": 631
+          "responseTimeMillis": 886
         },
         {
           "host": "mainnet.nunchuk.io",
           "port": 52002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "1cb583edec47617dc31f89b71a8c36363b53701b7dc4a9324cd1976ed9d21b7a",
+          "certificateSha256Fingerprint": "a6184f1e8719b845f872b626e24ed2d61d68364c52c94fdc9730b58e69fdcca8",
           "source": "1209k",
-          "responseTimeMillis": 2437
+          "responseTimeMillis": 2069
         },
         {
           "host": "marseille.anties.org",
@@ -2513,7 +2233,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4debe63d9fed439a83cf56b9a730bd784c6d73c8e7f3e72cbd18a33bbcd99e22",
           "source": "1209k,peer",
-          "responseTimeMillis": 1113
+          "responseTimeMillis": 1902
         },
         {
           "host": "melo.dyn.amic.name",
@@ -2521,15 +2241,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cf59bc6333ad870b94cb032feff46f5ec398e12a1278e0bf3066326d4f9573e6",
           "source": "1209k,peer",
-          "responseTimeMillis": 1868
-        },
-        {
-          "host": "mempool.8333.mobi",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "5dccf08a5f63770d63dd821f68a92a661b5dc472849ac7f14fc57a947d3702f9",
-          "source": "1209k,peer",
-          "responseTimeMillis": 1010
+          "responseTimeMillis": 2556
         },
         {
           "host": "mempool.coinfroggy.com",
@@ -2537,7 +2249,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ba81182a8faa327154f4610acdd1b15a04a633c87f36eb4d86fca5a0e747f171",
           "source": "1209k",
-          "responseTimeMillis": 972
+          "responseTimeMillis": 726
         },
         {
           "host": "molten.tranquille.cc",
@@ -2545,7 +2257,39 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "562997ea2e083f4d9d9c18368ead79a38e145d64e637b9685459720c3f819494",
           "source": "1209k,peer",
-          "responseTimeMillis": 1163
+          "responseTimeMillis": 1876
+        },
+        {
+          "host": "node.anondadys.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "c2d0839a9a5d02277e21181907527552aa547f8933e791d146e2d1b6c5155ebd",
+          "source": "peer",
+          "responseTimeMillis": 1848
+        },
+        {
+          "host": "node.digitalexco.vip",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "6e4587f02b020a6e3ccd8bfd6233759629d6a9b31bf145d622da457216a5be68",
+          "source": "peer",
+          "responseTimeMillis": 2324
+        },
+        {
+          "host": "nodesx.info",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "79cfcd36b0f1f66a6663c698e217e65cd163b6cc1e7b8142602189e0636252b8",
+          "source": "peer",
+          "responseTimeMillis": 2434
+        },
+        {
+          "host": "nodoo.org",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "af3c6e320f29b8e016cfc9174f11fb0557035f38c06edfbeb43fe0bad08834fb",
+          "source": "peer",
+          "responseTimeMillis": 2420
         },
         {
           "host": "ns3104364.ip-54-36-168.eu",
@@ -2553,7 +2297,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b46531af8fca3d32a9919af5e60f2d87437fdd27aa5f693680f900fe6c3afb99",
           "source": "1209k,peer",
-          "responseTimeMillis": 1114
+          "responseTimeMillis": 1868
         },
         {
           "host": "paris.anties.org",
@@ -2561,7 +2305,39 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bbe2e1476d83214774348e5271ed90a3ab231529da58f59c0163f4c754b8866d",
           "source": "1209k,peer",
-          "responseTimeMillis": 1131
+          "responseTimeMillis": 1874
+        },
+        {
+          "host": "pipstickx.info",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "81a9f838275768e46a0da555ee957b05949cc71f9c41c25811619a1f10277a69",
+          "source": "peer",
+          "responseTimeMillis": 2247
+        },
+        {
+          "host": "pizzabit.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "3f1b374358fc095897fa9fa13b70bb9a0b9f6848418daa763eccf24895d3d53e",
+          "source": "peer",
+          "responseTimeMillis": 2399
+        },
+        {
+          "host": "psjbgc.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "af924b3abdf3ccf92f3bd306235ae1614cb272dbce82953a5ee5af94aa353795",
+          "source": "peer",
+          "responseTimeMillis": 3670
+        },
+        {
+          "host": "rnodium.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "b35a1780d5a44e9cff82a5e43d6aabc88c97c1a0e72a1ab39fa0a6e13d1d8bd2",
+          "source": "peer",
+          "responseTimeMillis": 1763
         },
         {
           "host": "satoshi.stevenpolley.net",
@@ -2569,7 +2345,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "958c084766f85d57818f158dca1b928422f49d0454a820f904bad010cf1685f3",
           "source": "1209k,peer",
-          "responseTimeMillis": 892
+          "responseTimeMillis": 1053
         },
         {
           "host": "se-got-crypto-payments-001.mullvad.net",
@@ -2577,7 +2353,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "77223f52cf4dfdb60834e53e2d8c428d08608c0abe8fbe7c5165429ec0f9fc89",
           "source": "1209k",
-          "responseTimeMillis": 1071
+          "responseTimeMillis": 1880
         },
         {
           "host": "se-mma-crypto-payments-001.mullvad.net",
@@ -2585,7 +2361,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "95e4d8988d31136a3d5801d8e4281a78446de19ba6b36a10ed7e49b191114618",
           "source": "1209k,peer",
-          "responseTimeMillis": 1038
+          "responseTimeMillis": 1874
         },
         {
           "host": "skbxmit.coinjoined.com",
@@ -2593,7 +2369,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6848a4f3b3b17fa146b0efc1ad525c22711f57021c87e2c5cff9f08cb3459b19",
           "source": "1209k,peer",
-          "responseTimeMillis": 1125
+          "responseTimeMillis": 1842
         },
         {
           "host": "smmalis37.ddns.net",
@@ -2601,7 +2377,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c587063f55cb81a1cfba93b753569cf7ce7a8a8c6e913c3bf03a18633dc2a40f",
           "source": "1209k,peer",
-          "responseTimeMillis": 461
+          "responseTimeMillis": 1058
+        },
+        {
+          "host": "snoderx.info",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "f8e2e867e0521b001dab73963a04ef7cf791745a8625790bd5e723521572d616",
+          "source": "peer",
+          "responseTimeMillis": 2028
         },
         {
           "host": "sornas.familyds.net",
@@ -2609,7 +2393,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4534e26d6fc2509cbd6f718ca48005a777390f062c5773239587de687887a527",
           "source": "1209k,peer",
-          "responseTimeMillis": 2564
+          "responseTimeMillis": 2224
         },
         {
           "host": "starnode.biz",
@@ -2617,7 +2401,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "70c991fee2b713d28450d7b70178370def9219419de48bd5d9aaa9293065c12a",
           "source": "peer",
-          "responseTimeMillis": 1129
+          "responseTimeMillis": 1976
         },
         {
           "host": "static.104.65.78.5.clients.your-server.de",
@@ -2625,7 +2409,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c178c196fe3bdcae5840b95a02219080083a25b236b66ff6a83261853c8e0941",
           "source": "1209k",
-          "responseTimeMillis": 1000
+          "responseTimeMillis": 827
         },
         {
           "host": "static.106.104.161.5.clients.your-server.de",
@@ -2633,7 +2417,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "86568eb08dbf23bd13f5b054046882e8b5f545358533f7f5521ab839b4519485",
           "source": "1209k",
-          "responseTimeMillis": 408
+          "responseTimeMillis": 1026
         },
         {
           "host": "static.108.83.9.5.clients.your-server.de",
@@ -2649,7 +2433,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4fc9bdfaf26cb259ff48cd22e68c870a862a8ba5082bc265832119c8eef94a33",
           "source": "1209k",
-          "responseTimeMillis": 1173
+          "responseTimeMillis": 1979
         },
         {
           "host": "static.14.179.217.95.clients.your-server.de",
@@ -2657,7 +2441,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d75f5cb677251be103b00e06fd1406e8ddd3e4affb783024eef6631a611668ca",
           "source": "1209k",
-          "responseTimeMillis": 1201
+          "responseTimeMillis": 1852
         },
         {
           "host": "static.154.90.78.5.clients.your-server.de",
@@ -2665,7 +2449,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f8527060d7b18b229e6868fb9229683ec7bd9e9883e04ac635b290ddf20f8b53",
           "source": "1209k",
-          "responseTimeMillis": 974
+          "responseTimeMillis": 840
         },
         {
           "host": "static.174.18.27.37.clients.your-server.de",
@@ -2673,7 +2457,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bf80d4c50003519bc2bad939e965e1ccd21c12126cdb9b2698be14caeb7b03ef",
           "source": "1209k",
-          "responseTimeMillis": 1424
+          "responseTimeMillis": 1974
         },
         {
           "host": "static.192.67.140.128.clients.your-server.de",
@@ -2681,7 +2465,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0a8c9282df581a632a5bbb0edd566ea2b583422b2f77fc1c011aa14a0a1fe933",
           "source": "1209k",
-          "responseTimeMillis": 1139
+          "responseTimeMillis": 1691
         },
         {
           "host": "static.20.146.108.65.clients.your-server.de",
@@ -2689,7 +2473,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8c15fddb2dae642a87fc490d2e1deb407ef8c2b37c990717361f305cea000cc6",
           "source": "1209k",
-          "responseTimeMillis": 1154
+          "responseTimeMillis": 2006
         },
         {
           "host": "static.228.86.203.116.clients.your-server.de",
@@ -2697,7 +2481,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "97ce93fd11c745fb911de4043244566d1a156ede03daaa14850a7dad51fad7c9",
           "source": "1209k",
-          "responseTimeMillis": 1149
+          "responseTimeMillis": 1688
         },
         {
           "host": "static.4.49.140.128.clients.your-server.de",
@@ -2705,7 +2489,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f54e232a1cb03d01bd8c47def7c7e0670e3ae0fd8d7f84b309d923e49ef8addd",
           "source": "1209k",
-          "responseTimeMillis": 1091
+          "responseTimeMillis": 1851
         },
         {
           "host": "static.82.9.235.167.clients.your-server.de",
@@ -2713,7 +2497,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b31538ba4ad27136b0c4ac85fd8565e87cd894a9db0c3f0953fceedd1585e14d",
           "source": "1209k,peer",
-          "responseTimeMillis": 1014
+          "responseTimeMillis": 1760
         },
         {
           "host": "stavver.dyshek.org",
@@ -2721,7 +2505,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "163aeaa835ed3fb1212eeca43009bbd22a3c7d02e4b6ec782ff25e9508a2098b",
           "source": "1209k,peer",
-          "responseTimeMillis": 1453
+          "responseTimeMillis": 1989
         },
         {
           "host": "tardis.bauerj.eu",
@@ -2729,7 +2513,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6b2f370288bc6f6d98a95421b8d59863cae1f7b6931437f1bdf1d4d46bcc924a",
           "source": "1209k",
-          "responseTimeMillis": 1382
+          "responseTimeMillis": 2869
         },
         {
           "host": "tool.sh",
@@ -2737,7 +2521,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "03a97e9fcba085b3412afa7de79d82d1888f73a0f269ea53419ab5c27120ff1e",
           "source": "1209k,peer",
-          "responseTimeMillis": 934
+          "responseTimeMillis": 1596
         },
         {
           "host": "unholy.fiatfaucet.com",
@@ -2745,7 +2529,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b5b6d366f3ab5916739d884917005e00e075a608863427208b4758619e1c49ce",
           "source": "1209k,peer",
-          "responseTimeMillis": 1048
+          "responseTimeMillis": 1763
         },
         {
           "host": "vmd128083.contaboserver.net",
@@ -2753,7 +2537,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "139d1a90daf644fabcb2b3981059f31ae082f2eeb3f17e2e063fb0f5047bbaa5",
           "source": "1209k,peer",
-          "responseTimeMillis": 1448
+          "responseTimeMillis": 1796
         },
         {
           "host": "vmi3158395.contaboserver.net",
@@ -2761,7 +2545,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "78c36a61d92fdcef09dac82acd2070a893df7682106c2d71a4f49d818d2edcb9",
           "source": "1209k",
-          "responseTimeMillis": 2797
+          "responseTimeMillis": 3189
         },
         {
           "host": "vmi3158397.contaboserver.net",
@@ -2769,7 +2553,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9ab212a8b444049b8a6a6c7af8dd8b08fb15008ac85127ca6bcc4ae9cfddaaa1",
           "source": "1209k",
-          "responseTimeMillis": 2713
+          "responseTimeMillis": 2767
         },
         {
           "host": "vmi3158401.contaboserver.net",
@@ -2777,7 +2561,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bfa0da71c1536e81ca5b6f9f2ebeed540a115abb87ba0cc23ce4689e20c6a541",
           "source": "1209k",
-          "responseTimeMillis": 2359
+          "responseTimeMillis": 2822
         },
         {
           "host": "vmi3158404.contaboserver.net",
@@ -2785,7 +2569,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e62a1b5fe652e28b40194a3562ef4c2bda19fe23e0e0112ed603f82ab4778c39",
           "source": "1209k",
-          "responseTimeMillis": 2660
+          "responseTimeMillis": 2634
         },
         {
           "host": "vmi3158406.contaboserver.net",
@@ -2793,7 +2577,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c80b435992f87fbc02a29f0630c723877a38d5a6b27e58155f2039804ae9370b",
           "source": "1209k",
-          "responseTimeMillis": 2679
+          "responseTimeMillis": 4264
         },
         {
           "host": "vps.hsmiths.com",
@@ -2801,7 +2585,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "b019752b64ba76a7cec64f8b32943428864e96aed6887ca81d4aa239c2a0fdd2",
           "source": "1209k",
-          "responseTimeMillis": 1201
+          "responseTimeMillis": 1866
         },
         {
           "host": "wallet.littlebitt.com",
@@ -2809,7 +2593,31 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8ffcb7acd3d930b83e05424f5456c742a4088fc835006c1f174b156898649b84",
           "source": "peer",
-          "responseTimeMillis": 1054
+          "responseTimeMillis": 1672
+        },
+        {
+          "host": "watchlek.com",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "ab71d5929083f73fbc8d0ce4308541fda8788988569b9fa58c349392c26e4a5b",
+          "source": "peer",
+          "responseTimeMillis": 2234
+        },
+        {
+          "host": "wbdbtc.com",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "40b4b591a26b0c6119e5e18391a0dfcdade7afd46d348d717cff631d80fc4bdd",
+          "source": "peer",
+          "responseTimeMillis": 2606
+        },
+        {
+          "host": "webclap.biz",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "086d300b69b9f49eca980d735f7d433fe359b46145f4aabe49bd5c1943849ba9",
+          "source": "peer",
+          "responseTimeMillis": 2787
         },
         {
           "host": "wtux-073.activcloud.eu",
@@ -2817,15 +2625,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4b1b0d8515a707dc5bf52e4d722f721db22b3e931111fa932d9f0948df8f5bda",
           "source": "1209k",
-          "responseTimeMillis": 1546
-        },
-        {
-          "host": "wtux-073.activcloud.fr",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "4b1b0d8515a707dc5bf52e4d722f721db22b3e931111fa932d9f0948df8f5bda",
-          "source": "1209k",
-          "responseTimeMillis": 1429
+          "responseTimeMillis": 2111
         },
         {
           "host": "xhc19qzeezkbru9q.myfritz.net",
@@ -2833,7 +2633,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8c290a8e9ed4ea7eed626bcc03717d22f19f1b922aa1e9d9a16109cb589729b8",
           "source": "1209k,peer",
-          "responseTimeMillis": 1088
+          "responseTimeMillis": 1894
+        },
+        {
+          "host": "yizza.asia",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "8fd49a30b2f99d0eaf8a8fd81a6d6dbfd3ed720919da0e3e299d46673b39a9c6",
+          "source": "peer",
+          "responseTimeMillis": 3549
         },
         {
           "host": "zutaten.mooo.com",
@@ -2841,7 +2649,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c08dc0920ad3ef9ed7b10597f37956d1a5d44f3ca0f8f563294bb8bff6fdee21",
           "source": "1209k,peer",
-          "responseTimeMillis": 1330
+          "responseTimeMillis": 1121
         },
         {
           "host": "zztop.twilightparadox.com",
@@ -2849,7 +2657,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8d2524b45dedfc245b8da3896d615fa9015377ab3540da8afcc4499b695159b7",
           "source": "1209k,peer",
-          "responseTimeMillis": 2142
+          "responseTimeMillis": 2639
         }
       ],
       "TEST3": [
@@ -2859,23 +2667,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a412f0414579a1fd1fea289dff195a6c8f88e1e1e592fc4e8de2d3f25a528c7a",
           "source": "builtin,1209k,peer",
-          "responseTimeMillis": 639
+          "responseTimeMillis": 778
         },
         {
           "host": "blockstream.info",
           "port": 993,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "dbf693e76efee60e897f3bf8e044b5355f7f525dc7359bd37618936b78fce4f6",
+          "certificateSha256Fingerprint": "18ac08691d93189ba9ab560a9a0d7caa537ddee75432fd8da8fd4212b54b2770",
           "source": "builtin,1209k",
-          "responseTimeMillis": 1651
+          "responseTimeMillis": 705
         },
         {
           "host": "electrum.blockstream.info",
           "port": 60002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "dbf693e76efee60e897f3bf8e044b5355f7f525dc7359bd37618936b78fce4f6",
+          "certificateSha256Fingerprint": "18ac08691d93189ba9ab560a9a0d7caa537ddee75432fd8da8fd4212b54b2770",
           "source": "builtin,1209k",
-          "responseTimeMillis": 924
+          "responseTimeMillis": 734
         },
         {
           "host": "testnet.aranguren.org",
@@ -2883,7 +2691,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1065a55969e30ef25ae7d896c3fb5b217a251104bc75c4aa7968b6dd9ace918f",
           "source": "builtin,1209k,peer",
-          "responseTimeMillis": 2030
+          "responseTimeMillis": 1953
         },
         {
           "host": "testnet.qtornado.com",
@@ -2891,7 +2699,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "688366b14f60fd4e460a10ebaebab7768c6a0433ef5b8d4f2d09ce853fec41bf",
           "source": "builtin,1209k,peer",
-          "responseTimeMillis": 1141
+          "responseTimeMillis": 1936
         }
       ],
       "TEST4": [
@@ -2901,7 +2709,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "0261597d0c48e1e204bda230cf06efb7a56203afc6f72c6ae398566729a271ff",
           "source": "1209k,peer",
-          "responseTimeMillis": 2374
+          "responseTimeMillis": 2074
         },
         {
           "host": "134.199.227.217",
@@ -2909,7 +2717,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9cc8614ffa48f38395fe54e9d924d19559cd68b426acf9b70797add9a6e87a0a",
           "source": "peer",
-          "responseTimeMillis": 850
+          "responseTimeMillis": 704
         },
         {
           "host": "bitcoin.stagemole.eu",
@@ -2917,7 +2725,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f5a34ea78f09a0912ffb66d2e0dbdb31847f881be59036203a3c9eb52e2ac658",
           "source": "1209k,peer",
-          "responseTimeMillis": 1159
+          "responseTimeMillis": 1885
         },
         {
           "host": "blackie.c3-soft.com",
@@ -2925,7 +2733,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a412f0414579a1fd1fea289dff195a6c8f88e1e1e592fc4e8de2d3f25a528c7a",
           "source": "1209k,peer",
-          "responseTimeMillis": 644
+          "responseTimeMillis": 739
         },
         {
           "host": "fulcrum.theuplink.net",
@@ -2933,7 +2741,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1b4a2c941c67a2407f1044a87b9e6ce1eaabb61b16d06ad3e9c16dd9a333abb7",
           "source": "1209k,peer",
-          "responseTimeMillis": 316
+          "responseTimeMillis": 1027
         },
         {
           "host": "testnet.aranguren.org",
@@ -2941,7 +2749,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "1065a55969e30ef25ae7d896c3fb5b217a251104bc75c4aa7968b6dd9ace918f",
           "source": "1209k,peer",
-          "responseTimeMillis": 2030
+          "responseTimeMillis": 1964
         },
         {
           "host": "testnet4.qtornado.com",
@@ -2949,7 +2757,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "11251a607ed45244ae1ff6c3f6a5c9a8806221c9b1c20a3a57bf02baadf091e6",
           "source": "1209k,peer",
-          "responseTimeMillis": 1423
+          "responseTimeMillis": 2163
         }
       ]
     },
@@ -2961,7 +2769,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ea091cf49c8652096bc9aea7c7d73ad7e748767ac94c2b4e033b812741cafe4a",
           "source": "peer",
-          "responseTimeMillis": 2617
+          "responseTimeMillis": 2441
         },
         {
           "host": "143.198.247.218",
@@ -2969,7 +2777,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "15b29275d5fbc142ff79085e8265f7207cdae310b92b78d14849ee2bba6f54d3",
           "source": "peer",
-          "responseTimeMillis": 2663
+          "responseTimeMillis": 2433
         },
         {
           "host": "146.190.2.84",
@@ -2977,7 +2785,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cb054b587802f5071ccaa0349c26a4a76497cd54ceb49e6af423879a749757e9",
           "source": "peer",
-          "responseTimeMillis": 2616
+          "responseTimeMillis": 2488
         },
         {
           "host": "146.190.200.46",
@@ -2985,7 +2793,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "fd4c991bf154cf12a46cbbb4eec903016eb3d4402b8df3e769ef7b71dce38ee2",
           "source": "peer",
-          "responseTimeMillis": 3721
+          "responseTimeMillis": 3647
         },
         {
           "host": "167.172.7.185",
@@ -2993,7 +2801,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f86cef1217a5277747affc3ce1bb21c3878f4f796484ed95845bd15c73d78d2d",
           "source": "peer",
-          "responseTimeMillis": 3694
+          "responseTimeMillis": 3698
         },
         {
           "host": "170.64.156.41",
@@ -3001,7 +2809,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "759c7bab0c9f88822ac9b76f2bac0055366287ce9836922d29e908b4a85b8449",
           "source": "1209k,peer",
-          "responseTimeMillis": 2191
+          "responseTimeMillis": 1795
         },
         {
           "host": "178.128.30.82",
@@ -3009,7 +2817,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "609565b4bd9124acfbe936954cf50faf8c4e05719fb535dcdf6edaee5e0eb756",
           "source": "1209k,peer",
-          "responseTimeMillis": 2272
+          "responseTimeMillis": 2072
         },
         {
           "host": "188.166.202.195",
@@ -3017,7 +2825,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "52fd392d4b84bc482c31dfe42b39ed93ebbd32c97b320e2e923cbfe9bf4304ed",
           "source": "peer",
-          "responseTimeMillis": 2760
+          "responseTimeMillis": 3281
         },
         {
           "host": "206.189.242.73",
@@ -3025,7 +2833,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "57ba6e5a6669a4225d9f1cc9f9639f33e01821cbc7c02dba85c100768fcfcb60",
           "source": "peer",
-          "responseTimeMillis": 2738
+          "responseTimeMillis": 3285
         },
         {
           "host": "5.78.98.215",
@@ -3033,7 +2841,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cfef3042ca4a43612adc8cc42b40b1ea979db31128a4b2c79e11d3a8fa276ab6",
           "source": "1209k,peer",
-          "responseTimeMillis": 972
+          "responseTimeMillis": 847
         },
         {
           "host": "95.216.217.48",
@@ -3041,7 +2849,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "920ec7db2b11cd7c7b11e7fce9ffd8197f34d947f0fd2c21af22b57c88840c38",
           "source": "peer",
-          "responseTimeMillis": 1255
+          "responseTimeMillis": 1993
         },
         {
           "host": "bch.aftrek.org",
@@ -3049,7 +2857,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "984d8f9e196c8188d9889dfe8cf1eae8c185dc0ea1d3c77eadc2d0ded5bb4a42",
           "source": "1209k,peer",
-          "responseTimeMillis": 1097
+          "responseTimeMillis": 1703
         },
         {
           "host": "bch.cyberbits.eu",
@@ -3057,15 +2865,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f52dbbe521b4664b8a64a6974379cbbdb0d73289b7175092c63bb862c117585f",
           "source": "1209k,peer",
-          "responseTimeMillis": 974
+          "responseTimeMillis": 1641
         },
         {
           "host": "bch.event.cash",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "b3ac2c90b051f86107393fcc82902fde28b6969b505a6fb2e06947483bdaed8b",
+          "certificateSha256Fingerprint": "06d9739402aec900e300d9ca1a7fb8d053befef4947b73b4dcb1345cbf8e5651",
           "source": "1209k,peer",
-          "responseTimeMillis": 306
+          "responseTimeMillis": 998
         },
         {
           "host": "bch.imaginary.cash",
@@ -3073,7 +2881,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "3d11e43401927e427c3626ff4390c7e7dc7918ebd5ad1e1de8e02ddfb55701f4",
           "source": "1209k,peer",
-          "responseTimeMillis": 717
+          "responseTimeMillis": 718
         },
         {
           "host": "bch.loping.net",
@@ -3081,7 +2889,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9ca0037d51b3167805b7f6a6d02dd244e600a3fdb81784439dc88235f48e44e7",
           "source": "1209k,peer",
-          "responseTimeMillis": 2357
+          "responseTimeMillis": 2188
         },
         {
           "host": "bch.reichster.de",
@@ -3089,7 +2897,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ff08a7925a64221c6b7901b325f880828281fed963ac03aa1f398c8116a155de",
           "source": "1209k,peer",
-          "responseTimeMillis": 962
+          "responseTimeMillis": 1490
         },
         {
           "host": "bch.soul-dev.com",
@@ -3097,23 +2905,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "60f6173ea877e9773d29fe9a825673c68dfdc999a4a3556e5572287fcbf63a2d",
           "source": "1209k,peer",
-          "responseTimeMillis": 516
+          "responseTimeMillis": 1135
         },
         {
           "host": "bch0.kister.net",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "ad7f4dce42a47c02e1d287f5c8be184254a628db4a3a451bdebd5311b324af46",
+          "certificateSha256Fingerprint": "dc45ace22196c4abe00166b2d9fb97df2b168ca4b9220e615ff13eb1dd4329a1",
           "source": "1209k,peer",
-          "responseTimeMillis": 347
+          "responseTimeMillis": 1363
         },
         {
           "host": "bitcoincash.stackwallet.com",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "8942e0ef771062293a3dba69028bb4ca668853c242d6eb9457607419155aea23",
+          "certificateSha256Fingerprint": "3f4e4ebcfd67691e2a165ceaf7bf8445018abb29817925f0d80b802e0aa4dff0",
           "source": "1209k",
-          "responseTimeMillis": 342
+          "responseTimeMillis": 1040
         },
         {
           "host": "blackie.c3-soft.com",
@@ -3121,7 +2929,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a412f0414579a1fd1fea289dff195a6c8f88e1e1e592fc4e8de2d3f25a528c7a",
           "source": "1209k,peer",
-          "responseTimeMillis": 608
+          "responseTimeMillis": 1031
         },
         {
           "host": "btc.electroncash.dk",
@@ -3129,7 +2937,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cb8b8f61640897a2da01acac0827e05d54e4f6c55afa60ffe174ef67194d8d2a",
           "source": "1209k",
-          "responseTimeMillis": 996
+          "responseTimeMillis": 1739
         },
         {
           "host": "cashnode.bch.ninja",
@@ -3137,7 +2945,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "60187bb16697ada8761de9c7f23d3e7e48a7af952210d2d2b4f1bbca17a213b7",
           "source": "1209k,peer",
-          "responseTimeMillis": 340
+          "responseTimeMillis": 1003
         },
         {
           "host": "coin01.ssdata.dk",
@@ -3145,23 +2953,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e1e52761d939b09ccb63bb3e8b592f1c7f47d9762bc250b2296eb7464fecbab7",
           "source": "peer",
-          "responseTimeMillis": 1211
+          "responseTimeMillis": 1812
         },
         {
           "host": "electron.jhoenicke.de",
           "port": 51002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "ed44d5812c37b7ed7a821da7bb8f0e49d9e8bf5329f5824dda2ab04fe6d90720",
+          "certificateSha256Fingerprint": "2a066a4a169323bec5847fc092dcd1270864f6448beb8179bed0a5520ff412e8",
           "source": "peer",
-          "responseTimeMillis": 1000
+          "responseTimeMillis": 1758
         },
         {
           "host": "electron.jochen-hoenicke.de",
           "port": 51002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "ed44d5812c37b7ed7a821da7bb8f0e49d9e8bf5329f5824dda2ab04fe6d90720",
+          "certificateSha256Fingerprint": "2a066a4a169323bec5847fc092dcd1270864f6448beb8179bed0a5520ff412e8",
           "source": "1209k",
-          "responseTimeMillis": 1016
+          "responseTimeMillis": 1786
         },
         {
           "host": "electroncash.dk",
@@ -3169,15 +2977,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cb8b8f61640897a2da01acac0827e05d54e4f6c55afa60ffe174ef67194d8d2a",
           "source": "1209k,peer",
-          "responseTimeMillis": 1004
+          "responseTimeMillis": 1773
         },
         {
           "host": "electrum.imaginary.cash",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "9407dcafa607532c0d6517da9cde2704b3441549c6761d34c1afe96cff14fcf2",
+          "certificateSha256Fingerprint": "00764e3929c5d2b5bb6b1a58352626b6b9a467c7081e8e9c79b97cf960d2b8f4",
           "source": "1209k,peer",
-          "responseTimeMillis": 885
+          "responseTimeMillis": 802
         },
         {
           "host": "fulcrum-cash.1209k.com",
@@ -3185,15 +2993,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "089e346b4a05437ea806cb1d019abd890c9edad3e85569b2a5e2a4c93c5b38f8",
           "source": "1209k,peer",
-          "responseTimeMillis": 788
+          "responseTimeMillis": 754
         },
         {
           "host": "fulcrum.aglauck.com",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "76d2e456960fe1ba96c42db7d8f974240cf09d3ec5f0d315c6aafee0a25c046f",
+          "certificateSha256Fingerprint": "c7702c4508d3660656586d5dce60d3d0406b0a7e18344e479185587c55355c12",
           "source": "1209k,peer",
-          "responseTimeMillis": 398
+          "responseTimeMillis": 1155
         },
         {
           "host": "fulcrum.criptolayer.net",
@@ -3201,47 +3009,47 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2e3d1c322bdf7b49d5855aa2464b1202a7f15777a2c15c22b0b522c3d23dd4d3",
           "source": "1209k,peer",
-          "responseTimeMillis": 1027
+          "responseTimeMillis": 1568
         },
         {
           "host": "fulcrum.greyh.at",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "d925ab73571490171af251dbf0f1e245599f465e7c1602f4adc6469d47376898",
+          "certificateSha256Fingerprint": "c366509c0c52ba98de362ddecec469d8f74fffd250134fbc0c75c706c308ba09",
           "source": "peer,1209k",
-          "responseTimeMillis": 494
+          "responseTimeMillis": 1000
         },
         {
           "host": "fulcrum.jettscythe.xyz",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "e2dd047e57502a3c0c2de24a56e036ececd24301ae7f18589229e5c3246bc059",
+          "certificateSha256Fingerprint": "9fb59df05f0f6da6cb1e0d95c25c611bbed2142b2322c1e946e08af1bbc358f8",
           "source": "peer,1209k",
-          "responseTimeMillis": 439
+          "responseTimeMillis": 1729
         },
         {
           "host": "fulcrum.kronbit.com",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "06df15c9ad998caf066d467f37fb58c77f19039e53cea0bed1b60b0ace8f77ef",
+          "certificateSha256Fingerprint": "6ca5ab6e4157f0ee8b30e845c94476366b6d2d96df4324b916cbeb993ea8a49a",
           "source": "peer,1209k",
-          "responseTimeMillis": 1020
+          "responseTimeMillis": 1800
         },
         {
-          "host": "fulcrum.zhomebase.com",
+          "host": "greedyhog.mooo.com",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "456cda4a2dd921502e269665c2c314479cf835bac9e876681abe2ab21b609b80",
-          "source": "1209k,peer",
-          "responseTimeMillis": 910
+          "certificateSha256Fingerprint": "c57e9160fd1053e96e7583aabb05dc32a2085a9bcfdaacf12ac5b838fa3885c2",
+          "source": "peer",
+          "responseTimeMillis": 2088
         },
         {
           "host": "niblerino.com",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "b6b8a7a2c3f29b3db2c80f45c4150b5e3536434ca28fe83e5a1f2235d7380f26",
+          "certificateSha256Fingerprint": "2a2f9e81a0099087d3ac094c7ba1dfac1ea9f77c75b3f483b7d37ffd6c24601b",
           "source": "1209k,peer",
-          "responseTimeMillis": 295
+          "responseTimeMillis": 993
         }
       ],
       "TEST4": [
@@ -3251,7 +3059,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a412f0414579a1fd1fea289dff195a6c8f88e1e1e592fc4e8de2d3f25a528c7a",
           "source": "1209k,peer",
-          "responseTimeMillis": 648
+          "responseTimeMillis": 762
         },
         {
           "host": "tbch4.loping.net",
@@ -3259,7 +3067,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a8e4836da5ea2ac7157e5d9167f0af7ae01c76ff232b9d53a4fb6f059670fc59",
           "source": "1209k,peer",
-          "responseTimeMillis": 2351
+          "responseTimeMillis": 1925
         },
         {
           "host": "testnet4.imaginary.cash",
@@ -3267,19 +3075,27 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "cae50f8d633307b0339de8b400f5ede95cf61d4bb563b0c50aec17dfb748e5e3",
           "source": "peer",
-          "responseTimeMillis": 762
+          "responseTimeMillis": 1072
         }
       ]
     },
     "LTC": {
       "MAIN": [
         {
+          "host": "103.176.58.34",
+          "port": 50002,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "e316d2f190c655e3371e7be1f0463040c20a4cf5b375d76800e520e771311d6b",
+          "source": "peer",
+          "responseTimeMillis": 1991
+        },
+        {
           "host": "137.184.250.112",
           "port": 50002,
           "protocol": "SSL",
           "certificateSha256Fingerprint": "bf97ee7d67ed22ca657c63cc8e5b307f9c45cda244fec552938155b67fb70cc5",
           "source": "peer",
-          "responseTimeMillis": 2987
+          "responseTimeMillis": 2966
         },
         {
           "host": "146.190.15.65",
@@ -3287,7 +3103,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "32feb2303ed5286449107a1d694909163ab07d808211b9e8d113a7fca29bd8c9",
           "source": "peer",
-          "responseTimeMillis": 1752
+          "responseTimeMillis": 1570
         },
         {
           "host": "157.230.64.188",
@@ -3295,7 +3111,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6c7600a783ac9b47efd660623107d98538d404ca7ffb8bf9190a93b5dbd8722e",
           "source": "peer",
-          "responseTimeMillis": 2258
+          "responseTimeMillis": 2799
         },
         {
           "host": "188.166.208.106",
@@ -3303,7 +3119,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "9b76de72f50c684615f32e8a1501116a18d36d094c006510627c115ed5d663db",
           "source": "1209k,peer",
-          "responseTimeMillis": 2219
+          "responseTimeMillis": 1882
         },
         {
           "host": "209.38.53.75",
@@ -3311,7 +3127,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "f659828babf5a48413e77b23f9b890a5560b7ab50935cd808b63a035a28836d0",
           "source": "peer",
-          "responseTimeMillis": 1882
+          "responseTimeMillis": 2470
         },
         {
           "host": "24.199.78.132",
@@ -3319,7 +3135,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "60ff51574409b778d36aa6d52dc4348a32a43e36402fd20d6b0a553d60236bff",
           "source": "peer",
-          "responseTimeMillis": 1717
+          "responseTimeMillis": 1538
         },
         {
           "host": "5.161.216.180",
@@ -3327,7 +3143,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "4eb074dacb2bc8c4cb697b1fe58b19f45a4b3e4e824ca2f38abdf73e26cdcf20",
           "source": "1209k,peer",
-          "responseTimeMillis": 394
+          "responseTimeMillis": 1034
         },
         {
           "host": "5.78.97.174",
@@ -3335,7 +3151,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "02d02a1d8af01832f38f7aef6f6866fb9362b0ce584cb882e0a6fb0d713af8d1",
           "source": "1209k,peer",
-          "responseTimeMillis": 988
+          "responseTimeMillis": 835
         },
         {
           "host": "0xrpc.io",
@@ -3343,7 +3159,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "05667c9dfbfa1da7d77046aec0d78e0db8e236d65b3e98ff2f7b44e097272dcc",
           "source": "1209k",
-          "responseTimeMillis": 1152
+          "responseTimeMillis": 1677
         },
         {
           "host": "backup.electrum-ltc.org",
@@ -3351,7 +3167,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6a7119f31b4784e9c56cfb7c054975e2337b009fb60bf15e409d3bcc159e39e3",
           "source": "1209k,peer",
-          "responseTimeMillis": 964
+          "responseTimeMillis": 1878
         },
         {
           "host": "backup.electrum-ltc.org",
@@ -3359,15 +3175,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6a7119f31b4784e9c56cfb7c054975e2337b009fb60bf15e409d3bcc159e39e3",
           "source": "1209k",
-          "responseTimeMillis": 968
-        },
-        {
-          "host": "cryptod.bruijn.nu",
-          "port": 50002,
-          "protocol": "SSL",
-          "certificateSha256Fingerprint": "371991d4a3c1358d63c319c8f45865573fffadce376daaf749f340c0a6a5e74a",
-          "source": "peer",
-          "responseTimeMillis": 914
+          "responseTimeMillis": 1867
         },
         {
           "host": "electrum-ltc.bysh.me",
@@ -3375,7 +3183,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "fdf3c121181c14100d8740007ed546de388099c7090315ca2cf995bb4620c41d",
           "source": "1209k,peer",
-          "responseTimeMillis": 1178
+          "responseTimeMillis": 1883
         },
         {
           "host": "electrum-ltc.petrkr.net",
@@ -3383,15 +3191,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d6335ffe9ba203ba02cda39b0db73d3a1e39fbe637c1de71a8f561801c8bf38b",
           "source": "1209k",
-          "responseTimeMillis": 1054
+          "responseTimeMillis": 1777
         },
         {
           "host": "electrum.jhoenicke.de",
           "port": 50091,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "ed44d5812c37b7ed7a821da7bb8f0e49d9e8bf5329f5824dda2ab04fe6d90720",
+          "certificateSha256Fingerprint": "2a066a4a169323bec5847fc092dcd1270864f6448beb8179bed0a5520ff412e8",
           "source": "peer",
-          "responseTimeMillis": 1115
+          "responseTimeMillis": 1768
         },
         {
           "host": "electrum.ltc.xurious.com",
@@ -3399,7 +3207,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e3aedd3093856098e2efe66d96fb7cd97adae8eeda1d070d460e84dc5134cf26",
           "source": "1209k,peer",
-          "responseTimeMillis": 545
+          "responseTimeMillis": 988
         },
         {
           "host": "electrum.petrkr.net",
@@ -3407,23 +3215,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d6335ffe9ba203ba02cda39b0db73d3a1e39fbe637c1de71a8f561801c8bf38b",
           "source": "1209k,peer",
-          "responseTimeMillis": 1050
+          "responseTimeMillis": 1734
         },
         {
           "host": "electrum1.cipig.net",
           "port": 20063,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1088
+          "responseTimeMillis": 1763
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20063,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1048
+          "responseTimeMillis": 1753
         },
         {
           "host": "fallacy.fiatfaucet.com",
@@ -3431,7 +3239,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "a06eacca8f389b5f83a05031fb86b55a7471ab7876ff35a358a25a863ac9dc6c",
           "source": "peer",
-          "responseTimeMillis": 1048
+          "responseTimeMillis": 1836
         },
         {
           "host": "l.fem.sh",
@@ -3439,15 +3247,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "11768f4877f4f404efd5acbc1402a55a1ee41f77158e3de6bde2675aa9f05567",
           "source": "peer",
-          "responseTimeMillis": 988
+          "responseTimeMillis": 1753
         },
         {
           "host": "litecoin.stackwallet.com",
           "port": 20063,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "75fd4ffb17eaf31218cd3e46d1d9077282d2e3d835e8788b768a88ec8ad8d68d",
+          "certificateSha256Fingerprint": "519aec9707c5caee654a8ae5ed887591da1ba68bd649130631dca56791f1a4e6",
           "source": "1209k",
-          "responseTimeMillis": 398
+          "responseTimeMillis": 1021
         },
         {
           "host": "ltc.accessnodes.com",
@@ -3455,7 +3263,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "32fed88cb0dd8e2e09827c76063d7fe8becd0d8ebf1085436d81de824de9536a",
           "source": "peer",
-          "responseTimeMillis": 479
+          "responseTimeMillis": 1041
         },
         {
           "host": "ltc.aftrek.org",
@@ -3463,7 +3271,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c6cb28d06ecacc28140aecb2609ee6de16e22bf1190cdcd5c1bf8e38bbaf7509",
           "source": "1209k,peer",
-          "responseTimeMillis": 1098
+          "responseTimeMillis": 1881
         },
         {
           "host": "ltc2.publicrypto.com",
@@ -3471,7 +3279,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "df14934e0e574d6163658ae93c7aff20467a5d7d8654d4ed6950ea825138ab0d",
           "source": "peer",
-          "responseTimeMillis": 488
+          "responseTimeMillis": 1040
         }
       ],
       "TEST4": [
@@ -3481,7 +3289,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "fdf3c121181c14100d8740007ed546de388099c7090315ca2cf995bb4620c41d",
           "source": "builtin,1209k,peer",
-          "responseTimeMillis": 1016
+          "responseTimeMillis": 1904
         },
         {
           "host": "electrum.ltc.xurious.com",
@@ -3489,7 +3297,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "e3aedd3093856098e2efe66d96fb7cd97adae8eeda1d070d460e84dc5134cf26",
           "source": "builtin,1209k,peer",
-          "responseTimeMillis": 609
+          "responseTimeMillis": 965
         }
       ]
     },
@@ -3501,7 +3309,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "c369d1166d127a71d592257526a5cb32025a4e897f046689b978d527d296d29f",
           "source": "1209k,peer",
-          "responseTimeMillis": 1126
+          "responseTimeMillis": 1741
         },
         {
           "host": "dogecoin.stackwallet.com",
@@ -3509,23 +3317,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "6e114def53f58fcc65195898627575a65e0f149136f2f0099fc19f120ebf8a52",
           "source": "1209k",
-          "responseTimeMillis": 1058
+          "responseTimeMillis": 1828
         },
         {
           "host": "electrum1.cipig.net",
           "port": 20060,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 2832
+          "responseTimeMillis": 3319
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20060,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 2838
+          "responseTimeMillis": 3421
         }
       ]
     },
@@ -3535,17 +3343,17 @@
           "host": "electrum1.cipig.net",
           "port": 20059,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1101
+          "responseTimeMillis": 1809
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20059,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1044
+          "responseTimeMillis": 1812
         }
       ]
     },
@@ -3563,17 +3371,17 @@
           "host": "electrum1.cipig.net",
           "port": 20051,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1090
+          "responseTimeMillis": 1832
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20051,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1096
+          "responseTimeMillis": 1884
         }
       ]
     },
@@ -3585,7 +3393,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "2bc88df62885ef0e8ff6ec420127c8ab84bff12552e250dfb117ce8723337264",
           "source": "1209k,peer",
-          "responseTimeMillis": 1012
+          "responseTimeMillis": 1735
         },
         {
           "host": "dash.stackwallet.com",
@@ -3593,23 +3401,23 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7f163222a545e53bf13d6ccb420b9bbd0d64d77f04178943ba52edfa8136a23b",
           "source": "1209k",
-          "responseTimeMillis": 1250
+          "responseTimeMillis": 1952
         },
         {
           "host": "electrum1.cipig.net",
           "port": 20061,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1092
+          "responseTimeMillis": 1823
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20061,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 1045
+          "responseTimeMillis": 1816
         }
       ]
     },
@@ -3621,7 +3429,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "d9553bd652ca9ed572d5bcf3352aefd16a94b1f6d217651021163f01aa427972",
           "source": "1209k",
-          "responseTimeMillis": 1101
+          "responseTimeMillis": 1857
         }
       ]
     },
@@ -3633,7 +3441,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5365d5bb2619f5401cd88efcaffba5b2a0ea7a992df70f057e9bcd5036c7799c",
           "source": "peer",
-          "responseTimeMillis": 521
+          "responseTimeMillis": 958
         },
         {
           "host": "46.229.238.187",
@@ -3641,7 +3449,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8241aeaf153ed52af84087da27c4327a409e60d555267483b80ccfcb94574aae",
           "source": "1209k",
-          "responseTimeMillis": 6100
+          "responseTimeMillis": 3156
         },
         {
           "host": "nmc2.bitcoins.sk",
@@ -3649,7 +3457,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "8241aeaf153ed52af84087da27c4327a409e60d555267483b80ccfcb94574aae",
           "source": "1209k,peer",
-          "responseTimeMillis": 6090
+          "responseTimeMillis": 3370
         }
       ]
     },
@@ -3661,7 +3469,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "5b290af39c2eebfb999259f31b8214023f7fe4f33783eef3a264da8ed9b9778a",
           "source": "1209k",
-          "responseTimeMillis": 791
+          "responseTimeMillis": 647
         },
         {
           "host": "electrumx02.firo.org",
@@ -3669,15 +3477,15 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "7576b497bfc59090424537118e0558bbe05c9d98dfd9126e104713aae7800e43",
           "source": "1209k",
-          "responseTimeMillis": 985
+          "responseTimeMillis": 1681
         },
         {
           "host": "firo.stackwallet.com",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "9a276a6bc7c141aadea9bf5f8f9500dc6bd67f50fab0300395eb3f4b5b1b2ccc",
+          "certificateSha256Fingerprint": "e6f98f17ffca28c0a0f83da23512bd1088540f60cfa1229362ef087a05ee0d82",
           "source": "1209k",
-          "responseTimeMillis": 960
+          "responseTimeMillis": 1624
         }
       ]
     },
@@ -3687,17 +3495,17 @@
           "host": "electrum1.cipig.net",
           "port": 20001,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 2837
+          "responseTimeMillis": 3355
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20001,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 2837
+          "responseTimeMillis": 3384
         }
       ]
     },
@@ -3709,7 +3517,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ee94bd34254a27f5d36249fa308a40d10d2bd3f80efd8da878d096006c45ecf3",
           "source": "peer",
-          "responseTimeMillis": 2932
+          "responseTimeMillis": 3451
         },
         {
           "host": "el0.verus.io",
@@ -3717,7 +3525,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ee94bd34254a27f5d36249fa308a40d10d2bd3f80efd8da878d096006c45ecf3",
           "source": "1209k",
-          "responseTimeMillis": 2932
+          "responseTimeMillis": 3315
         },
         {
           "host": "el1.verus.io",
@@ -3725,7 +3533,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ee94bd34254a27f5d36249fa308a40d10d2bd3f80efd8da878d096006c45ecf3",
           "source": "1209k",
-          "responseTimeMillis": 2849
+          "responseTimeMillis": 3448
         },
         {
           "host": "el2.verus.io",
@@ -3733,7 +3541,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ee94bd34254a27f5d36249fa308a40d10d2bd3f80efd8da878d096006c45ecf3",
           "source": "1209k",
-          "responseTimeMillis": 2929
+          "responseTimeMillis": 3392
         },
         {
           "host": "el3.verus.io",
@@ -3741,7 +3549,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "ee94bd34254a27f5d36249fa308a40d10d2bd3f80efd8da878d096006c45ecf3",
           "source": "1209k",
-          "responseTimeMillis": 2996
+          "responseTimeMillis": 3397
         }
       ]
     },
@@ -3751,17 +3559,17 @@
           "host": "electrum1.cipig.net",
           "port": 20058,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 2797
+          "responseTimeMillis": 3380
         },
         {
           "host": "electrum2.cipig.net",
           "port": 20058,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "2ef89fbb20db4863bdeec468d3014ccd2add1efffa640786b48273a6c0af66c3",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
           "source": "1209k",
-          "responseTimeMillis": 2893
+          "responseTimeMillis": 3283
         }
       ]
     },
@@ -3769,10 +3577,19 @@
       "MAIN": [
         {
           "host": "lbc.electrum1.cipig.net",
-          "port": 10067,
-          "protocol": "TCP",
-          "source": "1209k",
-          "responseTimeMillis": 3273
+          "port": 20067,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
+          "source": "manual",
+          "responseTimeMillis": 1500
+        },
+        {
+          "host": "lbc.electrum2.cipig.net",
+          "port": 20067,
+          "protocol": "SSL",
+          "certificateSha256Fingerprint": "9ec4ea922c4ca305477445409ea3a9196904d7e99d9b46aae697a94e8533d170",
+          "source": "manual",
+          "responseTimeMillis": 1500
         }
       ]
     },
@@ -3782,9 +3599,9 @@
           "host": "electrum-verge.cloud",
           "port": 50002,
           "protocol": "SSL",
-          "certificateSha256Fingerprint": "5e9218573a53effc918932e7ed4225a39011c37be803b6a337cd052f59391c03",
+          "certificateSha256Fingerprint": "29527cb2a726bcc7b5b71fb83f84b7cb7ea0713d55b7e6ac2e35710735d4f98d",
           "source": "1209k",
-          "responseTimeMillis": 369
+          "responseTimeMillis": 1035
         },
         {
           "host": "electrumx-verge.cloud",
@@ -3792,7 +3609,7 @@
           "protocol": "SSL",
           "certificateSha256Fingerprint": "73f0a0a0b8d7a4a6c23a0b0691a59472fda329c8e3fc8850f9494bc6c7632c30",
           "source": "1209k",
-          "responseTimeMillis": 335
+          "responseTimeMillis": 951
         }
       ]
     }
