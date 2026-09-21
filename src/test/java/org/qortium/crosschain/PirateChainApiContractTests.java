@@ -9,7 +9,9 @@ import org.qortium.repository.DataException;
 import org.qortium.test.common.Common;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class PirateChainApiContractTests {
 
@@ -29,6 +31,7 @@ public class PirateChainApiContractTests {
 
 		assertEquals(1200L, balance.zbalance);
 		assertEquals(900L, balance.verified_zbalance);
+		assertTrue(balance.verifiedBalanceKnown);
 	}
 
 	@Test
@@ -38,18 +41,25 @@ public class PirateChainApiContractTests {
 
 		assertEquals(1200L, balance.zbalance);
 		assertEquals(900L, balance.verified_zbalance);
+		assertTrue(balance.verifiedBalanceKnown);
 	}
 
 	@Test
-	public void testVerifiedBalanceFallsBackToTotalAndIgnoresMalformedOptionalField() throws Exception {
+	public void testVerifiedBalanceUnknownWhenAbsentOrMalformedRatherThanSilentlyEqualToTotal() throws Exception {
 		PirateChainBalance balance = PirateChain.parseWalletBalances("{\"zbalance\":1200}");
 		PirateChainBalance malformedOptional = PirateChain.parseWalletBalances(
 				"{\"zbalance\":1200,\"verified_zbalance\":{}}");
 
+		// The total balance is still reported...
 		assertEquals(1200L, balance.zbalance);
-		assertEquals(1200L, balance.verified_zbalance);
 		assertEquals(1200L, malformedOptional.zbalance);
-		assertEquals(1200L, malformedOptional.verified_zbalance);
+		// ...but a legacy backend that omits or malforms verified_zbalance does not thereby prove the
+		// wallet's spendable funds equal its total: that must be flagged unknown, never silently
+		// asserted as true by copying the total balance across.
+		assertFalse("absent verified_zbalance must not be trusted as equal to the total",
+				balance.verifiedBalanceKnown);
+		assertFalse("malformed verified_zbalance must not be trusted as equal to the total",
+				malformedOptional.verifiedBalanceKnown);
 	}
 
 	@Test

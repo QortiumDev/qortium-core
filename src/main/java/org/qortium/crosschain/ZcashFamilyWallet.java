@@ -343,6 +343,15 @@ public class ZcashFamilyWallet {
 		return Base58.encode(entropyHash);
 	}
 
+	/**
+	 * Stable Base58(SHA-256(entropy)) identity for this wallet — the same hash Core already uses to
+	 * name its on-disk wallet directories/files. This is safe to expose in API responses: unlike the
+	 * entropy itself, it is one-way and cannot be used to recover spending authority.
+	 */
+	public String getWalletIdentityHash() {
+		return this.getEntropyHash58();
+	}
+
 	public String getSeedPhrase() {
 		return this.seedPhrase;
 	}

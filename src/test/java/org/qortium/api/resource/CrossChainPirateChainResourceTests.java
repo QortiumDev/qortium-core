@@ -15,6 +15,7 @@ import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.PirateChain;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.ApiCommon;
+import org.qortium.utils.Base58;
 
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -54,19 +55,61 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testBalanceSelectorReturnsTotalWhenVerifiedNotRequestedButRejectsUnknownVerified()
+			throws Exception {
+		PirateChainBalance unknownVerified = new PirateChainBalance(1200L, 1200L, false);
+
+		// ?verified=false (or omitted) must keep returning the total balance even when the verified
+		// figure is unknown - only an explicit ?verified=true request is affected.
+		assertEquals(1200L, CrossChainPirateChainResource.selectWalletBalance(unknownVerified, false));
+
+		ForeignBlockchainException.BalanceUnavailableException exception = assertThrows(
+				ForeignBlockchainException.BalanceUnavailableException.class,
+				() -> CrossChainPirateChainResource.selectWalletBalance(unknownVerified, true));
+		assertEquals("ARRR_VERIFIED_BALANCE_UNAVAILABLE", exception.getMessage());
+		// Home's read adapter matches on this stable substring, not the exact message: keep it.
+		assertTrue(exception.getMessage().contains("BALANCE_UNAVAILABLE"));
+	}
+
+	@Test
 	public void testDisabledSyncStatusHasPlainAndStructuredContracts() {
 		Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
 
+		// The legacy plain-text contract never carries balances/identity, so it stays permissive
+		// even for a non-entropy placeholder.
 		Response plain = this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, null, "ignored");
 		assertEquals(MediaType.TEXT_PLAIN_TYPE, plain.getMediaType());
 		assertEquals("Pirate Chain wallet is disabled", plain.getEntity());
 
-		Response structured = this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, true, "ignored");
+		Response structured = this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, true,
+				Base58.encode(new byte[32]));
 		assertEquals(MediaType.APPLICATION_JSON_TYPE, structured.getMediaType());
 		PirateChainSyncStatus status = (PirateChainSyncStatus) structured.getEntity();
 		assertEquals(PirateChainSyncStatus.State.DISABLED, status.state);
 		assertEquals("Pirate Chain wallet is disabled", status.message);
 		assertFalse(status.restartRequired);
+	}
+
+	@Test
+	public void testStructuredSyncStatusRequiresValidEntropyAndLeaksNoIdentityWhenAbsent() {
+		Settings.getInstance().enableWallet(PirateChain.CURRENCY_CODE);
+
+		ApiException nullEntropy = assertThrows(ApiException.class,
+				() -> this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, true, null));
+		assertEquals(400, nullEntropy.getResponse().getStatus());
+
+		ApiException malformedEntropy = assertThrows(ApiException.class,
+				() -> this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, true, "not-base58-!!"));
+		assertEquals(400, malformedEntropy.getResponse().getStatus());
+
+		ApiException shortEntropy = assertThrows(ApiException.class,
+				() -> this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, true, Base58.encode(new byte[16])));
+		assertEquals(400, shortEntropy.getResponse().getStatus());
+
+		// The legacy plain-text contract is unaffected by this: it never carries balances/identity,
+		// so a null/general-status request remains permitted and returns no wallet-bound data.
+		Response plain = this.resource.getPirateChainSyncStatus(ApiCommon.TEST_API_KEY, null, null);
+		assertEquals(MediaType.TEXT_PLAIN_TYPE, plain.getMediaType());
 	}
 
 	@Test
@@ -105,6 +148,44 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 		assertEquals(PirateChainSyncStatus.State.DEGRADED, degraded.state);
 		assertEquals("Unavailable until Core restart", degraded.message);
 		assertTrue(degraded.restartRequired);
+	}
+
+	@Test
+	public void testStructuredStatusCarriesSnapshotBackendModeAndLastError() throws Exception {
+		try {
+			setUnifiedWalletEnabled(false);
+			PirateChainSyncStatus legacy = CrossChainPirateChainResource.toStructuredStatus(
+					ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized")
+							.withSnapshot(200L, 200L, "100000000", "90000000", "identityHash58"));
+			assertEquals(PirateChainSyncStatus.State.READY, legacy.state);
+			assertEquals(Long.valueOf(200), legacy.scannedHeight);
+			assertEquals(Long.valueOf(200), legacy.tipHeight);
+			assertEquals("100000000", legacy.totalBalanceAtomic);
+			assertEquals("90000000", legacy.verifiedBalanceAtomic);
+			assertEquals("identityHash58", legacy.walletIdentityHash);
+			assertEquals("legacy", legacy.backendMode);
+			assertFalse(legacy.stale);
+			assertNull(legacy.lastError);
+
+			setUnifiedWalletEnabled(true);
+			PirateChainSyncStatus unified = CrossChainPirateChainResource.toStructuredStatus(
+					ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+			assertEquals("unified", unified.backendMode);
+
+			PirateChainSyncStatus degradedWithError = CrossChainPirateChainResource.toStructuredStatus(
+					ZcashFamilyWalletController.WalletSyncStatus.degraded("Unavailable until Core restart")
+							.withLastError("CORE_RESTART_REQUIRED", "Native wallet is unavailable until Core restart"));
+			assertEquals("CORE_RESTART_REQUIRED", degradedWithError.lastError.code);
+			assertEquals("Native wallet is unavailable until Core restart", degradedWithError.lastError.message);
+
+			// A stale snapshot cannot be reported READY even though the underlying status was ready.
+			PirateChainSyncStatus stale = CrossChainPirateChainResource.toStructuredStatus(
+					ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized").asStale());
+			assertEquals(PirateChainSyncStatus.State.SYNCHRONIZING, stale.state);
+			assertTrue(stale.stale);
+		} finally {
+			setUnifiedWalletEnabled(false);
+		}
 	}
 
 	private static PirateChainVerifiedRecoveryRequest buildValidRecoveryRequest() {

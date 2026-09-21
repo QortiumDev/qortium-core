@@ -47,6 +47,41 @@ public class PirateRecoveryApiSerializationTests {
 	}
 
 	@Test
+	public void testSyncStatusOmitsAbsentSnapshotFieldsAndCarriesPresentOnes() throws Exception {
+		String minimal = marshal(new PirateChainSyncStatus(PirateChainSyncStatus.State.LOADING,
+				"Not initialized yet", null, null, false, null, null, null, null, null,
+				1_700_000_000_000L, false, "legacy", null, null));
+		assertFalse("scannedHeight must be omitted when null: " + minimal, minimal.contains("scannedHeight"));
+		assertFalse("tipHeight must be omitted when null: " + minimal, minimal.contains("tipHeight"));
+		assertFalse("totalBalanceAtomic must be omitted when null: " + minimal, minimal.contains("totalBalanceAtomic"));
+		assertFalse("verifiedBalanceAtomic must be omitted when null: " + minimal, minimal.contains("verifiedBalanceAtomic"));
+		assertFalse("walletIdentityHash must be omitted when null: " + minimal, minimal.contains("walletIdentityHash"));
+		assertFalse("lastError must be omitted when null: " + minimal, minimal.contains("lastError"));
+		assertTrue(minimal.contains("\"backendMode\":\"legacy\""));
+		// observedAt must be a bare JSON number (epoch milliseconds), never a quoted string - Home's
+		// adapter parses it as a number.
+		assertTrue("observedAt must serialize as an unquoted JSON number: " + minimal,
+				minimal.contains("\"observedAt\":1700000000000"));
+		assertFalse("observedAt must not be a JSON string: " + minimal, minimal.contains("\"observedAt\":\""));
+		assertTrue(minimal.contains("\"stale\":false"));
+
+		PirateChainSyncStatus.LastError lastError =
+				new PirateChainSyncStatus.LastError("NATIVE_LANE_DEGRADED", "Native wallet lane is degraded");
+		String full = marshal(new PirateChainSyncStatus(PirateChainSyncStatus.State.DEGRADED,
+				"Unavailable until Core restart", null, null, true, null, 100L, 200L,
+				"100000000", "90000000", 1_700_000_000_000L, true, "unified", "identityHash58", lastError));
+		assertTrue(full.contains("\"scannedHeight\":100"));
+		assertTrue(full.contains("\"tipHeight\":200"));
+		assertTrue(full.contains("\"totalBalanceAtomic\":\"100000000\""));
+		assertTrue(full.contains("\"verifiedBalanceAtomic\":\"90000000\""));
+		assertTrue(full.contains("\"walletIdentityHash\":\"identityHash58\""));
+		assertTrue(full.contains("\"stale\":true"));
+		assertTrue(full.contains("\"backendMode\":\"unified\""));
+		assertTrue(full.contains("NATIVE_LANE_DEGRADED"));
+		assertTrue(full.contains("Native wallet lane is degraded"));
+	}
+
+	@Test
 	public void testRecoveryResultOmitsAbsentRescanFloorAndCarriesPresentOne() throws Exception {
 		String completed = marshal(new PirateChainVerifiedRecoveryResult(42L, "sapling", "zs1canonical",
 				7, 1_999_000, true, false, null));
