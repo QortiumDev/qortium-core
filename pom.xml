@@ -917,9 +917,22 @@
 			<artifactId>java-diff-utils</artifactId>
 			<version>${java-diff-utils.version}</version>
 		</dependency>
+		<!-- grpc-netty-shaded (not grpc-netty): bundles its own working Netty + BoringSSL
+		     (netty-tcnative) so GrpcSslContexts.defaultSslProvider() always finds an OPENSSL
+		     ALPN provider and never falls back to probing the JDK's Security providers.
+		     Without this, ARRR/ZEC lightwalletd TLS connections fail on any node that has
+		     registered BouncyCastleJsseProvider ahead of the JDK's SunJSSE (every real node
+		     does this at startup - see Controller#main) and is running with a BouncyCastle
+		     bctls-jdk18on whose Multi-Release JAR happens not to carry a matching
+		     META-INF/versions/9 override for ProvSSLContextSpi (a real gap introduced between
+		     bctls-jdk18on 1.85 and 1.86 - #319 - that throws
+		     NoSuchMethodError: SSLEngineUtil.create(ContextData) from SSLContext#createSSLEngine
+		     the first time BCJSSE is asked for a JDK-provider SSLEngine). Nothing else in this
+		     codebase imports io.netty.* directly (only io.grpc.netty.* and grpc's own stub/
+		     protobuf types), so shading Netty away here doesn't hide any class we use. -->
 		<dependency>
 			<groupId>io.grpc</groupId>
-			<artifactId>grpc-netty</artifactId>
+			<artifactId>grpc-netty-shaded</artifactId>
 			<version>${grpc.version}</version>
 		</dependency>
 		<dependency>
