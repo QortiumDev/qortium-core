@@ -16,7 +16,24 @@
 		<test.awt.headless>true</test.awt.headless>
 
 		<bitcoinj.version>0.17.1</bitcoinj.version>
-		<bouncycastle.version>1.86</bouncycastle.version>
+		<!-- Pinned to 1.85 (do NOT bump - see .github/dependabot.yml ignore for org.bouncycastle:*).
+		     bctls-jdk18on 1.86's Multi-Release JAR dropped the META-INF/versions/9 override of
+		     ProvSSLContextSpi that 1.85 ships. On Java 9+ the JVM still resolves the versioned
+		     SSLEngineUtil (whose create(ContextData) returns ProvSSLEngine), but 1.86 falls back
+		     to the un-versioned ProvSSLContextSpi (compiled against the base SSLEngineUtil
+		     overload returning plain SSLEngine) - a bytecode descriptor mismatch that throws
+		     NoSuchMethodError: SSLEngineUtil.create(ContextData) the moment anything calls
+		     SSLContext#createSSLEngine() on a "BCJSSE" context. In production this killed
+		     GatewayService.start() (Jetty's SslContextFactory.checkConfiguration(), which
+		     GatewayService feeds an explicit SSLContext.getInstance("TLS", "BCJSSE")) with an
+		     uncaught Error that took down the whole Controller.main() startup thread before
+		     Gui.notifyRunning() - node left half-initialised (API up, gateway down, splash
+		     stuck) - and separately broke ARRR/ZEC lightwalletd gRPC TLS, because every real
+		     node also registers BouncyCastleJsseProvider ahead of the JDK's SunJSSE at startup
+		     (Controller#main). Regression introduced by #319 (1.85 -> 1.86); root-caused and
+		     reverted in Core PR #329/#330 (2026-09-20/21). See GrpcAlpnProviderTests and the
+		     BCJSSE gateway-TLS regression test for the reproduction/verification. -->
+		<bouncycastle.version>1.85</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<ciyam-at.version>0525eec</ciyam-at.version>
 
@@ -917,22 +934,23 @@
 			<artifactId>java-diff-utils</artifactId>
 			<version>${java-diff-utils.version}</version>
 		</dependency>
-		<!-- grpc-netty-shaded (not grpc-netty): bundles its own working Netty + BoringSSL
-		     (netty-tcnative) so GrpcSslContexts.defaultSslProvider() always finds an OPENSSL
-		     ALPN provider and never falls back to probing the JDK's Security providers.
-		     Without this, ARRR/ZEC lightwalletd TLS connections fail on any node that has
-		     registered BouncyCastleJsseProvider ahead of the JDK's SunJSSE (every real node
-		     does this at startup - see Controller#main) and is running with a BouncyCastle
-		     bctls-jdk18on whose Multi-Release JAR happens not to carry a matching
-		     META-INF/versions/9 override for ProvSSLContextSpi (a real gap introduced between
-		     bctls-jdk18on 1.85 and 1.86 - #319 - that throws
-		     NoSuchMethodError: SSLEngineUtil.create(ContextData) from SSLContext#createSSLEngine
-		     the first time BCJSSE is asked for a JDK-provider SSLEngine). Nothing else in this
-		     codebase imports io.netty.* directly (only io.grpc.netty.* and grpc's own stub/
-		     protobuf types), so shading Netty away here doesn't hide any class we use. -->
+		<!-- Plain grpc-netty, not grpc-netty-shaded: an earlier pass at this bug (Core PR #329)
+		     switched to grpc-netty-shaded so its bundled BoringSSL/tcnative would give
+		     GrpcSslContexts.defaultSslProvider() a working OPENSSL ALPN provider, sidestepping
+		     grpc-netty's JDK-provider probe (which broke when BCJSSE - registered ahead of
+		     SunJSSE by every node at startup, see Controller#main - was asked for a JDK
+		     SSLEngine; see the bouncycastle.version comment above). That workaround cost ~6.4MB
+		     (+7.7%) of bundled per-platform native libraries in every release jar. Now that the
+		     actual regression (bctls-jdk18on 1.86) is pinned back to 1.85 at its root, plain
+		     grpc-netty's own JDK ALPN detection works again (verified: GrpcAlpnProviderTests
+		     passes against bouncycastle.version 1.85 with plain grpc-netty), so the shaded
+		     artifact is redundant for this bug - it only ever protected the gRPC/ARRR-wallet
+		     path anyway, not GatewayService's Jetty TLS (which explicitly requests "BCJSSE" and
+		     is unaffected by which grpc-netty variant is on the classpath). Reverted to save the
+		     jar size. -->
 		<dependency>
 			<groupId>io.grpc</groupId>
-			<artifactId>grpc-netty-shaded</artifactId>
+			<artifactId>grpc-netty</artifactId>
 			<version>${grpc.version}</version>
 		</dependency>
 		<dependency>

@@ -449,6 +449,19 @@ public class Controller extends Thread {
 	// Entry point
 
 	public static void main(String[] args) {
+		try {
+			mainInternal(args);
+		} catch (Throwable t) {
+			// Final catch-all: anything that escapes mainInternal() (an Error/LinkageError from
+			// deep inside repository/network/service startup that isn't caught by one of the
+			// narrower try/catch blocks below) previously only reached the JVM's default
+			// uncaught-exception handler - a bare stack trace on stderr, invisible to LOGGER
+			// and to anyone only watching the log files. Log it here so it's always captured.
+			LOGGER.error("Startup thread failed", t);
+		}
+	}
+
+	private static void mainInternal(String[] args) {
 		LoggingUtils.fixLegacyLog4j2Properties();
 
 		LOGGER.info("Starting up...");
@@ -692,10 +705,17 @@ public class Controller extends Thread {
 		try {
 			ApiService apiService = ApiService.getInstance();
 			apiService.start();
-		} catch (Exception e) {
-			LOGGER.error("Unable to start API", e);
+		} catch (Throwable t) {
+			// Catch Throwable, not just Exception: a TLS provider mismatch (e.g. the bctls
+			// 1.86 BCJSSE NoSuchMethodError - see GatewayService/DomainMapService below) surfaces
+			// as an Error/LinkageError, which "catch (Exception e)" does not catch. Left
+			// uncaught, that kills the main thread silently (no LOGGER output, no GUI error,
+			// just a bare stack trace on stderr) and everything after this point in main()
+			// - including Gui.notifyRunning() - never runs. The API is load-bearing, so this
+			// stays fatal exactly as before; only the catch type was widened.
+			LOGGER.error("Unable to start API", t);
 			Controller.getInstance().shutdown();
-			Gui.getInstance().fatalError("API failure", e);
+			Gui.getInstance().fatalError("API failure", t.getMessage());
 			return; // Not System.exit() so that GUI can display error
 		}
 
@@ -707,28 +727,12 @@ public class Controller extends Thread {
 
 		if (Settings.getInstance().isGatewayEnabled()) {
 			LOGGER.info("Starting gateway service on port {}", Settings.getInstance().getGatewayPort());
-			try {
-				GatewayService gatewayService = GatewayService.getInstance();
-				gatewayService.start();
-			} catch (Exception e) {
-				LOGGER.error("Unable to start gateway service", e);
-				Controller.getInstance().shutdown();
-				Gui.getInstance().fatalError("Gateway service failure", e);
-				return; // Not System.exit() so that GUI can display error
-			}
+			startOptionalService("gateway service", () -> GatewayService.getInstance().start());
 		}
 
 		if (Settings.getInstance().isDomainMapEnabled()) {
 			LOGGER.info("Starting domain map service on port {}", Settings.getInstance().getDomainMapPort());
-			try {
-				DomainMapService domainMapService = DomainMapService.getInstance();
-				domainMapService.start();
-			} catch (Exception e) {
-				LOGGER.error("Unable to start domain map service", e);
-				Controller.getInstance().shutdown();
-				Gui.getInstance().fatalError("Domain map service failure", e);
-				return; // Not System.exit() so that GUI can display error
-			}
+			startOptionalService("domain map service", () -> DomainMapService.getInstance().start());
 		}
 
 		// If GUI is enabled, we're no longer starting up but actually running now
@@ -851,6 +855,34 @@ public class Controller extends Thread {
 				}
 			}
 		}, 3*60*1000, 3*60*1000);
+	}
+
+	/**
+	 * Starts an optional service (one the node can run without - currently the gateway and
+	 * domain-map services), tolerating any {@link Throwable} - including {@link Error}/
+	 * {@link LinkageError} - so a broken optional dependency can never silently kill the
+	 * startup thread before it reaches the rest of {@code mainInternal()}, in particular
+	 * {@code Gui.notifyRunning()}. A plain {@code catch (Exception e)} does not catch
+	 * {@code Error}: that's exactly what let Jetty's {@code SslContextFactory.checkConfiguration()}
+	 * take down the whole main thread when it hit the bctls 1.86 BCJSSE
+	 * {@code NoSuchMethodError} (see the {@code bouncycastle.version} comment in {@code pom.xml}),
+	 * leaving the node half-initialised (API up, gateway down, splash stuck).
+	 *
+	 * @param serviceName human-readable name used in the log line, so it's clear which optional
+	 *                    service failed
+	 * @param start       the service's start-up call
+	 */
+	/* package */ static void startOptionalService(String serviceName, ThrowingRunnable start) {
+		try {
+			start.run();
+		} catch (Throwable t) {
+			LOGGER.error("Unable to start {} - continuing without it", serviceName, t);
+		}
+	}
+
+	@FunctionalInterface
+	/* package */ interface ThrowingRunnable {
+		void run() throws Exception;
 	}
 
 	/** Called by AdvancedInstaller's launch EXE in single-instance mode, when an instance is already running. */

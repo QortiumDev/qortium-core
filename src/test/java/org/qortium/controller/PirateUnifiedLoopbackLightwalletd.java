@@ -15,10 +15,7 @@ import io.grpc.ServerInterceptors;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
-// grpc-netty-shaded relocates io.grpc.netty.* under this package (bundling its own working
-// Netty + BoringSSL/tcnative) so it no longer needs the JDK's ALPN providers at all; see the
-// comment on the grpc-netty-shaded dependency in pom.xml for why grpc-netty was replaced.
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ServerCalls;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
