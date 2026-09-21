@@ -390,20 +390,25 @@ public class PirateChain extends Bitcoiny {
 				throw new ForeignBlockchainException("Unable to determine total balance");
 
 			long totalBalance = json.getLong("zbalance");
-			long verifiedBalance = optionalBalance(json, "verified_zbalance", totalBalance);
-			return new PirateChainBalance(totalBalance, verifiedBalance);
+			boolean verifiedKnown = hasNumericValue(json, "verified_zbalance");
+			// The legacy backend can omit or malform verified_zbalance. Falling back to the total
+			// balance here would silently claim funds are spendable when that is not known to be
+			// true, so the placeholder is flagged unknown rather than trusted by callers.
+			long verifiedBalance = verifiedKnown ? json.getLong("verified_zbalance") : totalBalance;
+			return new PirateChainBalance(totalBalance, verifiedBalance, verifiedKnown);
 		} catch (JSONException e) {
 			throw new ForeignBlockchainException("Unable to determine balance");
 		}
 	}
 
-	private static long optionalBalance(JSONObject json, String key, long fallback) {
+	private static boolean hasNumericValue(JSONObject json, String key) {
 		if (!json.has(key) || json.isNull(key))
-			return fallback;
+			return false;
 		try {
-			return json.getLong(key);
+			json.getLong(key);
+			return true;
 		} catch (JSONException e) {
-			return fallback;
+			return false;
 		}
 	}
 

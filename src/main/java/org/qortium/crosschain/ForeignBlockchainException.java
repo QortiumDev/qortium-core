@@ -74,4 +74,26 @@ public class ForeignBlockchainException extends Exception {
 		}
 	}
 
+	/**
+	 * The native wallet coordinator is bound to a different wallet and cannot be safely stopped or
+	 * switched right now. Callers must never serve another wallet's cached data in this case; the
+	 * message is a stable, machine-readable reason (e.g. "ARRR_WALLET_BUSY") rather than free text.
+	 */
+	public static class WalletBusyException extends ForeignBlockchainException {
+		public WalletBusyException(String message) {
+			super(message);
+		}
+	}
+
+	/**
+	 * A specific balance figure (e.g. the verified/spendable amount) was explicitly requested but the
+	 * active wallet backend cannot determine it truthfully. Callers must never substitute another
+	 * figure (such as the total balance) for the missing one.
+	 */
+	public static class BalanceUnavailableException extends ForeignBlockchainException {
+		public BalanceUnavailableException(String message) {
+			super(message);
+		}
+	}
+
 }

@@ -11,6 +11,7 @@ import org.qortium.arbitrary.exception.MissingDataException;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.ZcashFamilyWallet;
+import org.qortium.crypto.Crypto;
 import org.qortium.crosschain.ZcashFamilyWalletConfig;
 import org.qortium.crosschain.ZcashFamilyNativeAdapter;
 import org.qortium.crosschain.ZcashFamilyNativeCoordinator;
@@ -41,6 +42,13 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private static final long SHUTDOWN_JOIN_MILLIS = 5_000L;
 	private static final ZcashFamilyNativeCoordinator NATIVE_COORDINATOR = ZcashFamilyNativeCoordinator.getInstance();
 
+	/**
+	 * Stable, machine-readable reason reported (via {@link ForeignBlockchainException.WalletBusyException})
+	 * when the controller is bound to a different wallet and cannot be safely stopped or switched right
+	 * now. Every wallet-bound read must fail this way rather than ever serving another wallet's data.
+	 */
+	public static final String WALLET_BUSY_REASON = "ARRR_WALLET_BUSY";
+
 	public enum LifecycleState {
 		NEW,
 		RUNNING,
@@ -57,6 +65,10 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		READY
 	}
 
+	/** Best-effort atomic-unit balance strings for a coin's active wallet; null when unavailable. */
+	public record WalletBalanceSnapshot(String totalAtomic, String verifiedAtomic) {
+	}
+
 	/** Stable status shared by the legacy text and opt-in structured API responses. */
 	public static final class WalletSyncStatus {
 		private final WalletSyncState state;
@@ -65,48 +77,127 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		private final Long totalBlocks;
 		private final boolean restartRequired;
 		private final String recoveryState;
+		private final Long scannedHeight;
+		private final Long tipHeight;
+		private final String totalBalanceAtomic;
+		private final String verifiedBalanceAtomic;
+		private final long observedAt;
+		private final boolean stale;
+		private final String walletIdentityHash;
+		private final String lastErrorCode;
+		private final String lastErrorMessage;
 
 		private WalletSyncStatus(WalletSyncState state, String message, Long syncedBlocks, Long totalBlocks,
-				boolean restartRequired, String recoveryState) {
+				boolean restartRequired, String recoveryState, Long scannedHeight, Long tipHeight,
+				String totalBalanceAtomic, String verifiedBalanceAtomic, long observedAt, boolean stale,
+				String walletIdentityHash, String lastErrorCode, String lastErrorMessage) {
 			this.state = state;
 			this.message = message;
 			this.syncedBlocks = syncedBlocks;
 			this.totalBlocks = totalBlocks;
 			this.restartRequired = restartRequired;
 			this.recoveryState = recoveryState;
+			this.scannedHeight = scannedHeight;
+			this.tipHeight = tipHeight;
+			this.totalBalanceAtomic = totalBalanceAtomic;
+			this.verifiedBalanceAtomic = verifiedBalanceAtomic;
+			this.observedAt = observedAt;
+			this.stale = stale;
+			this.walletIdentityHash = walletIdentityHash;
+			this.lastErrorCode = lastErrorCode;
+			this.lastErrorMessage = lastErrorMessage;
+		}
+
+		private static WalletSyncStatus base(WalletSyncState state, String message, Long syncedBlocks,
+				Long totalBlocks, boolean restartRequired, String recoveryState) {
+			return new WalletSyncStatus(state, message, syncedBlocks, totalBlocks, restartRequired, recoveryState,
+					null, null, null, null, System.currentTimeMillis(), false, null, null, null);
 		}
 
 		public static WalletSyncStatus disabled(String message) {
-			return new WalletSyncStatus(WalletSyncState.DISABLED, message, null, null, false, null);
+			return base(WalletSyncState.DISABLED, message, null, null, false, null);
 		}
 
 		public static WalletSyncStatus loading(String message) {
-			return new WalletSyncStatus(WalletSyncState.LOADING, message, null, null, false, null);
+			return base(WalletSyncState.LOADING, message, null, null, false, null);
 		}
 
 		public static WalletSyncStatus synchronizing(String message, Long syncedBlocks, Long totalBlocks) {
-			return new WalletSyncStatus(WalletSyncState.SYNCHRONIZING, message, syncedBlocks, totalBlocks, false, null);
+			return base(WalletSyncState.SYNCHRONIZING, message, syncedBlocks, totalBlocks, false, null);
 		}
 
 		/** A verified-import recovery replay owns the wallet: reported as synchronizing plus a marker. */
 		public static WalletSyncStatus recovering(String message, String recoveryState) {
-			return new WalletSyncStatus(WalletSyncState.SYNCHRONIZING, message, null, null, false, recoveryState);
+			return base(WalletSyncState.SYNCHRONIZING, message, null, null, false, recoveryState);
 		}
 
 		public static WalletSyncStatus degraded(String message) {
-			return new WalletSyncStatus(WalletSyncState.DEGRADED, message, null, null, true, null);
+			return base(WalletSyncState.DEGRADED, message, null, null, true, null);
 		}
 
 		public static WalletSyncStatus ready(String message) {
-			return new WalletSyncStatus(WalletSyncState.READY, message, null, null, false, null);
+			return base(WalletSyncState.READY, message, null, null, false, null);
 		}
 
-		/** Same status with the given recovery marker (null clears it). */
+		/**
+		 * Same status with the given recovery marker (null clears it). A durable recovery replay that
+		 * has not completed (anything but RECOVERED) can never coexist with a READY state: readiness
+		 * requires fresh, successful synchronization evidence, and a pending/active recovery is neither.
+		 */
 		public WalletSyncStatus withRecoveryMarker(String recoveryState) {
 			if (Objects.equals(this.recoveryState, recoveryState))
 				return this;
+			WalletSyncState effectiveState = this.state;
+			if (effectiveState == WalletSyncState.READY && recoveryState != null
+					&& !ZcashFamilyWallet.RecoveryProgress.RECOVERED.name().equals(recoveryState))
+				effectiveState = WalletSyncState.SYNCHRONIZING;
+			return new WalletSyncStatus(effectiveState, this.message, this.syncedBlocks, this.totalBlocks,
+					this.restartRequired, recoveryState, this.scannedHeight, this.tipHeight,
+					this.totalBalanceAtomic, this.verifiedBalanceAtomic, this.observedAt, this.stale,
+					this.walletIdentityHash, this.lastErrorCode, this.lastErrorMessage);
+		}
+
+		/**
+		 * Enriches this status with the wallet-bound snapshot fields: absolute chain heights (never the
+		 * relative in-flight counters carried by syncedBlocks/totalBlocks), best-effort atomic-unit
+		 * balances, and the identity hash of the wallet the snapshot actually belongs to. A READY state
+		 * requires the absolute heights to be known; when they are not, READY is not fresh, successful
+		 * sync evidence and is downgraded.
+		 */
+		public WalletSyncStatus withSnapshot(Long scannedHeight, Long tipHeight, String totalBalanceAtomic,
+				String verifiedBalanceAtomic, String walletIdentityHash) {
+			WalletSyncState effectiveState = this.state == WalletSyncState.READY
+					&& (scannedHeight == null || tipHeight == null)
+					? WalletSyncState.SYNCHRONIZING : this.state;
+			return new WalletSyncStatus(effectiveState, this.message, this.syncedBlocks, this.totalBlocks,
+					this.restartRequired, this.recoveryState, scannedHeight, tipHeight, totalBalanceAtomic,
+					verifiedBalanceAtomic, this.observedAt, this.stale, walletIdentityHash,
+					this.lastErrorCode, this.lastErrorMessage);
+		}
+
+		/** Sanitized last-error detail (no paths, no entropy, no stack trace) for a degraded/failed lane. */
+		public WalletSyncStatus withLastError(String code, String message) {
 			return new WalletSyncStatus(this.state, this.message, this.syncedBlocks, this.totalBlocks,
-					this.restartRequired, recoveryState);
+					this.restartRequired, this.recoveryState, this.scannedHeight, this.tipHeight,
+					this.totalBalanceAtomic, this.verifiedBalanceAtomic, this.observedAt, this.stale,
+					this.walletIdentityHash, code, message);
+		}
+
+		/**
+		 * Marks this snapshot as served from cache rather than freshly observed (produced while the
+		 * native lane was busy with other work, or kept after a failed refresh attempt). A stale READY
+		 * is not fresh, successful sync evidence and is downgraded so structured consumers cannot treat
+		 * it as a current guarantee.
+		 */
+		public WalletSyncStatus asStale() {
+			if (this.stale)
+				return this;
+			WalletSyncState effectiveState = this.state == WalletSyncState.READY
+					? WalletSyncState.SYNCHRONIZING : this.state;
+			return new WalletSyncStatus(effectiveState, this.message, this.syncedBlocks, this.totalBlocks,
+					this.restartRequired, this.recoveryState, this.scannedHeight, this.tipHeight,
+					this.totalBalanceAtomic, this.verifiedBalanceAtomic, this.observedAt, true,
+					this.walletIdentityHash, this.lastErrorCode, this.lastErrorMessage);
 		}
 
 		public WalletSyncState getState() {
@@ -132,6 +223,49 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		/** RecoveryProgress name (PENDING/RECOVERING/RECOVERED), or null when recovery is not involved. */
 		public String getRecoveryState() {
 			return this.recoveryState;
+		}
+
+		/** Absolute wallet-scanned chain height, or null when unknown. Never a relative counter. */
+		public Long getScannedHeight() {
+			return this.scannedHeight;
+		}
+
+		/** Absolute chain tip height, or null when unknown. Never a relative counter. */
+		public Long getTipHeight() {
+			return this.tipHeight;
+		}
+
+		/** Total balance in 8-decimal atomic units, or null when unknown. */
+		public String getTotalBalanceAtomic() {
+			return this.totalBalanceAtomic;
+		}
+
+		/** Verified/spendable balance in 8-decimal atomic units, or null when unknown. */
+		public String getVerifiedBalanceAtomic() {
+			return this.verifiedBalanceAtomic;
+		}
+
+		/** Epoch-millisecond timestamp this snapshot was originally observed. */
+		public long getObservedAt() {
+			return this.observedAt;
+		}
+
+		/** Whether this snapshot is a cached reuse rather than a fresh, current observation. */
+		public boolean isStale() {
+			return this.stale;
+		}
+
+		/** Base58(SHA-256(entropy)) identity of the wallet this snapshot actually belongs to. */
+		public String getWalletIdentityHash() {
+			return this.walletIdentityHash;
+		}
+
+		public String getLastErrorCode() {
+			return this.lastErrorCode;
+		}
+
+		public String getLastErrorMessage() {
+			return this.lastErrorMessage;
 		}
 	}
 
@@ -178,6 +312,19 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	/** Optional safe, coin-specific detail for a failed wallet initialization. */
 	protected String getWalletInitializationFailure(W wallet) {
+		return null;
+	}
+
+	/**
+	 * Coin-specific hook: best-effort atomic-unit balances for the currently active wallet, for
+	 * sync-status snapshot enrichment. Returns null when the coin has no balance-in-status support.
+	 * Implementations must never throw: a failure to read balances must be caught internally and
+	 * reported as a snapshot whose fields are null, so a status read never fails just because a
+	 * secondary balance read did. Runs on the native lane; the coordinator is reentrant for the
+	 * thread that is already executing on it, so implementations may safely call the wallet's own
+	 * public accessors.
+	 */
+	protected WalletBalanceSnapshot currentWalletBalanceSnapshot(W wallet) {
 		return null;
 	}
 
@@ -587,6 +734,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
 			boolean initializeAtCurrentTip, ZcashFamilyNativeAdapter nativeAdapter) {
+		this.initializationFailure = null;
+
 		if (!nativeAdapter.isLoaded()) {
 			shouldLoadWallet = true;
 			return false;
@@ -595,9 +744,9 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		byte[] entropyBytes = Base58.decode(entropy58);
 		if (entropyBytes == null || entropyBytes.length != 32) {
 			LOGGER.info("Invalid entropy bytes");
+			this.initializationFailure = "Invalid entropy bytes";
 			return false;
 		}
-		this.initializationFailure = null;
 
 		W previousWallet = null;
 		if (this.currentWallet != null) {
@@ -612,6 +761,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			if (!this.currentWallet.prepareForSwitch(nativeAdapter)) {
 				LOGGER.info("Unable to switch {} wallet because prior native work has not terminated",
 						this.config.getDisplayName());
+				this.initializationFailure = WALLET_BUSY_REASON;
 				return false;
 			}
 			previousWallet = this.currentWallet;
@@ -654,10 +804,13 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		return executeChecked("initialize known-new " + this.config.getCurrencyCode() + " wallet", nativeAdapter -> {
 			if (!acceptsWalletOperations(this.lifecycleState))
 				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
-			if (!this.initWithEntropy58(entropy58, false, true, nativeAdapter))
+			if (!this.initWithEntropy58(entropy58, false, true, nativeAdapter)) {
+				if (WALLET_BUSY_REASON.equals(this.initializationFailure))
+					throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
 				throw new ForeignBlockchainException(this.initializationFailure == null
 						? this.config.getDisplayName() + " wallet could not be initialized as known-new"
 						: this.initializationFailure);
+			}
 			return this.currentWallet;
 		});
 	}
@@ -693,19 +846,19 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	public String getSyncStatus() {
+	public String getSyncStatus() throws ForeignBlockchainException {
 		return this.getSyncStatusDetails().getMessage();
 	}
 
-	public String getSyncStatus(String entropy58) {
+	public String getSyncStatus(String entropy58) throws ForeignBlockchainException {
 		return this.getSyncStatusDetails(entropy58).getMessage();
 	}
 
-	public WalletSyncStatus getSyncStatusDetails() {
+	public WalletSyncStatus getSyncStatusDetails() throws ForeignBlockchainException {
 		return this.getBoundedSyncStatus(null);
 	}
 
-	public WalletSyncStatus getSyncStatusDetails(String entropy58) {
+	public WalletSyncStatus getSyncStatusDetails(String entropy58) throws ForeignBlockchainException {
 		return this.getBoundedSyncStatus(entropy58);
 	}
 
@@ -720,24 +873,87 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private <T> T withWallet(String entropy58, boolean isNullSeedWallet, boolean requireSynchronized,
 			boolean requireNotNullSeed, WalletOperation<W, T> operation) throws ForeignBlockchainException {
-		return executeChecked("execute " + this.config.getCurrencyCode() + " wallet operation", nativeAdapter -> {
-			if (!acceptsWalletOperations(this.lifecycleState))
-				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
-			if (!this.initWithEntropy58(entropy58, isNullSeedWallet, nativeAdapter))
-				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet isn't initialized yet");
-			ensureInitialized(nativeAdapter);
-			W wallet = this.currentWallet;
-			return wallet.withValidatedServerSelectionLease(nativeAdapter, leasedAdapter -> {
-				if (!wallet.prepareForSynchronization(leasedAdapter))
-					throw new ForeignBlockchainException(
-							this.config.getDisplayName() + " wallet endpoint is not validated yet");
-				if (requireSynchronized)
-					ensureSynchronized(leasedAdapter);
-				if (requireNotNullSeed)
-					ensureNotNullSeedInternal();
-				return operation.execute(wallet, leasedAdapter);
+		// Fast, non-blocking preflight BEFORE submitting anything to the native coordinator: without
+		// this, a request for a different wallet than the one currently bound would either queue
+		// behind the in-flight/queued work for up to the coordinator's default timeout (two minutes)
+		// or be rejected outright by a full queue, and only then surface - as a generic failure, not
+		// the structured busy signal every wallet-bound read must give.
+		this.assertNotCrossWalletBusy(entropy58, isNullSeedWallet);
+
+		try {
+			return NATIVE_COORDINATOR.execute("execute " + this.config.getCurrencyCode() + " wallet operation",
+					nativeAdapter -> {
+				if (!acceptsWalletOperations(this.lifecycleState))
+					throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
+				if (!this.initWithEntropy58(entropy58, isNullSeedWallet, nativeAdapter)) {
+					if (WALLET_BUSY_REASON.equals(this.initializationFailure))
+						throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
+					throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet isn't initialized yet");
+				}
+				ensureInitialized(nativeAdapter);
+				W wallet = this.currentWallet;
+				// Defense in depth: initWithEntropy58() must already guarantee this, but a served wallet
+				// must never diverge from the requester's own entropy under any future refactor.
+				byte[] requestedEntropyBytes = Base58.decode(entropy58);
+				if (requestedEntropyBytes == null || !wallet.matchesWallet(requestedEntropyBytes, isNullSeedWallet))
+					throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
+				return wallet.withValidatedServerSelectionLease(nativeAdapter, leasedAdapter -> {
+					if (!wallet.prepareForSynchronization(leasedAdapter))
+						throw new ForeignBlockchainException(
+								this.config.getDisplayName() + " wallet endpoint is not validated yet");
+					if (requireSynchronized)
+						ensureSynchronized(leasedAdapter);
+					if (requireNotNullSeed)
+						ensureNotNullSeedInternal();
+					return operation.execute(wallet, leasedAdapter);
+				});
 			});
-		});
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			Throwable cause = e;
+			while (cause != null) {
+				if (cause instanceof ForeignBlockchainException foreignBlockchainException)
+					throw foreignBlockchainException;
+				cause = cause.getCause();
+			}
+			// No ForeignBlockchainException anywhere in the cause chain means the operation itself
+			// never got to run: the coordinator either rejected the submission outright (its single
+			// worker plus one-deep queue were both occupied) or the wait to be scheduled outlasted
+			// the default timeout - both only happen because another wallet's native work is holding
+			// the lane, so this must report the same structured busy signal, not a generic failure.
+			// A lane that is now degraded (a mid-operation timeout) is a different, unrelated failure
+			// mode and keeps the generic mapping below.
+			if (!NATIVE_COORDINATOR.isDegraded()
+					&& (e.getCause() instanceof java.util.concurrent.RejectedExecutionException
+							|| e.getCause() instanceof java.util.concurrent.TimeoutException
+							|| e.getCause() instanceof InterruptedException))
+				throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
+			throw new ForeignBlockchainException(e.getMessage());
+		}
+	}
+
+	/**
+	 * Fast, non-blocking cross-wallet busy check shared by every wallet-bound read
+	 * (walletaddress/walletbalance/wallettransactions via {@link #withWallet}, and syncstatus via
+	 * {@link #computeBoundedSyncStatus}). Only ever a fast-fail optimization: the coordinator itself
+	 * remains the sole authority once an operation actually runs, this just avoids ever submitting a
+	 * cross-wallet request into a lane that is currently occupied by different wallet's work.
+	 */
+	private void assertNotCrossWalletBusy(String entropy58, boolean isNullSeedWallet) throws ForeignBlockchainException {
+		if (!NATIVE_COORDINATOR.isBusy())
+			return;
+
+		byte[] entropyBytes;
+		try {
+			entropyBytes = Base58.decode(entropy58);
+		} catch (RuntimeException e) {
+			entropyBytes = null;
+		}
+		W wallet = this.currentWallet;
+		if (entropyBytes != null && entropyBytes.length == 32 && wallet != null
+				&& wallet.matchesWallet(entropyBytes, isNullSeedWallet))
+			return; // busy, but already bound to the SAME wallet: an ordinary in-flight operation
+
+		throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
 	}
 
 	private void ensureInitialized(ZcashFamilyNativeAdapter nativeAdapter) throws ForeignBlockchainException {
@@ -780,7 +996,38 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		ZcashFamilyWallet.RecoveryProgress recoveryMarker = this.currentWallet.peekRecoveryProgress();
 		if (recoveryMarker != null)
 			status = status.withRecoveryMarker(recoveryMarker.name());
+		status = this.enrichWithSnapshot(status);
 		return cacheCurrentWalletStatus(status);
+	}
+
+	/**
+	 * Best-effort absolute heights, atomic-unit balances and wallet identity for the currently active
+	 * wallet. Each reading fails closed to null on its own rather than failing the whole status: a
+	 * status read must never fail just because a secondary snapshot field could not be determined.
+	 */
+	private WalletSyncStatus enrichWithSnapshot(WalletSyncStatus status) {
+		W wallet = this.currentWallet;
+		if (wallet == null)
+			return status;
+
+		Long scannedHeight = safeAbsoluteHeight(wallet::getHeight);
+		Long tipHeight = safeAbsoluteHeight(wallet::getChainTip);
+		String walletIdentityHash = wallet.getWalletIdentityHash();
+		WalletBalanceSnapshot balances = this.currentWalletBalanceSnapshot(wallet);
+
+		return status.withSnapshot(scannedHeight, tipHeight,
+				balances == null ? null : balances.totalAtomic(),
+				balances == null ? null : balances.verifiedAtomic(),
+				walletIdentityHash);
+	}
+
+	private static Long safeAbsoluteHeight(java.util.function.Supplier<Integer> heightSupplier) {
+		try {
+			Integer height = heightSupplier.get();
+			return height == null ? null : Long.valueOf(height);
+		} catch (RuntimeException e) {
+			return null;
+		}
 	}
 
 	static WalletSyncStatus interpretNativeSyncStatus(JSONObject json, boolean walletSynchronized) {
@@ -829,10 +1076,31 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private WalletSyncStatus getBoundedSyncStatus(String entropy58) {
+	/**
+	 * Window beyond which a served snapshot is considered stale purely by age, independent of
+	 * whether it was served from cache because the native lane was busy. Applied uniformly to every
+	 * returned status by {@link #getBoundedSyncStatus(String)} so no internal branch can accidentally
+	 * skip it.
+	 */
+	static final long STATUS_STALE_WINDOW_MILLIS = 90_000L;
+
+	private WalletSyncStatus getBoundedSyncStatus(String entropy58) throws ForeignBlockchainException {
+		return applyStaleWindow(this.computeBoundedSyncStatus(entropy58));
+	}
+
+	/** Re-checks staleness purely by the snapshot's age, regardless of how it was produced. */
+	private static WalletSyncStatus applyStaleWindow(WalletSyncStatus status) {
+		if (status.isStale())
+			return status;
+		long age = System.currentTimeMillis() - status.getObservedAt();
+		return age > STATUS_STALE_WINDOW_MILLIS ? status.asStale() : status;
+	}
+
+	private WalletSyncStatus computeBoundedSyncStatus(String entropy58) throws ForeignBlockchainException {
 		if (this.requiresCoreRestart())
 			return cacheStatus(WalletSyncStatus.degraded(
-					this.config.getDisplayName() + " native wallet is unavailable until Core restart"));
+					this.config.getDisplayName() + " native wallet is unavailable until Core restart")
+					.withLastError("CORE_RESTART_REQUIRED", "Native wallet is unavailable until Core restart"));
 
 		if (this.lifecycleState == LifecycleState.NEW)
 			return cacheStatus(WalletSyncStatus.loading(
@@ -848,29 +1116,60 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		if (NATIVE_COORDINATOR.isBusy()) {
 			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
 			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
-				return withPeekedRecoveryMarker(cachedStatus);
-			return WalletSyncStatus.loading("Wallet status unavailable while another native operation is running");
+				return withPeekedRecoveryMarker(cachedStatus).asStale();
+			// Never fall back to a generic "loading" placeholder here: that would blur a genuinely
+			// busy/switch-blocked wallet with an ordinary unsynchronized one, and callers need the
+			// stable, structured signal to retry instead of misreading this as sync progress.
+			throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
 		}
 
 		try {
 			Duration timeout = this.statusTimeoutFor(entropy58);
 			return NATIVE_COORDINATOR.execute("get wallet synchronization status",
 					timeout, nativeAdapter -> {
-				if (entropy58 != null && !this.initWithEntropy58(entropy58, false, nativeAdapter))
+				if (entropy58 != null && !this.initWithEntropy58(entropy58, false, nativeAdapter)) {
+					if (WALLET_BUSY_REASON.equals(this.initializationFailure))
+						throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
 					return WalletSyncStatus.loading(this.config.getDisplayName() + " wallet isn't initialized yet");
-				return this.getSyncStatus(nativeAdapter);
+				}
+				WalletSyncStatus fresh = this.getSyncStatus(nativeAdapter);
+				// Defense in depth: initWithEntropy58() must already guarantee this, but the served
+				// snapshot's identity must never diverge from the requester's own entropy under any
+				// future refactor - never trust the "current" wallet without re-checking it here.
+				if (entropy58 != null && !Objects.equals(fresh.getWalletIdentityHash(), expectedIdentityHash58(entropy58)))
+					throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
+				return fresh;
 			});
 		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			Throwable cause = e;
+			while (cause != null) {
+				if (cause instanceof ForeignBlockchainException.WalletBusyException walletBusyException)
+					throw walletBusyException;
+				cause = cause.getCause();
+			}
 			if (NATIVE_COORDINATOR.isDegraded()) {
 				WalletSyncStatus status = cacheStatus(WalletSyncStatus.degraded(
-						this.config.getDisplayName() + " native wallet is unavailable until Core restart"));
+						this.config.getDisplayName() + " native wallet is unavailable until Core restart")
+						.withLastError("NATIVE_LANE_DEGRADED", "Native wallet lane is degraded"));
 				this.lifecycleState = LifecycleState.DEGRADED;
 				return status;
 			}
 			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
 			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
-				return withPeekedRecoveryMarker(cachedStatus);
-			return WalletSyncStatus.loading("Wallet status unavailable for the requested wallet");
+				return withPeekedRecoveryMarker(cachedStatus).asStale();
+			throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
+		}
+	}
+
+	/** Base58(SHA-256(entropy)) the same way {@link ZcashFamilyWallet#getWalletIdentityHash()} does. */
+	private static String expectedIdentityHash58(String entropy58) {
+		try {
+			byte[] entropyBytes = Base58.decode(entropy58);
+			if (entropyBytes == null)
+				return null;
+			return Base58.encode(Crypto.digest(entropyBytes));
+		} catch (RuntimeException e) {
+			return null;
 		}
 	}
 

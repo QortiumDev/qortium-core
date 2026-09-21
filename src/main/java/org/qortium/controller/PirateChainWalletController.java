@@ -1,5 +1,6 @@
 package org.qortium.controller;
 
+import org.qortium.api.model.crosschain.PirateChainBalance;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.PirateChain;
 import org.qortium.crosschain.PirateWallet;
@@ -62,6 +63,18 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
 	@Override
 	protected String getWalletInitializationFailure(PirateWallet wallet) {
 		return wallet.getInitializationFailureMessage();
+	}
+
+	@Override
+	protected ZcashFamilyWalletController.WalletBalanceSnapshot currentWalletBalanceSnapshot(PirateWallet wallet) {
+		try {
+			PirateChainBalance balances = wallet.getWalletBalances();
+			String totalAtomic = Long.toString(balances.zbalance);
+			String verifiedAtomic = balances.verifiedBalanceKnown ? Long.toString(balances.verified_zbalance) : null;
+			return new ZcashFamilyWalletController.WalletBalanceSnapshot(totalAtomic, verifiedAtomic);
+		} catch (ForeignBlockchainException | RuntimeException e) {
+			return new ZcashFamilyWalletController.WalletBalanceSnapshot(null, null);
+		}
 	}
 
 	public KnownNewInitialization initializeKnownNewWallet(String entropy58) throws ForeignBlockchainException {

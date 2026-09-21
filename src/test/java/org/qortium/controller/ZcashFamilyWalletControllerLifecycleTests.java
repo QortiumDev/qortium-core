@@ -17,6 +17,7 @@ import org.qortium.utils.Base58;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -26,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -209,6 +211,64 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	}
 
 	@Test
+	public void testWalletSyncStatusReadyRequiresFreshEvidence() {
+		ZcashFamilyWalletController.WalletSyncStatus ready =
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized");
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, ready.getState());
+		assertFalse(ready.isStale());
+
+		// A pending/active recovery downgrades an otherwise-READY status: it is not fresh, successful
+		// sync evidence.
+		ZcashFamilyWalletController.WalletSyncStatus pendingRecovery = ready.withRecoveryMarker("PENDING");
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, pendingRecovery.getState());
+		assertEquals("PENDING", pendingRecovery.getRecoveryState());
+
+		// A completed recovery does not block readiness.
+		ZcashFamilyWalletController.WalletSyncStatus recoveredReady = ready.withRecoveryMarker("RECOVERED");
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, recoveredReady.getState());
+
+		// A cached/stale snapshot cannot be reported READY either.
+		ZcashFamilyWalletController.WalletSyncStatus stale = ready.asStale();
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, stale.getState());
+		assertTrue(stale.isStale());
+		assertSame("asStale() is idempotent", stale, stale.asStale());
+
+		// Missing absolute native fields (heights) also block readiness, independent of the relative
+		// in-flight synced/total-block counters.
+		ZcashFamilyWalletController.WalletSyncStatus missingHeights =
+				ready.withSnapshot(null, 200L, "100000000", "90000000", "identityHash58");
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, missingHeights.getState());
+		assertNull(missingHeights.getScannedHeight());
+		assertEquals(Long.valueOf(200), missingHeights.getTipHeight());
+
+		// Known heights preserve READY and carry the balances/identity through untouched.
+		ZcashFamilyWalletController.WalletSyncStatus knownHeights =
+				ready.withSnapshot(200L, 200L, "100000000", "90000000", "identityHash58");
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, knownHeights.getState());
+		assertEquals(Long.valueOf(200), knownHeights.getScannedHeight());
+		assertEquals(Long.valueOf(200), knownHeights.getTipHeight());
+		assertEquals("100000000", knownHeights.getTotalBalanceAtomic());
+		assertEquals("90000000", knownHeights.getVerifiedBalanceAtomic());
+		assertEquals("identityHash58", knownHeights.getWalletIdentityHash());
+		assertTrue("observedAt must be stamped", knownHeights.getObservedAt() > 0);
+
+		// syncedBlocks/totalBlocks (relative counters) are untouched by snapshot enrichment.
+		ZcashFamilyWalletController.WalletSyncStatus synchronizing =
+				ZcashFamilyWalletController.WalletSyncStatus.synchronizing("Sync in progress (1 / 2)", 1L, 2L)
+						.withSnapshot(100L, 200L, null, null, "identityHash58");
+		assertEquals(Long.valueOf(1), synchronizing.getSyncedBlocks());
+		assertEquals(Long.valueOf(2), synchronizing.getTotalBlocks());
+		assertNull("unknown balances stay null, never a reinterpreted counter",
+				synchronizing.getTotalBalanceAtomic());
+
+		ZcashFamilyWalletController.WalletSyncStatus withError =
+				ready.withLastError("NATIVE_LANE_DEGRADED", "Native wallet lane is degraded");
+		assertEquals("NATIVE_LANE_DEGRADED", withError.getLastErrorCode());
+		assertEquals("Native wallet lane is degraded", withError.getLastErrorMessage());
+		assertNull(ready.getLastErrorCode());
+	}
+
+	@Test
 	public void testPersistentSyncAcceptanceDoesNotReportReadyBeforeValidatedTip() {
 		ZcashFamilyWalletController.WalletSyncStatus pending =
 				ZcashFamilyWalletController.statusAfterSyncAttempt(true, true, true, false);
@@ -306,14 +366,20 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 			}));
 			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
 
+			// A cached status for the SAME wallet is served, but flagged stale: it was produced while
+			// the native lane was busy with other work, so a would-be READY is not fresh, successful
+			// sync evidence and must not be reported as current.
 			ZcashFamilyWalletController.WalletSyncStatus matching =
 					controller.getSyncStatusDetails(Base58.encode(entropyA));
-			assertEquals(ZcashFamilyWalletController.WalletSyncState.READY, matching.getState());
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, matching.getState());
+			assertTrue(matching.isStale());
 
-			ZcashFamilyWalletController.WalletSyncStatus different =
-					controller.getSyncStatusDetails(Base58.encode(entropyB));
-			assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, different.getState());
-			assertEquals("Wallet status unavailable while another native operation is running", different.getMessage());
+			// A different wallet's entropy must never receive wallet A's cached data — the controller
+			// reports a structured busy signal instead.
+			ForeignBlockchainException.WalletBusyException busy = assertThrows(
+					ForeignBlockchainException.WalletBusyException.class,
+					() -> controller.getSyncStatusDetails(Base58.encode(entropyB)));
+			assertEquals("ARRR_WALLET_BUSY", busy.getMessage());
 
 			releaseOperation.countDown();
 			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
@@ -348,10 +414,101 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 			}));
 			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
 
-			ZcashFamilyWalletController.WalletSyncStatus status =
-					controller.getSyncStatusDetails(Base58.encode(entropyB));
-			assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, status.getState());
-			assertEquals("Wallet status unavailable while another native operation is running", status.getMessage());
+			ForeignBlockchainException.WalletBusyException busy = assertThrows(
+					ForeignBlockchainException.WalletBusyException.class,
+					() -> controller.getSyncStatusDetails(Base58.encode(entropyB)));
+			assertEquals("ARRR_WALLET_BUSY", busy.getMessage());
+
+			releaseOperation.countDown();
+			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
+		} finally {
+			releaseOperation.countDown();
+			caller.shutdownNow();
+			controller.shutdown();
+		}
+	}
+
+	@Test
+	public void testSwitchBlockedByPriorNativeWorkReportsWalletBusy() throws Exception {
+		TestController controller = new TestController();
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		BusySwitchWallet walletA = new BusySwitchWallet(entropyA);
+		setControllerField(controller, "currentWallet", walletA);
+
+		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
+				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+		initialize.setAccessible(true);
+
+		assertFalse((Boolean) initialize.invoke(controller, Base58.encode(entropyB), false, false,
+				new RecordingNativeAdapter()));
+
+		Field initializationFailure = ZcashFamilyWalletController.class.getDeclaredField("initializationFailure");
+		initializationFailure.setAccessible(true);
+		assertEquals("ARRR_WALLET_BUSY", initializationFailure.get(controller));
+
+		// The wallet still bound to A's entropy must never be swapped out for a half-initialized B.
+		Field currentWallet = ZcashFamilyWalletController.class.getDeclaredField("currentWallet");
+		currentWallet.setAccessible(true);
+		assertSame(walletA, currentWallet.get(controller));
+	}
+
+	/**
+	 * All four ARRR reads (walletaddress/walletbalance/wallettransactions/syncstatus) must report
+	 * the structured busy signal - never queue behind wallet A's native work and never fall back to
+	 * a generic failure - when requested for a different wallet B. walletaddress/walletbalance/
+	 * wallettransactions are trivial {@link PirateChain} wrappers over the single shared
+	 * {@link #withEntropyWallet} implementation exercised here directly (three separate call sites,
+	 * zero additional busy-handling logic of their own); syncstatus is exercised through {@link
+	 * #getSyncStatusDetails(String)}. Uses only public entry points plus the pre-existing
+	 * setControllerField() field-reflection helper for test setup - no reflective private-method
+	 * invocation.
+	 */
+	@Test
+	public void testFourReadsAllReportWalletBusyForACrossWalletRequest() throws Exception {
+		TestController controller = new TestController();
+		assertTrue(controller.startController());
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		String entropyB58 = Base58.encode(entropyB);
+		TestWallet walletA = new TestWallet(entropyA);
+		setControllerField(controller, "currentWallet", walletA);
+		controller.cacheCurrentWalletStatus(ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+
+		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
+		CountDownLatch operationEntered = new CountDownLatch(1);
+		CountDownLatch releaseOperation = new CountDownLatch(1);
+		ExecutorService caller = Executors.newSingleThreadExecutor();
+		try {
+			Future<String> operation = caller.submit(() -> coordinator.execute("wallet A holds native work", nativeAdapter -> {
+				operationEntered.countDown();
+				releaseOperation.await();
+				return "done";
+			}));
+			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
+
+			// walletaddress / walletbalance / wallettransactions share this one implementation.
+			for (String label : new String[] {"walletaddress", "walletbalance", "wallettransactions"}) {
+				long start = System.nanoTime();
+				ForeignBlockchainException.WalletBusyException busy = assertThrows(
+						ForeignBlockchainException.WalletBusyException.class,
+						() -> controller.withEntropyWallet(entropyB58, false, (wallet, nativeAdapter) -> "unreachable"));
+				assertEquals(label, "ARRR_WALLET_BUSY", busy.getMessage());
+				// The preflight must fail fast, never queue behind A's still-running native work.
+				assertTrue(label, Duration.ofNanos(System.nanoTime() - start).toMillis() < 1_000);
+			}
+
+			// syncstatus.
+			ForeignBlockchainException.WalletBusyException syncStatusBusy = assertThrows(
+					ForeignBlockchainException.WalletBusyException.class,
+					() -> controller.getSyncStatusDetails(entropyB58));
+			assertEquals("ARRR_WALLET_BUSY", syncStatusBusy.getMessage());
+
+			// Wallet A itself is unaffected: same-wallet requests are ordinary in-flight operations,
+			// not cross-wallet contention, so syncstatus for A still serves its (stale, cached) status.
+			ZcashFamilyWalletController.WalletSyncStatus statusForA =
+					controller.getSyncStatusDetails(Base58.encode(entropyA));
+			assertTrue(statusForA.isStale());
 
 			releaseOperation.countDown();
 			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
@@ -381,6 +538,80 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		} finally {
 			controller.shutdown();
 		}
+	}
+
+	@Test
+	public void testWalletIdentityHashIsDeterministicAcrossInstancesAndRestart() throws Exception {
+		byte[] entropy = filledEntropy(7);
+
+		// Two independent wallet instances built from the same entropy - simulating the wallet
+		// object being recreated after a Core restart - must report the same identity hash, since
+		// it is a pure function of the entropy (matching the Base58(SHA-256(entropy)) directory
+		// naming Core already uses on disk).
+		TestWallet beforeRestart = new TestWallet(entropy);
+		TestWallet afterRestart = new TestWallet(entropy);
+		assertEquals(beforeRestart.getWalletIdentityHash(), afterRestart.getWalletIdentityHash());
+		assertNotEquals(beforeRestart.getWalletIdentityHash(), new TestWallet(filledEntropy(8)).getWalletIdentityHash());
+	}
+
+	/**
+	 * Controller-level enrichment coverage that goes through the public {@link
+	 * #getSyncStatusDetails(String)} entry point rather than reflectively invoking any private
+	 * method: the snapshot fields (heights/balances/identity) a cached status carries survive the
+	 * round trip through the busy-cache-serving path with a matching identity, get correctly
+	 * downgraded out of READY once served stale, and a wallet rebuilt from the same entropy after a
+	 * simulated restart reports the identical identity the live snapshot carried.
+	 */
+	@Test
+	public void testSyncStatusServesEnrichedSnapshotWithMatchingIdentityAcrossRestart() throws Exception {
+		byte[] entropy = filledEntropy(9);
+		String entropy58 = Base58.encode(entropy);
+
+		TestController controller = new TestController();
+		assertTrue(controller.startController());
+		TestWallet wallet = new TestWallet(entropy);
+		setControllerField(controller, "currentWallet", wallet);
+		// Primes the cache the way a real fresh read (getSyncStatus()/enrichWithSnapshot()) would,
+		// without requiring a loaded native library, which this sandbox does not have.
+		controller.cacheCurrentWalletStatus(ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized")
+				.withSnapshot(500L, 500L, "100000000", "90000000", wallet.getWalletIdentityHash()));
+
+		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
+		CountDownLatch operationEntered = new CountDownLatch(1);
+		CountDownLatch releaseOperation = new CountDownLatch(1);
+		ExecutorService caller = Executors.newSingleThreadExecutor();
+		try {
+			Future<String> operation = caller.submit(() -> coordinator.execute("enrichment snapshot test", nativeAdapter -> {
+				operationEntered.countDown();
+				releaseOperation.await();
+				return "done";
+			}));
+			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
+
+			ZcashFamilyWalletController.WalletSyncStatus status = controller.getSyncStatusDetails(entropy58);
+			assertEquals(wallet.getWalletIdentityHash(), status.getWalletIdentityHash());
+			assertEquals(Long.valueOf(500), status.getScannedHeight());
+			assertEquals(Long.valueOf(500), status.getTipHeight());
+			assertEquals("100000000", status.getTotalBalanceAtomic());
+			assertEquals("90000000", status.getVerifiedBalanceAtomic());
+			// Served from cache while another native operation is in flight: stale, and READY must
+			// be downgraded accordingly rather than reported as current.
+			assertTrue(status.isStale());
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, status.getState());
+
+			releaseOperation.countDown();
+			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
+		} finally {
+			releaseOperation.countDown();
+			caller.shutdownNow();
+			controller.shutdown();
+		}
+
+		// "Restart": a brand-new wallet instance built from the same entropy (no shared Java object
+		// identity with the pre-restart one) must report the identical identity hash the live
+		// snapshot above carried.
+		TestWallet restartedWallet = new TestWallet(entropy);
+		assertEquals(wallet.getWalletIdentityHash(), restartedWallet.getWalletIdentityHash());
 	}
 
 	private static byte[] filledEntropy(int value) {
@@ -439,6 +670,17 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	private static class NotReadyWallet extends ZcashFamilyWallet {
 		private NotReadyWallet(byte[] entropyBytes) throws IOException {
 			super(TestController.TEST_CONFIG, entropyBytes, false, false, false);
+		}
+	}
+
+	private static class BusySwitchWallet extends TestWallet {
+		private BusySwitchWallet(byte[] entropyBytes) throws IOException {
+			super(entropyBytes);
+		}
+
+		@Override
+		public boolean prepareForSwitch(ZcashFamilyNativeAdapter nativeAdapter) {
+			return false;
 		}
 	}
 

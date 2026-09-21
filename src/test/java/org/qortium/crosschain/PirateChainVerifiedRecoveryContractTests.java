@@ -215,12 +215,14 @@ public class PirateChainVerifiedRecoveryContractTests {
 						+ "\"pending\":\"3456789\"}}");
 		assertEquals(123456789L, balance.zbalance);
 		assertEquals(120000000L, balance.verified_zbalance);
+		assertTrue("unified always determines verified balance or fails closed", balance.verifiedBalanceKnown);
 
 		// Plain integers are accepted too, as the upstream decoder accepts either form.
 		PirateChainBalance numeric = PirateWallet.parseTypedBalance(
 				"{\"ok\":true,\"result\":{\"total\":10,\"spendable\":4,\"pending\":6}}");
 		assertEquals(10L, numeric.zbalance);
 		assertEquals(4L, numeric.verified_zbalance);
+		assertTrue(numeric.verifiedBalanceKnown);
 	}
 
 	@Test

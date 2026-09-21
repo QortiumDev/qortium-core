@@ -130,6 +130,11 @@ public enum ApiError {
 	FOREIGN_BLOCKCHAIN_NETWORK_ISSUE(1201, 500),
 	FOREIGN_BLOCKCHAIN_BALANCE_ISSUE(1202, 402),
 	FOREIGN_BLOCKCHAIN_TOO_SOON(1203, 408),
+	// A specific balance figure (e.g. ARRR's verified/spendable amount) was requested but the active
+	// wallet backend cannot determine it truthfully (e.g. a legacy backend that never reported it).
+	// The custom exception message carries the stable substring "BALANCE_UNAVAILABLE" so callers
+	// (e.g. Home's read adapter) can match on it without depending on this numeric code alone.
+	FOREIGN_BLOCKCHAIN_BALANCE_UNAVAILABLE(1204, 404),
 
 	// Trade portal
 	ORDER_SIZE_TOO_SMALL(1300, 402),

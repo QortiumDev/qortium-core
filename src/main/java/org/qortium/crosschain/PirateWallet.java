@@ -667,6 +667,25 @@ public class PirateWallet extends ZcashFamilyWallet {
 	 * every call and exceeds the native lane's timeout after a recovery. The typed
 	 * request returns precisely the two amounts Core consumes.
 	 */
+	/**
+	 * Best-effort wallet balances for callers that are not scoped to one entropy-bound request, such
+	 * as sync-status snapshot enrichment. Safe to call while already running on the native lane's own
+	 * worker thread (the coordinator is reentrant there); off that thread it queues normally.
+	 */
+	public PirateChainBalance getWalletBalances() throws ForeignBlockchainException {
+		try {
+			return ZcashFamilyNativeCoordinator.getInstance().execute("get wallet balances", this::getWalletBalances);
+		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
+			Throwable cause = e;
+			while (cause != null) {
+				if (cause instanceof ForeignBlockchainException foreignBlockchainException)
+					throw foreignBlockchainException;
+				cause = cause.getCause();
+			}
+			throw new ForeignBlockchainException(e.getMessage());
+		}
+	}
+
 	PirateChainBalance getWalletBalances(ZcashFamilyNativeAdapter nativeAdapter)
 			throws ForeignBlockchainException {
 		if (!this.unifiedWallet)
