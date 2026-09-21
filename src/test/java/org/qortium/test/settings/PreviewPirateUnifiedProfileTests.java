@@ -54,6 +54,39 @@ public class PreviewPirateUnifiedProfileTests {
 		}
 	}
 
+	/**
+	 * P-CORE-58 regression coverage: every preview profile must resolve to the same Pirate
+	 * Unified wallet bundle pin as Settings' own compiled-in default (PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE),
+	 * whether it pins the signature explicitly (settings-preview.json) or relies on the code
+	 * default (the seed profiles). Without this, a future bundle bump in Settings.java can drift
+	 * silently from a stale explicit pin left behind in one of these templates, and a main build
+	 * downloads/uses the wrong bundle forever with only a generic provenance-mismatch log to go on.
+	 */
+	@Test
+	public void testAllPreviewProfilesPinTheSameQdnSignatureAsSettingsDefault() throws Exception {
+		Settings.fileInstance("src/test/resources/test-settings-v2.json");
+		String settingsDefaultSignature = Settings.getInstance().getPirateChainWalletQdnSignature();
+		assertEquals(PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE, settingsDefaultSignature);
+
+		for (String profile : new String[] {
+				"preview/settings-preview.json",
+				"preview/settings-preview-seed.json",
+				"preview/settings-preview-seed-netcup.json"
+		}) {
+			Map<String, Object> rawSettings = readSettings(Path.of(profile));
+			Object explicitSignature = rawSettings.get("pirateChainWalletQdnSignature");
+			if (explicitSignature != null) {
+				assertEquals("Explicit pirateChainWalletQdnSignature in " + profile
+								+ " has drifted from Settings' compiled-in default",
+						settingsDefaultSignature, explicitSignature);
+			}
+
+			Settings.fileInstance(profile);
+			assertEquals("Loading " + profile + " resolves to a different Pirate wallet bundle pin than Settings' default",
+					settingsDefaultSignature, Settings.getInstance().getPirateChainWalletQdnSignature());
+		}
+	}
+
 	@Test
 	public void testSeedProfilesRetainCurrentAndSupportedPreviousBundle() throws Exception {
 		for (String profile : new String[] {"preview/settings-preview-seed.json", "preview/settings-preview-seed-netcup.json"}) {
