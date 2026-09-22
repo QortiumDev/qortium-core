@@ -566,7 +566,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				try {
 					validatePinnedResourcePath(authenticatedUnifiedSource, libFileName, true);
 				} catch (DataException e) {
-					LOGGER.error("Invalid configured {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+					LOGGER.error("Invalid configured {} wallet library: {} (configured QDN signature: {})",
+							this.config.getDisplayName(), e.getMessage(), qdnWalletSignature);
 					setLoadStatus(String.format("Configured %s wallet library could not be read from QDN",
 							this.config.getDisplayName()));
 					return;
@@ -577,7 +578,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				try {
 					loadValidatedNativeLibrary(libDirectory, libFileName, authenticatedUnifiedSource);
 				} catch (DataException e) {
-					LOGGER.error("Invalid cached {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+					LOGGER.error("Invalid cached {} wallet library: {} (configured QDN signature: {})",
+							this.config.getDisplayName(), e.getMessage(), qdnWalletSignature);
 					setLoadStatus(String.format("Cached %s wallet library failed integrity validation",
 							this.config.getDisplayName()));
 					return;
@@ -606,7 +608,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			try {
 				validatePinnedResourcePath(resourcePath, libFileName, unifiedWalletEnabled);
 			} catch (DataException e) {
-				LOGGER.error("Invalid configured {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+				LOGGER.error("Invalid configured {} wallet library: {} (configured QDN signature: {})",
+						this.config.getDisplayName(), e.getMessage(), qdnWalletSignature);
 				setLoadStatus(String.format("Configured %s wallet library could not be read from QDN",
 						this.config.getDisplayName()));
 				return;
@@ -621,7 +624,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				}
 				loadValidatedNativeLibrary(libDirectory, libFileName, authenticatedUnifiedSource);
 			} catch (DataException e) {
-				LOGGER.error("Invalid installed {} wallet library: {}", this.config.getDisplayName(), e.getMessage());
+				LOGGER.error("Invalid installed {} wallet library: {} (configured QDN signature: {})",
+						this.config.getDisplayName(), e.getMessage(), qdnWalletSignature);
 				setLoadStatus(String.format("Installed %s wallet library failed integrity validation",
 						this.config.getDisplayName()));
 				return;

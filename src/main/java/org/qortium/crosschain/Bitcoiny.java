@@ -140,7 +140,8 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 
 			return bitcoinyAddress.getType() == BitcoinyAddress.Type.P2PKH
 					|| bitcoinyAddress.getType() == BitcoinyAddress.Type.P2SH
-					|| bitcoinyAddress.getType() == BitcoinyAddress.Type.P2WPKH;
+					|| bitcoinyAddress.getType() == BitcoinyAddress.Type.P2WPKH
+					|| bitcoinyAddress.getType() == BitcoinyAddress.Type.P2WSH;
 		} catch (IllegalArgumentException e) {
 			LOGGER.error(String.format("Unrecognised address format: %s", address));
 			return false;

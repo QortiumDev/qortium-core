@@ -91,7 +91,15 @@ public class PirateUnifiedWalletBundleTests {
 		Path manifest = bundle.resolve(PirateUnifiedWalletBundle.MANIFEST_FILENAME);
 		Files.writeString(manifest, Files.readString(manifest).replace("release-tag: v1.2.3", "release-tag: v1.1.7"));
 
-		assertThrows(DataException.class, () -> PirateUnifiedWalletBundle.validate(bundle, HOST_LIBRARY));
+		DataException exception = assertThrows(DataException.class,
+				() -> PirateUnifiedWalletBundle.validate(bundle, HOST_LIBRARY));
+
+		// P-CORE-58: the mismatch must name the pinned release and expected artifact hash, not just
+		// "provenance does not match", so an operator staring at a stale-pin log line can see why.
+		assertTrue("Message should name the pinned release: " + exception.getMessage(),
+				exception.getMessage().contains(PirateUnifiedWalletBundle.RELEASE_TAG));
+		assertTrue("Message should include the expected artifact-sha256 prefix: " + exception.getMessage(),
+				exception.getMessage().contains(PirateUnifiedWalletBundle.ARTIFACT_SHA256.substring(0, 12)));
 	}
 
 	@Test

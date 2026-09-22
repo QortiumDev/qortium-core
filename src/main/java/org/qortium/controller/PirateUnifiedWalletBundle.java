@@ -202,7 +202,10 @@ final class PirateUnifiedWalletBundle {
 				parseLine(line, metadata, expectedFiles);
 
 			if (!metadata.equals(REQUIRED_METADATA))
-				throw new DataException("Unified wallet bundle manifest provenance does not match the pinned release");
+				throw new DataException(String.format(
+						"Unified wallet bundle manifest provenance does not match the pinned release %s"
+								+ " (expected artifact-sha256 %s...)",
+						RELEASE_TAG, sha256Prefix(ARTIFACT_SHA256)));
 			if (!expectedFiles.keySet().equals(BUNDLE_FILES))
 				throw new DataException("Unified wallet bundle manifest inventory is incomplete");
 
@@ -253,6 +256,15 @@ final class PirateUnifiedWalletBundle {
 				&& before.size() == after.size()
 				&& before.lastModifiedTime().equals(after.lastModifiedTime())
 				&& Objects.equals(before.fileKey(), after.fileKey());
+	}
+
+	private static final int SHA256_PREFIX_LENGTH = 12;
+
+	private static String sha256Prefix(String sha256) {
+		if (sha256 == null)
+			return "unknown";
+
+		return sha256.substring(0, Math.min(SHA256_PREFIX_LENGTH, sha256.length()));
 	}
 
 	private static String sha256(Path path) throws IOException {
