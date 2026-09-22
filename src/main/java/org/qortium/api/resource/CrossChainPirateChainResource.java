@@ -98,9 +98,7 @@ public class CrossChainPirateChainResource {
 			@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 
 		Security.checkApiCallAllowed(request);
-		Settings.getInstance().enableWallet("ARRR");
-		PirateChainWalletController pirate = PirateChainWalletController.getInstance();
-		boolean started = pirate != null && pirate.startController();
+		boolean started = PirateChainWalletController.startInstance();
 
 		return Boolean.toString(started);
 	}
@@ -122,10 +120,54 @@ public class CrossChainPirateChainResource {
 			@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 
 		Security.checkApiCallAllowed(request);
-		boolean stopped = Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
+		boolean stopped = PirateChainWalletController.stopWallet();
 
 		return Boolean.toString(stopped);
 	}
+
+    public static class WalletSessionRequest {
+        public String entropy58;
+        public String operation;
+        public String expectedRevision;
+    }
+
+    @javax.xml.bind.annotation.XmlAccessorType(javax.xml.bind.annotation.XmlAccessType.FIELD)
+    public static class WalletSessionContract {
+        public String contract = PirateChainWalletController.SESSION_CONTRACT;
+    }
+
+    @GET
+    @Path("/walletsession")
+    @javax.ws.rs.Produces(MediaType.APPLICATION_JSON)
+    @SecurityRequirement(name = "apiKey")
+    public WalletSessionContract walletSessionContract(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+        Security.checkApiCallAllowed(request);
+        return new WalletSessionContract();
+    }
+
+    @POST
+    @Path("/walletsession")
+    @javax.ws.rs.Consumes(MediaType.APPLICATION_JSON)
+    @javax.ws.rs.Produces(MediaType.APPLICATION_JSON)
+    @SecurityRequirement(name = "apiKey")
+    @Operation(summary = "Inspect or explicitly activate this ARRR wallet; ordinary reads never switch ownership")
+    public PirateChainWalletController.WalletSession walletSession(
+            @HeaderParam(Security.API_KEY_HEADER) String apiKey, WalletSessionRequest value) {
+        Security.checkApiCallAllowed(request);
+        if (value == null || !isValidEntropy(value.entropy58) ||
+                !("status".equals(value.operation) || "activate".equals(value.operation)) ||
+                ("activate".equals(value.operation) && (value.expectedRevision == null || !value.expectedRevision.matches("[a-f0-9-]{36}"))))
+            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+        try {
+            return "activate".equals(value.operation)
+                    ? PirateChainWalletController.activateWallet(value.entropy58, value.expectedRevision)
+                    : PirateChainWalletController.walletSession(value.entropy58);
+        } catch (ForeignBlockchainException e) {
+            ApiError error = e.getMessage() != null && e.getMessage().contains("ARRR_SESSION_CHANGED")
+                    ? ApiError.OPERATION_IN_PROGRESS : ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE;
+            throw ApiExceptionFactory.INSTANCE.createCustomException(request, error, e.getMessage());
+        }
+    }
 
 	@POST
 	@Path("/initialize")
@@ -159,6 +201,9 @@ public class CrossChainPirateChainResource {
 		Security.checkApiCallAllowed(request);
 		Security.requireLoopbackRequest(request);
 
+        if (initializationRequest != null && initializationRequest.expectedRevision != null &&
+                !initializationRequest.expectedRevision.matches("[a-f0-9-]{36}"))
+            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
 		String validationError = validateWalletInitializationRequest(initializationRequest);
 		if (validationError != null)
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
@@ -174,12 +219,12 @@ public class CrossChainPirateChainResource {
 
 		try {
 			PirateChainWalletController.KnownNewInitialization result =
-					controller.initializeKnownNewWallet(initializationRequest.entropy58);
+					PirateChainWalletController.initializeKnownNewWallet(initializationRequest.entropy58, initializationRequest.expectedRevision);
 			return new PirateChainWalletInitializationResult(initializationRequest.initializationMode,
 					result.birthdayHeight());
 		} catch (ForeignBlockchainException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request,
-					ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
+					(e.getMessage() != null && e.getMessage().contains("ARRR_SESSION_CHANGED") ? ApiError.OPERATION_IN_PROGRESS : ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE), e.getMessage());
 		}
 	}
 

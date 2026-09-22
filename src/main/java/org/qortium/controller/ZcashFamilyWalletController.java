@@ -355,6 +355,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 		try {
 			while (running && !Controller.isStopping()) {
+                try {
 				if (!this.waitWhileRunning(1000))
 					break;
 
@@ -390,6 +391,12 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				Long now = NTP.getTime();
 				if (now != null && now - SAVE_INTERVAL >= this.lastSaveTime)
 					this.saveCurrentWallet();
+                } catch (ZcashFamilyNativeCoordinator.NativeQueueContentionException e) {
+                    if (NATIVE_COORDINATOR.isDegraded()) throw e;
+                    // A queued operation never touched native state. Do not turn normal
+                    // contention into controller shutdown/restart-required recovery.
+                    if (!this.waitWhileRunning(1000)) break;
+                }
 			}
 		} catch (InterruptedException e) {
 			// Fall-through to exit.
@@ -731,6 +738,34 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		return null;
 	}
 
+	/** Coin-specific ownership gate; runs on the native lane before any switch/cancel. */
+	protected void requireWalletOwner(String entropy58, boolean isNullSeedWallet) throws ForeignBlockchainException { }
+	protected void walletSelected(W wallet) { }
+    protected void walletSelectionPending(String entropy58) throws ForeignBlockchainException { }
+	private boolean selectingExplicitly; // Native-lane-only; never a request-thread bypass.
+	protected boolean explicitWalletSelection() { return selectingExplicitly; }
+
+	protected final void activateEntropyWallet(String entropy58, Runnable checkRevision) throws ForeignBlockchainException {
+		if (!isValidEntropy(entropy58)) throw new ForeignBlockchainException("Invalid entropy bytes");
+		executeChecked("activate wallet", nativeAdapter -> {
+			if (!acceptsWalletOperations(this.lifecycleState)) throw new ForeignBlockchainException("Wallet controller isn't running");
+			checkRevision.run();
+			this.selectingExplicitly = true;
+			try {
+				if (!this.initWithEntropy58(entropy58, false, nativeAdapter)) {
+                    if (!nativeAdapter.isLoaded()) {
+                        // Activation chooses an owner even while the library loads;
+                        // its subsequent authorized reads may initialize only that wallet.
+                        walletSelectionPending(entropy58);
+                        return null;
+                    }
+					throw new ForeignBlockchainException(this.initializationFailure == null ? "Wallet activation not completed" : this.initializationFailure);
+                }
+				return null;
+			} finally { this.selectingExplicitly = false; }
+		});
+	}
+
 	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
 			ZcashFamilyNativeAdapter nativeAdapter) {
 		return this.initWithEntropy58(entropy58, isNullSeedWallet, false, nativeAdapter);
@@ -739,6 +774,10 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
 			boolean initializeAtCurrentTip, ZcashFamilyNativeAdapter nativeAdapter) {
 		this.initializationFailure = null;
+		if (!explicitWalletSelection()) {
+			try { requireWalletOwner(entropy58, isNullSeedWallet); }
+			catch (ForeignBlockchainException e) { this.initializationFailure = WALLET_BUSY_REASON; return false; }
+		}
 
 		if (!nativeAdapter.isLoaded()) {
 			shouldLoadWallet = true;
@@ -768,8 +807,13 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				this.initializationFailure = WALLET_BUSY_REASON;
 				return false;
 			}
+			if (explicitWalletSelection() && !this.currentWallet.isNullSeedWallet()) {
+				try {
+					if (!this.currentWallet.save()) { this.initializationFailure = "Prior wallet save was not confirmed"; return false; }
+				} catch (IOException | RuntimeException e) { this.initializationFailure = "Prior wallet save failed"; return false; }
+			}
 			previousWallet = this.currentWallet;
-			this.saveCurrentWallet();
+			if (!explicitWalletSelection()) this.saveCurrentWallet();
 			this.currentWallet = null;
 		}
 
@@ -783,6 +827,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				// initialization succeeds without passing through the unloaded branch above,
 				// so explicitly re-arm the new controller's background sync loop.
 				this.shouldLoadWallet = true;
+				walletSelected(this.currentWallet);
 				if (previousWallet != null)
 					previousWallet.cleanupAfterSwitch();
 			}
@@ -799,16 +844,21 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	 * Initializes one explicitly known-new entropy wallet at a coin-specific validated current tip.
 	 * The coin implementation owns durable intent and exact-retry semantics.
 	 */
-	protected final W initializeWalletAtCurrentTip(String entropy58) throws ForeignBlockchainException {
+	protected final W initializeWalletAtCurrentTip(String entropy58, Runnable checkRevision) throws ForeignBlockchainException {
 		if (!acceptsWalletOperations(this.lifecycleState))
 			throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
 		if (!isValidEntropy(entropy58))
 			throw new ForeignBlockchainException("Invalid entropy bytes");
 
 		return executeChecked("initialize known-new " + this.config.getCurrencyCode() + " wallet", nativeAdapter -> {
+            checkRevision.run();
 			if (!acceptsWalletOperations(this.lifecycleState))
 				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
-			if (!this.initWithEntropy58(entropy58, false, true, nativeAdapter)) {
+			boolean initialized;
+			this.selectingExplicitly = true;
+			try { initialized = this.initWithEntropy58(entropy58, false, true, nativeAdapter); }
+			finally { this.selectingExplicitly = false; }
+			if (!initialized) {
 				if (WALLET_BUSY_REASON.equals(this.initializationFailure))
 					throw new ForeignBlockchainException.WalletBusyException(WALLET_BUSY_REASON);
 				throw new ForeignBlockchainException(this.initializationFailure == null
@@ -882,6 +932,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		// behind the in-flight/queued work for up to the coordinator's default timeout (two minutes)
 		// or be rejected outright by a full queue, and only then surface - as a generic failure, not
 		// the structured busy signal every wallet-bound read must give.
+		this.requireWalletOwner(entropy58, isNullSeedWallet);
 		this.assertNotCrossWalletBusy(entropy58, isNullSeedWallet);
 
 		try {
@@ -1101,6 +1152,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	private WalletSyncStatus computeBoundedSyncStatus(String entropy58) throws ForeignBlockchainException {
+		if (entropy58 != null) this.requireWalletOwner(entropy58, false);
 		if (this.requiresCoreRestart())
 			return cacheStatus(WalletSyncStatus.degraded(
 					this.config.getDisplayName() + " native wallet is unavailable until Core restart")
@@ -1236,7 +1288,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		this.cacheStatus(WalletSyncStatus.loading(status));
 	}
 
-	private boolean isLibraryLoaded() {
+	protected boolean isLibraryLoaded() {
 		return NATIVE_COORDINATOR.execute("check native wallet library", ZcashFamilyNativeAdapter::isLoaded);
 	}
 
@@ -1270,7 +1322,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 	}
 
-	private <T> T executeChecked(String operationName,
+	protected <T> T executeChecked(String operationName,
 			ZcashFamilyNativeCoordinator.NativeOperation<T> operation) throws ForeignBlockchainException {
 		try {
 			return NATIVE_COORDINATOR.execute(operationName, operation);

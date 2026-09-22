@@ -49,7 +49,7 @@ public class PirateChain extends Bitcoiny {
 	private static final long MINIMUM_ORDER_AMOUNT = 10000; // 0.0001 ARRR minimum order, to avoid dust errors // TODO: increase this
 
 	// Temporary values until a dynamic fee system is written.
-	private static final long MAINNET_FEE = 10000L; // 0.0001 ARRR
+	static final long MAINNET_FEE = 10000L; // 0.0001 ARRR
 	private static final long NON_MAINNET_FEE = 10000L; // 0.0001 ARRR
 	static final String SEND_COMMAND = "send";
 	static final String FUND_P2SH_COMMAND = "sendp2sh";
@@ -437,89 +437,7 @@ public class PirateChain extends Bitcoiny {
 	public List<SimpleTransaction> getWalletTransactions(String entropy58) throws ForeignBlockchainException {
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
 		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
-			String myAddress = wallet.getWalletAddress();
-
-			List<SimpleTransaction> transactions = new ArrayList<>();
-
-			// Get transactions list
-			String response = nativeAdapter.execute("list", "");
-			JSONArray transactionsJson = new JSONArray(response);
-			if (transactionsJson != null) {
-				for (int i = 0; i < transactionsJson.length(); i++) {
-					JSONObject transactionJson = transactionsJson.getJSONObject(i);
-
-					if (transactionJson.has("txid")) {
-						String txId = transactionJson.getString("txid");
-						Long timestamp = transactionJson.getLong("datetime");
-						Long amount = 0L;
-						Long fee = 0L;
-						String memo = null;
-
-						List<SimpleTransaction.Input> inputs = new ArrayList<>();
-						List<SimpleTransaction.Output> outputs = new ArrayList<>();
-
-						if (transactionJson.has("incoming_metadata")) {
-							JSONArray incomingMetadatas = transactionJson.getJSONArray("incoming_metadata");
-							if (incomingMetadatas != null) {
-								for (int j = 0; j < incomingMetadatas.length(); j++) {
-									JSONObject incomingMetadata = incomingMetadatas.getJSONObject(j);
-									if (incomingMetadata.has("value")) {
-										Long value = incomingMetadata.getLong("value");
-										amount += value;
-
-										if(incomingMetadata.has("address")) {
-
-											inputs.add(new SimpleTransaction.Input("[PRIVATE]", value, false));
-
-											String address = incomingMetadata.getString("address");
-											outputs.add(new SimpleTransaction.Output(address, value, address.equals(myAddress)));
-										}
-									}
-
-									if (incomingMetadata.has("memo") && !incomingMetadata.isNull("memo")) {
-										memo = incomingMetadata.getString("memo");
-									}
-								}
-							}
-						}
-
-						if (transactionJson.has("outgoing_metadata")) {
-							JSONArray outgoingMetadatas = transactionJson.getJSONArray("outgoing_metadata");
-							for (int j = 0; j < outgoingMetadatas.length(); j++) {
-								JSONObject outgoingMetadata = outgoingMetadatas.getJSONObject(j);
-
-								if(outgoingMetadata.has("value")) {
-									Long value = outgoingMetadata.getLong("value");
-									amount -= value;
-									fee += MAINNET_FEE; // add the standard fee for each send
-
-									if(outgoingMetadata.has("address")) {
-
-										inputs.add(new SimpleTransaction.Input(myAddress, value, true));
-
-										String address = outgoingMetadata.getString("address");
-										outputs.add(new SimpleTransaction.Output(address, value, address.equals(myAddress)));
-									}
-								}
-
-								if (outgoingMetadata.has("memo") && !outgoingMetadata.isNull("memo")) {
-									memo = outgoingMetadata.getString("memo");
-								}
-							}
-						}
-
-						long timestampMillis = Math.toIntExact(timestamp) * 1000L;
-						SimpleTransaction transaction = new SimpleTransaction(txId, timestampMillis, amount, fee, inputs, outputs, memo);
-						transactions.add(transaction);
-					}
-				}
-			}
-
-			double sum = transactions.stream().mapToDouble(SimpleTransaction::getTotalAmount).sum() / 100000000.0;
-			double fees = transactions.stream().mapToDouble(SimpleTransaction::getFeeAmount).sum() / 100000000.0;
-			LOGGER.info("balance = " + (sum - fees));
-
-			return transactions;
+			return wallet.getTransactionHistory(nativeAdapter);
 		});
 	}
 

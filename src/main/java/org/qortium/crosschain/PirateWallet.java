@@ -1,5 +1,7 @@
 package org.qortium.crosschain;
 
+import java.util.List;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bouncycastle.util.encoders.Base64;
@@ -649,6 +651,12 @@ public class PirateWallet extends ZcashFamilyWallet {
 		String walletId = getResultString(response);
 		return walletId == null || walletId.isBlank() ? null : walletId;
 	}
+
+    List<SimpleTransaction> getTransactionHistory(ZcashFamilyNativeAdapter adapter)
+            throws ForeignBlockchainException {
+        return PirateChainHistory.read(adapter, this.unifiedWallet,
+                this.unifiedWallet ? getActiveWalletId(adapter) : null, this.getWalletAddress());
+    }
 
 	private static boolean isAcknowledged(JSONObject response) {
 		JSONObject result = response.optJSONObject("result");
