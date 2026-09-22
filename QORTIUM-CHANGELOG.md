@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Pin the ARRR history acceptance bundle for local testing
+
+2026-09-22
+
+This dedicated test branch pins the Qortium fork acceptance bundle from native source 6b19fb18. It requires an explicit operator signature override for the separately published test resource. Official defaults, profiles and migration rules are unchanged; this pin must not be merged as a general release dependency before acceptance and a separate adoption decision.
+
 ### Preserve known ARRR receipts when address metadata is missing
 
 2026-09-22
