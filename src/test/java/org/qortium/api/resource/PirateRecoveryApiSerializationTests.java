@@ -34,6 +34,14 @@ public class PirateRecoveryApiSerializationTests {
 		return output.toString(StandardCharsets.UTF_8);
 	}
 
+    @Test
+    public void testWalletSessionContractUsesWritableJsonModel() throws Exception {
+        Object model = new CrossChainPirateChainResource.WalletSessionContract();
+        MOXyJsonProvider provider = new MOXyJsonProvider();
+        assertTrue(provider.isWriteable(model.getClass(), model.getClass(), NO_ANNOTATIONS, JSON));
+        org.junit.Assert.assertEquals("{\"contract\":\"qortium-arrr-wallet-session-v1\"}", marshal(model));
+    }
+
 	@Test
 	public void testSyncStatusOmitsAbsentRecoveryStateAndCarriesPresentOne() throws Exception {
 		String plain = marshal(new PirateChainSyncStatus(PirateChainSyncStatus.State.READY,

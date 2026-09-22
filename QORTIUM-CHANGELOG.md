@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Serialize ARRR session discovery as a JSON model
+
+- Return an explicit JSON model for the ARRR session capability probe. The generic map had no registered HTTP writer and returned 500, preventing Home from discovering explicit account controls. Add a provider-level serialization regression test.
+
 ### Keep ARRR account ownership and native recovery explicit
 
 2026-09-22

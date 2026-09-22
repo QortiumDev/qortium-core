@@ -131,13 +131,18 @@ public class CrossChainPirateChainResource {
         public String expectedRevision;
     }
 
+    @javax.xml.bind.annotation.XmlAccessorType(javax.xml.bind.annotation.XmlAccessType.FIELD)
+    public static class WalletSessionContract {
+        public String contract = PirateChainWalletController.SESSION_CONTRACT;
+    }
+
     @GET
     @Path("/walletsession")
     @javax.ws.rs.Produces(MediaType.APPLICATION_JSON)
     @SecurityRequirement(name = "apiKey")
-    public java.util.Map<String, String> walletSessionContract(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+    public WalletSessionContract walletSessionContract(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
         Security.checkApiCallAllowed(request);
-        return java.util.Map.of("contract", PirateChainWalletController.SESSION_CONTRACT);
+        return new WalletSessionContract();
     }
 
     @POST
