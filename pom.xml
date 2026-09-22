@@ -77,7 +77,7 @@
 		<maven-reproducible-build-plugin.version>0.17</maven-reproducible-build-plugin.version>
 		<maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
 		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
-		<maven-install-plugin.version>3.1.4</maven-install-plugin.version>
+		<maven-install-plugin.version>3.2.0</maven-install-plugin.version>
 		<maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
 		<netty.version>4.2.18.Final</netty.version>
 		<os-maven-plugin.version>1.7.1</os-maven-plugin.version>
