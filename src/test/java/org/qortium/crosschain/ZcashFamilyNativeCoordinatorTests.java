@@ -109,6 +109,9 @@ public class ZcashFamilyNativeCoordinatorTests {
 				assertThrows(ZcashFamilyNativeCoordinator.NativeWalletException.class,
 						() -> coordinator.execute("queued", Duration.ofMillis(50), nativeAdapter -> "never"));
 				assertFalse(coordinator.isDegraded());
+                assertEquals("Cancelled queued work releases the bounded queue immediately", 0, coordinator.getQueueDepth());
+                assertThrows(ZcashFamilyNativeCoordinator.NativeQueueContentionException.class,
+                        () -> coordinator.execute("second queued", Duration.ofMillis(20), nativeAdapter -> "never"));
 
 				release.countDown();
 				assertEquals("done", first.get(2, TimeUnit.SECONDS));

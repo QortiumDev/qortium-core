@@ -64,6 +64,26 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		assertFalse(controller.startController());
 	}
 
+    @Test
+    public void testQueuedContentionDoesNotStopController() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
+        TestController controller = new TestController() {
+            @Override protected boolean isLibraryLoaded() {
+                if (attempts.incrementAndGet() == 1)
+                    throw new ZcashFamilyNativeCoordinator.NativeQueueContentionException("queued timeout", null);
+                return true;
+            }
+        };
+        setControllerField(controller, "shouldLoadWallet", true);
+        controller.startController();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+        while (attempts.get() < 2 && System.nanoTime() < deadline) Thread.sleep(20);
+        assertTrue("The loop retried after queued contention", attempts.get() >= 2);
+        assertEquals(ZcashFamilyWalletController.LifecycleState.RUNNING, controller.getLifecycleState());
+        assertFalse(controller.requiresCoreRestart());
+        assertTrue(controller.shutdown());
+    }
+
 	@Test
 	public void testFailedWalletShutdownFailsClosedUntilCoreRestart() throws Exception {
 		TestController controller = new TestController();
@@ -314,6 +334,49 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		assertTrue("An already-loaded native lane must still re-arm the replacement controller's sync loop",
 				shouldLoadWallet.getBoolean(controller));
 	}
+
+    @Test
+    public void testOwnershipBlocksIdleBackgroundSelectionAndAllowsExplicitSwitch() throws Exception {
+        OwnedController controller = new OwnedController();
+        String a = Base58.encode(filledEntropy(21));
+        String b = Base58.encode(filledEntropy(22));
+        Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
+                String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+        initialize.setAccessible(true);
+        RecordingNativeAdapter adapter = new RecordingNativeAdapter();
+        assertFalse((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        controller.explicit = true;
+        assertTrue((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        controller.explicit = false;
+        String revision = controller.owner.snapshot().revision();
+        assertFalse((Boolean) initialize.invoke(controller, b, false, false, adapter));
+        assertEquals(revision, controller.owner.snapshot().revision());
+        assertThrows(ForeignBlockchainException.WalletBusyException.class, () -> controller.getSyncStatusDetails(b));
+        assertThrows(ForeignBlockchainException.WalletBusyException.class,
+                () -> controller.withEntropyWallet(b, false, (wallet, nativeAdapter) -> null));
+        assertTrue((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        controller.explicit = true;
+        assertTrue((Boolean) initialize.invoke(controller, b, false, false, adapter));
+        controller.explicit = false;
+        assertNotEquals(revision, controller.owner.snapshot().revision());
+        assertFalse((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        assertThrows(ForeignBlockchainException.class, () -> controller.owner.requireRevision(revision));
+    }
+
+    private static class OwnedController extends SyncRequestingController {
+        final ArrrWalletOwnership owner = new ArrrWalletOwnership();
+        boolean explicit;
+        @Override protected boolean explicitWalletSelection() { return explicit; }
+        @Override protected void requireWalletOwner(String entropy, boolean nullSeed) throws ForeignBlockchainException {
+            owner.requireOwner(Base58.encode(org.qortium.crypto.Crypto.digest(Base58.decode(entropy))));
+        }
+        @Override protected ZcashFamilyWallet createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException {
+            return new TestWallet(entropyBytes) { @Override public boolean save() { return true; } };
+        }
+        @Override protected void walletSelected(ZcashFamilyWallet wallet) {
+            owner.selected(wallet.getWalletIdentityHash(), null);
+        }
+    }
 
 	@Test
 	public void testNotReadyWalletInitializationReportsFailure() throws Exception {

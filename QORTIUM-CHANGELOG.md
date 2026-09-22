@@ -34,11 +34,30 @@ own chain.
 
 ## Change Entries
 
+### Integrate ARRR ownership controls with partial history
+
+2026-09-22
+
+Combine the previously tested explicit account ownership and recovery changes with partial history so the integrated build preserves stop/start and account switching while displaying incomplete transactions.
+
 ### Keep incomplete ARRR history visible without guessing amounts
 
 2026-09-22
 
 Use the native wallet's explicit partial-history response when available, keeping pending and restored transactions visible even when their totals are unknown. Preserve unknown amounts and separately labeled estimates through the API, and count a transaction's fee once regardless of recipient count. Older native wallets retain their existing history method; other native errors do not trigger a second request. This requires compatible Home and Wallet adapters to display incomplete amounts, and a native build with the partial-history method for the new behavior.
+
+### Serialize ARRR session discovery as a JSON model
+
+- Return an explicit JSON model for the ARRR session capability probe. The generic map had no registered HTTP writer and returned 500, preventing Home from discovering explicit account controls. Add a provider-level serialization regression test.
+
+### Keep ARRR account ownership and native recovery explicit
+
+2026-09-22
+
+ARRR now has one explicitly selected custody account per Core process. Opening another account or polling its address, balance, history or status cannot cancel the current scan or select a different wallet. A protected wallet-session API separates passive observation from explicit activation, with a revision check so an old confirmation cannot replace a newer choice. Controller stop/start retains account ownership and previously verified receive addresses; a full Core restart requires selection again. Existing explicit redeem/refund work remains transient, and known-new initialization participates in the ownership revision checks. A failed save blocks explicit replacement.
+
+Native work that times out before it starts is now treated as queue contention and retried by the controller, instead of forcing shutdown and a Core restart. Cancelled queued work releases its queue slot immediately. An operation that actually starts and then times out still makes the native lane unavailable until restart.
+
 
 ### 2026-09-14 - feat(arrr): let an interrupted verified key import be retried after restart
 
