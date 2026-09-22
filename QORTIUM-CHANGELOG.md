@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Preserve known ARRR receipts when address metadata is missing
+
+2026-09-22
+
+Keep the known value of a received note even when its displayed address is unavailable. Missing recipient text no longer turns a proven incoming amount into an unknown total or suppresses a separately labeled estimate.
+
 ### Integrate ARRR ownership controls with partial history
 
 2026-09-22

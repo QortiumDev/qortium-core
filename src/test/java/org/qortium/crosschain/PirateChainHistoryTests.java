@@ -72,6 +72,20 @@ public class PirateChainHistoryTests {
         assertEquals(Long.valueOf(0), tx.getFeeAmount());
     }
 
+    @Test public void knownIncomingValueDoesNotRequireARecoveredAddress() {
+        JSONArray incoming = new JSONArray().put(new JSONObject().put("value", 100).put("address", "[UNKNOWN]"));
+        SimpleTransaction received = parse(row().put("has_outgoing", false).put("outgoing_value", "0")
+                .put("incoming_metadata", incoming));
+        assertEquals(Long.valueOf(100), received.getTotalAmount());
+        assertEquals(Long.valueOf(0), received.getFeeAmount());
+        assertTrue(received.getMetadataComplete());
+        SimpleTransaction estimated = parse(row().put("metadata_complete", false).put("outgoing_value", JSONObject.NULL)
+                .put("outgoing_value_estimate", "150").put("incoming_metadata", incoming));
+        assertNull(estimated.getTotalAmount());
+        assertEquals(Long.valueOf(-50), estimated.getTotalAmountEstimate());
+        assertFalse(estimated.getMetadataComplete());
+    }
+
     private ZcashFamilyNativeAdapter adapter(String response, AtomicInteger legacy) {
         return (ZcashFamilyNativeAdapter) Proxy.newProxyInstance(getClass().getClassLoader(),
                 new Class<?>[]{ZcashFamilyNativeAdapter.class}, (proxy, method, args) -> {

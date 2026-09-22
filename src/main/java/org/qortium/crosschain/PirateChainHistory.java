@@ -44,7 +44,6 @@ final class PirateChainHistory {
             List<SimpleTransaction.Output> outputs = new ArrayList<>();
             long incoming = 0;
             long outgoing = 0;
-            boolean incomingKnown = true;
             String memo = null;
             JSONArray received = row.optJSONArray("incoming_metadata");
             if (received != null) for (int j = 0; j < received.length(); j++) {
@@ -52,7 +51,6 @@ final class PirateChainHistory {
                 long value = requiredAmount(item, "value");
                 incoming = Math.addExact(incoming, value);
                 String recipient = item.optString("address", "[UNKNOWN]");
-                incomingKnown &= !recipient.equals("[UNKNOWN]");
                 inputs.add(new SimpleTransaction.Input("[PRIVATE]", value, false));
                 outputs.add(new SimpleTransaction.Output(recipient, value, recipient.equals(address)));
                 if (!item.isNull("memo")) memo = item.getString("memo");
@@ -74,10 +72,10 @@ final class PirateChainHistory {
             Long feeEstimate = null;
             boolean complete = true;
             if (partial) {
-                complete = row.getBoolean("metadata_complete") && incomingKnown;
+                complete = row.getBoolean("metadata_complete");
                 Long total = optionalAmount(row, "outgoing_value");
                 amount = complete && total != null ? Math.subtractExact(incoming, total) : null;
-                if (amount == null && incomingKnown) {
+                if (amount == null) {
                     Long estimate = optionalAmount(row, "outgoing_value_estimate");
                     if (estimate != null) amountEstimate = Math.subtractExact(incoming, estimate);
                 }
