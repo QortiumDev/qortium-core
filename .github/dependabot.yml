@@ -9,6 +9,19 @@ updates:
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
+      # bctls-jdk18on 1.86 (org.bouncycastle:bctls-jdk18on) dropped the
+      # META-INF/versions/9 override of ProvSSLContextSpi that its Multi-Release JAR shipped
+      # in 1.85, so on Java 9+ SSLContext#createSSLEngine() throws
+      # NoSuchMethodError: SSLEngineUtil.create(ContextData) for any SSLContext obtained
+      # from "BCJSSE" (org.bouncycastle.jsse.provider.BouncyCastleJsseProvider) - which
+      # GatewayService explicitly requests, and which every real node also registers ahead of
+      # the JDK's own SunJSSE at startup (Controller#main). That killed the gateway/main
+      # thread in production (Core PR #329/#330, 2026-09-20/21) - #319 (dependabot bumping
+      # bouncycastle.version 1.85 -> 1.86) is the PR that introduced it. Pinned back to 1.85
+      # in pom.xml; do not let dependabot re-propose bctls-jdk18on/bcprov-jdk18on/etc until
+      # this is fixed upstream and re-verified with the regression tests in
+      # GrpcAlpnProviderTests / the BCJSSE gateway-TLS test.
+      - dependency-name: "org.bouncycastle:*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
