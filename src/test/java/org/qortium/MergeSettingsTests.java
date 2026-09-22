@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -335,6 +336,139 @@ public class MergeSettingsTests {
 		Map<String, Object> merged = readJson(settingsPath);
 		assertEquals(MAPPER.readValue("[\"5.6.7.8:24892\"]", Object.class), merged.get("initialPeers"));
 		assertEquals(MAPPER.readValue("{\"BTC\": true}", Object.class), merged.get("wallets"));
+	}
+
+	// --- Superseded-value rule (P-CORE-59): pirateChainWalletQdnSignature ---
+
+	private static final String CURRENT_PIRATE_PIN =
+			"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j";
+	private static final String SUPERSEDED_PIRATE_PIN =
+			"bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a";
+
+	@Test
+	public void testSupersededPinMigratesWithoutSnapshot() throws Exception {
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(CURRENT_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertTrue(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertFalse(result.preserved.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinMigratesWithSnapshot() throws Exception {
+		writeJson(snapshotPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(CURRENT_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertTrue(result.migrated.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinRuleLeavesOperatorsThirdValueUntouched() throws Exception {
+		String operatorPin = "operator-chosen-signature-value";
+		writeJson(snapshotPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + operatorPin + "\"}");
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(operatorPin, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertFalse(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertTrue(result.preserved.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinRuleLeavesMissingKeyMissing() throws Exception {
+		writeJson(snapshotPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{}");
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertFalse(readJson(settingsPath).containsKey("pirateChainWalletQdnSignature"));
+		assertFalse(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertTrue(result.removed.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinRuleIsIdempotentOnSecondMerge() throws Exception {
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+
+		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+		assertEquals(CURRENT_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+
+		MergeSettings.MergeResult second = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(CURRENT_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertFalse(second.migrated.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinRuleDoesNotApplyWhenTemplateIsRollback() throws Exception {
+		// The template itself has not advanced past the superseded value (e.g. a rollback to an
+		// older release), so the local value -- even though it matches a listed superseded value --
+		// must not be force-migrated forward.
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(SUPERSEDED_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertFalse(result.migrated.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinRuleRequiresExactJsonType() throws Exception {
+		// A local value that differs only in JSON type from a listed superseded value (here a JSON
+		// number instead of the superseded string) must never be treated as a match.
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": 12345}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(12345, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertFalse(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertTrue(result.preserved.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testSupersededPinRuleReportsOnlyTheKeyNeverTheValue() throws Exception {
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(List.of("pirateChainWalletQdnSignature"), result.migrated);
+		// The stdout line built by main() is String.join(", ", result.migrated): confirm the list
+		// itself carries only the key, so that line can never leak either pin value.
+		String stdoutLine = String.format("Migrated superseded settings: %s", String.join(", ", result.migrated));
+		assertFalse(stdoutLine.contains(CURRENT_PIRATE_PIN));
+		assertFalse(stdoutLine.contains(SUPERSEDED_PIRATE_PIN));
+	}
+
+	@Test
+	public void testRealV180ThreeFileFixtureMigratesToV123Pin() throws Exception {
+		// A real v1.8.0-shipped settings-preview.json (with the v1.2.1 pin) used as both the
+		// snapshot and the operator's local settings, merged against this worktree's current
+		// template (with the v1.2.3 pin), must migrate the pin and leave every other key alone.
+		Path shippedV180Fixture = Path.of("src/test/resources/mergesettings/settings-preview-v1.8.0.json");
+		Files.copy(shippedV180Fixture, snapshotPath);
+		Files.copy(shippedV180Fixture, settingsPath);
+		Files.copy(Path.of("preview/settings-preview.json"), templatePath);
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(CURRENT_PIRATE_PIN, merged.get("pirateChainWalletQdnSignature"));
+		assertTrue(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertEquals(readJson(Path.of("preview/settings-preview.json")), merged);
 	}
 
 	@Test
