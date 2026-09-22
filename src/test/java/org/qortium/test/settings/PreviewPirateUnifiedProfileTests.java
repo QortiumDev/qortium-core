@@ -2,11 +2,15 @@ package org.qortium.test.settings;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.junit.After;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.qortium.settings.Settings;
 
 import java.nio.file.Files;
+import java.security.Security;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.List;
@@ -16,6 +20,20 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class PreviewPirateUnifiedProfileTests {
+
+	/**
+	 * Settings/NullAccount static init needs RIPEMD160 from BouncyCastle. In the full suite an
+	 * earlier test registers the provider (Common.useSettings); run alone this class failed with
+	 * "RIPEMD160 message digest not available" -> NoClassDefFoundError NullAccount. Register it
+	 * here exactly like Controller#main so the test is order-independent.
+	 */
+	@BeforeClass
+	public static void registerBouncyCastle() {
+		if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)
+			Security.insertProviderAt(new BouncyCastleProvider(), 0);
+		if (Security.getProvider(BouncyCastleJsseProvider.PROVIDER_NAME) == null)
+			Security.insertProviderAt(new BouncyCastleJsseProvider(), 1);
+	}
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<Map<String, Object>>() {};
