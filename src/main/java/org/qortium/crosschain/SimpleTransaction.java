@@ -8,11 +8,38 @@ import java.util.List;
 public class SimpleTransaction {
     private String txHash;
     private Long timestamp;
-    private long totalAmount;
-    private long feeAmount;
+    private Long totalAmount;
+    private Long feeAmount;
     private List<Input> inputs;
     private List<Output> outputs;
     private String memo;
+    private Long totalAmountEstimate;
+    private Long feeAmountEstimate;
+    private Boolean metadataComplete;
+    private Boolean pending;
+
+    public Long getTotalAmountEstimate() { return totalAmountEstimate; }
+    public Long getFeeAmountEstimate() { return feeAmountEstimate; }
+    public Boolean getMetadataComplete() { return metadataComplete; }
+    public Boolean getPending() { return pending; }
+
+    public static SimpleTransaction partial(String hash, long timestamp, Long amount, Long fee,
+            Long amountEstimate, Long feeEstimate, boolean complete, boolean pending,
+            List<Input> inputs, List<Output> outputs, String memo) {
+        SimpleTransaction tx = new SimpleTransaction();
+        tx.txHash = hash;
+        tx.timestamp = timestamp;
+        tx.totalAmount = amount;
+        tx.feeAmount = fee;
+        tx.totalAmountEstimate = amountEstimate;
+        tx.feeAmountEstimate = feeEstimate;
+        tx.metadataComplete = complete;
+        tx.pending = pending;
+        tx.inputs = inputs;
+        tx.outputs = outputs;
+        tx.memo = memo;
+        return tx;
+    }
 
 
     @XmlAccessorType(XmlAccessType.FIELD)
@@ -93,11 +120,11 @@ public class SimpleTransaction {
         return timestamp;
     }
 
-    public long getTotalAmount() {
+    public Long getTotalAmount() {
         return totalAmount;
     }
 
-    public long getFeeAmount() {
+    public Long getFeeAmount() {
         return feeAmount;
     }
 

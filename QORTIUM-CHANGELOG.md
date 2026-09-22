@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Keep incomplete ARRR history visible without guessing amounts
+
+2026-09-22
+
+Use the native wallet's explicit partial-history response when available, keeping pending and restored transactions visible even when their totals are unknown. Preserve unknown amounts and separately labeled estimates through the API, and count a transaction's fee once regardless of recipient count. Older native wallets retain their existing history method; other native errors do not trigger a second request. This requires compatible Home and Wallet adapters to display incomplete amounts, and a native build with the partial-history method for the new behavior.
+
 ### 2026-09-14 - feat(arrr): let an interrupted verified key import be retried after restart
 
 A verified Pirate spending-key import that was interrupted (Core stopped,
