@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Keep native pin rejection tests independent of release labels
+
+2026-09-22
+
+Make the negative provenance fixture corrupt the active release tag instead of a hardcoded old tag, so the test continues to verify rejection for the acceptance bundle.
+
 ### Pin the ARRR history acceptance bundle for local testing
 
 2026-09-22
