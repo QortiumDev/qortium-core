@@ -9,6 +9,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Serializes access to LiteWalletJni's single process-global wallet context. */
 public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
@@ -67,33 +68,28 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 		final Future<T> future;
 		try {
 			future = this.executor.submit(task::run);
-		} catch (RuntimeException e) {
-			throw new NativeWalletException("Native wallet lane is busy while starting " + operationName, e);
+		} catch (java.util.concurrent.RejectedExecutionException e) {
+			if (this.degraded.get()) throw new NativeWalletException("Native wallet lane is degraded", e);
+			throw new NativeQueueContentionException("Native wallet lane is busy while starting " + operationName, e);
 		}
 
 		try {
 			return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {
-			boolean started = task.started.get();
+			boolean started = task.state.getAndUpdate(value -> value == 0 ? 2 : value) == 1;
 			if (started)
 				degrade(operationName + " timed out");
 			future.cancel(true);
-			if (!started && task.started.get()) {
-				started = true;
-				degrade(operationName + " timed out while starting");
-			}
+			this.executor.remove((Runnable) future);
 			if (started)
 				throw new NativeWalletException("Native wallet operation timed out; lane is now degraded: " + operationName, e);
-			throw new NativeWalletException("Timed out waiting to start native wallet operation: " + operationName, e);
+			throw new NativeQueueContentionException("Timed out waiting to start native wallet operation: " + operationName, e);
 		} catch (InterruptedException e) {
-			boolean started = task.started.get();
+			boolean started = task.state.getAndUpdate(value -> value == 0 ? 2 : value) == 1;
 			if (started)
 				degrade(operationName + " was interrupted after starting");
 			future.cancel(true);
-			if (!started && task.started.get()) {
-				started = true;
-				degrade(operationName + " was interrupted while starting");
-			}
+			this.executor.remove((Runnable) future);
 			Thread.currentThread().interrupt();
 			String state = started ? "; lane is now degraded" : "";
 			throw new NativeWalletException("Interrupted while waiting for native wallet operation: " + operationName + state, e);
@@ -154,7 +150,7 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 	private final class NativeTask<T> {
 		private final String operationName;
 		private final NativeOperation<T> operation;
-		private final AtomicBoolean started = new AtomicBoolean(false);
+		private final AtomicInteger state = new AtomicInteger(0); // queued, started, cancelled-before-start
 
 		private NativeTask(String operationName, NativeOperation<T> operation) {
 			this.operationName = operationName;
@@ -162,7 +158,7 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 		}
 
 		private T run() {
-			this.started.set(true);
+			if (!this.state.compareAndSet(0, 1)) throw new NativeQueueContentionException("Queued native operation was cancelled", null);
 			return executeDirect(this.operationName, this.operation);
 		}
 	}
@@ -235,6 +231,10 @@ public final class ZcashFamilyNativeCoordinator implements AutoCloseable {
 			ensureHealthy();
 			return adapter.execute(command, arguments);
 		}
+	}
+
+	public static class NativeQueueContentionException extends NativeWalletException {
+		public NativeQueueContentionException(String message, Throwable cause) { super(message, cause); }
 	}
 
 	public static class NativeWalletException extends RuntimeException {

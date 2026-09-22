@@ -16,6 +16,9 @@ public class PirateChainWalletInitializationRequest {
 			example = "NEW_AT_CURRENT_TIP", allowableValues = { "NEW_AT_CURRENT_TIP" })
 	public String initializationMode;
 
+    @Schema(description = "Last observed wallet-session revision; required to replace another active account")
+    public String expectedRevision;
+
 	public PirateChainWalletInitializationRequest() {
 	}
 }
