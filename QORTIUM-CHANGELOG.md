@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Refresh the ARRR acceptance build on merged main
+
+2026-09-22
+
+Bring the merged production Core changes into the local acceptance branch while retaining its separately authenticated native test bundle. No wallet behavior or native payload changes.
+
 ### Keep native pin rejection tests independent of release labels
 
 2026-09-22
