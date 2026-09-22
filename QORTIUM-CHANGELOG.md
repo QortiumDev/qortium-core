@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### Refresh the ARRR acceptance build on merged main
+
+2026-09-22
+
+Bring the merged production Core changes into the local acceptance branch while retaining its separately authenticated native test bundle. No wallet behavior or native payload changes.
+
+### Keep native pin rejection tests independent of release labels
+
+2026-09-22
+
+Make the negative provenance fixture corrupt the active release tag instead of a hardcoded old tag, so the test continues to verify rejection for the acceptance bundle.
+
+### Pin the ARRR history acceptance bundle for local testing
+
+2026-09-22
+
+This dedicated test branch pins the Qortium fork acceptance bundle from native source 6b19fb18. It requires an explicit operator signature override for the separately published test resource. Official defaults, profiles and migration rules are unchanged; this pin must not be merged as a general release dependency before acceptance and a separate adoption decision.
+
 ### Preserve known ARRR receipts when address metadata is missing
 
 2026-09-22

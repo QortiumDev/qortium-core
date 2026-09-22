@@ -86,10 +86,10 @@ public class PirateUnifiedWalletBundleTests {
 	}
 
 	@Test
-	public void testWrongOfficialProvenanceIsRejected() throws Exception {
+	public void testWrongPinnedProvenanceIsRejected() throws Exception {
 		Path bundle = createBundle();
 		Path manifest = bundle.resolve(PirateUnifiedWalletBundle.MANIFEST_FILENAME);
-		Files.writeString(manifest, Files.readString(manifest).replace("release-tag: v1.2.3", "release-tag: v1.1.7"));
+		Files.writeString(manifest, Files.readString(manifest).replace("release-tag: " + PirateUnifiedWalletBundle.RELEASE_TAG, "release-tag: invalid-test-provenance"));
 
 		DataException exception = assertThrows(DataException.class,
 				() -> PirateUnifiedWalletBundle.validate(bundle, HOST_LIBRARY));

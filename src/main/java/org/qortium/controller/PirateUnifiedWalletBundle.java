@@ -27,17 +27,15 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-/** Validates the pinned Pirate Unified cross-platform native bundle. */
+/** Validates the Qortium ARRR acceptance bundle; this test pin is not a default release. */
 final class PirateUnifiedWalletBundle {
 
-	static final String RELEASE_TAG = "v1.2.3";
-	// Upstream v1.2.3 reuses the v1.2.2 native artifact without renaming it.
-	static final String ARTIFACT_FILENAME = "pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip";
-	static final long ARTIFACT_SIZE = 363_529_930L;
-	static final String ARTIFACT_SHA256 =
-			"faedb4548903de75c4dd90ac4faff2b938612afaccc3519462408e45a26e982b";
-	static final String RELEASE_URL = "https://github.com/PirateNetwork/Stashi-Wallet/"
-			+ "releases/download/" + RELEASE_TAG + "/" + ARTIFACT_FILENAME;
+	static final String RELEASE_TAG = "arrr-history-test-6b19fb18";
+	// Qortium fork test bundle from reviewed source 6b19fb18 and CI run 35755835448.
+	static final String ARTIFACT_FILENAME = "pirate-unified-wallet-qortal-jni-arrr-history-6b19fb18.zip";
+	static final long ARTIFACT_SIZE = 365953690L;
+	static final String ARTIFACT_SHA256 = "695202d5a1055629c9d37db84eae69b885e77dcb5106b4dc93f2fa17f2532188";
+	static final String RELEASE_URL = "https://github.com/QortiumDev/Pirate-Unified-Light-Wallet/releases/download/arrr-history-test-6b19fb18/pirate-unified-wallet-qortal-jni-arrr-history-6b19fb18.zip";
 	static final String MANIFEST_FILENAME = "QORTIUM-MANIFEST.txt";
 
 	private static final String FORMAT = "qortium-pirate-unified-bundle-v1";
