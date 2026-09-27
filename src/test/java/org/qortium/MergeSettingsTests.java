@@ -341,7 +341,11 @@ public class MergeSettingsTests {
 	// --- Superseded-value rule (P-CORE-59): pirateChainWalletQdnSignature ---
 
 	private static final String CURRENT_PIRATE_PIN =
+			"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv";
+	/** The v1.2.3 interim pin (versioned identifier), pinned on main but never shipped in a stable Core. */
+	private static final String SUPERSEDED_V1_2_3_PIRATE_PIN =
 			"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j";
+	/** The v1.2.1 generic-identifier pin shipped in Core v1.8.0 / v1.8.0-rc.1. */
 	private static final String SUPERSEDED_PIRATE_PIN =
 			"bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a";
 
@@ -367,6 +371,21 @@ public class MergeSettingsTests {
 
 		assertEquals(CURRENT_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
 		assertTrue(result.migrated.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
+	public void testInterimV123PinMigratesToCurrent() throws Exception {
+		// A node that followed main between 2026-09-12 and 2026-09-27 carries the v1.2.3 pin; it
+		// must migrate forward exactly like the released v1.2.1 pin does.
+		writeJson(snapshotPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_V1_2_3_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_V1_2_3_PIRATE_PIN + "\"}");
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(CURRENT_PIRATE_PIN, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertTrue(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertFalse(result.preserved.contains("pirateChainWalletQdnSignature"));
 	}
 
 	@Test
@@ -454,10 +473,10 @@ public class MergeSettingsTests {
 	}
 
 	@Test
-	public void testRealV180ThreeFileFixtureMigratesToV123Pin() throws Exception {
+	public void testRealV180ThreeFileFixtureMigratesToCurrentPin() throws Exception {
 		// A real v1.8.0-shipped settings-preview.json (with the v1.2.1 pin) used as both the
 		// snapshot and the operator's local settings, merged against this worktree's current
-		// template (with the v1.2.3 pin), must migrate the pin and leave every other key alone.
+		// template (with the v1.2.4 pin), must migrate the pin and leave every other key alone.
 		Path shippedV180Fixture = Path.of("src/test/resources/mergesettings/settings-preview-v1.8.0.json");
 		Files.copy(shippedV180Fixture, snapshotPath);
 		Files.copy(shippedV180Fixture, settingsPath);

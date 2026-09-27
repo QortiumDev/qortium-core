@@ -112,7 +112,7 @@ def main():
         "host": "Linux x86_64", "startedUtc": started,
         "oldArtifactSha256": sha256(args.old_artifact), "artifactSha256": sha256(args.artifact),
         "phases": phase_results, "tests": 3, "failures": 0, "errors": 0, "skipped": 0,
-        "boundary": "Three separate JVMs: old native creates and syncs a synthetic-note wallet; new native opens and reopens its encrypted storage without seed restore or history rescan. Identity, exported key digest, key group, birthday, transaction and balance persist. SQLCipher schema version is not queried; schema 41-to-42 is source-derived. No real wallet, public endpoint, transaction broadcast, downgrade, QDN publication or deployment proof. Temporary wallet state, logs and unique reports removed."
+        "boundary": "Three separate JVMs: old native creates and syncs a synthetic-note wallet; new native opens and reopens its encrypted storage without seed restore or history rescan. Identity, exported key digest, key group, birthday, transaction and balance persist. SQLCipher schema version is not queried; the storage-layer change between the old and new releases is source-derived. No real wallet, public endpoint, transaction broadcast, downgrade, QDN publication or deployment proof. Temporary wallet state, logs and unique reports removed."
     }
     with args.receipt.open("x") as output:
         json.dump(receipt, output, indent=2)
