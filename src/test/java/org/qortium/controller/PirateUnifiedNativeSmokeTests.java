@@ -297,9 +297,15 @@ public class PirateUnifiedNativeSmokeTests {
 			assertTrue("Native sync never requested the complete deterministic compact-block range; observed "
 					+ serverA.observedRanges(),
 					serverA.completeRangeCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE) > 0);
-			assertTrue("Native client never requested the Pirate lightwalletd tip",
+			// The sync target comes from the configured server's tip-bearing metadata. Stashi takes the
+			// initial target from GetLightdInfo.blockHeight; GetLatestBlock is only a later monitoring
+			// poll that v1.2.4 no longer reaches before this lifecycle cancels sync, so either RPC
+			// proves that server A, not a built-in endpoint, supplied the tip.
+			assertTrue("Native client never queried tip-bearing metadata from the configured Pirate server",
 					serverA.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE,
-							"GetLatestBlock") > 0);
+							"GetLatestBlock") > 0
+							|| serverA.rpcCount(PirateUnifiedLoopbackLightwalletd.PIRATE_SERVICE,
+									"GetLightdInfo") > 0);
 			assertEquals("Native acceptance attempted a forbidden transaction RPC", 0,
 					serverA.forbiddenRpcCount() + serverB.forbiddenRpcCount() + nativeBad.forbiddenRpcCount());
 			assertTrue("Native acceptance omitted its optional subtree capability probe",
