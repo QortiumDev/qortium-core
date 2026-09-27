@@ -169,10 +169,14 @@ with on-chain payload SHA-256 `7d7d3fa5c58cf453e3e1b694dcaeab06af46d4f69ac74bcd0
 Regxa built the transaction from the reviewed files after independently
 verifying the official ZIP and staged-file hashes. The nonce was computed
 before local signing; only the signed transaction was submitted to Regxa.
-Seed verification follows the v1.2.3 procedure: each seed's signature-keyed
-payload must match the on-chain SHA-256, and authenticated AES-GCM decryption
-plus all eight ZIP file hashes must match the reviewed bundle, including
-manifest `50e95fb62685a73c902af27c9c6a03ada57c2ce062f98c4414379426eade6128`.
+Both Regxa and Netcup reached `DOWNLOADED 700/700` (Regxa within a minute of
+confirmation; Netcup after one demand re-arm, about 30 minutes later). On each
+seed the signature-keyed payload matched the on-chain SHA-256, and
+authenticated AES-GCM decryption plus all eight ZIP file hashes matched the
+reviewed bundle, including manifest
+`50e95fb62685a73c902af27c9c6a03ada57c2ce062f98c4414379426eade6128`. Netcup
+held only the chunk set, so its payload was reassembled in metadata order
+before verification.
 
 Settings, the Previewnet participant profile, the seed retention lists, the
 settings-merge superseded-value rule, the release ledger, and their tests pin
