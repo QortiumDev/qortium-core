@@ -163,8 +163,8 @@ The reviewed official v1.2.4 bundle is published on Qortium Previewnet as
 The `PUT` transaction (service `100`, ZIP compression) was created by the
 `QortiumHomeTest` identity `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` with fee zero
 and MemoryPoW nonce `3379`; the stored payload is `366002487` bytes across
-`__V1_2_4_CHUNKS__` chunks. It confirmed at height `__V1_2_4_BLOCK_HEIGHT__`
-with on-chain payload SHA-256 `__V1_2_4_PAYLOAD_SHA256__`.
+`700` chunks. It confirmed at height `145606`
+with on-chain payload SHA-256 `7d7d3fa5c58cf453e3e1b694dcaeab06af46d4f69ac74bcd0c001a467e586be4`.
 
 Regxa built the transaction from the reviewed files after independently
 verifying the official ZIP and staged-file hashes. The nonce was computed

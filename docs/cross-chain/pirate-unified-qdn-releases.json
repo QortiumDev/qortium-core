@@ -11,7 +11,7 @@
     "walletRelease": "v1.2.4",
     "identifier": "pirate-unified-wallet-v1.2.4",
     "signature": "3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv",
-    "blockHeight": null,
+    "blockHeight": 145606,
     "replacementStableCoreRelease": null
   },
   "previous": {
