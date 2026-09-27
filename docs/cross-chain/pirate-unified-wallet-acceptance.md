@@ -7,34 +7,39 @@ transactions, deployment, and default enablement remain separate decisions.
 
 ## Pinned artifact
 
-- Release tag: `v1.2.3`
-- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip`
-- Size: `363529930` bytes
-- SHA-256: `faedb4548903de75c4dd90ac4faff2b938612afaccc3519462408e45a26e982b`
-- URL: `https://github.com/PirateNetwork/Stashi-Wallet/releases/download/v1.2.3/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip`
+- Release tag: `v1.2.4`
+- Asset filename: `pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip`
+- Size: `366149509` bytes
+- SHA-256: `3a878eada47d3a1ef2ec15b5cb542d0672888255d8129260b2358c8a66dab61c`
+- URL: `https://github.com/PirateNetwork/Stashi-Wallet/releases/download/v1.2.4/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip`
 
-The official Stashi `v1.2.3` release intentionally reuses the `v1.2.2` JNI
-artifact with its original filename. Release tag and asset version are
-independent: do not rename this asset to `v1.2.3`. The `v1.2.2` and `v1.2.3`
-release assets have the same SHA-256. Release tag `v1.2.3` resolves to commit
-`73560800f0d3c73a0de7932c4cf1e7e2222228d1`; its successful release workflow is
-[`34668376882`](https://github.com/PirateNetwork/Stashi-Wallet/actions/runs/34668376882).
-The established upstream signing fingerprint is
-`E4FB2399AECCF9B9447DED472CE65343401553A6`. Verify both the checksum manifest
-and the artifact's detached signature against that fingerprint before use.
+Provenance: this is the official PirateNetwork `v1.2.4` release artifact
+(published 2026-09-27). Release tag `v1.2.4` resolves to commit
+`4e5a3044954f5378708d5c7a20eb2287d6762d40`; its successful release workflow is
+[`36314592371`](https://github.com/PirateNetwork/Stashi-Wallet/actions/runs/36314592371).
+The release tag and the asset version match again for `v1.2.4` (unlike
+`v1.2.3`, which reused the `v1.2.2` asset). The release ZIP, its detached
+signature, `sha256sum-v1.2.4.txt.sig` and `build-payloads-v1.2.4.txt.sig` all
+verify under the established upstream signing fingerprint
+`E4FB2399AECCF9B9447DED472CE65343401553A6`, the same key that signed `v1.1.9`
+through `v1.2.3`. Verify both the checksum manifest and the artifact's
+detached signature against that fingerprint before use.
 
-The `pirate-qortal-jni` subtree is unchanged from `v1.2.1`, but its shared
-backend dependencies change in `v1.2.2`. Storage schema `41` -> `42` adds an
-encrypted payment-disclosure table. Migration startup serializes concurrent
-upgrades and propagates schema-read failures instead of treating them as a
-new database. Shared service fixes also cover key/disclosure encryption
-rotation and watch-only address derivation. These changes require native
-upgrade and reopen acceptance; unchanged JNI source alone is not sufficient.
-
-The shared sync client's Auto endpoint improvements do not enable automatic
-failover in Core: JNI still configures a single endpoint. No Rust crate
-changes occur between `v1.2.2` and `v1.2.3`; the latter fixes the Stashi desktop
-updater, Android send input focus, and React Native package metadata.
+`v1.2.4` contains the merge of Stashi PR #60 (the QortiumDev partial-history
+fix, merged upstream on 2026-09-23), which is why Core waited for this release
+rather than pinning a fork build. The `pirate-qortal-jni` crate is unchanged
+from `v1.2.3`. What changes beneath it is the wallet service and storage:
+`crates/pirate-wallet-service/src/api/qortal.rs` gains a bounded 5 s history
+recovery budget, validated outgoing accounting, and the opt-in typed JSON
+method `qortal_list_transactions_partial` that Core already calls through
+`invokeJson` in `PirateChainHistory` (older bundles fall back to the existing
+history method). The storage layer changes as well: imported-key birthday
+persistence (`repository/birthday.rs`, which lowers viewing-key birthdays
+atomically), `spendability_state` adjustments, and Ironwood ancestry-tag
+identity fixes. These storage changes require native upgrade and reopen
+acceptance; unchanged JNI source alone is not sufficient. The rest of the
+release (rustls upgrade, Arti 0.44, rust-toolchain 1.91.1) is invisible to
+Core's request/response surface.
 
 The exact release payloads are:
 
@@ -42,12 +47,23 @@ The exact release payloads are:
 | --- | ---: | --- |
 | `LICENSE-qortal-jni.txt` | 1081 | `5ee51e5067dd67cbf94640328494418539c708c7ec420e8a30c808866b384ab0` |
 | `LiteWalletJni.java` | 1551 | `2aa1768c72a5d900367b0f068c6f430230d03d63f9df2ab773004c049fe9091e` |
-| `librust-linux-aarch64.so` | 112107736 | `c574171bbc3949d13789aaa6783427f6f4c95ec44da167d0fe5c1f4d48416e22` |
-| `librust-linux-x86_64.so` | 114493504 | `5d39ba7e692a8f1aa8f833477aa6139ad1b287279333195584c0fe0c3ffe5dc7` |
-| `librust-macos-aarch64.dylib` | 100462496 | `af89fcd7e40345b6575bb7f7d570c5de3efae092d5f2c53ffe24cd1253ad2c5e` |
-| `librust-macos-x86_64.dylib` | 103093788 | `ca9165fab57b2d6f142131f9c41efef09e153718692f6d5aacc7c961e623a17c` |
-| `librust-windows-x86_64.dll` | 104994304 | `9b431481fc983cbc74abceb2ce81228e75c56601265f583eb37cb6b969923b3f` |
-| `qortal-handoff.md` | 12839 | `bd25c2af9513c16bd31d78cd2913c1f9128e1f749c9672c33dc9e55a35b2d20f` |
+| `librust-linux-aarch64.so` | 113530112 | `5e45b8cc967ccfffd530021c58e2009346c90f681c69d2500afd78caf16f0572` |
+| `librust-linux-x86_64.so` | 116425160 | `460979f26371c0e239bbf223ce01972ce9e19018b4ac41337dd3a5d369bee915` |
+| `librust-macos-aarch64.dylib` | 101612320 | `78bdcc74c015c0e7a88441ba78aae1ba046eae112449b2adad55f9508015a201` |
+| `librust-macos-x86_64.dylib` | 104261356 | `f2d454642fab38a930f5305547a56a971f2f781fcb4524f1f42ade3d015032b7` |
+| `librust-windows-x86_64.dll` | 106370048 | `71dc4c7481c292c2cc37699e94a0e121932c45730b13f14d1a58a2375e4158fb` |
+| `qortal-handoff.md` | 20377 | `681d842aab6ef9da46b15420b0f80a9d8069e83597ef80a1e73e8f94f76ca104` |
+
+`LiteWalletJni.java` is a release-archive reference copy and is not part of the
+staged bundle; the staged `QORTIUM-MANIFEST.txt` for this release hashes to
+`50e95fb62685a73c902af27c9c6a03ada57c2ce062f98c4414379426eade6128`.
+
+The superseded official `v1.2.3` artifact (size `363529930`, SHA-256
+`faedb4548903de75c4dd90ac4faff2b938612afaccc3519462408e45a26e982b`, the
+`v1.2.2`-named asset reused by release tag `v1.2.3`, source
+`73560800f0d3c73a0de7932c4cf1e7e2222228d1`, release workflow `34668376882`)
+is retained for provenance; its Previewnet publication was an interim pin that
+never shipped in a stable Core release.
 
 The superseded official `v1.2.1` artifact (size `363257276`, SHA-256
 `871eafe7d4b18e383f3810a31a95f058e5d10b37cbb8ac101ad01206ac235bef`, source
@@ -85,8 +101,8 @@ same worktree:
 MAVEN_ARGS=-Dmaven.gitcommitid.nativegit=true python3 tools/run-pirate-unified-upgrade-acceptance.py \
   --old-artifact /absolute/v1.2.1/pirate-unified-wallet-qortal-jni-artifacts-v1.2.1.zip \
   --old-bundle /absolute/v1.2.1/staged-bundle \
-  --artifact /absolute/v1.2.3/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  --bundle /absolute/v1.2.3/staged-bundle \
+  --artifact /absolute/v1.2.4/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  --bundle /absolute/v1.2.4/staged-bundle \
   --receipt /absolute/new-upgrade-receipt.json --native
 ```
 
@@ -97,8 +113,10 @@ identity, key group, synthetic balance and transaction persist without a
 mnemonic restore or history rescan. Artifacts are hash-verified before native
 execution. Disposable wallet state and raw logs are removed; the receipt
 contains only validation evidence. The database uses SQLCipher, so this test
-does not directly query its schema version. The `41` -> `42` transition is
-established by upstream source; persistence is measured by this test.
+does not directly query its schema version. The storage-layer change between
+the old and new releases (for `v1.2.4`: birthday persistence and Ironwood
+identity) is established by upstream source; persistence is measured by this
+test.
 Downgrade compatibility and funded transactions are outside its scope.
 
 ## Upstream freshness watcher
@@ -137,9 +155,40 @@ bump the acknowledged version). `python3 tools/check-pirate-bundle-freshness.py
 --self-test` runs the comparison logic offline against fixtures with no
 network access.
 
-## Published v1.2.3 QDN bundle
+## Published v1.2.4 QDN bundle
 
-The reviewed official v1.2.3 bundle is published on Qortium Previewnet as
+The reviewed official v1.2.4 bundle is published on Qortium Previewnet as
+`ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet-v1.2.4` at immutable signature
+`3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv`.
+The `PUT` transaction (service `100`, ZIP compression) was created by the
+`QortiumHomeTest` identity `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` with fee zero
+and MemoryPoW nonce `3379`; the stored payload is `366002487` bytes across
+`700` chunks. It confirmed at height `145606`
+with on-chain payload SHA-256 `7d7d3fa5c58cf453e3e1b694dcaeab06af46d4f69ac74bcd0c001a467e586be4`.
+
+Regxa built the transaction from the reviewed files after independently
+verifying the official ZIP and staged-file hashes. The nonce was computed
+before local signing; only the signed transaction was submitted to Regxa.
+Both Regxa and Netcup reached `DOWNLOADED 700/700` (Regxa within a minute of
+confirmation; Netcup after one demand re-arm, about 30 minutes later). On each
+seed the signature-keyed payload matched the on-chain SHA-256, and
+authenticated AES-GCM decryption plus all eight ZIP file hashes matched the
+reviewed bundle, including manifest
+`50e95fb62685a73c902af27c9c6a03ada57c2ce062f98c4414379426eade6128`. Netcup
+held only the chunk set, so its payload was reassembled in metadata order
+before verification.
+
+Settings, the Previewnet participant profile, the seed retention lists, the
+settings-merge superseded-value rule, the release ledger, and their tests pin
+this v1.2.4 transaction. A node whose local settings still carry the v1.2.3
+or v1.2.1 pin migrates to this signature on its next settings merge; any
+other explicit operator value is preserved. Core defaults remain disabled;
+the participant Previewnet profile retains its existing enablement. This
+source change does not deploy or enable any node.
+
+## Previously published v1.2.3 QDN bundle (interim)
+
+The reviewed official v1.2.3 bundle was published on Qortium Previewnet as
 `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet-v1.2.3` at immutable signature
 `24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j`.
 It confirmed at height `127321` with fee zero and MemoryPoW nonce `315`;
@@ -154,16 +203,16 @@ all eight ZIP file hashes matched the reviewed bundle, including manifest
 `4cb70e5e07dd8130e4b5a81ee7d08d16fb69b3553dc0be87910ad8246478c3b8`.
 Both nodes also served the matching manifest through their QDN APIs.
 
-Settings, the Previewnet profile, and their tests pin this v1.2.3 transaction.
-Core defaults remain disabled; the participant Previewnet profile retains its
-existing enablement. Existing installations with an
-explicit old signature retain that override until their deployment settings
-are updated; this source change does not deploy or enable any node.
+Core main pinned this v1.2.3 transaction from 2026-09-12 to 2026-09-27, but
+no stable Core release shipped with it, so no released Core depends on it. The
+seeds keep retaining it for at least 30 days after the replacement stable Core
+release ships and until its support is explicitly ended; the release ledger
+records it as `previous` with no required Core releases.
 
 See [publication and retention policy](pirate-unified-qdn-retention.md) for
 the supported-release window and the generic-resource transition.
 
-## Previously published QDN bundle
+## Previously published v1.2.1 QDN bundle
 
 The reviewed official v1.2.1 runtime bundle is published on Qortium Previewnet
 as `ARBITRARY_DATA/QortiumHomeTest/pirate-unified-wallet` at immutable
@@ -225,8 +274,8 @@ archive:
 
 ```sh
 tools/stage-pirate-unified-bundle.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  /absolute/new/path/pirate-unified-v1.2.3
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  /absolute/new/path/pirate-unified-v1.2.4
 ```
 
 The script verifies the archive size and SHA-256, refuses to overwrite output,
@@ -283,8 +332,8 @@ and byte-compares every staged payload to the matching archive entry:
 ```sh
 mvn -DskipTests=false \
   -Dqortium.runPirateUnifiedArtifactAcceptanceTests=true \
-  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.2.3 \
+  -Dqortium.pirateUnifiedArtifactPath=/absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  -Dqortium.pirateUnifiedBundlePath=/absolute/path/pirate-unified-v1.2.4 \
   -Dtest=PirateUnifiedArtifactAcceptanceTests \
   test
 ```
@@ -354,8 +403,8 @@ termination and secret-capable evidence deletion are both proven:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/new/path/pirate-unified-native-receipt.md \
   --native
 ```
@@ -366,8 +415,8 @@ is approved:
 
 ```sh
 tools/run-pirate-unified-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/new/path/pirate-unified-receipt.md
 ```
 
@@ -429,8 +478,8 @@ staged bundle, a new absolute receipt path, and the explicit `--native` marker:
 
 ```sh
 tools/run-pirate-production-native-interoperability-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/new/path/pirate-production-native-receipt.md \
   --native
 ```
@@ -474,8 +523,8 @@ Run the historical gate only from a clean Core commit:
 
 ```sh
 tools/run-pirate-unified-historical-restore-acceptance.sh \
-  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.2.zip \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/new/path/pirate-unified-historical-restore-receipt.md
 ```
 
@@ -523,7 +572,7 @@ anything. Prepare that fixture from an already validated staged bundle:
 
 ```sh
 tools/prepare-pirate-unified-local-qdn-fixture.sh \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/new/path/pirate-unified-local-qdn-fixture
 ```
 
@@ -557,7 +606,7 @@ loader against that fixture without network egress or wallet creation:
 ```sh
 tools/run-pirate-unified-packaged-loader-acceptance.sh \
   /absolute/path/qortium.jar \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-loader-receipt.md
 ```
@@ -592,7 +641,7 @@ bounded wallet-lifecycle gate:
 ```sh
 tools/run-pirate-unified-packaged-lifecycle-acceptance.sh \
   /absolute/path/qortium.jar \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/new/path/pirate-unified-packaged-lifecycle-receipt.md
 ```
@@ -741,7 +790,7 @@ fixture:
 ```sh
 tools/run-pirate-unified-packaged-real-legacy-migration-acceptance.sh \
   /absolute/path/qortium.jar \
-  /absolute/path/pirate-unified-v1.2.3 \
+  /absolute/path/pirate-unified-v1.2.4 \
   /absolute/path/pirate-unified-local-qdn-fixture \
   /absolute/path/reviewed-legacy-bundle \
   /absolute/path/protected-v8-metadata.json \

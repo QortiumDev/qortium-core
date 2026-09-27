@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "policy": {
     "targetRetainedVersions": 2,
     "minimumUpgradeWindowDays": 30,
@@ -8,22 +8,35 @@
     "automaticDelete": false
   },
   "current": {
+    "walletRelease": "v1.2.4",
+    "identifier": "pirate-unified-wallet-v1.2.4",
+    "signature": "3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv",
+    "blockHeight": 145606,
+    "replacementStableCoreRelease": null
+  },
+  "previous": {
     "walletRelease": "v1.2.3",
     "identifier": "pirate-unified-wallet-v1.2.3",
     "signature": "24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j",
     "blockHeight": 127321,
-    "replacementStableCoreRelease": null
+    "requiredByCoreReleases": [],
+    "retireNotBefore": null,
+    "note": "Interim pin carried on main from 2026-09-12 to 2026-09-27 and never shipped in a stable Core release (Core 1.8.1 was not released with it); no released Core depends on it. It still follows the normal retention window: retireNotBefore is set to 30 days after the replacement stable Core release publishes, and retirement additionally requires an explicit support end."
   },
-  "previous": {
-    "walletRelease": "v1.2.1",
-    "identifier": "pirate-unified-wallet",
-    "signature": "bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a",
-    "requiredByCoreReleases": [
-      "v1.8.0",
-      "v1.8.0-rc.1"
-    ],
-    "retireNotBefore": null
-  },
+  "retainedHistorical": [
+    {
+      "walletRelease": "v1.2.1",
+      "identifier": "pirate-unified-wallet",
+      "signature": "bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a",
+      "blockHeight": 119890,
+      "requiredByCoreReleases": [
+        "v1.8.0",
+        "v1.8.0-rc.1"
+      ],
+      "retireNotBefore": null,
+      "note": "Generic-identifier publication pinned by released Core v1.8.0 and v1.8.0-rc.1 participant profiles; retain until support for those releases is explicitly ended."
+    }
+  ],
   "transition": {
     "genericDeleteAllowed": false,
     "reason": "Released participant profiles pin historical data under the generic resource; deploy historical retention before considering retirement."

@@ -104,8 +104,8 @@ public class Settings {
 
 	private static final Logger LOGGER = LogManager.getLogger(Settings.class);
 	private static final String DEFAULT_SSL_KEYSTORE_PASSWORD = "default";
-	private static final String PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE =
-			"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j";
+	private static final String PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE =
+			"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv";
 	private static final int GENERATED_SSL_KEYSTORE_PASSWORD_BYTES = 32;
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static final String SETTINGS_FILENAME = "settings.json";
@@ -471,8 +471,8 @@ public class Settings {
 	 * record their one-way address identity before the native-library restart.
 	 */
 	private boolean pirateChainWalletUnified = false;
-	/** Immutable QDN transaction signature for the reviewed official v1.2.3 Unified native wallet bundle. */
-	private String pirateChainWalletQdnSignature = PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE;
+	/** Immutable QDN transaction signature for the reviewed official v1.2.4 Unified native wallet bundle. */
+	private String pirateChainWalletQdnSignature = PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE;
 	/** Enables Unified native-wallet debug logging when the opt-in gate is enabled. */
 	private boolean pirateChainWalletDebugLogging = false;
 
@@ -2275,7 +2275,7 @@ public class Settings {
 	private void setAdditionalDefaults() {
 		// MOXy replaces missing reference fields with null, so apply the reviewed bundle pin after unmarshalling.
 		if (this.pirateChainWalletQdnSignature == null)
-			this.pirateChainWalletQdnSignature = PIRATE_UNIFIED_V1_2_3_QDN_SIGNATURE;
+			this.pirateChainWalletQdnSignature = PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE;
 
 		// Populate defaults for maxThreadsPerMessageType. If any are specified in settings.json, they will take priority.
 		maxThreadsPerMessageType.add(new ThreadLimit("ARBITRARY_DATA_FILE", 5));

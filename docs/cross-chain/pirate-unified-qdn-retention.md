@@ -3,9 +3,11 @@
 Core loads the exact transaction signature it pins, not the latest publication
 under a name. Every future native bundle must use a unique version-specific
 identifier under `ARBITRARY_DATA/QortiumHomeTest`, such as
-`pirate-unified-wallet-v1.2.3`. Never overwrite a version identifier. A packaging
+`pirate-unified-wallet-v1.2.4`. Never overwrite a version identifier. A packaging
 correction needs a new identifier suffix and a new reviewed transaction pin.
-The current/previous records are in [the release ledger](pirate-unified-qdn-releases.json).
+The current/previous records, and the older publications still required by released
+Core versions (`retainedHistorical`), are in
+[the release ledger](pirate-unified-qdn-releases.json).
 
 ## Supported versions and retirement
 
@@ -64,8 +66,11 @@ retained. Never use a latest-by-name request as evidence for an older signature.
 Capacity still gates new fetches. Retained bytes can exceed a configured cap and
 will not be evicted merely to meet it. Keep sufficient disk/capacity headroom
 for the new bundle and build workspace; monitor both independent holders.
-The tracked seed profiles retain current v1.2.3 and the supported v1.2.1 pin
-without enabling ARRR on seeds. Existing installations must update their active
+The tracked seed profiles retain current v1.2.4, the interim v1.2.3 pin (carried
+on main from 2026-09-12 to 2026-09-27 but never shipped in a stable Core release,
+retained for at least 30 days after the replacement stable Core release and
+until its support is explicitly ended, like every other bundle), and the supported
+v1.2.1 pin, without enabling ARRR on seeds. Existing installations must update their active
 local settings; changing repository templates alone does not change a running node.
 
 ## Transition from the generic identifier

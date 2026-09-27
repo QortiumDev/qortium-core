@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-27 - chore(arrr): pin the official Stashi v1.2.4 native bundle
+
+Updates the Pirate native wallet artifact from the interim Stashi 1.2.3 pin to
+the bundle published with Stashi 1.2.4, whose release tag and artifact
+filename match again. This release carries the partial-history fix Qortium
+contributed upstream (a bounded history recovery budget, validated outgoing
+accounting, and the opt-in partial-history method Core already calls), plus
+wallet storage changes for imported-key birthdays and Ironwood identity that
+require the disposable old-wallet upgrade and reopen check. Publishes the
+verified bundle to Previewnet under its own version identifier and pins the
+new transaction in Core, the participant profile, the settings-merge
+migration rule (so nodes still carrying the 1.2.1 or 1.2.3 pin move forward
+on their next merge), the seed retention lists, and the release ledger. The
+1.2.3 publication never shipped in a stable Core release and is recorded as
+an interim pin that still follows the normal retention window (at least 30
+days after the replacement stable release and an explicit support end); the 1.2.1 publication
+stays retained for released Core 1.8.0. Core defaults remain disabled; the
+participant profile retains its existing enablement.
+
 ### Preserve known ARRR receipts when address metadata is missing
 
 2026-09-22
