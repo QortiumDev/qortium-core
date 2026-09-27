@@ -403,6 +403,22 @@ public class MergeSettingsTests {
 	}
 
 	@Test
+	public void testSupersededPinRuleLeavesLocalAcceptanceTestSignatureUntouched() throws Exception {
+		// The 2026-09-22 local ARRR acceptance bundle signature is a deliberate operator override,
+		// not a superseded release pin: it must never be listed in the rule table.
+		String acceptanceTestPin = "2Q7CHSLKNx4pQVprzSYQr12w4VBC7jwFb4km4zWUUxKUX7B8R9kZjGtudgSJSVCpgggo5Vfvv4zyn8sMLrDk4AQn";
+		writeJson(snapshotPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_V1_2_3_PIRATE_PIN + "\"}");
+		writeJson(settingsPath, "{\"pirateChainWalletQdnSignature\": \"" + acceptanceTestPin + "\"}");
+		writeJson(templatePath, "{\"pirateChainWalletQdnSignature\": \"" + CURRENT_PIRATE_PIN + "\"}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(acceptanceTestPin, readJson(settingsPath).get("pirateChainWalletQdnSignature"));
+		assertFalse(result.migrated.contains("pirateChainWalletQdnSignature"));
+		assertTrue(result.preserved.contains("pirateChainWalletQdnSignature"));
+	}
+
+	@Test
 	public void testSupersededPinRuleLeavesMissingKeyMissing() throws Exception {
 		writeJson(snapshotPath, "{\"pirateChainWalletQdnSignature\": \"" + SUPERSEDED_PIRATE_PIN + "\"}");
 		writeJson(settingsPath, "{}");

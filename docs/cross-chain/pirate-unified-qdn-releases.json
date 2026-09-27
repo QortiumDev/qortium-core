@@ -21,7 +21,7 @@
     "blockHeight": 127321,
     "requiredByCoreReleases": [],
     "retireNotBefore": null,
-    "note": "Interim pin carried on main from 2026-09-12 to 2026-09-27 and never shipped in a stable Core release (Core 1.8.1 was not released with it). Retirable after the replacement stable Core release ships; no released Core depends on it."
+    "note": "Interim pin carried on main from 2026-09-12 to 2026-09-27 and never shipped in a stable Core release (Core 1.8.1 was not released with it); no released Core depends on it. It still follows the normal retention window: retireNotBefore is set to 30 days after the replacement stable Core release publishes, and retirement additionally requires an explicit support end."
   },
   "retainedHistorical": [
     {

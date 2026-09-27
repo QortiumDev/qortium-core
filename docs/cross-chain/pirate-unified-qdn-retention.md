@@ -68,7 +68,8 @@ will not be evicted merely to meet it. Keep sufficient disk/capacity headroom
 for the new bundle and build workspace; monitor both independent holders.
 The tracked seed profiles retain current v1.2.4, the interim v1.2.3 pin (carried
 on main from 2026-09-12 to 2026-09-27 but never shipped in a stable Core release,
-retirable once the replacement stable Core release ships), and the supported
+retained for at least 30 days after the replacement stable Core release and
+until its support is explicitly ended, like every other bundle), and the supported
 v1.2.1 pin, without enabling ARRR on seeds. Existing installations must update their active
 local settings; changing repository templates alone does not change a running node.
 

@@ -48,7 +48,8 @@ new transaction in Core, the participant profile, the settings-merge
 migration rule (so nodes still carrying the 1.2.1 or 1.2.3 pin move forward
 on their next merge), the seed retention lists, and the release ledger. The
 1.2.3 publication never shipped in a stable Core release and is recorded as
-retirable once the replacement stable release ships; the 1.2.1 publication
+an interim pin that still follows the normal retention window (at least 30
+days after the replacement stable release and an explicit support end); the 1.2.1 publication
 stays retained for released Core 1.8.0. Core defaults remain disabled; the
 participant profile retains its existing enablement.
 

@@ -201,8 +201,9 @@ Both nodes also served the matching manifest through their QDN APIs.
 
 Core main pinned this v1.2.3 transaction from 2026-09-12 to 2026-09-27, but
 no stable Core release shipped with it, so no released Core depends on it. The
-seeds keep retaining it until the replacement stable Core release ships; the
-release ledger records it as `previous` with no required Core releases.
+seeds keep retaining it for at least 30 days after the replacement stable Core
+release ships and until its support is explicitly ended; the release ledger
+records it as `previous` with no required Core releases.
 
 See [publication and retention policy](pirate-unified-qdn-retention.md) for
 the supported-release window and the generic-resource transition.
