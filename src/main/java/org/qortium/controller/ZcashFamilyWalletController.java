@@ -1163,8 +1163,19 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		if (this.lifecycleState == LifecycleState.NEW)
 			return cacheStatus(WalletSyncStatus.loading(
 					this.config.getDisplayName() + " wallet controller has not started"));
-		if (this.lifecycleState == LifecycleState.STOPPING)
-			return this.cachedStatus.status;
+		if (this.lifecycleState == LifecycleState.STOPPING) {
+			// Shutdown's own "Stopping..." cache write is not the last word: a refresh or sync pass
+			// already running on the native lane can overwrite it with a wallet-bound snapshot
+			// (balances included) after STOPPING is entered. Never hand that shared entry to a
+			// requester it is not bound to - apply the same binding check and staleness as every
+			// other cached read, and otherwise answer with a fresh, wallet-independent stopping
+			// status that carries no identity, heights, balances or error from anyone's cache.
+			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
+			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
+				return withPeekedRecoveryMarker(cachedStatus).asStale();
+			return WalletSyncStatus.loading(
+					"Stopping " + this.config.getDisplayName() + " wallet controller...");
+		}
 		if (this.lifecycleState == LifecycleState.TERMINATED)
 			return cacheStatus(WalletSyncStatus.loading(
 					this.config.getDisplayName() + " wallet controller is stopped"));

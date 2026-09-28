@@ -51,7 +51,11 @@ for a synchronized wallet). The owner therefore sees a loading state until the
 first real observation replaces it. The safety rules are unchanged: a request
 for a different wallet still never receives another wallet's cached status and
 still gets the structured busy signal, and non-owners are still refused.
-Transient internal wallets used by redeem/refund do not seed the cache.
+The status served while the controller is stopping now applies that same
+ownership binding too: it is only served from the cache to the wallet the
+cache belongs to (flagged stale), and anyone else receives a plain "stopping"
+status with no wallet data. Transient internal wallets used by redeem/refund
+do not seed the cache.
 
 ### 2026-09-27 - chore(arrr): pin the official Stashi v1.2.4 native bundle
 

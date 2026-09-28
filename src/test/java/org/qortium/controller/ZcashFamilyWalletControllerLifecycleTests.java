@@ -587,6 +587,53 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		}
 	}
 
+	/**
+	 * The stopping-state reader is a cached read like any other. Models shutdown entered while B's
+	 * in-flight refresh has just cached a fresh snapshot (balances included) and A's request - which
+	 * passed the ownership gate before the switch - resumes: A must never receive B's snapshot (no B
+	 * identity, no balances), only a wallet-independent stopping status, while B's own read gets its
+	 * cache flagged stale. A seed served through this path is stale too.
+	 */
+	@Test
+	public void testStoppingStatusNeverServesAnotherWalletsCacheAndStaysStale() throws Exception {
+		SyncRequestingController controller = new SyncRequestingController();
+		assertTrue(controller.startController());
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		TestWallet walletB = new TestWallet(entropyB);
+		setControllerField(controller, "currentWallet", walletB);
+		controller.cacheCurrentWalletStatus(ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized")
+				.withSnapshot(100L, 100L, "123456789", "123456789", walletB.getWalletIdentityHash()));
+		setControllerField(controller, "lifecycleState", ZcashFamilyWalletController.LifecycleState.STOPPING);
+
+		try {
+			ZcashFamilyWalletController.WalletSyncStatus forA = controller.getSyncStatusDetails(Base58.encode(entropyA));
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, forA.getState());
+			assertEquals("Stopping Test wallet controller...", forA.getMessage());
+			assertNull(forA.getWalletIdentityHash());
+			assertNull(forA.getTotalBalanceAtomic());
+			assertNull(forA.getVerifiedBalanceAtomic());
+			assertNull(forA.getScannedHeight());
+			assertNull(forA.getTipHeight());
+			assertNull(forA.getRecoveryState());
+			assertNull(forA.getLastErrorCode());
+
+			ZcashFamilyWalletController.WalletSyncStatus forB = controller.getSyncStatusDetails(Base58.encode(entropyB));
+			assertTrue(forB.isStale());
+			assertEquals(ZcashFamilyWalletController.WalletSyncState.SYNCHRONIZING, forB.getState());
+			assertEquals(walletB.getWalletIdentityHash(), forB.getWalletIdentityHash());
+
+			// A selection seed read back through the stopping branch is stale as well.
+			setControllerField(controller, "lifecycleState", ZcashFamilyWalletController.LifecycleState.RUNNING);
+			ZcashFamilyWallet walletC = selectWallet(controller, filledEntropy(3));
+			setControllerField(controller, "lifecycleState", ZcashFamilyWalletController.LifecycleState.STOPPING);
+			assertSeededLoadingSnapshot(controller.getSyncStatusDetails(Base58.encode(filledEntropy(3))), walletC);
+			assertNull(controller.getSyncStatusDetails(Base58.encode(entropyB)).getWalletIdentityHash());
+		} finally {
+			controller.shutdown();
+		}
+	}
+
 	/** Runs the real selection path (A→B switch) and returns the wallet the controller now holds. */
 	private static ZcashFamilyWallet selectWallet(TestController controller, byte[] entropy) throws Exception {
 		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
