@@ -47,13 +47,23 @@ canonical lowercase Sapling recipients are accepted; Ironwood, unified and
 transparent addresses are refused with a distinct reason. The old per-byte fee
 field is rejected outright because the fee has always been fixed; the fixed
 fee, protocol version and limits are published by a new read-only
-`/crosschain/arrr/sendcontract` endpoint. Inside the wallet lane the send is
-refused unless the wallet's verified (spendable) balance is known and covers
-the amount plus fee, so the native wallet is never asked to spend funds Core
-cannot see. A disabled wallet or a legacy (non-Unified) backend now returns a
-typed error instead of crashing, and native failure text is reduced to a
-stable reason so the recipient, memo and key never appear in responses or
-logs. Adds API error codes 1205 (wallet not ready), 1206, 1207 and 1208
+`/crosschain/arrr/sendcontract` endpoint. The request body is read by a strict
+reader that refuses arrays, nested values, duplicate or unknown fields and
+keeps a numeric amount exactly as written, so a malformed body can no longer
+be quietly turned into a plausible amount or a shortened memo. Inside the
+wallet lane the native wallet first confirms the recipient is a real Sapling
+address (a well-formed encoding is not enough), then the send is refused
+unless the wallet's verified (spendable) balance is known and covers the
+amount plus fee, so the native wallet is never asked to spend funds Core
+cannot see; a Unified balance reply without a spendable figure now reports
+"not ready" rather than a generic failure. A disabled wallet or a legacy
+(non-Unified) backend returns a typed error instead of crashing, and native
+failure text is reduced to a stable reason so the recipient, memo and key
+never appear in responses or logs. When the native send has started and Core
+cannot prove it did not go out (a timeout, a crash, or a reply with no
+transaction id), the response says so explicitly and tells the client not to
+retry until the wallet history has been checked, because this version does
+not yet deduplicate retries. Adds API error codes 1205 (wallet not ready), 1206, 1207 and 1208
 (reserved for the upcoming durable send operations) with messages in every
 language. Also tightens the general ARRR address check used by the trade
 paths to the same canonical lowercase Sapling rule, so uppercase or

@@ -38,7 +38,10 @@ public class PirateChainSendRequest {
 	public String memo;
 
 	@Schema(description = "Client-generated idempotency key: a canonical lowercase UUID "
-			+ "(8-4-4-4-12 hex). Keep the same key when retrying the same send.",
+			+ "(8-4-4-4-12 hex), validated but NOT deduplicated by send protocol version 1. Retrying a send "
+			+ "whose outcome is unknown (SEND_OUTCOME_UNKNOWN, timeout, lost connection) can pay twice: check "
+			+ "the wallet history first. Keep the key for the same logical payment so version 2 can "
+			+ "deduplicate it.",
 			example = "123e4567-e89b-12d3-a456-426614174000", requiredMode = Schema.RequiredMode.REQUIRED)
 	public String idempotencyKey;
 

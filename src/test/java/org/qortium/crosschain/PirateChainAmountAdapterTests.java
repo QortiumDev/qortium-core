@@ -26,9 +26,12 @@ public class PirateChainAmountAdapterTests {
 		assertEquals(100_000_000L, PirateChainAmountAdapter.parseAtomic("1"));
 		assertEquals(123_456_789_000L, PirateChainAmountAdapter.parseAtomic("1234.56789"));
 		assertEquals(10_000L, PirateChainAmountAdapter.parseAtomic("0.0001"));
-		assertEquals(PirateChainAmountAdapter.MAX_SUPPLY_ATOMIC, PirateChainAmountAdapter.parseAtomic("20000000"));
-		assertEquals(PirateChainAmountAdapter.MAX_SUPPLY_ATOMIC - 1,
-				PirateChainAmountAdapter.parseAtomic("19999999.99999999"));
+		// The cap is the ARRR maximum supply: 200,000,000 ARRR = 2e16 atomic units, asserted as a
+		// literal so a wrong constant cannot be self-consistent with the test.
+		assertEquals(20_000_000_000_000_000L, PirateChainAmountAdapter.MAX_SUPPLY_ATOMIC);
+		assertEquals(20_000_000_000_000_000L, PirateChainAmountAdapter.parseAtomic("200000000"));
+		assertEquals(19_999_999_999_999_999L, PirateChainAmountAdapter.parseAtomic("199999999.99999999"));
+		assertEquals(2_000_000_000_000_000L, PirateChainAmountAdapter.parseAtomic("20000000"));
 	}
 
 	@Test
@@ -73,8 +76,9 @@ public class PirateChainAmountAdapterTests {
 	@Test
 	public void testRejectsOverflowAndAboveMaxSupply() {
 		// Above the ARRR maximum supply but still a valid long.
-		assertEquals("AMOUNT_TOO_LARGE", reject("20000000.00000001"));
-		assertEquals("AMOUNT_TOO_LARGE", reject("200000000"));
+		assertEquals("AMOUNT_TOO_LARGE", reject("200000000.00000001"));
+		assertEquals("AMOUNT_TOO_LARGE", reject("200000001"));
+		assertEquals("AMOUNT_TOO_LARGE", reject("2000000000"));
 		// Above Long.MAX_VALUE atomic units: the shared adapter's longValue() would silently wrap.
 		assertEquals("AMOUNT_TOO_LARGE", reject("92233720368.54775808"));
 		assertEquals("AMOUNT_TOO_LARGE", reject("99999999999999999999"));

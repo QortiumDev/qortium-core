@@ -110,4 +110,27 @@ public class ForeignBlockchainException extends Exception {
 		}
 	}
 
+	/**
+	 * The recipient address passed Core's encoding checks but the native wallet's semantic
+	 * validation (curve point, diversifier, network) rejected it, or the native send refused it.
+	 * Nothing was broadcast. The message is a stable reason token.
+	 */
+	public static class InvalidRecipientException extends ForeignBlockchainException {
+		public InvalidRecipientException(String message) {
+			super(message);
+		}
+	}
+
+	/**
+	 * The native send was started but Core cannot tell whether the transaction was broadcast:
+	 * the native call threw, timed out, or returned something that is neither a txid nor an
+	 * explicit error. The payment MAY have gone out. Callers must not retry until the wallet's
+	 * history has been checked; the message is a stable reason token.
+	 */
+	public static class SendOutcomeUnknownException extends ForeignBlockchainException {
+		public SendOutcomeUnknownException(String message) {
+			super(message);
+		}
+	}
+
 }

@@ -23,7 +23,7 @@ public final class PirateChainAmountAdapter {
 	 * ARRR maximum supply (200,000,000 ARRR) in atomic units. Any single send above this is
 	 * necessarily malformed input, never a real balance, so it is rejected before any wallet work.
 	 */
-	public static final long MAX_SUPPLY_ATOMIC = 2_000_000_000_000_000L;
+	public static final long MAX_SUPPLY_ATOMIC = 20_000_000_000_000_000L;
 
 	private PirateChainAmountAdapter() {
 	}
