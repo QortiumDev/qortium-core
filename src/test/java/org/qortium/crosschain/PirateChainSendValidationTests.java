@@ -240,24 +240,84 @@ public class PirateChainSendValidationTests {
 		assertFalse(insufficient.getMessage().contains(recipient));
 		assertFalse(insufficient.getMessage().contains("secret note"));
 
+		// The native wallet's own recipient rejection (see its "Invalid recipient address in output #"
+		// text) is an invalid-address failure, still sanitized.
+		ForeignBlockchainException.InvalidRecipientException invalidRecipient = assertThrows(
+				ForeignBlockchainException.InvalidRecipientException.class,
+				() -> PirateChain.parseSendResponse("{\"error\":\"Invalid recipient address in output #0: "
+						+ recipient + "\"}"));
+		assertEquals(PirateChain.RECIPIENT_INVALID_REASON, invalidRecipient.getMessage());
+		assertFalse(invalidRecipient.getMessage().contains(recipient));
+
+		// An explicit native error reply is a failure the native wallet reported itself: definitive.
 		ForeignBlockchainException generic = assertThrows(ForeignBlockchainException.class,
 				() -> PirateChain.parseSendResponse("{\"error\":\"could not pay " + recipient + " memo=secret note\"}"));
 		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, generic.getMessage());
 		assertFalse(generic.getMessage().contains(recipient));
 		assertFalse(generic instanceof ForeignBlockchainException.InsufficientFundsException);
+		assertFalse(generic instanceof ForeignBlockchainException.SendOutcomeUnknownException);
+	}
 
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse("not json")).getMessage());
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse(null)).getMessage());
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse("{\"txid\":\"\"}")).getMessage());
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse("{\"txid\":null}")).getMessage());
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse("{}")).getMessage());
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse("{\"error\":{\"code\":7}}")).getMessage());
+	@Test
+	public void testNativeSendReplyWithoutTxidOrErrorIsAnUnknownOutcomeNotACleanFailure() {
+		// The native wallet broadcasts before it answers: a reply that is neither a txid nor an
+		// explicit error proves nothing about whether the payment went out, so it must never be
+		// reported as a definitive failure a client could safely retry.
+		for (String reply : new String[] { null, "", "not json", "{}", "{\"txid\":\"\"}", "{\"txid\":null}",
+				"{\"result\":\"success\"}", "{\"error\":null}", "[]", "\"txid\"" }) {
+			ForeignBlockchainException.SendOutcomeUnknownException unknown = assertThrows(
+					"reply: " + reply, ForeignBlockchainException.SendOutcomeUnknownException.class,
+					() -> PirateChain.parseSendResponse(reply));
+			assertEquals(PirateChain.SEND_OUTCOME_UNKNOWN_REASON, unknown.getMessage());
+		}
+	}
+
+	@Test
+	public void testNativeValidateAddressReplyInterpretation() throws Exception {
+		// Observed v1.2.4 replies (probe against the bundled library, no wallet):
+		assertTrue(PirateChain.parseValidateAddressResponse(
+				"{\"ok\":true,\"result\":{\"address_type\":\"Sapling\",\"is_valid\":true,\"reason\":null}}"));
+		assertFalse(PirateChain.parseValidateAddressResponse(
+				"{\"ok\":true,\"result\":{\"address_type\":null,\"is_valid\":false,\"reason\":"
+						+ "\"Invalid shielded address. Supported formats start with \\\"zs1\\\" or \\\"pirate1\\\".\"}}"));
+		// A valid address of another pool is still not an acceptable Sapling recipient.
+		assertFalse(PirateChain.parseValidateAddressResponse(
+				"{\"ok\":true,\"result\":{\"address_type\":\"Ironwood\",\"is_valid\":true,\"reason\":null}}"));
+		assertFalse(PirateChain.parseValidateAddressResponse(
+				"{\"ok\":true,\"result\":{\"is_valid\":true}}"));
+		assertFalse(PirateChain.parseValidateAddressResponse(
+				"{\"ok\":true,\"result\":{\"address_type\":\"Sapling\",\"is_valid\":\"true\"}}"));
+
+		// Not an answer at all: fail closed as "cannot validate right now", never as "valid".
+		for (String reply : new String[] { null, "", "nope", "{\"ok\":false,\"error\":\"Invalid request JSON\"}",
+				"{\"ok\":true}", "{\"ok\":\"true\",\"result\":{\"is_valid\":true,\"address_type\":\"Sapling\"}}" }) {
+			ForeignBlockchainException.WalletNotReadyException notReady = assertThrows("reply: " + reply,
+					ForeignBlockchainException.WalletNotReadyException.class,
+					() -> PirateChain.parseValidateAddressResponse(reply));
+			assertEquals(PirateChain.RECIPIENT_VALIDATION_UNAVAILABLE_REASON, notReady.getMessage());
+		}
+	}
+
+	@Test
+	public void testUnifiedBalanceWithoutSpendableIsTypedUnavailableNotGenericFailure() throws Exception {
+		for (String reply : new String[] { "{\"ok\":true,\"result\":{\"total\":\"500000000\"}}",
+				"{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":null}}",
+				"{\"ok\":true,\"result\":{\"total\":500,\"pending\":\"1\"}}" }) {
+			ForeignBlockchainException.BalanceUnavailableException unavailable = assertThrows("reply: " + reply,
+					ForeignBlockchainException.BalanceUnavailableException.class,
+					() -> PirateWallet.parseTypedBalance(reply));
+			assertEquals(PirateWallet.VERIFIED_BALANCE_UNAVAILABLE_REASON, unavailable.getMessage());
+			// Home's read adapter matches on this stable substring.
+			assertTrue(unavailable.getMessage().contains("BALANCE_UNAVAILABLE"));
+		}
+		// A malformed spendable value is still a generic fail-closed failure, not "unavailable".
+		ForeignBlockchainException malformed = assertThrows(ForeignBlockchainException.class,
+				() -> PirateWallet.parseTypedBalance("{\"ok\":true,\"result\":{\"total\":\"1\",\"spendable\":\"x\"}}"));
+		assertFalse(malformed instanceof ForeignBlockchainException.BalanceUnavailableException);
+		// And a missing total is still malformed.
+		ForeignBlockchainException noTotal = assertThrows(ForeignBlockchainException.class,
+				() -> PirateWallet.parseTypedBalance("{\"ok\":true,\"result\":{\"spendable\":\"1\"}}"));
+		assertFalse(noTotal instanceof ForeignBlockchainException.BalanceUnavailableException);
 	}
 
 	@Test

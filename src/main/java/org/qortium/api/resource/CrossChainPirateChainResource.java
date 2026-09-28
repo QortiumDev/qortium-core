@@ -412,8 +412,10 @@ public class CrossChainPirateChainResource {
 				+ "decimal text (at most 8 decimals); the fee is fixed (see GET /crosschain/arrr/sendcontract); "
 				+ "feePerByte is rejected. The send is refused unless the wallet is synchronized and its verified "
 				+ "(spendable) balance is known and covers amount plus fee. Error messages carry stable reason "
-				+ "tokens and never echo the entropy, address or memo. The idempotencyKey is validated but not "
-				+ "yet deduplicated in protocol version 1.",
+				+ "tokens and never echo the entropy, address or memo. The recipient is also semantically validated "
+				+ "by the native wallet before any spend. The idempotencyKey is validated but NOT deduplicated in "
+				+ "protocol version 1: an ARRR_SEND_OUTCOME_UNKNOWN reply means the payment may already have been "
+				+ "broadcast, so check the wallet history before retrying.",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
@@ -458,18 +460,29 @@ public class CrossChainPirateChainResource {
 					sendRequest.memo);
 			return new PirateChainSendResult(txid, Long.toString(PirateChain.getSendFeeAtomic()),
 					PirateChainSendContract.FEE_POLICY_FIXED, PirateChainSendContract.SEND_PROTOCOL_VERSION);
+		} catch (ForeignBlockchainException.SendOutcomeUnknownException e) {
+			// The native send started and Core cannot prove it did not broadcast. Same code as a
+			// network failure, but the message must never read like a clean, retryable failure.
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE,
+					e.getMessage() + SEND_OUTCOME_UNKNOWN_GUIDANCE);
 		} catch (ForeignBlockchainException.WalletBusyException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS, e.getMessage());
+		} catch (ForeignBlockchainException.InvalidRecipientException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_ADDRESS, e.getMessage());
 		} catch (ForeignBlockchainException.InsufficientFundsException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, e.getMessage());
 		} catch (ForeignBlockchainException.WalletNotReadyException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_WALLET_NOT_READY, e.getMessage());
 		} catch (ForeignBlockchainException e) {
-			// NetworkException and every other failure (not synchronized, endpoint not validated, native
-			// failure reduced to its stable reason, ...) keep the existing network-issue code.
+			// NetworkException and every other pre-send failure (not synchronized, endpoint not
+			// validated, native error reduced to its stable reason, ...) keep the network-issue code.
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
 		}
 	}
+
+	/** Appended to the stable ARRR_SEND_OUTCOME_UNKNOWN reason so no client reads it as a clean failure. */
+	static final String SEND_OUTCOME_UNKNOWN_GUIDANCE = ": the payment may already have been broadcast; do NOT retry"
+			+ " until the wallet history has been checked for this send (protocol version 1 does not deduplicate)";
 
 	/** Canonical lowercase UUID (8-4-4-4-12 hex); uppercase, braces and URN prefixes are rejected. */
 	private static final java.util.regex.Pattern CANONICAL_UUID =
