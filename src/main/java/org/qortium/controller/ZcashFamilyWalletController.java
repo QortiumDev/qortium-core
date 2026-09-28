@@ -828,6 +828,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				// so explicitly re-arm the new controller's background sync loop.
 				this.shouldLoadWallet = true;
 				walletSelected(this.currentWallet);
+				if (!isNullSeedWallet)
+					this.seedSelectedWalletStatus(this.currentWallet);
 				if (previousWallet != null)
 					previousWallet.cleanupAfterSwitch();
 			}
@@ -1276,6 +1278,23 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private WalletSyncStatus cacheStatus(WalletSyncStatus status) {
 		this.cachedStatus = new CachedWalletSyncStatus(status, null);
 		return status;
+	}
+
+	/**
+	 * Binds the status cache to a freshly selected wallet the moment ownership flips to it. Until
+	 * the background loop's first synchronize pass caches a real observation, the native lane is
+	 * busy with exactly that work, and a busy-lane status read is served from cache only when the
+	 * cache is bound to the requester's own wallet. Without this seed the cache still belonged to
+	 * the replaced wallet (or to nothing), so the new owner's own reads were rejected as
+	 * {@link #WALLET_BUSY_REASON} right after a successful switch. The seed is a LOADING placeholder
+	 * carrying nothing but the wallet identity hash: no heights, no balances, no error, and no
+	 * recovery marker (the read path peeks the wallet's own durable marker). It can never be
+	 * mistaken for READY, and it is never served to another wallet's entropy because the cache
+	 * binding is checked before any cached snapshot is returned.
+	 */
+	private void seedSelectedWalletStatus(W wallet) {
+		this.cacheCurrentWalletStatus(WalletSyncStatus.loading("Opening wallet...")
+				.withSnapshot(null, null, null, null, wallet.getWalletIdentityHash()));
 	}
 
 	WalletSyncStatus cacheCurrentWalletStatus(WalletSyncStatus status) {

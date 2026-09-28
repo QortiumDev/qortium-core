@@ -453,6 +453,12 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		}
 	}
 
+	/**
+	 * Guards the binding invariant directly: a cache still bound to wallet A that outlives A's
+	 * replacement (the wallet is swapped at field level here, bypassing the selection path that
+	 * would re-seed the cache for B) must never be served to a request for wallet B - the read
+	 * reports the structured busy signal instead.
+	 */
 	@Test
 	public void testBusyStatusRejectsCacheFromReplacedWallet() throws Exception {
 		TestController controller = new TestController();
@@ -488,6 +494,143 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 			releaseOperation.countDown();
 			caller.shutdownNow();
 			controller.shutdown();
+		}
+	}
+
+	/**
+	 * The production A→B switch: {@code initWithEntropy58} replaces wallet A with wallet B and flips
+	 * ownership. From that moment the status cache must already be bound to B, so B's own reads
+	 * while the native lane is busy (the background loop's first synchronize pass holds it) get a
+	 * stale LOADING placeholder bound to B's identity - never the busy signal a successful switch
+	 * used to flash at its new owner, and never A's cached data - while A's entropy is still
+	 * refused the now B-bound cache.
+	 */
+	@Test
+	public void testSelectedWalletSeedsOwnerBoundLoadingStatusForBusyReads() throws Exception {
+		SyncRequestingController controller = new SyncRequestingController();
+		assertTrue(controller.startController());
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		TestWallet walletA = new TestWallet(entropyA);
+		setControllerField(controller, "currentWallet", walletA);
+		controller.cacheCurrentWalletStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+
+		ZcashFamilyWallet walletB = selectWallet(controller, entropyB);
+		assertNotSame(walletA, walletB);
+
+		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
+		CountDownLatch operationEntered = new CountDownLatch(1);
+		CountDownLatch releaseOperation = new CountDownLatch(1);
+		ExecutorService caller = Executors.newSingleThreadExecutor();
+		try {
+			Future<String> operation = caller.submit(() -> coordinator.execute("first sync pass after switch", nativeAdapter -> {
+				operationEntered.countDown();
+				releaseOperation.await();
+				return "done";
+			}));
+			assertTrue(operationEntered.await(2, TimeUnit.SECONDS));
+
+			ZcashFamilyWalletController.WalletSyncStatus seeded =
+					controller.getSyncStatusDetails(Base58.encode(entropyB));
+			assertSeededLoadingSnapshot(seeded, walletB);
+
+			// The replaced wallet A must never be served B's seeded cache.
+			ForeignBlockchainException.WalletBusyException busy = assertThrows(
+					ForeignBlockchainException.WalletBusyException.class,
+					() -> controller.getSyncStatusDetails(Base58.encode(entropyA)));
+			assertEquals("ARRR_WALLET_BUSY", busy.getMessage());
+
+			releaseOperation.countDown();
+			assertEquals("done", operation.get(2, TimeUnit.SECONDS));
+		} finally {
+			releaseOperation.countDown();
+			caller.shutdownNow();
+			controller.shutdown();
+		}
+	}
+
+	/**
+	 * The other cache fallback: a status task that started but failed (without degrading the lane)
+	 * falls back to the cached snapshot, and after a switch that cache is the B-bound seed - so B's
+	 * owner sees the same stale LOADING placeholder, and A's entropy is still refused it. A task that
+	 * fails on the native lane after being scheduled is the deterministic stand-in for the
+	 * started-then-timed-out case, which additionally degrades the lane and takes the separate
+	 * NATIVE_LANE_DEGRADED branch.
+	 */
+	@Test
+	public void testFailedStatusRefreshFallsBackToSeededOwnerBoundCache() throws Exception {
+		NativeLaneFailingController controller = new NativeLaneFailingController();
+		assertTrue(controller.startController());
+		byte[] entropyA = filledEntropy(1);
+		byte[] entropyB = filledEntropy(2);
+		setControllerField(controller, "currentWallet", new TestWallet(entropyA));
+		controller.cacheCurrentWalletStatus(
+				ZcashFamilyWalletController.WalletSyncStatus.ready("Synchronized"));
+		ZcashFamilyWallet walletB = selectWallet(controller, entropyB);
+
+		try {
+			controller.failOffThread = Thread.currentThread();
+
+			ZcashFamilyWalletController.WalletSyncStatus seeded =
+					controller.getSyncStatusDetails(Base58.encode(entropyB));
+			assertSeededLoadingSnapshot(seeded, walletB);
+			assertFalse(ZcashFamilyNativeCoordinator.getInstance().isDegraded());
+
+			ForeignBlockchainException.WalletBusyException busy = assertThrows(
+					ForeignBlockchainException.WalletBusyException.class,
+					() -> controller.getSyncStatusDetails(Base58.encode(entropyA)));
+			assertEquals("ARRR_WALLET_BUSY", busy.getMessage());
+		} finally {
+			controller.failOffThread = null;
+			controller.shutdown();
+		}
+	}
+
+	/** Runs the real selection path (A→B switch) and returns the wallet the controller now holds. */
+	private static ZcashFamilyWallet selectWallet(TestController controller, byte[] entropy) throws Exception {
+		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
+				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+		initialize.setAccessible(true);
+		assertTrue((Boolean) initialize.invoke(controller, Base58.encode(entropy), false, false,
+				new RecordingNativeAdapter()));
+		// Selection re-arms the background loop; keep it off the (unloaded) shared test lane so its
+		// library-load status writes cannot race the assertions below.
+		setControllerField(controller, "shouldLoadWallet", false);
+		Field currentWallet = ZcashFamilyWalletController.class.getDeclaredField("currentWallet");
+		currentWallet.setAccessible(true);
+		ZcashFamilyWallet selected = (ZcashFamilyWallet) currentWallet.get(controller);
+		assertTrue(selected.matchesWallet(entropy, false));
+		return selected;
+	}
+
+	/** The seed is a stale, identity-bound LOADING placeholder and nothing more - never READY-like. */
+	private static void assertSeededLoadingSnapshot(ZcashFamilyWalletController.WalletSyncStatus status,
+			ZcashFamilyWallet wallet) {
+		assertEquals(ZcashFamilyWalletController.WalletSyncState.LOADING, status.getState());
+		assertTrue(status.isStale());
+		assertEquals("Opening wallet...", status.getMessage());
+		assertEquals(wallet.getWalletIdentityHash(), status.getWalletIdentityHash());
+		assertNull(status.getTotalBalanceAtomic());
+		assertNull(status.getVerifiedBalanceAtomic());
+		assertNull(status.getScannedHeight());
+		assertNull(status.getTipHeight());
+		assertNull(status.getSyncedBlocks());
+		assertNull(status.getTotalBlocks());
+		assertNull(status.getRecoveryState());
+		assertNull(status.getLastErrorCode());
+		assertFalse(status.isRestartRequired());
+	}
+
+	/** Ownership passes on the request thread but blows up once the status task runs on the native lane. */
+	private static class NativeLaneFailingController extends SyncRequestingController {
+		private volatile Thread failOffThread;
+
+		@Override
+		protected void requireWalletOwner(String entropy58, boolean isNullSeedWallet) {
+			Thread spared = this.failOffThread;
+			if (spared != null && Thread.currentThread() != spared)
+				throw new IllegalStateException("simulated native status task failure");
 		}
 	}
 
