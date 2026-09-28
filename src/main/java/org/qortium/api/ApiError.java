@@ -135,6 +135,17 @@ public enum ApiError {
 	// The custom exception message carries the stable substring "BALANCE_UNAVAILABLE" so callers
 	// (e.g. Home's read adapter) can match on it without depending on this numeric code alone.
 	FOREIGN_BLOCKCHAIN_BALANCE_UNAVAILABLE(1204, 404),
+	// Foreign wallet custody (ARRR send contract). The messages carry stable tokens
+	// (WALLET_NOT_READY, SEND_NOT_FOUND, SEND_CONFLICT, SEND_STORAGE_ISSUE) for client matching.
+	// The wallet exists but cannot spend right now: disabled, not synchronized, verified balance
+	// unknown, degraded native lane, or pending recovery. Retry later; nothing was broadcast.
+	FOREIGN_WALLET_NOT_READY(1205, 503),
+	// A send operation id (durable operation protocol) is unknown to this node.
+	FOREIGN_SEND_NOT_FOUND(1206, 404),
+	// The same idempotency key was already used for a different canonical send request.
+	FOREIGN_SEND_CONFLICT(1207, 409),
+	// The durable send record could not be written or read back; sending is blocked until resolved.
+	FOREIGN_SEND_STORAGE_ISSUE(1208, 500),
 
 	// Trade portal
 	ORDER_SIZE_TOO_SMALL(1300, 402),
