@@ -34,6 +34,29 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-28 - fix(arrr): serve the new owner a loading status during a wallet switch
+
+Fixes a false "busy with another ARRR wallet" error that appeared right after a
+successful wallet switch. When Home activated wallet B in place of wallet A,
+Core flipped ownership to B immediately, but the cached sync status it serves
+while the native wallet lane is busy still belonged to A (or to nothing) until
+B's first background synchronization pass finished. Because that first pass is
+exactly what keeps the lane busy, B's own status reads during that window were
+refused with the cross-wallet busy signal, which Home shows as an error even
+though the switch had worked. Core now binds the status cache to the newly
+selected wallet the moment ownership flips, using a plain "Opening wallet..."
+loading placeholder that carries only the wallet identity (no balances,
+heights, or errors, and it is always reported as stale, so it can never pass
+for a synchronized wallet). The owner therefore sees a loading state until the
+first real observation replaces it. The safety rules are unchanged: a request
+for a different wallet still never receives another wallet's cached status and
+still gets the structured busy signal, and non-owners are still refused.
+The status served while the controller is stopping now applies that same
+ownership binding too: it is only served from the cache to the wallet the
+cache belongs to (flagged stale), and anyone else receives a plain "stopping"
+status with no wallet data. Transient internal wallets used by redeem/refund
+do not seed the cache.
+
 ### 2026-09-27 - chore(arrr): pin the official Stashi v1.2.4 native bundle
 
 Updates the Pirate native wallet artifact from the interim Stashi 1.2.3 pin to
