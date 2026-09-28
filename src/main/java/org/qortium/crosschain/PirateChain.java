@@ -4,14 +4,12 @@ import cash.z.wallet.sdk.rpc.CompactFormats;
 import org.bitcoinj.base.Base58;
 import org.bitcoinj.base.Bech32;
 import org.bitcoinj.base.Coin;
-import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bitcoinj.core.*;
 import org.bitcoinj.base.utils.MonetaryFormat;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.qortium.api.model.crosschain.PirateChainBalance;
-import org.qortium.api.model.crosschain.PirateChainSendRequest;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
 import org.qortium.controller.PirateChainWalletController;
@@ -22,6 +20,7 @@ import org.qortium.crypto.Crypto;
 import org.qortium.settings.Settings;
 import org.qortium.transform.TransformationException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -306,22 +305,83 @@ public class PirateChain extends Bitcoiny {
 	}
 
 
+	/** Mainnet Sapling human-readable part. */
+	static final String SAPLING_HRP = "zs";
+	/** Bech32 length of a Sapling payment address: hrp(2) + separator(1) + 69 data + 6 checksum. */
+	static final int SAPLING_ADDRESS_LENGTH = 78;
+	/** Decoded Sapling payment address: 11-byte diversifier + 32-byte pk_d. */
+	static final int SAPLING_PAYLOAD_BYTES = 43;
+
+	/**
+	 * Strict check for a canonical mainnet Sapling payment address as the send contract accepts it:
+	 * lowercase only (a Bech32 decoder accepts uppercase and mixed case; a spend must not), exactly
+	 * {@value #SAPLING_ADDRESS_LENGTH} characters, {@value #SAPLING_HRP} human-readable part, plain
+	 * Bech32 (not Bech32m) checksum, valid zero padding, and a {@value #SAPLING_PAYLOAD_BYTES}-byte
+	 * payload. Never throws.
+	 */
+	public static boolean isCanonicalSaplingAddress(String address) {
+		if (address == null || address.length() != SAPLING_ADDRESS_LENGTH)
+			return false;
+		if (!address.equals(address.toLowerCase(Locale.ROOT)))
+			return false;
+		if (!address.startsWith(SAPLING_HRP + "1"))
+			return false;
+
+		try {
+			byte[] payload = Bech32.decodeBytes(address, SAPLING_HRP, Bech32.Encoding.BECH32);
+			return payload != null && payload.length == SAPLING_PAYLOAD_BYTES;
+		} catch (IllegalArgumentException e) { // AddressFormatException is an IllegalArgumentException
+			// Wrong hrp, bad checksum, bech32m, invalid characters, bad padding, ...
+			return false;
+		}
+	}
+
+	/**
+	 * Tightened (since the send contract) to {@link #isCanonicalSaplingAddress}: lowercase canonical
+	 * Sapling only. This is also consulted by the trade paths (trade-bot create/respond receiving
+	 * addresses), which previously tolerated uppercase and Bech32m-encoded addresses that no wallet
+	 * produces and that the native wallet would refuse to pay anyway.
+	 */
 	@Override
 	public boolean isValidAddress(String address) {
-		// Start with some simple checks
-		if (address == null || !address.toLowerCase().startsWith("zs") || address.length() != 78) {
-			return false;
+		return isCanonicalSaplingAddress(address);
+	}
+
+	/** Maximum memo size in UTF-8 encoded bytes (ZIP 302 memo field). */
+	public static final int MAX_MEMO_BYTES = 512;
+
+	/**
+	 * Validates an optional send memo without ever altering it (no trimming, no truncation).
+	 *
+	 * @return null when the memo is acceptable (including absent/empty), else a stable reason token:
+	 *         {@code MEMO_LONE_SURROGATE} (malformed UTF-16 that cannot encode to UTF-8),
+	 *         {@code MEMO_CONTROL_CHARACTER} (any control character other than tab, CR and LF,
+	 *         including DEL and the C1 range) or {@code MEMO_TOO_LONG} (over {@value #MAX_MEMO_BYTES}
+	 *         UTF-8 bytes)
+	 */
+	public static String validateMemo(String memo) {
+		if (memo == null || memo.isEmpty())
+			return null;
+
+		for (int i = 0; i < memo.length(); ) {
+			char ch = memo.charAt(i);
+			if (Character.isHighSurrogate(ch)) {
+				if (i + 1 >= memo.length() || !Character.isLowSurrogate(memo.charAt(i + 1)))
+					return "MEMO_LONE_SURROGATE";
+				i += 2;
+				continue;
+			}
+			if (Character.isLowSurrogate(ch))
+				return "MEMO_LONE_SURROGATE";
+			if (ch != '\t' && ch != '\r' && ch != '\n' && Character.getType(ch) == Character.CONTROL)
+				return "MEMO_CONTROL_CHARACTER";
+			i++;
 		}
 
-		// Now try Bech32 decoding the address (which includes checksum verification)
-		try {
-			Bech32.Bech32Data decoded = Bech32.decode(address);
-			return (decoded != null && Objects.equals("zs", decoded.hrp));
-		}
-		catch (AddressFormatException e) {
-			// Invalid address, checksum failed, etc
-			return false;
-		}
+		if (memo.getBytes(StandardCharsets.UTF_8).length > MAX_MEMO_BYTES)
+			return "MEMO_TOO_LONG";
+
+		return null;
 	}
 
 	@Override
@@ -469,25 +529,121 @@ public class PirateChain extends Bitcoiny {
 		return this.getWalletAddress(key58);
 	}
 
-	public String sendCoins(PirateChainSendRequest pirateChainSendRequest) throws ForeignBlockchainException {
+	/** Stable reasons carried by {@link ForeignBlockchainException.WalletNotReadyException} from sends. */
+	public static final String WALLET_DISABLED_REASON = "ARRR_WALLET_DISABLED";
+	public static final String WALLET_MODE_UNSUPPORTED_REASON = "ARRR_WALLET_MODE_UNSUPPORTED";
+	public static final String VERIFIED_BALANCE_UNKNOWN_REASON = "ARRR_VERIFIED_BALANCE_UNKNOWN";
+	/** Stable reason carried by {@link ForeignBlockchainException.InsufficientFundsException} from sends. */
+	public static final String INSUFFICIENT_VERIFIED_FUNDS_REASON = "ARRR_INSUFFICIENT_VERIFIED_FUNDS";
+	/** Stable, sanitized reason for any native send failure whose text is not echoed to callers. */
+	public static final String NATIVE_SEND_FAILED_REASON = "ARRR_NATIVE_SEND_FAILED";
+
+	/** Fixed fee every send pays, in atomic units (send contract: feePolicy FIXED). */
+	public static long getSendFeeAtomic() {
+		return MAINNET_FEE;
+	}
+
+	/**
+	 * Sends {@code amountAtomic} atomic units to an already-validated canonical Sapling recipient
+	 * (send protocol version 1: synchronous, returns the txid the native wallet reports after
+	 * broadcast).
+	 * <p>
+	 * Inputs are assumed validated by the caller ({@link #isCanonicalSaplingAddress},
+	 * {@link PirateChainAmountAdapter#parseAtomic}, {@link #validateMemo}); nothing here re-validates
+	 * or logs them. Only the persistent Unified backend is supported. Inside the native lane, after
+	 * the ordinary synchronized gate, the wallet's verified (spendable) balance is read and the send
+	 * is refused unless it is known and covers amount plus fee, so the native wallet is never asked
+	 * to spend funds Core cannot see. Native error text is never returned to callers (it can echo the
+	 * recipient and memo) and is logged only when Pirate debug logging is enabled; callers get
+	 * stable reason tokens instead.
+	 *
+	 * @throws ForeignBlockchainException.WalletNotReadyException wallet disabled or its verified balance unknown
+	 * @throws ForeignBlockchainException.InsufficientFundsException verified balance below amount + fee
+	 * @throws ForeignBlockchainException.WalletBusyException another wallet holds the native lane
+	 * @throws ForeignBlockchainException any other failure (not synchronized, native error, ...)
+	 */
+	public String sendCoins(String entropy58, String receivingAddress, long amountAtomic, String memo)
+			throws ForeignBlockchainException {
+		if (!Settings.getInstance().isPirateChainWalletUnified())
+			throw new ForeignBlockchainException.WalletNotReadyException(WALLET_MODE_UNSUPPORTED_REASON);
+
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
-		return walletController.withEntropyWallet(pirateChainSendRequest.entropy58, true, (wallet, nativeAdapter) -> {
+		if (walletController == null)
+			throw new ForeignBlockchainException.WalletNotReadyException(WALLET_DISABLED_REASON);
+
+		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
+			if (!wallet.usesPersistentUnifiedStorage())
+				throw new ForeignBlockchainException.WalletNotReadyException(WALLET_MODE_UNSUPPORTED_REASON);
+
+			assertSufficientVerifiedFunds(wallet.getWalletBalances(nativeAdapter), amountAtomic);
+
 			wallet.unlock();
 
-			JSONObject txn = buildSendPayload(wallet.getWalletAddress(), pirateChainSendRequest);
+			// The input address identifies the wallet-owned key group the native wallet spends from.
+			// The Unified export follows the active pool (Sapling before Ironwood activation, the
+			// matching Ironwood address afterwards); the native wallet accepts either as input for
+			// the same key group. Read it through the leased adapter: this already runs on the lane.
+			String inputAddress = wallet.getWalletAddress(nativeAdapter);
+			if (inputAddress == null || inputAddress.isBlank())
+				throw new ForeignBlockchainException.WalletNotReadyException("ARRR_WALLET_ADDRESS_UNKNOWN");
+
+			JSONObject txn = buildSendPayload(inputAddress, receivingAddress, amountAtomic, memo);
 
 			String response = nativeAdapter.execute(SEND_COMMAND, txn.toString());
-			JSONObject json = new JSONObject(response);
-			try {
-				if (json.has("txid"))
-					return json.getString("txid");
-				if (json.has("error"))
-					throw new ForeignBlockchainException(json.getString("error"));
-			} catch (JSONException e) {
-				throw new ForeignBlockchainException(e.getMessage());
-			}
-			throw new ForeignBlockchainException("Something went wrong");
+			return parseSendResponse(response);
 		});
+	}
+
+	/**
+	 * In-lane funds check shared by the send path: the verified (spendable) balance must be known,
+	 * and must cover amount plus the fixed fee without overflow.
+	 */
+	static void assertSufficientVerifiedFunds(PirateChainBalance balances, long amountAtomic)
+			throws ForeignBlockchainException {
+		if (balances == null || !balances.verifiedBalanceKnown)
+			throw new ForeignBlockchainException.WalletNotReadyException(VERIFIED_BALANCE_UNKNOWN_REASON);
+
+		final long required;
+		try {
+			required = Math.addExact(amountAtomic, MAINNET_FEE);
+		} catch (ArithmeticException e) {
+			throw new ForeignBlockchainException.InsufficientFundsException(INSUFFICIENT_VERIFIED_FUNDS_REASON);
+		}
+
+		if (amountAtomic <= 0 || required > balances.verified_zbalance)
+			throw new ForeignBlockchainException.InsufficientFundsException(INSUFFICIENT_VERIFIED_FUNDS_REASON);
+	}
+
+	/**
+	 * Interprets the native {@code send} response. A txid is returned as-is; any error is mapped to a
+	 * stable reason so the raw native text (which can contain the recipient address and memo) is
+	 * never returned to API callers. The raw text is logged only when Pirate debug logging is on.
+	 */
+	static String parseSendResponse(String response) throws ForeignBlockchainException {
+		String nativeError;
+		try {
+			JSONObject json = new JSONObject(response == null ? "" : response);
+			if (json.has("txid") && !json.isNull("txid")) {
+				String txid = json.getString("txid");
+				if (!txid.isBlank())
+					return txid;
+			}
+			nativeError = json.has("error") && !json.isNull("error") ? json.get("error").toString() : null;
+		} catch (JSONException e) {
+			nativeError = null;
+		}
+
+		if (Settings.getInstance().isPirateChainWalletDebugLogging())
+			LOGGER.debug(() -> String.format("Native ARRR send failed: %s", nativeErrorForLog(response)));
+
+		if (nativeError != null && nativeError.toLowerCase(Locale.ROOT).contains("insufficient"))
+			throw new ForeignBlockchainException.InsufficientFundsException(INSUFFICIENT_VERIFIED_FUNDS_REASON);
+
+		throw new ForeignBlockchainException(NATIVE_SEND_FAILED_REASON);
+	}
+
+	private static String nativeErrorForLog(String response) {
+		return response == null ? "<null>" : response.length() > 512 ? response.substring(0, 512) + "..." : response;
 	}
 
 	public String fundP2SH(String entropy58, String receivingAddress, long amount,
@@ -564,9 +720,10 @@ public class PirateChain extends Bitcoiny {
 		});
 	}
 
-	static JSONObject buildSendPayload(String inputAddress, PirateChainSendRequest request) {
-		JSONObject transaction = buildPaymentPayload(inputAddress, request.receivingAddress, request.arrrAmount);
-		transaction.getJSONArray("output").getJSONObject(0).put("memo", request.memo);
+	static JSONObject buildSendPayload(String inputAddress, String receivingAddress, long amountAtomic, String memo) {
+		JSONObject transaction = buildPaymentPayload(inputAddress, receivingAddress, amountAtomic);
+		// JSONObject.put(key, null) removes the key: an absent memo stays absent from the payload.
+		transaction.getJSONArray("output").getJSONObject(0).put("memo", memo);
 		return transaction;
 	}
 

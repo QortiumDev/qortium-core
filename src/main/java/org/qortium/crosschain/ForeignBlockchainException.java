@@ -96,4 +96,18 @@ public class ForeignBlockchainException extends Exception {
 		}
 	}
 
+	/**
+	 * The wallet exists and is owned by the caller but cannot spend right now: the wallet backend is
+	 * disabled, the wallet is not initialized/synchronized, its verified (spendable) balance is not
+	 * known, or the native lane is degraded. Nothing was broadcast. Like
+	 * {@link WalletBusyException}, the message is a stable, machine-readable reason (e.g.
+	 * "ARRR_WALLET_DISABLED", "ARRR_VERIFIED_BALANCE_UNKNOWN") rather than free text, so it can be
+	 * returned to API callers without leaking request contents.
+	 */
+	public static class WalletNotReadyException extends ForeignBlockchainException {
+		public WalletNotReadyException(String message) {
+			super(message);
+		}
+	}
+
 }

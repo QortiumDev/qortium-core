@@ -34,6 +34,34 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-28 - feat(arrr): validated JSON send contract with typed errors (send protocol v1)
+
+Turns the Pirate Chain (ARRR) send endpoint into a documented JSON contract
+that checks everything before touching the wallet and reports one clear,
+stable reason for each refusal. The request now carries the amount as exact
+decimal text (at most eight decimals; exponents, rounding, zero and amounts
+above the ARRR supply are refused instead of being silently rounded or
+wrapped), a required client idempotency key, and an optional memo that is
+checked for size and malformed text but never trimmed or truncated. Only
+canonical lowercase Sapling recipients are accepted; Ironwood, unified and
+transparent addresses are refused with a distinct reason. The old per-byte fee
+field is rejected outright because the fee has always been fixed; the fixed
+fee, protocol version and limits are published by a new read-only
+`/crosschain/arrr/sendcontract` endpoint. Inside the wallet lane the send is
+refused unless the wallet's verified (spendable) balance is known and covers
+the amount plus fee, so the native wallet is never asked to spend funds Core
+cannot see. A disabled wallet or a legacy (non-Unified) backend now returns a
+typed error instead of crashing, and native failure text is reduced to a
+stable reason so the recipient, memo and key never appear in responses or
+logs. Adds API error codes 1205 (wallet not ready), 1206, 1207 and 1208
+(reserved for the upcoming durable send operations) with messages in every
+language. Also tightens the general ARRR address check used by the trade
+paths to the same canonical lowercase Sapling rule, so uppercase or
+Bech32m-encoded addresses that no wallet produces are no longer treated as
+valid. The send itself is still synchronous (HTTP 200 with the transaction
+id); the durable operation journal and readiness changes follow in later
+pull requests.
+
 ### 2026-09-28 - fix(arrr): serve the new owner a loading status during a wallet switch
 
 Fixes a false "busy with another ARRR wallet" error that appeared right after a

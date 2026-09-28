@@ -4,7 +4,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.json.JSONObject;
 import org.qortium.api.model.crosschain.PirateChainBalance;
-import org.qortium.api.model.crosschain.PirateChainSendRequest;
 import org.qortium.repository.DataException;
 import org.qortium.test.common.Common;
 
@@ -72,14 +71,14 @@ public class PirateChainApiContractTests {
 
 	@Test
 	public void testDefaultOffSendAndP2shPayloadContractsRemainStable() {
-		PirateChainSendRequest sendRequest = new PirateChainSendRequest();
-		sendRequest.receivingAddress = "zs-recipient";
-		sendRequest.arrrAmount = 1234L;
-		sendRequest.memo = "memo";
-		JSONObject send = PirateChain.buildSendPayload("zs-input", sendRequest);
+		JSONObject send = PirateChain.buildSendPayload("zs-input", "zs-recipient", 1234L, "memo");
 		assertEquals("send", PirateChain.SEND_COMMAND);
 		assertPayment(send, "zs-input", "zs-recipient", 1234L);
 		assertEquals("memo", send.getJSONArray("output").getJSONObject(0).getString("memo"));
+
+		// An absent memo stays absent from the native payload rather than becoming "null".
+		JSONObject sendWithoutMemo = PirateChain.buildSendPayload("zs-input", "zs-recipient", 1234L, null);
+		assertFalse(sendWithoutMemo.getJSONArray("output").getJSONObject(0).has("memo"));
 
 		JSONObject fund = PirateChain.buildFundP2shPayload("zs-input", "t3-p2sh", 2345L, "script58");
 		assertEquals("sendp2sh", PirateChain.FUND_P2SH_COMMAND);

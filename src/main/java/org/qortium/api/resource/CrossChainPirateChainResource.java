@@ -15,7 +15,9 @@ import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.Security;
 import org.qortium.api.model.crosschain.ForeignCoinStatus;
 import org.qortium.api.model.crosschain.PirateChainBalance;
+import org.qortium.api.model.crosschain.PirateChainSendContract;
 import org.qortium.api.model.crosschain.PirateChainSendRequest;
+import org.qortium.api.model.crosschain.PirateChainSendResult;
 import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryResult;
@@ -28,10 +30,12 @@ import org.qortium.crosschain.*;
 import org.qortium.settings.Settings;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -379,48 +383,166 @@ public class CrossChainPirateChainResource {
 		}
 	}
 
+	@GET
+	@Path("/sendcontract")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Describes this node's ARRR send contract (protocol version, fixed fee, limits)",
+		description = "Static contract for POST /crosschain/arrr/send. Carries no wallet state and needs no entropy.",
+		responses = {
+			@ApiResponse(
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = PirateChainSendContract.class))
+			)
+		}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public PirateChainSendContract getPirateChainSendContract(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+		Security.checkApiCallAllowed(request);
+		return new PirateChainSendContract(PirateChain.getSendFeeAtomic());
+	}
+
 	@POST
 	@Path("/send")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(
-		summary = "Sends ARRR from wallet",
-		description = "Currently supports 'legacy' P2PKH PirateChain addresses and Native SegWit (P2WPKH) addresses. Supply BIP32 'm' private key in base58, starting with 'xprv' for mainnet, 'tprv' for testnet",
+		summary = "Sends ARRR from the caller's Unified wallet to a Sapling address (send protocol version 1)",
+		description = "Synchronous: the native wallet builds, signs and broadcasts the transaction and the txid is "
+				+ "returned with HTTP 200. Requires the persistent Unified Pirate wallet backend. The amount is exact "
+				+ "decimal text (at most 8 decimals); the fee is fixed (see GET /crosschain/arrr/sendcontract); "
+				+ "feePerByte is rejected. The send is refused unless the wallet is synchronized and its verified "
+				+ "(spendable) balance is known and covers amount plus fee. Error messages carry stable reason "
+				+ "tokens and never echo the entropy, address or memo. The idempotencyKey is validated but not "
+				+ "yet deduplicated in protocol version 1.",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
-				mediaType = MediaType.TEXT_PLAIN,
-				schema = @Schema(
-						type = "string",
-						description = "32 bytes of entropy, Base58 encoded",
-						example = "5oSXF53qENtdUyKhqSxYzP57m6RhVFP9BJKRr9E5kRGV"
-				)
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(implementation = PirateChainSendRequest.class)
 			)
 		),
 		responses = {
 			@ApiResponse(
-				content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string", description = "transaction hash"))
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = PirateChainSendResult.class))
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.INVALID_ADDRESS, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
+	@ApiErrors({ApiError.INVALID_DATA, ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.INVALID_ADDRESS,
+			ApiError.FOREIGN_WALLET_NOT_READY, ApiError.OPERATION_IN_PROGRESS, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE,
+			ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
 	@SecurityRequirement(name = "apiKey")
-	public String sendPirateChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey, PirateChainSendRequest pirateChainSendRequest) {
+	public PirateChainSendResult sendPirateChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PirateChainSendRequest sendRequest) {
 		Security.checkApiCallAllowed(request);
 
-		if (pirateChainSendRequest.arrrAmount <= 0)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		SendRequestRejection rejection = validateSendRequest(sendRequest);
+		if (rejection != null)
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, rejection.error, rejection.message());
 
-		if (pirateChainSendRequest.feePerByte != null && pirateChainSendRequest.feePerByte <= 0)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		// Only the persistent Unified backend is supported (a configuration fact, hence 400 not 503).
+		if (!Settings.getInstance().isPirateChainWalletUnified())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					PirateChain.WALLET_MODE_UNSUPPORTED_REASON + ": sending requires the Unified Pirate wallet backend");
 
-		PirateChain pirateChain = PirateChain.getInstance();
+		// A disabled wallet is "not ready" (503 with a stable reason), never a NullPointerException.
+		PirateChain pirateChain = Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE)
+				? PirateChain.getInstance() : null;
+		if (pirateChain == null)
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_WALLET_NOT_READY,
+					PirateChain.WALLET_DISABLED_REASON);
+
+		long amountAtomic = PirateChainAmountAdapter.parseAtomic(sendRequest.arrrAmount);
 
 		try {
-			return pirateChain.sendCoins(pirateChainSendRequest);
-
+			String txid = pirateChain.sendCoins(sendRequest.entropy58, sendRequest.receivingAddress, amountAtomic,
+					sendRequest.memo);
+			return new PirateChainSendResult(txid, Long.toString(PirateChain.getSendFeeAtomic()),
+					PirateChainSendContract.FEE_POLICY_FIXED, PirateChainSendContract.SEND_PROTOCOL_VERSION);
+		} catch (ForeignBlockchainException.WalletBusyException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS, e.getMessage());
+		} catch (ForeignBlockchainException.InsufficientFundsException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, e.getMessage());
+		} catch (ForeignBlockchainException.WalletNotReadyException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_WALLET_NOT_READY, e.getMessage());
 		} catch (ForeignBlockchainException e) {
-			// TODO
+			// NetworkException and every other failure (not synchronized, endpoint not validated, native
+			// failure reduced to its stable reason, ...) keep the existing network-issue code.
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
 		}
+	}
+
+	/** Canonical lowercase UUID (8-4-4-4-12 hex); uppercase, braces and URN prefixes are rejected. */
+	private static final java.util.regex.Pattern CANONICAL_UUID =
+			java.util.regex.Pattern.compile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+
+	/** One rejected send request: the API error to raise and a stable reason token for the message. */
+	static final class SendRequestRejection {
+		public final ApiError error;
+		public final String reason;
+		private final String detail;
+
+		SendRequestRejection(ApiError error, String reason, String detail) {
+			this.error = error;
+			this.reason = reason;
+			this.detail = detail;
+		}
+
+		/** Stable token first so clients can match on it, then a short human explanation. */
+		String message() {
+			return this.reason + ": " + this.detail;
+		}
+	}
+
+	/**
+	 * Validates a send request before any wallet work, in a fixed order so a client sees one
+	 * deterministic error at a time: body (115) -> entropy (128) -> feePerByte (125) -> idempotencyKey
+	 * (125) -> amount (125) -> address (102) -> memo (115). Nothing here logs or returns the field
+	 * values themselves.
+	 *
+	 * @return null when valid, else the rejection to raise
+	 */
+	static SendRequestRejection validateSendRequest(PirateChainSendRequest sendRequest) {
+		if (sendRequest == null)
+			return new SendRequestRejection(ApiError.INVALID_DATA, "MISSING_BODY", "a JSON request body is required");
+
+		if (!isValidEntropy(sendRequest.entropy58))
+			return new SendRequestRejection(ApiError.INVALID_PRIVATE_KEY, "ENTROPY_INVALID",
+					"entropy58 must be exactly 32 Base58-encoded bytes");
+
+		if (sendRequest.feePerByte != null)
+			return new SendRequestRejection(ApiError.INVALID_CRITERIA, "FEE_PER_BYTE_UNSUPPORTED",
+					"feePerByte is not supported; the fee is fixed (see /crosschain/arrr/sendcontract)");
+
+		if (sendRequest.idempotencyKey == null || !CANONICAL_UUID.matcher(sendRequest.idempotencyKey).matches())
+			return new SendRequestRejection(ApiError.INVALID_CRITERIA, "IDEMPOTENCY_KEY_INVALID",
+					"idempotencyKey must be a canonical lowercase UUID");
+
+		try {
+			PirateChainAmountAdapter.parseAtomic(sendRequest.arrrAmount);
+		} catch (IllegalArgumentException e) {
+			return new SendRequestRejection(ApiError.INVALID_CRITERIA, e.getMessage(),
+					"arrrAmount must be positive plain decimal text with at most 8 decimals");
+		}
+
+		String address = sendRequest.receivingAddress;
+		if (address == null || address.isBlank())
+			return new SendRequestRejection(ApiError.INVALID_ADDRESS, "RECIPIENT_INVALID",
+					"receivingAddress is required");
+		// Classify by prefix (ignoring case and surrounding whitespace) so a client can tell "wrong
+		// address type" from "malformed Sapling address"; the canonical check below is strict.
+		if (!address.strip().toLowerCase(java.util.Locale.ROOT).startsWith("zs1"))
+			return new SendRequestRejection(ApiError.INVALID_ADDRESS, "RECIPIENT_UNSUPPORTED",
+					"only Sapling (zs1...) recipients are supported");
+		if (!PirateChain.isCanonicalSaplingAddress(address))
+			return new SendRequestRejection(ApiError.INVALID_ADDRESS, "RECIPIENT_INVALID",
+					"receivingAddress must be a canonical lowercase Sapling address");
+
+		String memoReason = PirateChain.validateMemo(sendRequest.memo);
+		if (memoReason != null)
+			return new SendRequestRejection(ApiError.INVALID_DATA, memoReason,
+					"memo must be at most 512 UTF-8 bytes of well-formed text without control characters");
+
+		return null;
 	}
 
 
