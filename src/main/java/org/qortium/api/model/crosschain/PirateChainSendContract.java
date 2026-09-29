@@ -13,15 +13,16 @@ import java.util.List;
  */
 @XmlAccessorType(XmlAccessType.FIELD)
 public class PirateChainSendContract {
+    public String network;
 
-	/** Version 1: synchronous send, HTTP 200 with a txid. Version 2 (durable operations) is later. */
-	public static final int SEND_PROTOCOL_VERSION = 1;
+	/** Version 2: durable asynchronous operations, no native replay after uncertainty. */
+	public static final int SEND_PROTOCOL_VERSION = 2;
 	public static final String FEE_POLICY_FIXED = "FIXED";
 	public static final int AMOUNT_DECIMALS = 8;
 	public static final int MAX_MEMO_BYTES = 512;
 	public static final String RECIPIENT_TYPE_SAPLING = "sapling";
 
-	@Schema(description = "Send protocol version implemented by POST /crosschain/arrr/send", example = "1")
+	@Schema(description = "Send protocol version implemented by POST /crosschain/arrr/send", example = "2")
 	public int sendProtocolVersion = SEND_PROTOCOL_VERSION;
 
 	@Schema(description = "Fee policy; FIXED means every send pays exactly feeAtomic", example = "FIXED")

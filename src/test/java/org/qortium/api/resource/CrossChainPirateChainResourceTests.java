@@ -34,16 +34,25 @@ import static org.junit.Assert.assertTrue;
 
 public class CrossChainPirateChainResourceTests extends ApiCommon {
 	private CrossChainPirateChainResource resource;
+    @org.junit.Rule public org.junit.rules.TemporaryFolder sendTemp = new org.junit.rules.TemporaryFolder();
+    private String originalWalletsPath;
+
 
 	@Before
-	public void buildResource() {
+	public void buildResource() throws Exception {
+        originalWalletsPath = Settings.getInstance().getWalletsPath();
+        FieldUtils.writeField(Settings.getInstance(), "walletsPath", sendTemp.getRoot().getAbsolutePath(), true);
 		ApiCommon.installTestApiKey();
 		this.resource = (CrossChainPirateChainResource) ApiCommon.buildResource(
 				CrossChainPirateChainResource.class, ApiCommon.TEST_API_KEY);
 	}
 
 	@After
-	public void cleanup() {
+	public void cleanup() throws Exception {
+        var service = (org.qortium.crosschain.PirateChainSendService) FieldUtils.readStaticField(org.qortium.crosschain.PirateChainSendRuntime.class, "service", true);
+        if (service != null) service.close();
+        FieldUtils.writeStaticField(org.qortium.crosschain.PirateChainSendRuntime.class, "service", null, true);
+        FieldUtils.writeField(Settings.getInstance(), "walletsPath", originalWalletsPath, true);
 		Settings.getInstance().enableWallet(PirateChain.CURRENCY_CODE);
 		PirateChain.resetForTesting();
 		ApiCommon.clearTestApiKey();
@@ -465,9 +474,10 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 	}
 
 	@Test
-	public void testSendContractAdvertisesProtocolVersionOneAndFixedFee() {
+	public void testSendContractAdvertisesProtocolVersionTwoAndFixedFee() {
 		PirateChainSendContract contract = this.resource.getPirateChainSendContract(ApiCommon.TEST_API_KEY);
-		assertEquals(1, contract.sendProtocolVersion);
+		assertEquals(2, contract.sendProtocolVersion);
+        assertEquals(Settings.getInstance().getPirateChainNet().name(), contract.network);
 		assertEquals("FIXED", contract.feePolicy);
 		assertEquals("10000", contract.feeAtomic);
 		assertEquals(8, contract.amountDecimals);
@@ -654,6 +664,17 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 		assertTrue(String.valueOf(exception.getMessage()).startsWith(PirateChain.WALLET_MODE_UNSUPPORTED_REASON));
 	}
 
+    @Test public void expectedNetworkMismatchIsRejectedWithoutAdmission() throws Exception {
+        setUnifiedWalletEnabled(true);
+        try {
+            var input = buildValidSendRequest(); input.expectedNetwork = "wrong-network";
+            ApiException failure = assertThrows(ApiException.class, () -> resource.sendPirateChain(ApiCommon.TEST_API_KEY, input));
+            assertEquals(ApiError.INVALID_CRITERIA.getCode(), failure.error);
+            assertEquals("ARRR_SEND_NETWORK_MISMATCH", failure.getMessage());
+            assertNull(FieldUtils.readStaticField(org.qortium.crosschain.PirateChainSendRuntime.class, "service", true));
+        } finally { setUnifiedWalletEnabled(false); }
+    }
+
 	@Test
 	public void testSendReportsDisabledWalletAsNotReadyNotNullPointer() throws Exception {
 		setUnifiedWalletEnabled(true);
@@ -685,7 +706,7 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 		assertFalse(Settings.getInstance().isPirateChainWalletUnified());
 		ForeignBlockchainException.WalletNotReadyException legacy = assertThrows(
 				ForeignBlockchainException.WalletNotReadyException.class,
-				() -> pirateChain.sendCoins(buildValidSendRequest().entropy58, VALID_SAPLING, 150_000_000L, null));
+				() -> org.qortium.crosschain.PirateSendTestEntry.send(buildValidSendRequest().entropy58, VALID_SAPLING, 150_000_000L, null));
 		assertEquals(PirateChain.WALLET_MODE_UNSUPPORTED_REASON, legacy.getMessage());
 
 		// Unified backend but wallet disabled: the controller singleton is null, which used to NPE.
@@ -695,7 +716,7 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 			assertNull(PirateChainWalletController.getInstance());
 			ForeignBlockchainException.WalletNotReadyException disabled = assertThrows(
 					ForeignBlockchainException.WalletNotReadyException.class,
-					() -> pirateChain.sendCoins(buildValidSendRequest().entropy58, VALID_SAPLING, 150_000_000L, null));
+					() -> org.qortium.crosschain.PirateSendTestEntry.send(buildValidSendRequest().entropy58, VALID_SAPLING, 150_000_000L, null));
 			assertEquals(PirateChain.WALLET_DISABLED_REASON, disabled.getMessage());
 		} finally {
 			setUnifiedWalletEnabled(false);

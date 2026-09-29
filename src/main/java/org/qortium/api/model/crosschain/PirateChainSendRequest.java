@@ -6,7 +6,7 @@ import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 
 /**
- * JSON body of {@code POST /crosschain/arrr/send} (send protocol version 1).
+ * JSON body of {@code POST /crosschain/arrr/send} (send protocol version 2).
  * <p>
  * Every field is a String on purpose: amounts are exact decimal text (never a JSON float that a
  * client library might round), and no field is interpreted by the JSON binding itself, so a
@@ -37,13 +37,11 @@ public class PirateChainSendRequest {
 			nullable = true)
 	public String memo;
 
-	@Schema(description = "Client-generated idempotency key: a canonical lowercase UUID "
-			+ "(8-4-4-4-12 hex), validated but NOT deduplicated by send protocol version 1. Retrying a send "
-			+ "whose outcome is unknown (SEND_OUTCOME_UNKNOWN, timeout, lost connection) can pay twice: check "
-			+ "the wallet history first. Keep the key for the same logical payment so version 2 can "
-			+ "deduplicate it.",
-			example = "123e4567-e89b-12d3-a456-426614174000", requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(description = "Canonical lowercase UUID, durably deduplicated per wallet and network. Reuse the same key for the same payment; never retry an uncertain payment with a new key.", requiredMode = Schema.RequiredMode.REQUIRED)
 	public String idempotencyKey;
+
+	@Schema(description = "Optional expected Pirate network (MAIN, TEST3 or REGTEST). Mismatch is rejected before admission.")
+	public String expectedNetwork;
 
 	@Schema(description = "Deprecated and unsupported: the fee is fixed (see GET /crosschain/arrr/sendcontract). "
 			+ "Any non-null value is rejected.", deprecated = true, nullable = true)

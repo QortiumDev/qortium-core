@@ -579,8 +579,9 @@ public class PirateChain extends Bitcoiny {
 	 * @throws ForeignBlockchainException.SendOutcomeUnknownException the send started but its outcome is unknown
 	 * @throws ForeignBlockchainException any other pre-send failure (not synchronized, endpoint not validated, ...)
 	 */
-	public String sendCoins(String entropy58, String receivingAddress, long amountAtomic, String memo)
-			throws ForeignBlockchainException {
+
+	String sendCoins(String entropy58, String receivingAddress, long amountAtomic, String memo,
+			PirateChainSendService.Lifecycle lifecycle) throws ForeignBlockchainException {
 		if (!Settings.getInstance().isPirateChainWalletUnified())
 			throw new ForeignBlockchainException.WalletNotReadyException(WALLET_MODE_UNSUPPORTED_REASON);
 
@@ -616,18 +617,23 @@ public class PirateChain extends Bitcoiny {
 				if (inputAddress == null || inputAddress.isBlank())
 					throw new ForeignBlockchainException.WalletNotReadyException("ARRR_WALLET_ADDRESS_UNKNOWN");
 
+				PirateChainSendPreflight.check(nativeAdapter, inputAddress, amountAtomic, MAINNET_FEE);
+
 				JSONObject txn = buildSendPayload(inputAddress, receivingAddress, amountAtomic, memo);
 
 				final String response;
+				lifecycle.beforeNative();
 				sendStarted.set(true);
 				try {
 					response = nativeAdapter.execute(SEND_COMMAND, txn.toString());
 				} catch (RuntimeException | UnsatisfiedLinkError e) {
 					if (Settings.getInstance().isPirateChainWalletDebugLogging())
-						LOGGER.debug("Native ARRR send threw", e);
+						LOGGER.debug("Native ARRR send threw; outcome unknown");
 					throw new ForeignBlockchainException.SendOutcomeUnknownException(SEND_OUTCOME_UNKNOWN_REASON);
 				}
-				return parseSendResponse(response);
+				String txid = parseSendResponse(response);
+				lifecycle.broadcast(txid);
+				return txid;
 			});
 
 		} catch (ForeignBlockchainException e) {
@@ -723,8 +729,10 @@ public class PirateChain extends Bitcoiny {
 	public String fundP2SH(String entropy58, String receivingAddress, long amount,
 						   String redeemScript58) throws ForeignBlockchainException {
 
+		PirateChainSendRuntime.requireUnreserved(entropy58);
 		PirateChainWalletController walletController = PirateChainWalletController.getInstance();
 		return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
+			PirateChainSendRuntime.requireUnreserved(entropy58);
 			wallet.unlock();
 
 			JSONObject txn = buildFundP2shPayload(wallet.getWalletAddress(), receivingAddress, amount,

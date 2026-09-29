@@ -217,10 +217,28 @@ public class PirateChainSendApiSerializationTests {
 		assertFalse(json, json.contains("\"sendProtocolVersion\":\""));
 	}
 
+    @Test public void testDurableOperationWireShape() throws Exception {
+        var op = new org.qortium.crosschain.PirateChainSendJournal.Operation("123e4567-e89b-12d3-a456-426614174000", "wallet", "MAIN",
+                "123e4567-e89b-12d3-a456-426614174001", "fingerprint", org.qortium.crosschain.PirateChainSendJournal.Phase.UNRESOLVED, null,
+                "ARRR_SEND_OUTCOME_UNKNOWN", 1, 2);
+        var json = new org.json.JSONObject(marshal(new org.qortium.api.model.crosschain.PirateChainSendOperation(op)));
+        assertEquals(2, json.getInt("sendProtocolVersion"));
+        assertEquals("UNRESOLVED", json.getString("state"));
+        assertTrue(json.getBoolean("resolutionRequired"));
+        assertEquals(op.idempotencyKey(), json.getString("idempotencyKey"));
+        assertFalse(json.has("fingerprint")); assertFalse(json.has("entropy58"));
+    }
+
+    @Test public void expectedNetworkReaderIsStrict() throws Exception {
+        assertEquals("MAIN", read("{\"expectedNetwork\":\"MAIN\"}").expectedNetwork);
+        rejected("{\"expectedNetwork\":42}");
+        rejected("{\"expectedNetwork\":\"MAIN\",\"expectedNetwork\":\"TEST3\"}");
+    }
+
 	@Test
 	public void testSendContractWireShape() throws Exception {
 		String json = marshal(new PirateChainSendContract(10_000L));
-		assertTrue(json, json.contains("\"sendProtocolVersion\":1"));
+		assertTrue(json, json.contains("\"sendProtocolVersion\":2"));
 		assertTrue(json, json.contains("\"feePolicy\":\"FIXED\""));
 		assertTrue(json, json.contains("\"feeAtomic\":\"10000\""));
 		assertTrue(json, json.contains("\"amountDecimals\":8"));

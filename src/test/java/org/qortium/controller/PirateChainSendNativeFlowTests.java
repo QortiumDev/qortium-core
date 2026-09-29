@@ -39,7 +39,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Drives a complete ARRR send from the JSON resource down to the native adapter with a scripted
+ * Drives the package-private ARRR native send leg through the coordinator with a scripted
  * (fake) native library behind the REAL coordinator, controller ownership, synchronized gate and
  * {@link PirateChain#sendCoins} lane logic. Proves a passing request runs synchronization checks,
  * native recipient validation and the verified-funds check before exactly one native {@code send}
@@ -141,20 +141,21 @@ public class PirateChainSendNativeFlowTests {
 		return sendRequest;
 	}
 
-	private ApiException sendFails(PirateChainSendRequest sendRequest) {
-		return assertThrows(ApiException.class, () -> this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, sendRequest));
+	private String sendNative(PirateChainSendRequest request) throws ForeignBlockchainException {
+		return org.qortium.crosschain.PirateSendTestEntry.send(request.entropy58, request.receivingAddress,
+				org.qortium.crosschain.PirateChainAmountAdapter.parseAtomic(request.arrrAmount), request.memo);
+	}
+	private ForeignBlockchainException sendFails(PirateChainSendRequest request) {
+		return assertThrows(ForeignBlockchainException.class, () -> sendNative(request));
 	}
 
 	@Test
 	public void testPassingRequestRunsGatesThenExactlyOneNativeSendAndReturnsTxid() throws Exception {
 		String memo = "héllo \"quoted\" back\\slash\nsecond line\t😀";
-		PirateChainSendResult result = this.resource.sendPirateChain(ApiCommon.TEST_API_KEY,
+		String result = sendNative(
 				request(RECIPIENT, "1.5", memo));
 
-		assertEquals("abababababababababababababababababababababababababababababababab", result.txid);
-		assertEquals("10000", result.feeAtomic);
-		assertEquals("FIXED", result.feePolicy);
-		assertEquals(1, result.sendProtocolVersion);
+		assertEquals("abababababababababababababababababababababababababababababababab", result);
 
 		// Exactly one native send, with the exact atomic amount, the fixed fee, the wallet's own
 		// export address as input and the memo round-tripped verbatim through the JSON payload.
@@ -188,10 +189,9 @@ public class PirateChainSendNativeFlowTests {
 
 	@Test
 	public void testNativeRecipientRejectionIsInvalidAddressAndNothingIsSent() {
-		ApiException exception = sendFails(request(BAD_POINT_RECIPIENT, "1.5", null));
-		assertEquals(400, exception.status);
-		assertEquals(ApiError.INVALID_ADDRESS.getCode(), exception.error);
-		assertEquals(PirateChain.RECIPIENT_INVALID_REASON, exception.message);
+		ForeignBlockchainException exception = sendFails(request(BAD_POINT_RECIPIENT, "1.5", null));
+		assertTrue(exception instanceof ForeignBlockchainException.InvalidRecipientException);
+		assertEquals(PirateChain.RECIPIENT_INVALID_REASON, exception.getMessage());
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 		// The address only ever went to the non-spending validation call.
 		assertEquals(BAD_POINT_RECIPIENT,
@@ -201,54 +201,43 @@ public class PirateChainSendNativeFlowTests {
 	@Test
 	public void testUnknownUnifiedSpendableBalanceIsNotReadyNotNetworkIssue() {
 		this.adapter.balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\"}}";
-		ApiException exception = sendFails(request(RECIPIENT, "1.5", null));
-		assertEquals(503, exception.status);
-		assertEquals(1205, exception.error);
-		assertEquals(PirateChain.VERIFIED_BALANCE_UNKNOWN_REASON, exception.message);
+		ForeignBlockchainException exception = sendFails(request(RECIPIENT, "1.5", null));
+		assertEquals(PirateChain.VERIFIED_BALANCE_UNKNOWN_REASON, exception.getMessage());
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 
 		this.adapter.balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":null}}";
 		exception = sendFails(request(RECIPIENT, "1.5", null));
-		assertEquals(1205, exception.error);
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 	}
 
 	@Test
-	public void testInsufficientVerifiedFundsIsRefusedBeforeAnySend() {
+	public void testInsufficientVerifiedFundsIsRefusedBeforeAnySend() throws Exception {
 		// total covers it, verified/spendable does not
 		this.adapter.balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":\"150009999\"}}";
-		ApiException exception = sendFails(request(RECIPIENT, "1.5", null));
-		assertEquals(402, exception.status);
-		assertEquals(ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE.getCode(), exception.error);
-		assertEquals(PirateChain.INSUFFICIENT_VERIFIED_FUNDS_REASON, exception.message);
+		ForeignBlockchainException exception = sendFails(request(RECIPIENT, "1.5", null));
+		assertEquals(PirateChain.INSUFFICIENT_VERIFIED_FUNDS_REASON, exception.getMessage());
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 
 		// exactly amount + fee is enough
 		this.adapter.balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":\"150010000\"}}";
-		assertEquals("abababababababababababababababababababababababababababababababab", this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, request(RECIPIENT, "1.5", null)).txid);
+		assertEquals("abababababababababababababababababababababababababababababababab", sendNative(request(RECIPIENT, "1.5", null)));
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
 
 	@Test
 	public void testExplicitNativeErrorIsAnUnknownOutcome() {
 		this.adapter.sendReply = "{\"error\":\"Failed to build transaction for " + RECIPIENT + "\"}";
-		ApiException exception = sendFails(request(RECIPIENT, "1.5", "private"));
-		assertEquals(500, exception.status);
-		assertEquals(ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE.getCode(), exception.error);
-		assertTrue(exception.message.startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
-		assertFalse(exception.message.contains(RECIPIENT));
+		ForeignBlockchainException exception = sendFails(request(RECIPIENT, "1.5", "private"));
+		assertTrue(exception.getMessage().startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
+		assertFalse(exception.getMessage().contains(RECIPIENT));
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
 
 	@Test
 	public void testTxidLessNativeReplyIsReportedAsUnknownOutcomeWithNoRetryGuidance() {
 		this.adapter.sendReply = "garbage";
-		ApiException exception = sendFails(request(RECIPIENT, "1.5", null));
-		assertEquals(500, exception.status);
-		assertEquals(ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE.getCode(), exception.error);
-		assertTrue(exception.message, exception.message.startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
-		assertTrue(exception.message, exception.message.contains("may already have been broadcast"));
-		assertTrue(exception.message, exception.message.contains("do NOT retry"));
+		ForeignBlockchainException exception = sendFails(request(RECIPIENT, "1.5", null));
+		assertTrue(exception.getMessage(), exception.getMessage().startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
 
@@ -259,7 +248,7 @@ public class PirateChainSendNativeFlowTests {
 		assertNotNull(pirateChain);
 		ForeignBlockchainException.SendOutcomeUnknownException unknown = assertThrows(
 				ForeignBlockchainException.SendOutcomeUnknownException.class,
-				() -> pirateChain.sendCoins(ENTROPY, RECIPIENT, 150_000_000L, null));
+				() -> org.qortium.crosschain.PirateSendTestEntry.send(ENTROPY, RECIPIENT, 150_000_000L, null));
 		assertEquals(PirateChain.SEND_OUTCOME_UNKNOWN_REASON, unknown.getMessage());
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
@@ -267,10 +256,8 @@ public class PirateChainSendNativeFlowTests {
 	@Test
 	public void testNativeValidationOutageIsNotReadyNotValid() {
 		this.adapter.validateReply = address -> "{\"ok\":false,\"error\":\"service unavailable\"}";
-		ApiException exception = sendFails(request(RECIPIENT, "1.5", null));
-		assertEquals(503, exception.status);
-		assertEquals(1205, exception.error);
-		assertEquals(PirateChain.RECIPIENT_VALIDATION_UNAVAILABLE_REASON, exception.message);
+		ForeignBlockchainException exception = sendFails(request(RECIPIENT, "1.5", null));
+		assertEquals(PirateChain.RECIPIENT_VALIDATION_UNAVAILABLE_REASON, exception.getMessage());
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 	}
 
@@ -278,9 +265,7 @@ public class PirateChainSendNativeFlowTests {
 	public void testAnotherAccountIsBusyRejectedWithoutAnySend() {
 		PirateChainSendRequest other = request(RECIPIENT, "1.5", null);
 		other.entropy58 = entropy(10);
-		ApiException exception = sendFails(other);
-		assertEquals(409, exception.status);
-		assertEquals(ApiError.OPERATION_IN_PROGRESS.getCode(), exception.error);
+		ForeignBlockchainException exception = sendFails(other);
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 	}
 
@@ -288,12 +273,30 @@ public class PirateChainSendNativeFlowTests {
 	public void testCoordinatorTimeoutWithLateNativeSuccessNeverReportsDefinitiveFailure() throws Exception {
 		this.controller.timeout = java.time.Duration.ofMillis(100);
 		this.adapter.returnAfterTimeout = true;
-		ApiException exception = sendFails(request(RECIPIENT, "1.5", null));
-		assertTrue(exception.message.startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
+		ForeignBlockchainException exception = sendFails(request(RECIPIENT, "1.5", null));
+		assertTrue(exception.getMessage().startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
 		assertTrue(this.adapter.lateReturned.await(5, java.util.concurrent.TimeUnit.SECONDS));
 		assertTrue(this.coordinator.isDegraded());
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
+
+    @Test public void lateNativeSuccessIsDurableEvenWhenTheCallerTimesOut() throws Exception {
+        this.controller.timeout = java.time.Duration.ofMillis(100);
+        this.adapter.returnAfterTimeout = true;
+        try (var journal = new org.qortium.crosschain.PirateChainSendJournal(this.controller.root.resolve("send-test-journal"), "MAIN")) {
+            var op = journal.admit(org.qortium.crosschain.PirateChainSendJournal.walletIdentity(ENTROPY), java.util.UUID.randomUUID().toString(),
+                    org.qortium.crosschain.PirateChainSendJournal.fingerprint("MAIN", RECIPIENT, 150_000_000L, null, 10000));
+            var lifecycle = new org.qortium.crosschain.PirateChainSendService.Lifecycle() {
+                public void beforeNative() throws java.io.IOException { journal.transition(op.operationId(), org.qortium.crosschain.PirateChainSendJournal.Phase.NATIVE_STARTED, null, null); }
+                public void broadcast(String txid) throws java.io.IOException { journal.transition(op.operationId(), org.qortium.crosschain.PirateChainSendJournal.Phase.BROADCAST, txid, null); }
+            };
+            assertThrows(ForeignBlockchainException.SendOutcomeUnknownException.class, () ->
+                    org.qortium.crosschain.PirateSendTestEntry.sendWithLifecycle(ENTROPY, RECIPIENT, 150_000_000L, null, lifecycle));
+            assertEquals(org.qortium.crosschain.PirateChainSendJournal.Phase.BROADCAST, journal.get(op.operationId()).phase());
+            assertEquals("ab".repeat(32), journal.get(op.operationId()).txid());
+            assertEquals(1, this.adapter.arguments("execute:send").size());
+        }
+    }
 
 	@Test
 	public void testMissingSpendablePreservesUnverifiedReadAndRejectsVerifiedRead() throws Exception {
@@ -399,6 +402,11 @@ public class PirateChainSendNativeFlowTests {
 			return switch (method) {
 				case "get_active_wallet" -> "{\"ok\":true,\"result\":\"wallet-1\"}";
 				case "get_balance" -> this.balanceReply;
+				case "current_receive_address" -> new JSONObject().put("ok", true).put("result", INPUT_ADDRESS).toString();
+				case "list_key_groups" -> "{\"ok\":true,\"result\":[{\"id\":1,\"spendable\":true}]}";
+				case "list_address_balances" -> new JSONObject().put("ok", true).put("result", new JSONArray().put(
+						new JSONObject().put("address", INPUT_ADDRESS).put("key_id", 1).put("address_id", 1).put("spendable", "400000000"))).toString();
+				case "get_spendability_status" -> "{\"ok\":true,\"result\":{\"spendable\":true,\"rescan_required\":false,\"repair_queued\":false,\"reason_code\":\"OK\",\"anchor_height\":90,\"validated_anchor_height\":90}}";
 				case "validate_address" -> this.validateReply.apply(request.getString("address"));
 				case "sync_status" -> "{\"ok\":true,\"result\":{\"target_height\":100}}";
 				default -> "{\"ok\":false,\"error\":\"unexpected method " + method + "\"}";

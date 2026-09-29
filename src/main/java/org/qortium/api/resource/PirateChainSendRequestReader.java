@@ -107,6 +107,7 @@ public class PirateChainSendRequestReader implements MessageBodyReader<PirateCha
 					case "entropy58" -> request.entropy58 = stringOnly(parser, valueToken);
 					case "receivingAddress" -> request.receivingAddress = stringOnly(parser, valueToken);
 					case "memo" -> request.memo = stringOnly(parser, valueToken);
+					case "expectedNetwork" -> request.expectedNetwork = stringOnly(parser, valueToken);
 					case "idempotencyKey" -> request.idempotencyKey = stringOnly(parser, valueToken);
 					case "arrrAmount" -> request.arrrAmount = stringOrNumber(parser, valueToken);
 					case "feePerByte" -> request.feePerByte = stringOrNumber(parser, valueToken);

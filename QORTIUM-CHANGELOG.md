@@ -34,6 +34,11 @@ own chain.
 
 ## Change Entries
 
+### Add durable ARRR sends with wallet-scoped recovery
+
+ARRR protocol v2 records each payment before execution, returns an operation to track, and recovers lost replies without sending again. Unknown outcomes block that wallet's sends and trade funding; other wallets remain usable once the native worker is healthy. Fixed 0.0001 ARRR fees, selected-key-group funds checks, network pinning, strict inputs and interrupt-safe transaction-ID persistence protect the custody boundary. No send is replayed after restart.
+
+
 ### 2026-09-29 - fix(arrr): preserve uncertain send outcomes and reject malformed memo bytes
 
 A native send error or late reply can follow a successful broadcast. Treat every

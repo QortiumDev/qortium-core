@@ -35,6 +35,7 @@ import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
@@ -398,7 +399,9 @@ public class CrossChainPirateChainResource {
 	@SecurityRequirement(name = "apiKey")
 	public PirateChainSendContract getPirateChainSendContract(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
-		return new PirateChainSendContract(PirateChain.getSendFeeAtomic());
+		var contract = new PirateChainSendContract(PirateChain.getSendFeeAtomic());
+        contract.network = Settings.getInstance().getPirateChainNet().name();
+        return contract;
 	}
 
 	@POST
@@ -406,16 +409,12 @@ public class CrossChainPirateChainResource {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(
-		summary = "Sends ARRR from the caller's Unified wallet to a Sapling address (send protocol version 1)",
-		description = "Synchronous: the native wallet builds, signs and broadcasts the transaction and the txid is "
-				+ "returned with HTTP 200. Requires the persistent Unified Pirate wallet backend. The amount is exact "
-				+ "decimal text (at most 8 decimals); the fee is fixed (see GET /crosschain/arrr/sendcontract); "
-				+ "feePerByte is rejected. The send is refused unless the wallet is synchronized and its verified "
-				+ "(spendable) balance is known and covers amount plus fee. Error messages carry stable reason "
-				+ "tokens and never echo the entropy, address or memo. The recipient is also semantically validated "
-				+ "by the native wallet before any spend. The idempotencyKey is validated but NOT deduplicated in "
-				+ "protocol version 1: an ARRR_SEND_OUTCOME_UNKNOWN reply means the payment may already have been "
-				+ "broadcast, so check the wallet history before retrying.",
+		summary = "Admits an idempotent ARRR send operation (protocol version 2)",
+		description = "Durably reserves a request before native execution. Returns HTTP 202 while pending, "
+				+ "or HTTP 200 for an existing terminal operation. Reusing the same key and payment returns the "
+				+ "same operation; changing the payment conflicts. Poll the operation or look it up by key after "
+				+ "a lost response. UNRESOLVED means the payment may already have been broadcast: do not retry "
+				+ "with a new key. It blocks this wallet's spending, including trade funding. Fixed fee: 10000 atomic.",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
@@ -425,64 +424,111 @@ public class CrossChainPirateChainResource {
 		),
 		responses = {
 			@ApiResponse(
-				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = PirateChainSendResult.class))
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = org.qortium.api.model.crosschain.PirateChainSendOperation.class))
 			)
 		}
 	)
 	@ApiErrors({ApiError.INVALID_DATA, ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.INVALID_ADDRESS,
-			ApiError.FOREIGN_WALLET_NOT_READY, ApiError.OPERATION_IN_PROGRESS, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE,
+			ApiError.FOREIGN_WALLET_NOT_READY, ApiError.OPERATION_IN_PROGRESS, ApiError.FOREIGN_SEND_CONFLICT, ApiError.FOREIGN_SEND_STORAGE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE,
 			ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
 	@SecurityRequirement(name = "apiKey")
-	public PirateChainSendResult sendPirateChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+	public javax.ws.rs.core.Response sendPirateChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
 			PirateChainSendRequest sendRequest) {
 		Security.checkApiCallAllowed(request);
-
 		SendRequestRejection rejection = validateSendRequest(sendRequest);
 		if (rejection != null)
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, rejection.error, rejection.message());
-
-		// Only the persistent Unified backend is supported (a configuration fact, hence 400 not 503).
 		if (!Settings.getInstance().isPirateChainWalletUnified())
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
-					PirateChain.WALLET_MODE_UNSUPPORTED_REASON + ": sending requires the Unified Pirate wallet backend");
-
-		// A disabled wallet is "not ready" (503 with a stable reason), never a NullPointerException.
-		PirateChain pirateChain = Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE)
-				? PirateChain.getInstance() : null;
-		if (pirateChain == null)
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_WALLET_NOT_READY,
-					PirateChain.WALLET_DISABLED_REASON);
-
-		long amountAtomic = PirateChainAmountAdapter.parseAtomic(sendRequest.arrrAmount);
-
+					PirateChain.WALLET_MODE_UNSUPPORTED_REASON);
 		try {
-			String txid = pirateChain.sendCoins(sendRequest.entropy58, sendRequest.receivingAddress, amountAtomic,
-					sendRequest.memo);
-			return new PirateChainSendResult(txid, Long.toString(PirateChain.getSendFeeAtomic()),
-					PirateChainSendContract.FEE_POLICY_FIXED, PirateChainSendContract.SEND_PROTOCOL_VERSION);
-		} catch (ForeignBlockchainException.SendOutcomeUnknownException e) {
-			// The native send started and Core cannot prove it did not broadcast. Same code as a
-			// network failure, but the message must never read like a clean, retryable failure.
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE,
-					e.getMessage() + SEND_OUTCOME_UNKNOWN_GUIDANCE);
+			String network = Settings.getInstance().getPirateChainNet().name();
+            if (sendRequest.expectedNetwork != null && !network.equals(sendRequest.expectedNetwork))
+                throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "ARRR_SEND_NETWORK_MISMATCH");
+			var input = new org.qortium.crosschain.PirateChainSendService.Request(sendRequest.entropy58,
+					org.qortium.crosschain.PirateChainSendJournal.walletIdentity(sendRequest.entropy58), network,
+					sendRequest.idempotencyKey, sendRequest.receivingAddress,
+					PirateChainAmountAdapter.parseAtomic(sendRequest.arrrAmount), sendRequest.memo, PirateChain.getSendFeeAtomic());
+			var op = org.qortium.crosschain.PirateChainSendRuntime.service().submit(input,
+					() -> org.qortium.crosschain.PirateChainSendRuntime.checkReservedAdmission(sendRequest.entropy58));
+			boolean pending = op.phase() == org.qortium.crosschain.PirateChainSendJournal.Phase.ACCEPTED
+					|| op.phase() == org.qortium.crosschain.PirateChainSendJournal.Phase.NATIVE_STARTED;
+			return javax.ws.rs.core.Response.status(pending ? 202 : 200)
+					.location(java.net.URI.create("/crosschain/arrr/send/" + op.operationId()))
+					.entity(new org.qortium.api.model.crosschain.PirateChainSendOperation(op)).build();
+		} catch (org.qortium.crosschain.PirateChainSendJournal.ConflictException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_SEND_CONFLICT, "ARRR_SEND_REQUEST_CONFLICT");
+		} catch (java.io.IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_SEND_STORAGE_ISSUE, "ARRR_SEND_STORAGE_UNAVAILABLE");
 		} catch (ForeignBlockchainException.WalletBusyException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS, e.getMessage());
-		} catch (ForeignBlockchainException.InvalidRecipientException e) {
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_ADDRESS, e.getMessage());
-		} catch (ForeignBlockchainException.InsufficientFundsException e) {
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, e.getMessage());
-		} catch (ForeignBlockchainException.WalletNotReadyException e) {
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_WALLET_NOT_READY, e.getMessage());
 		} catch (ForeignBlockchainException e) {
-			// NetworkException and every other pre-send failure (not synchronized, endpoint not
-			// validated, native error reduced to its stable reason, ...) keep the network-issue code.
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_WALLET_NOT_READY,
+					e instanceof ForeignBlockchainException.WalletNotReadyException ? e.getMessage() : "ARRR_WALLET_NOT_READY");
 		}
 	}
 
-	/** Appended to the stable ARRR_SEND_OUTCOME_UNKNOWN reason so no client reads it as a clean failure. */
-	static final String SEND_OUTCOME_UNKNOWN_GUIDANCE = ": the payment may already have been broadcast; do NOT retry"
-			+ " until the wallet history has been checked for this send (protocol version 1 does not deduplicate)";
+	@GET
+	@Path("/send/{operationId}")
+    @ApiErrors({ApiError.INVALID_CRITERIA, ApiError.FOREIGN_SEND_NOT_FOUND, ApiError.FOREIGN_SEND_STORAGE_ISSUE})
+	@Produces(MediaType.APPLICATION_JSON)
+	@SecurityRequirement(name = "apiKey")
+	public org.qortium.api.model.crosschain.PirateChainSendOperation getSendOperation(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey, @PathParam("operationId") String operationId) {
+		Security.checkApiCallAllowed(request);
+		if (operationId == null || !CANONICAL_UUID.matcher(operationId).matches())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		try {
+			var op = org.qortium.crosschain.PirateChainSendRuntime.service().get(operationId);
+			if (op == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_SEND_NOT_FOUND);
+			return new org.qortium.api.model.crosschain.PirateChainSendOperation(op);
+		} catch (java.io.IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_SEND_STORAGE_ISSUE, "ARRR_SEND_STORAGE_UNAVAILABLE");
+		}
+	}
+
+	@POST
+	@Path("/sendlookup/{idempotencyKey}")
+    @ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_SEND_NOT_FOUND, ApiError.FOREIGN_SEND_STORAGE_ISSUE})
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@SecurityRequirement(name = "apiKey")
+	public org.qortium.api.model.crosschain.PirateChainSendOperation lookupSendOperation(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey, @PathParam("idempotencyKey") String key, String entropy58) {
+		Security.checkApiCallAllowed(request);
+		if (!isValidEntropy(entropy58)) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+		if (key == null || !CANONICAL_UUID.matcher(key).matches())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		try {
+			var op = org.qortium.crosschain.PirateChainSendRuntime.service().lookup(
+					org.qortium.crosschain.PirateChainSendJournal.walletIdentity(entropy58), key);
+			if (op == null) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_SEND_NOT_FOUND);
+			return new org.qortium.api.model.crosschain.PirateChainSendOperation(op);
+		} catch (java.io.IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_SEND_STORAGE_ISSUE, "ARRR_SEND_STORAGE_UNAVAILABLE");
+		}
+	}
+
+	@POST
+	@Path("/sendreadiness")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@SecurityRequirement(name = "apiKey")
+	public org.qortium.api.model.crosschain.PirateChainSendReadiness getSendReadiness(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey, String entropy58) {
+		Security.checkApiCallAllowed(request);
+		if (!isValidEntropy(entropy58)) throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+		var result = new org.qortium.api.model.crosschain.PirateChainSendReadiness();
+		result.network = Settings.getInstance().getPirateChainNet().name();
+		try {
+			result.blockingOperationId = org.qortium.crosschain.PirateChainSendRuntime.service().blocking(
+					org.qortium.crosschain.PirateChainSendJournal.walletIdentity(entropy58));
+			org.qortium.crosschain.PirateChainSendRuntime.checkAdmission(entropy58);
+			result.sendAllowed = true;
+		} catch (java.io.IOException e) { result.reason = "ARRR_SEND_STORAGE_UNAVAILABLE"; }
+		catch (ForeignBlockchainException e) { result.reason = result.blockingOperationId != null ? "ARRR_SEND_UNRESOLVED_OR_PENDING" : "ARRR_WALLET_NOT_READY"; }
+		return result;
+	}
 
 	/** Canonical lowercase UUID (8-4-4-4-12 hex); uppercase, braces and URN prefixes are rejected. */
 	private static final java.util.regex.Pattern CANONICAL_UUID =
