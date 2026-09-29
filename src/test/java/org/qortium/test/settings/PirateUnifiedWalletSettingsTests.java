@@ -21,8 +21,8 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class PirateUnifiedWalletSettingsTests {
-	private static final String PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE =
-			"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv";
+	private static final String PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE =
+			"5D94EoVU8wN1kuHYuvtA2E5xkFXo69dDugoG26GVaaWaD2v781HNLtFLmMrmiBzFByyRArS1x8Z7J6p1y4EnYQri";
 
 	static {
 		if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)
@@ -42,7 +42,7 @@ public class PirateUnifiedWalletSettingsTests {
 		loadSettings("{\"storagePolicy\":\"FOLLOWED\"}");
 
 		assertFalse(Settings.getInstance().isPirateChainWalletUnified());
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 				Settings.getInstance().getPirateChainWalletQdnSignature());
 		assertFalse(Settings.getInstance().isPirateChainWalletDebugLogging());
 		assertFalse(PirateChain.WALLET_CONFIG.isUnifiedWalletEnabled());
@@ -55,10 +55,10 @@ public class PirateUnifiedWalletSettingsTests {
 		loadSettings("{\"storagePolicy\":\"FOLLOWED\",\"pirateChainWalletUnified\":true}");
 
 		assertTrue(Settings.getInstance().isPirateChainWalletUnified());
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 				Settings.getInstance().getPirateChainWalletQdnSignature());
 		assertTrue(PirateChain.WALLET_CONFIG.isUnifiedWalletEnabled());
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 				PirateChain.WALLET_CONFIG.getUnifiedQdnWalletSignature());
 	}
 
@@ -68,9 +68,9 @@ public class PirateUnifiedWalletSettingsTests {
 				+ "\"pirateChainWalletQdnSignature\":null}");
 
 		assertTrue(Settings.getInstance().isPirateChainWalletUnified());
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 				Settings.getInstance().getPirateChainWalletQdnSignature());
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 				PirateChain.WALLET_CONFIG.getUnifiedQdnWalletSignature());
 	}
 

@@ -20,7 +20,7 @@ import static org.junit.Assume.assumeTrue;
 
 /** Three separate opt-in JVMs prove old-create, new-upgrade and new-reopen persistence. */
 public class PirateUnifiedUpgradeAcceptanceTests {
-    private static final String OLD_SHA256 = "871eafe7d4b18e383f3810a31a95f058e5d10b37cbb8ac101ad01206ac235bef";
+    private static final String V121_SHA256 = "871eafe7d4b18e383f3810a31a95f058e5d10b37cbb8ac101ad01206ac235bef";
     private static final String EXPECTED_ADDRESS = "zs1ra3g8uphtg8ad7p8ye76pg06nr9rg5y8m5ycq40vpw4nvae6amehenaafv02g3dny9myxz7f60s";
 
     @Test
@@ -37,8 +37,16 @@ public class PirateUnifiedUpgradeAcceptanceTests {
         Path library = bundle.resolve(filename);
         if (phase.equals("create")) {
             assertFalse("Creation must use absent disposable storage", Files.exists(root));
-            assertEquals("Old official artifact size changed", 363257276L, Files.size(artifact));
-            assertEquals("Old official artifact hash changed", OLD_SHA256, digest(artifact));
+            // Only reviewed official old artifacts may initialize the disposable wallet.
+            // Keep the released Core 1.8.0 baseline and the currently installed v1.2.4 pin.
+            String oldHash = digest(artifact);
+            if (V121_SHA256.equals(oldHash)) {
+                assertEquals("Old v1.2.1 artifact size changed", 363257276L, Files.size(artifact));
+            } else {
+                assertEquals("Old official artifact hash changed",
+                        "3a878eada47d3a1ef2ec15b5cb542d0672888255d8129260b2358c8a66dab61c", oldHash);
+                assertEquals("Old v1.2.4 artifact size changed", 366149509L, Files.size(artifact));
+            }
             // Match the selected binary to the pinned old archive without changing production pins.
             try (ZipFile zip = new ZipFile(artifact.toFile())) {
                 var entries = zip.stream().filter(e -> !e.isDirectory() &&
