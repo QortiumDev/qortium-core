@@ -19,6 +19,9 @@ import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -57,7 +60,14 @@ public class PirateChainSendRequestReader implements MessageBodyReader<PirateCha
 			Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> httpHeaders,
 			InputStream entityStream) throws IOException, WebApplicationException {
 		byte[] body = readBounded(entityStream);
-		return parse(new String(body, StandardCharsets.UTF_8));
+		try {
+			return parse(StandardCharsets.UTF_8.newDecoder()
+					.onMalformedInput(CodingErrorAction.REPORT)
+					.onUnmappableCharacter(CodingErrorAction.REPORT)
+					.decode(ByteBuffer.wrap(body)).toString());
+		} catch (CharacterCodingException e) {
+			throw reject("invalid UTF-8");
+		}
 	}
 
 	private static byte[] readBounded(InputStream entityStream) throws IOException {

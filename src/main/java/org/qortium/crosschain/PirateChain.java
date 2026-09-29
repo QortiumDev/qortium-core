@@ -539,8 +539,6 @@ public class PirateChain extends Bitcoiny {
 	public static final String INSUFFICIENT_VERIFIED_FUNDS_REASON = "ARRR_INSUFFICIENT_VERIFIED_FUNDS";
 	/** Stable reason carried by {@link ForeignBlockchainException.InvalidRecipientException}. */
 	public static final String RECIPIENT_INVALID_REASON = "ARRR_RECIPIENT_INVALID";
-	/** Stable, sanitized reason for a native send the native wallet itself reported as failed. */
-	public static final String NATIVE_SEND_FAILED_REASON = "ARRR_NATIVE_SEND_FAILED";
 	/**
 	 * Stable reason carried by {@link ForeignBlockchainException.SendOutcomeUnknownException}: the
 	 * native send was started and Core cannot prove it did not broadcast.
@@ -567,12 +565,11 @@ public class PirateChain extends Bitcoiny {
 	 * non-spending {@code validate_address} method (curve point, diversifier, network), then the
 	 * wallet's verified (spendable) balance is read and the send is refused unless it is known and
 	 * covers amount plus fee, so the native wallet is never asked to spend funds Core cannot see.
-	 * Native error text is never returned to callers (it can echo the recipient and memo) and is
-	 * logged only when Pirate debug logging is enabled; callers get stable reason tokens instead.
+	 * Native reply text is neither returned nor logged: it may echo recipient and memo.
 	 * <p>
-	 * Outcome honesty: once the native {@code send} has been invoked, any failure that is not an
-	 * explicit native error reply (a thrown native call, a lane timeout, a malformed or txid-less
-	 * reply) is reported as {@link ForeignBlockchainException.SendOutcomeUnknownException}, because
+	 * Outcome honesty: once native {@code send} has been invoked, every failure and every reply
+	 * without a valid transaction ID is reported as
+	 * {@link ForeignBlockchainException.SendOutcomeUnknownException}, because
 	 * the native wallet broadcasts before it answers and the payment may already be on the network.
 	 *
 	 * @throws ForeignBlockchainException.WalletNotReadyException wallet disabled, legacy backend, verified balance unknown, or recipient validation unavailable
@@ -591,11 +588,8 @@ public class PirateChain extends Bitcoiny {
 		if (walletController == null)
 			throw new ForeignBlockchainException.WalletNotReadyException(WALLET_DISABLED_REASON);
 
-		// Set inside the lane immediately before / after the native send call. Read after the lane
-		// operation fails to decide whether a generic failure (e.g. a coordinator timeout that
-		// degraded the lane) happened while the native send was in flight.
+		// A returned worker response does not prove the waiting caller received it.
 		AtomicBoolean sendStarted = new AtomicBoolean(false);
-		AtomicBoolean sendAnswered = new AtomicBoolean(false);
 
 		try {
 			return walletController.withEntropyWallet(entropy58, true, (wallet, nativeAdapter) -> {
@@ -612,7 +606,7 @@ public class PirateChain extends Bitcoiny {
 				}
 				assertSufficientVerifiedFunds(balances, amountAtomic);
 
-				wallet.unlock();
+				wallet.unlock(nativeAdapter);
 
 				// The input address identifies the wallet-owned key group the native wallet spends from.
 				// The Unified export follows the active pool (Sapling before Ironwood activation, the
@@ -633,18 +627,14 @@ public class PirateChain extends Bitcoiny {
 						LOGGER.debug("Native ARRR send threw", e);
 					throw new ForeignBlockchainException.SendOutcomeUnknownException(SEND_OUTCOME_UNKNOWN_REASON);
 				}
-				sendAnswered.set(true);
 				return parseSendResponse(response);
 			});
-		} catch (ForeignBlockchainException.SendOutcomeUnknownException | ForeignBlockchainException.WalletNotReadyException
-				| ForeignBlockchainException.InvalidRecipientException | ForeignBlockchainException.InsufficientFundsException
-				| ForeignBlockchainException.WalletBusyException e) {
-			throw e;
+
 		} catch (ForeignBlockchainException e) {
 			// A generic failure raised while the native send was in flight (the coordinator timed out
 			// and degraded the lane, the worker was interrupted, ...) is NOT a proven failure: the
 			// native wallet may have broadcast before the lane gave up.
-			if (sendStarted.get() && !sendAnswered.get())
+			if (sendStarted.get())
 				throw new ForeignBlockchainException.SendOutcomeUnknownException(SEND_OUTCOME_UNKNOWN_REASON);
 			throw e;
 		}
@@ -716,50 +706,18 @@ public class PirateChain extends Bitcoiny {
 			throw new ForeignBlockchainException.InsufficientFundsException(INSUFFICIENT_VERIFIED_FUNDS_REASON);
 	}
 
-	/**
-	 * Interprets the native {@code send} reply. A txid is returned as-is. An explicit native
-	 * {@code error} is a failure the native wallet itself reported before completing the send and is
-	 * mapped to a stable reason (insufficient funds, invalid recipient, or a generic native failure)
-	 * so the raw text (which can contain the recipient address and memo) is never returned to API
-	 * callers. Anything else (null, non-JSON, a reply with neither txid nor error, an empty txid) is
-	 * NOT a proven failure: the native wallet broadcasts before it answers, so that is an unknown
-	 * outcome. The raw reply is logged only when Pirate debug logging is on.
-	 */
+	/** Native errors lack broadcast provenance: only a valid txid proves submission. */
 	static String parseSendResponse(String response) throws ForeignBlockchainException {
-		String nativeError = null;
-		boolean parsed = false;
 		try {
 			JSONObject json = new JSONObject(response == null ? "" : response);
-			parsed = true;
-			if (json.has("txid") && !json.isNull("txid")) {
-				String txid = json.getString("txid");
-				if (!txid.isBlank())
-					return txid;
-			}
-			if (json.has("error") && !json.isNull("error"))
-				nativeError = json.get("error").toString();
+			Object txid = json.opt("txid");
+			if (txid instanceof String value && value.matches("[0-9a-fA-F]{64}")
+					&& (!json.has("error") || json.isNull("error")))
+				return value.toLowerCase(Locale.ROOT);
 		} catch (JSONException e) {
-			// handled below
+			// No trustworthy txid was delivered. Do not expose native reply text.
 		}
-
-		if (Settings.getInstance().isPirateChainWalletDebugLogging())
-			LOGGER.debug(() -> String.format("Native ARRR send did not return a txid: %s", nativeErrorForLog(response)));
-
-		if (!parsed || nativeError == null)
-			throw new ForeignBlockchainException.SendOutcomeUnknownException(SEND_OUTCOME_UNKNOWN_REASON);
-
-		String lowered = nativeError.toLowerCase(Locale.ROOT);
-		if (lowered.contains("insufficient"))
-			throw new ForeignBlockchainException.InsufficientFundsException(INSUFFICIENT_VERIFIED_FUNDS_REASON);
-		if (lowered.contains("invalid recipient") || lowered.contains("invalid address")
-				|| lowered.contains("invalid shielded address") || lowered.contains("invalid sapling"))
-			throw new ForeignBlockchainException.InvalidRecipientException(RECIPIENT_INVALID_REASON);
-
-		throw new ForeignBlockchainException(NATIVE_SEND_FAILED_REASON);
-	}
-
-	private static String nativeErrorForLog(String response) {
-		return response == null ? "<null>" : response.length() > 512 ? response.substring(0, 512) + "..." : response;
+		throw new ForeignBlockchainException.SendOutcomeUnknownException(SEND_OUTCOME_UNKNOWN_REASON);
 	}
 
 	public String fundP2SH(String entropy58, String receivingAddress, long amount,

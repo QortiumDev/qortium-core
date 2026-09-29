@@ -295,6 +295,15 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		this.config = config;
 	}
 
+	/** Overridable by isolated native-flow harnesses; production always shares one lane. */
+	protected ZcashFamilyNativeCoordinator nativeCoordinator() {
+		return NATIVE_COORDINATOR;
+	}
+
+	protected java.time.Duration walletOperationTimeout() {
+		return ZcashFamilyNativeCoordinator.DEFAULT_TIMEOUT;
+	}
+
 	protected abstract W createWallet(byte[] entropyBytes, boolean isNullSeedWallet) throws IOException;
 
 	/** Coin-specific opt-in hook for a fresh wallet whose birthday must be chosen from the current tip. */
@@ -374,7 +383,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 				this.loadStatus = null;
 
-				boolean syncAttempted = NATIVE_COORDINATOR.execute("synchronize " + this.config.getCurrencyCode() + " wallet",
+				boolean syncAttempted = nativeCoordinator().execute("synchronize " + this.config.getCurrencyCode() + " wallet",
 						ZcashFamilyNativeCoordinator.SYNC_TIMEOUT, nativeAdapter -> {
 					W wallet = this.currentWallet;
 					if (wallet == null || wallet.isNullSeedWallet())
@@ -392,7 +401,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				if (now != null && now - SAVE_INTERVAL >= this.lastSaveTime)
 					this.saveCurrentWallet();
                 } catch (ZcashFamilyNativeCoordinator.NativeQueueContentionException e) {
-                    if (NATIVE_COORDINATOR.isDegraded()) throw e;
+                    if (nativeCoordinator().isDegraded()) throw e;
                     // A queued operation never touched native state. Do not turn normal
                     // contention into controller shutdown/restart-required recovery.
                     if (!this.waitWhileRunning(1000)) break;
@@ -414,8 +423,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			this.running = false;
 			this.shutdownPrepared = this.prepareCurrentWalletForShutdown();
 			this.saveCurrentWallet();
-			if (NATIVE_COORDINATOR.isDegraded() || !this.shutdownPrepared) {
-				String status = NATIVE_COORDINATOR.isDegraded()
+			if (nativeCoordinator().isDegraded() || !this.shutdownPrepared) {
+				String status = nativeCoordinator().isDegraded()
 						? this.config.getDisplayName() + " native wallet is unavailable until Core restart"
 						: this.config.getDisplayName() + " wallet did not stop cleanly; Core restart required";
 				this.cacheStatus(WalletSyncStatus.degraded(status));
@@ -539,7 +548,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	public boolean requiresCoreRestart() {
-		return this.lifecycleState == LifecycleState.DEGRADED || NATIVE_COORDINATOR.isDegraded();
+		return this.lifecycleState == LifecycleState.DEGRADED || nativeCoordinator().isDegraded();
 	}
 
 	static boolean acceptsWalletOperations(LifecycleState state) {
@@ -873,7 +882,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private void saveCurrentWallet() {
 		try {
-			NATIVE_COORDINATOR.execute("save " + this.config.getCurrencyCode() + " wallet", nativeAdapter -> {
+			nativeCoordinator().execute("save " + this.config.getCurrencyCode() + " wallet", nativeAdapter -> {
 				if (this.currentWallet == null)
 					return null;
 
@@ -891,7 +900,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private boolean prepareCurrentWalletForShutdown() {
 		try {
-			return NATIVE_COORDINATOR.execute("prepare " + this.config.getCurrencyCode() + " wallet shutdown", nativeAdapter -> {
+			return nativeCoordinator().execute("prepare " + this.config.getCurrencyCode() + " wallet shutdown", nativeAdapter -> {
 				if (this.currentWallet != null && !this.currentWallet.prepareForShutdown(nativeAdapter))
 					return false;
 				return true;
@@ -938,7 +947,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		this.assertNotCrossWalletBusy(entropy58, isNullSeedWallet);
 
 		try {
-			return NATIVE_COORDINATOR.execute("execute " + this.config.getCurrencyCode() + " wallet operation",
+			return nativeCoordinator().execute("execute " + this.config.getCurrencyCode() + " wallet operation",
+					walletOperationTimeout(),
 					nativeAdapter -> {
 				if (!acceptsWalletOperations(this.lifecycleState))
 					throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
@@ -979,7 +989,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			// the lane, so this must report the same structured busy signal, not a generic failure.
 			// A lane that is now degraded (a mid-operation timeout) is a different, unrelated failure
 			// mode and keeps the generic mapping below.
-			if (!NATIVE_COORDINATOR.isDegraded()
+			if (!nativeCoordinator().isDegraded()
 					&& (e.getCause() instanceof java.util.concurrent.RejectedExecutionException
 							|| e.getCause() instanceof java.util.concurrent.TimeoutException
 							|| e.getCause() instanceof InterruptedException))
@@ -996,7 +1006,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	 * cross-wallet request into a lane that is currently occupied by different wallet's work.
 	 */
 	private void assertNotCrossWalletBusy(String entropy58, boolean isNullSeedWallet) throws ForeignBlockchainException {
-		if (!NATIVE_COORDINATOR.isBusy())
+		if (!nativeCoordinator().isBusy())
 			return;
 
 		byte[] entropyBytes;
@@ -1182,7 +1192,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		if (entropy58 != null && !isValidEntropy(entropy58))
 			return WalletSyncStatus.loading("Invalid entropy bytes");
 
-		if (NATIVE_COORDINATOR.isBusy()) {
+		if (nativeCoordinator().isBusy()) {
 			CachedWalletSyncStatus cachedStatus = this.cachedStatus;
 			if (entropy58 == null || this.matchesCachedWallet(cachedStatus, entropy58))
 				return withPeekedRecoveryMarker(cachedStatus).asStale();
@@ -1194,7 +1204,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 		try {
 			Duration timeout = this.statusTimeoutFor(entropy58);
-			return NATIVE_COORDINATOR.execute("get wallet synchronization status",
+			return nativeCoordinator().execute("get wallet synchronization status",
 					timeout, nativeAdapter -> {
 				if (entropy58 != null && !this.initWithEntropy58(entropy58, false, nativeAdapter)) {
 					if (WALLET_BUSY_REASON.equals(this.initializationFailure))
@@ -1216,7 +1226,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 					throw walletBusyException;
 				cause = cause.getCause();
 			}
-			if (NATIVE_COORDINATOR.isDegraded()) {
+			if (nativeCoordinator().isDegraded()) {
 				WalletSyncStatus status = cacheStatus(WalletSyncStatus.degraded(
 						this.config.getDisplayName() + " native wallet is unavailable until Core restart")
 						.withLastError("NATIVE_LANE_DEGRADED", "Native wallet lane is degraded"));
@@ -1319,7 +1329,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	protected boolean isLibraryLoaded() {
-		return NATIVE_COORDINATOR.execute("check native wallet library", ZcashFamilyNativeAdapter::isLoaded);
+		return nativeCoordinator().execute("check native wallet library", ZcashFamilyNativeAdapter::isLoaded);
 	}
 
 	private void loadValidatedNativeLibrary(Path libDirectory, String libFileName, Path authenticatedUnifiedSource)
@@ -1334,7 +1344,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 
 		try {
-			NATIVE_COORDINATOR.execute("load native wallet library", nativeAdapter -> {
+			nativeCoordinator().execute("load native wallet library", nativeAdapter -> {
 				Path library = libDirectory.resolve(libFileName);
 				if (trustedRecord != null)
 					PirateUnifiedWalletBundle.validateSelectedLibrary(library, trustedRecord);
@@ -1355,7 +1365,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	protected <T> T executeChecked(String operationName,
 			ZcashFamilyNativeCoordinator.NativeOperation<T> operation) throws ForeignBlockchainException {
 		try {
-			return NATIVE_COORDINATOR.execute(operationName, operation);
+			return nativeCoordinator().execute(operationName, operation);
 		} catch (ZcashFamilyNativeCoordinator.NativeWalletException e) {
 			Throwable cause = e;
 			while (cause != null) {

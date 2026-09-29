@@ -37,8 +37,7 @@ public class PirateChainSendRequestReaderJerseyTests {
 
 	@Test
 	public void testReaderIsRegisteredByPackageScanning() {
-		ResourceConfig config = new ResourceConfig();
-		config.packages("org.qortium.api.resource");
+		ResourceConfig config = org.qortium.api.ApiServiceTestConfig.create();
 		assertTrue(config.getClasses().contains(PirateChainSendRequestReader.class));
 	}
 
@@ -72,6 +71,21 @@ public class PirateChainSendRequestReaderJerseyTests {
 		}
 	}
 
+	@Test
+	public void testMalformedUtf8MemoIsRejectedWithoutReplacement() throws Exception {
+		try (HandlerServer server = new HandlerServer()) {
+			byte[] prefix = "{\"memo\":\"".getBytes(StandardCharsets.UTF_8);
+			byte[] suffix = "\"}".getBytes(StandardCharsets.UTF_8);
+			byte[] body = new byte[prefix.length + 2 + suffix.length];
+			System.arraycopy(prefix, 0, body, 0, prefix.length);
+			body[prefix.length] = (byte) 0xc3; body[prefix.length + 1] = 0x28;
+			System.arraycopy(suffix, 0, body, prefix.length + 2, suffix.length);
+			String response = server.postBytes("/send-binding/echo", body);
+			assertStatus(400, response);
+			assertTrue(response.contains("MALFORMED_BODY"));
+		}
+	}
+
 	private static void assertStatus(int expectedStatus, String response) {
 		String statusLine = response.substring(0, response.indexOf("\r\n"));
 		assertEquals("unexpected status line: " + response, "HTTP/1.1 " + expectedStatus,
@@ -83,9 +97,8 @@ public class PirateChainSendRequestReaderJerseyTests {
 		private final LocalConnector connector = new LocalConnector(this.server);
 
 		private HandlerServer() throws Exception {
-			ResourceConfig config = new ResourceConfig(SendBindingResource.class);
-			config.registerClasses(ApiExceptionMapper.class, ApiRequestBodyInterceptor.class,
-					PirateChainSendRequestReader.class);
+			ResourceConfig config = org.qortium.api.ApiServiceTestConfig.create();
+			config.register(SendBindingResource.class);
 
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
 			context.setContextPath("/");
@@ -97,15 +110,16 @@ public class PirateChainSendRequestReaderJerseyTests {
 		}
 
 		private String post(String path, String body) throws Exception {
-			byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
-			String request = "POST " + path + " HTTP/1.1\r\n"
-					+ "Host: localhost\r\n"
-					+ "Content-Type: application/json\r\n"
-					+ "Content-Length: " + bodyBytes.length + "\r\n"
-					+ "Connection: close\r\n"
-					+ "\r\n"
-					+ body;
-			return this.connector.getResponse(request);
+			return postBytes(path, body.getBytes(StandardCharsets.UTF_8));
+		}
+
+		private String postBytes(String path, byte[] body) throws Exception {
+			byte[] headers = ("POST " + path + " HTTP/1.1\r\nHost: localhost\r\n"
+					+ "Content-Type: application/json\r\nContent-Length: " + body.length
+					+ "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
+			java.nio.ByteBuffer request = java.nio.ByteBuffer.allocate(headers.length + body.length);
+			request.put(headers).put(body).flip();
+			return StandardCharsets.UTF_8.decode(this.connector.getResponse(request)).toString();
 		}
 
 		@Override

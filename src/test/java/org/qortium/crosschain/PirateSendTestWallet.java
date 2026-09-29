@@ -13,10 +13,13 @@ import java.nio.file.Path;
  */
 public class PirateSendTestWallet extends PirateWallet {
 
-	public PirateSendTestWallet(byte[] entropy, boolean nullSeed, Path root) throws IOException {
+	private final ZcashFamilyNativeCoordinator coordinator;
+
+	public PirateSendTestWallet(byte[] entropy, boolean nullSeed, Path root, ZcashFamilyNativeCoordinator coordinator) throws IOException {
 		super(new ZcashFamilyWalletConfig("Pirate Chain", "ARRR", "PirateChain", "test",
 				"test", "zs", () -> 1, () -> null, () -> true, () -> "test", () -> false, () -> root),
 				entropy, nullSeed, false);
+		this.coordinator = coordinator;
 		setReady(true);
 	}
 
@@ -35,7 +38,7 @@ public class PirateSendTestWallet extends PirateWallet {
 
 	@Override
 	public boolean isSynchronized() {
-		return ZcashFamilyNativeCoordinator.getInstance().execute("test wallet synchronization check",
+		return this.coordinator.execute("test wallet synchronization check",
 				adapter -> ZcashFamilyWallet.isHeightSynchronized(getHeight(adapter), getChainTip(adapter), 0));
 	}
 

@@ -188,15 +188,16 @@ public class ZcashFamilyWallet {
 
 	public void unlock() {
 		NATIVE_COORDINATOR.execute("unlock wallet", nativeAdapter -> {
-			if (!this.isEncrypted(nativeAdapter)) {
-				return null;
-			}
-
-			String encryptionKey = this.getEncryptionKey();
-			if (encryptionKey != null)
-				this.doUnlock(nativeAdapter, encryptionKey);
+			unlock(nativeAdapter);
 			return null;
 		});
+	}
+
+	/** Unlock using the caller's already leased native lane. */
+	public void unlock(ZcashFamilyNativeAdapter nativeAdapter) {
+		if (!this.isEncrypted(nativeAdapter)) return;
+		String encryptionKey = this.getEncryptionKey();
+		if (encryptionKey != null) this.doUnlock(nativeAdapter, encryptionKey);
 	}
 
 	public boolean save() throws IOException {

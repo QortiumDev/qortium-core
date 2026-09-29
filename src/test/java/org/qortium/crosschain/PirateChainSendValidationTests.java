@@ -229,33 +229,19 @@ public class PirateChainSendValidationTests {
 
 	@Test
 	public void testNativeSendResponseIsReducedToStableReasons() throws Exception {
-		assertEquals("abc123", PirateChain.parseSendResponse("{\"txid\":\"abc123\"}"));
-
-		String recipient = VALID;
-		ForeignBlockchainException.InsufficientFundsException insufficient = assertThrows(
-				ForeignBlockchainException.InsufficientFundsException.class,
-				() -> PirateChain.parseSendResponse("{\"error\":\"Insufficient funds: need 5 more for "
-						+ recipient + " memo=secret note\"}"));
-		assertEquals(PirateChain.INSUFFICIENT_VERIFIED_FUNDS_REASON, insufficient.getMessage());
-		assertFalse(insufficient.getMessage().contains(recipient));
-		assertFalse(insufficient.getMessage().contains("secret note"));
-
-		// The native wallet's own recipient rejection (see its "Invalid recipient address in output #"
-		// text) is an invalid-address failure, still sanitized.
-		ForeignBlockchainException.InvalidRecipientException invalidRecipient = assertThrows(
-				ForeignBlockchainException.InvalidRecipientException.class,
-				() -> PirateChain.parseSendResponse("{\"error\":\"Invalid recipient address in output #0: "
-						+ recipient + "\"}"));
-		assertEquals(PirateChain.RECIPIENT_INVALID_REASON, invalidRecipient.getMessage());
-		assertFalse(invalidRecipient.getMessage().contains(recipient));
-
-		// An explicit native error reply is a failure the native wallet reported itself: definitive.
-		ForeignBlockchainException generic = assertThrows(ForeignBlockchainException.class,
-				() -> PirateChain.parseSendResponse("{\"error\":\"could not pay " + recipient + " memo=secret note\"}"));
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, generic.getMessage());
-		assertFalse(generic.getMessage().contains(recipient));
-		assertFalse(generic instanceof ForeignBlockchainException.InsufficientFundsException);
-		assertFalse(generic instanceof ForeignBlockchainException.SendOutcomeUnknownException);
+		String txid = "ab".repeat(32);
+		assertEquals(txid, PirateChain.parseSendResponse("{\"txid\":\"" + txid.toUpperCase(java.util.Locale.ROOT) + "\"}"));
+		for (String invalid : new String[] { "a".repeat(63), "a".repeat(65), "g".repeat(64) })
+			assertThrows(ForeignBlockchainException.SendOutcomeUnknownException.class,
+					() -> PirateChain.parseSendResponse("{\"txid\":\"" + invalid + "\"}"));
+		assertEquals(txid, PirateChain.parseSendResponse("{\"txid\":\"" + txid + "\"}"));
+		for (String reply : new String[] { "{\"error\":\"Insufficient funds\"}",
+				"{\"error\":\"Invalid recipient\"}", "{\"error\":\"transport failed\"}",
+				"{\"txid\":\"abc123\"}", "{\"txid\":\"" + txid + "\",\"error\":\"ambiguous\"}" }) {
+			ForeignBlockchainException.SendOutcomeUnknownException error = assertThrows(
+					ForeignBlockchainException.SendOutcomeUnknownException.class, () -> PirateChain.parseSendResponse(reply));
+			assertEquals(PirateChain.SEND_OUTCOME_UNKNOWN_REASON, error.getMessage());
+		}
 	}
 
 	@Test
@@ -303,12 +289,11 @@ public class PirateChainSendValidationTests {
 		for (String reply : new String[] { "{\"ok\":true,\"result\":{\"total\":\"500000000\"}}",
 				"{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":null}}",
 				"{\"ok\":true,\"result\":{\"total\":500,\"pending\":\"1\"}}" }) {
-			ForeignBlockchainException.BalanceUnavailableException unavailable = assertThrows("reply: " + reply,
-					ForeignBlockchainException.BalanceUnavailableException.class,
-					() -> PirateWallet.parseTypedBalance(reply));
-			assertEquals(PirateWallet.VERIFIED_BALANCE_UNAVAILABLE_REASON, unavailable.getMessage());
-			// Home's read adapter matches on this stable substring.
-			assertTrue(unavailable.getMessage().contains("BALANCE_UNAVAILABLE"));
+			PirateChainBalance balance = PirateWallet.parseTypedBalance(reply);
+			assertFalse(balance.verifiedBalanceKnown);
+			assertTrue(balance.zbalance > 0);
+			assertThrows(ForeignBlockchainException.WalletNotReadyException.class,
+					() -> PirateChain.assertSufficientVerifiedFunds(balance, 1));
 		}
 		// A malformed spendable value is still a generic fail-closed failure, not "unavailable".
 		ForeignBlockchainException malformed = assertThrows(ForeignBlockchainException.class,

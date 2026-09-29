@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-29 - fix(arrr): preserve uncertain send outcomes and reject malformed memo bytes
+
+A native send error or late reply can follow a successful broadcast. Treat every
+reply without a valid transaction ID and every caller failure after send starts
+as outcome unknown, with no automatic retry. Preserve total balance reads when
+spendable funds are unknown while still refusing verified reads and sends.
+Reject malformed UTF-8 instead of silently changing memo text. Exercise the
+production JSON provider configuration and isolated native lanes, including a
+deterministic timeout followed by a late successful native response.
+
 ### 2026-09-28 - feat(arrr): validated JSON send contract with typed errors (send protocol v1)
 
 Turns the Pirate Chain (ARRR) send endpoint into a documented JSON contract

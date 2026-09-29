@@ -64,7 +64,10 @@ public class PirateChainSendNativeFlowTests {
 	}
 
 	private ScriptedNativeAdapter adapter;
-	private ZcashFamilyNativeAdapter originalAdapter;
+	private ZcashFamilyNativeCoordinator coordinator;
+	private Settings originalSettings;
+	private boolean settingsCaptured;
+	private boolean repositoryOpened;
 	private FakeController controller;
 	private CrossChainPirateChainResource resource;
 
@@ -76,18 +79,18 @@ public class PirateChainSendNativeFlowTests {
 
 	@Before
 	public void before() throws Exception {
+		this.originalSettings = (Settings) FieldUtils.readStaticField(Settings.class, "instance", true);
+		this.settingsCaptured = true;
 		Common.useDefaultSettings();
+		this.repositoryOpened = true;
 		PirateChainWalletController.resetForTesting();
 		PirateChain.resetForTesting();
 		FieldUtils.writeField(Settings.getInstance(), "pirateChainWalletUnified", true, true);
 
-		ZcashFamilyNativeCoordinator coordinator = ZcashFamilyNativeCoordinator.getInstance();
-		assertFalse("native lane must be healthy for this harness", coordinator.isDegraded());
 		this.adapter = new ScriptedNativeAdapter();
-		this.originalAdapter = (ZcashFamilyNativeAdapter) FieldUtils.readField(coordinator, "adapter", true);
-		FieldUtils.writeField(coordinator, "adapter", this.adapter, true);
+		this.coordinator = org.qortium.crosschain.SendTestCoordinator.create(this.adapter);
 
-		this.controller = new FakeController(this.adapter);
+		this.controller = new FakeController(this.coordinator);
 		Field instance = PirateChainWalletController.class.getDeclaredField("instance");
 		instance.setAccessible(true);
 		instance.set(null, this.controller);
@@ -105,12 +108,27 @@ public class PirateChainSendNativeFlowTests {
 
 	@After
 	public void after() throws Exception {
-		FieldUtils.writeField(ZcashFamilyNativeCoordinator.getInstance(), "adapter", this.originalAdapter, true);
-		PirateChainWalletController.resetForTesting();
-		PirateChain.resetForTesting();
-		Settings.getInstance().enableWallet(PirateChain.CURRENCY_CODE);
-		FieldUtils.writeField(Settings.getInstance(), "pirateChainWalletUnified", false, true);
-		ApiCommon.clearTestApiKey();
+		try {
+			if (this.coordinator != null) this.coordinator.close();
+		} finally {
+			try { PirateChainWalletController.resetForTesting(); PirateChain.resetForTesting(); }
+			finally {
+				try {
+					try { if (this.repositoryOpened) Common.closeRepository(); }
+					finally {
+						if (this.settingsCaptured)
+							FieldUtils.writeStaticField(Settings.class, "instance", this.originalSettings, true);
+					}
+				} finally {
+					ApiCommon.clearTestApiKey();
+					if (this.controller != null) {
+						try (var paths = Files.walk(this.controller.root)) {
+							for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	private static PirateChainSendRequest request(String recipient, String amount, String memo) {
@@ -133,7 +151,7 @@ public class PirateChainSendNativeFlowTests {
 		PirateChainSendResult result = this.resource.sendPirateChain(ApiCommon.TEST_API_KEY,
 				request(RECIPIENT, "1.5", memo));
 
-		assertEquals("f00dtxid", result.txid);
+		assertEquals("abababababababababababababababababababababababababababababababab", result.txid);
 		assertEquals("10000", result.feeAtomic);
 		assertEquals("FIXED", result.feePolicy);
 		assertEquals(1, result.sendProtocolVersion);
@@ -207,17 +225,17 @@ public class PirateChainSendNativeFlowTests {
 
 		// exactly amount + fee is enough
 		this.adapter.balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":\"150010000\"}}";
-		assertEquals("f00dtxid", this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, request(RECIPIENT, "1.5", null)).txid);
+		assertEquals("abababababababababababababababababababababababababababababababab", this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, request(RECIPIENT, "1.5", null)).txid);
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
 
 	@Test
-	public void testExplicitNativeErrorIsADefinitiveSanitizedFailure() {
+	public void testExplicitNativeErrorIsAnUnknownOutcome() {
 		this.adapter.sendReply = "{\"error\":\"Failed to build transaction for " + RECIPIENT + "\"}";
 		ApiException exception = sendFails(request(RECIPIENT, "1.5", "private"));
 		assertEquals(500, exception.status);
 		assertEquals(ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE.getCode(), exception.error);
-		assertEquals(PirateChain.NATIVE_SEND_FAILED_REASON, exception.message);
+		assertTrue(exception.message.startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
 		assertFalse(exception.message.contains(RECIPIENT));
 		assertEquals(1, this.adapter.arguments("execute:send").size());
 	}
@@ -266,34 +284,60 @@ public class PirateChainSendNativeFlowTests {
 		assertEquals(0, this.adapter.arguments("execute:send").size());
 	}
 
+	@Test
+	public void testCoordinatorTimeoutWithLateNativeSuccessNeverReportsDefinitiveFailure() throws Exception {
+		this.controller.timeout = java.time.Duration.ofMillis(100);
+		this.adapter.returnAfterTimeout = true;
+		ApiException exception = sendFails(request(RECIPIENT, "1.5", null));
+		assertTrue(exception.message.startsWith(PirateChain.SEND_OUTCOME_UNKNOWN_REASON));
+		assertTrue(this.adapter.lateReturned.await(5, java.util.concurrent.TimeUnit.SECONDS));
+		assertTrue(this.coordinator.isDegraded());
+		assertEquals(1, this.adapter.arguments("execute:send").size());
+	}
+
+	@Test
+	public void testMissingSpendablePreservesUnverifiedReadAndRejectsVerifiedRead() throws Exception {
+		this.adapter.balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\"}}";
+		assertEquals("500000000", this.resource.getPirateChainWalletBalance(ApiCommon.TEST_API_KEY, false, ENTROPY));
+		ApiException exception = assertThrows(ApiException.class,
+				() -> this.resource.getPirateChainWalletBalance(ApiCommon.TEST_API_KEY, true, ENTROPY));
+		assertEquals(1204, exception.error);
+	}
+
 	/** Controller double: real ownership/lane logic, wallet creation and startup stubbed. */
 	private static class FakeController extends PirateChainWalletController {
-		private final ZcashFamilyNativeAdapter adapter;
+		private final ZcashFamilyNativeCoordinator coordinator;
 		private final Path root = Files.createTempDirectory("arrr-send-flow-test-");
-
-		FakeController(ZcashFamilyNativeAdapter adapter) throws Exception {
-			this.adapter = adapter;
-			FieldUtils.writeField(this, "lifecycleState", LifecycleState.RUNNING, true);
+		java.time.Duration timeout = java.time.Duration.ofSeconds(5);
+		final java.util.concurrent.CountDownLatch operationReturned = new java.util.concurrent.CountDownLatch(1);
+		@Override public <T> T withEntropyWallet(String entropy, boolean synchronizedWallet,
+				WalletOperation<PirateWallet, T> operation) throws ForeignBlockchainException {
+			try {
+				return super.withEntropyWallet(entropy, synchronizedWallet, (wallet, adapter) -> {
+					try { return operation.execute(wallet, adapter); }
+					finally { operationReturned.countDown(); }
+				});
+			} catch (ForeignBlockchainException e) {
+				if (this.coordinator.isDegraded()) {
+					try { assertTrue(operationReturned.await(5, java.util.concurrent.TimeUnit.SECONDS)); }
+					catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
+				}
+				throw e;
+			}
 		}
 
+		FakeController(ZcashFamilyNativeCoordinator coordinator) throws Exception {
+			this.coordinator = coordinator;
+			FieldUtils.writeField(this, "lifecycleState", LifecycleState.RUNNING, true);
+		}
+		@Override protected ZcashFamilyNativeCoordinator nativeCoordinator() { return this.coordinator; }
+		@Override protected java.time.Duration walletOperationTimeout() { return this.timeout; }
 		@Override public synchronized boolean startController() { return true; }
 		@Override public boolean shutdown() { return true; }
 
 		@Override
-		protected <T> T executeChecked(String name, ZcashFamilyNativeCoordinator.NativeOperation<T> operation)
-				throws ForeignBlockchainException {
-			try {
-				return operation.execute(this.adapter);
-			} catch (ForeignBlockchainException e) {
-				throw e;
-			} catch (Exception e) {
-				throw new ForeignBlockchainException(e.getMessage());
-			}
-		}
-
-		@Override
 		protected PirateWallet createWallet(byte[] bytes, boolean nullSeed, boolean tip) throws IOException {
-			return new PirateSendTestWallet(bytes, nullSeed, this.root);
+			return new PirateSendTestWallet(bytes, nullSeed, this.root, this.coordinator);
 		}
 	}
 
@@ -301,8 +345,10 @@ public class PirateChainSendNativeFlowTests {
 	private static final class ScriptedNativeAdapter implements ZcashFamilyNativeAdapter {
 		final List<String[]> calls = new ArrayList<>();
 		String balanceReply = "{\"ok\":true,\"result\":{\"total\":\"500000000\",\"spendable\":\"400000000\",\"pending\":\"0\"}}";
-		String sendReply = "{\"txid\":\"f00dtxid\"}";
+		String sendReply = "{\"txid\":\"abababababababababababababababababababababababababababababababab\"}";
 		boolean sendThrows;
+		boolean returnAfterTimeout;
+		final java.util.concurrent.CountDownLatch lateReturned = new java.util.concurrent.CountDownLatch(1);
 		Function<String, String> validateReply = address -> BAD_POINT_RECIPIENT.equals(address)
 				? "{\"ok\":true,\"result\":{\"address_type\":null,\"is_valid\":false,\"reason\":\"Invalid shielded address.\"}}"
 				: "{\"ok\":true,\"result\":{\"address_type\":\"Sapling\",\"is_valid\":true,\"reason\":null}}";
@@ -369,6 +415,10 @@ public class PirateChainSendNativeFlowTests {
 				case "encryptionstatus": return "{\"encrypted\":false}";
 				case "export": return "[{\"address\":\"" + INPUT_ADDRESS + "\"}]";
 				case "send":
+					if (this.returnAfterTimeout) {
+						try { new java.util.concurrent.CountDownLatch(1).await(); }
+						catch (InterruptedException expected) { this.lateReturned.countDown(); }
+					}
 					if (this.sendThrows)
 						throw new IllegalStateException("simulated JNI failure mid-send");
 					return this.sendReply;
