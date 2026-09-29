@@ -215,7 +215,7 @@ public class PirateChainVerifiedRecoveryContractTests {
 						+ "\"pending\":\"3456789\"}}");
 		assertEquals(123456789L, balance.zbalance);
 		assertEquals(120000000L, balance.verified_zbalance);
-		assertTrue("unified always determines verified balance or fails closed", balance.verifiedBalanceKnown);
+		assertTrue("explicit spendable balance is known", balance.verifiedBalanceKnown);
 
 		// Plain integers are accepted too, as the upstream decoder accepts either form.
 		PirateChainBalance numeric = PirateWallet.parseTypedBalance(
@@ -226,6 +226,16 @@ public class PirateChainVerifiedRecoveryContractTests {
 	}
 
 	@Test
+	public void testMissingSpendablePreservesDisplayTotalButRefusesSend() throws Exception {
+		PirateChainBalance balance = PirateWallet.parseTypedBalance(
+				"{\"ok\":true,\"result\":{\"total\":\"100000\"}}");
+		assertEquals(100000L, balance.zbalance);
+		assertFalse(balance.verifiedBalanceKnown);
+		assertThrows(ForeignBlockchainException.WalletNotReadyException.class,
+				() -> PirateChain.assertSufficientVerifiedFunds(balance, 1L));
+	}
+
+	@Test
 	public void testTypedBalanceFailsClosedOnMalformedResponses() {
 		for (String malformed : new String[] {
 				// not an envelope success
@@ -233,7 +243,6 @@ public class PirateChainVerifiedRecoveryContractTests {
 				"{\"ok\":\"true\",\"result\":{\"total\":\"1\",\"spendable\":\"1\"}}",
 				// missing result or fields
 				"{\"ok\":true}",
-				"{\"ok\":true,\"result\":{\"total\":\"1\"}}",
 				// wrong scalar shapes and impossible values
 				"{\"ok\":true,\"result\":{\"total\":{},\"spendable\":\"1\"}}",
 				"{\"ok\":true,\"result\":{\"total\":\"not-a-number\",\"spendable\":\"1\"}}",
