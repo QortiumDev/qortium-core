@@ -30,11 +30,11 @@ import java.util.zip.ZipFile;
 /** Validates the pinned Pirate Unified cross-platform native bundle. */
 final class PirateUnifiedWalletBundle {
 
-	static final String RELEASE_TAG = "v1.2.4";
-	static final String ARTIFACT_FILENAME = "pirate-unified-wallet-qortal-jni-artifacts-v1.2.4.zip";
-	static final long ARTIFACT_SIZE = 366_149_509L;
+	static final String RELEASE_TAG = "v1.2.5";
+	static final String ARTIFACT_FILENAME = "pirate-unified-wallet-qortal-jni-artifacts-v1.2.5.zip";
+	static final long ARTIFACT_SIZE = 366_141_712L;
 	static final String ARTIFACT_SHA256 =
-			"3a878eada47d3a1ef2ec15b5cb542d0672888255d8129260b2358c8a66dab61c";
+			"4f2a97d57c1854ba14407dbc7b32624906f65dce762017219fa241df1f380eda";
 	static final String RELEASE_URL = "https://github.com/PirateNetwork/Stashi-Wallet/"
 			+ "releases/download/" + RELEASE_TAG + "/" + ARTIFACT_FILENAME;
 	static final String MANIFEST_FILENAME = "QORTIUM-MANIFEST.txt";

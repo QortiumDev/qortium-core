@@ -3,7 +3,7 @@
 Core loads the exact transaction signature it pins, not the latest publication
 under a name. Every future native bundle must use a unique version-specific
 identifier under `ARBITRARY_DATA/QortiumHomeTest`, such as
-`pirate-unified-wallet-v1.2.4`. Never overwrite a version identifier. A packaging
+`pirate-unified-wallet-v1.2.5`. Never overwrite a version identifier. A packaging
 correction needs a new identifier suffix and a new reviewed transaction pin.
 The current/previous records, and the older publications still required by released
 Core versions (`retainedHistorical`), are in
@@ -21,7 +21,7 @@ For each update:
 
 1. Verify the upstream release, publish the new version identifier, and verify
    the exact signature, encrypted payload hash, authenticated ZIP, and every
-   file on both seeds. Temporarily holding three bundles is expected.
+   file on both seeds. Temporarily holding more than two bundles is expected.
 2. Pin the new signature in Core and its participant profile; update the ledger
    and the seeds' explicit retention lists. Release the replacement stable Core.
 3. Keep the previous bundle for at least **30 days after that stable release**,
@@ -66,12 +66,13 @@ retained. Never use a latest-by-name request as evidence for an older signature.
 Capacity still gates new fetches. Retained bytes can exceed a configured cap and
 will not be evicted merely to meet it. Keep sufficient disk/capacity headroom
 for the new bundle and build workspace; monitor both independent holders.
-The tracked seed profiles retain current v1.2.4, the interim v1.2.3 pin (carried
-on main from 2026-09-12 to 2026-09-27 but never shipped in a stable Core release,
-retained for at least 30 days after the replacement stable Core release and
-until its support is explicitly ended, like every other bundle), and the supported
-v1.2.1 pin, without enabling ARRR on seeds. Existing installations must update their active
-local settings; changing repository templates alone does not change a running node.
+The tracked seed profiles retain current v1.2.5, the interim v1.2.4 and v1.2.3
+pins (neither shipped in a stable Core release), and the v1.2.1 pin required
+by released Core 1.8.0. Keep the interim pins for at least 30 days after the
+replacement stable Core release and until support is explicitly ended.
+This rotation does not start a retirement clock or delete any publication.
+ARRR remains disabled on seeds. Existing installations must update their active
+local settings; repository templates alone do not change a running node.
 
 ## Transition from the generic identifier
 

@@ -37,8 +37,8 @@ public class PreviewPirateUnifiedProfileTests {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<Map<String, Object>>() {};
-	private static final String PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE =
-			"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv";
+	private static final String PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE =
+			"5D94EoVU8wN1kuHYuvtA2E5xkFXo69dDugoG26GVaaWaD2v781HNLtFLmMrmiBzFByyRArS1x8Z7J6p1y4EnYQri";
 
 	@After
 	public void restoreDefaultSettings() {
@@ -51,12 +51,12 @@ public class PreviewPirateUnifiedProfileTests {
 
 		assertEquals(Boolean.TRUE, walletSettings(settings).get("ARRR"));
 		assertEquals(Boolean.TRUE, settings.get("pirateChainWalletUnified"));
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE, settings.get("pirateChainWalletQdnSignature"));
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE, settings.get("pirateChainWalletQdnSignature"));
 
 		Settings.fileInstance("preview/settings-preview.json");
 		assertTrue(Settings.getInstance().isWalletEnabled("ARRR"));
 		assertTrue(Settings.getInstance().isPirateChainWalletUnified());
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 				Settings.getInstance().getPirateChainWalletQdnSignature());
 	}
 
@@ -74,7 +74,7 @@ public class PreviewPirateUnifiedProfileTests {
 
 	/**
 	 * P-CORE-58 regression coverage: every preview profile must resolve to the same Pirate
-	 * Unified wallet bundle pin as Settings' own compiled-in default (PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE),
+	 * Unified wallet bundle pin as Settings' own compiled-in default (PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE),
 	 * whether it pins the signature explicitly (settings-preview.json) or relies on the code
 	 * default (the seed profiles). Without this, a future bundle bump in Settings.java can drift
 	 * silently from a stale explicit pin left behind in one of these templates, and a main build
@@ -84,7 +84,7 @@ public class PreviewPirateUnifiedProfileTests {
 	public void testAllPreviewProfilesPinTheSameQdnSignatureAsSettingsDefault() throws Exception {
 		Settings.fileInstance("src/test/resources/test-settings-v2.json");
 		String settingsDefaultSignature = Settings.getInstance().getPirateChainWalletQdnSignature();
-		assertEquals(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE, settingsDefaultSignature);
+		assertEquals(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE, settingsDefaultSignature);
 
 		for (String profile : new String[] {
 				"preview/settings-preview.json",
@@ -107,11 +107,12 @@ public class PreviewPirateUnifiedProfileTests {
 
 	@Test
 	public void testSeedProfilesRetainCurrentAndSupportedPreviousBundle() throws Exception {
-		// Current v1.2.4 first, then the interim v1.2.3 pin (never shipped in a stable Core, retained
-		// until the replacement stable release ships), then the v1.2.1 pin shipped in Core v1.8.0.
+		// Current v1.2.5 first, followed by retained v1.2.4/v1.2.3 interim pins and
+		// the v1.2.1 pin shipped in Core v1.8.0. No retention window has expired.
 		for (String profile : new String[] {"preview/settings-preview-seed.json", "preview/settings-preview-seed-netcup.json"}) {
 			Map<String, Object> settings = readSettings(Path.of(profile));
-			assertEquals(profile, List.of(PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE,
+			assertEquals(profile, List.of(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
+					"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv",
 					"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j",
 					"bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a"), settings.get("qdnRetainedSignatures"));
 		}

@@ -96,12 +96,13 @@ public class MergeSettings {
 	 * Values below are the Pirate Unified QDN wallet bundle signatures. Source of truth:
 	 * docs/cross-chain/pirate-unified-qdn-releases.json ("current".signature is the replacement;
 	 * "previous".signature and every "retainedHistorical[].signature" are superseded) and the
-	 * compiled-in default PIRATE_UNIFIED_V1_2_4_QDN_SIGNATURE in org.qortium.settings.Settings.
+	 * compiled-in default PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE in org.qortium.settings.Settings.
 	 * Keep all three in sync when the bundle rotates again.
 	 */
 	private static final List<SupersededValueRule> SUPERSEDED_VALUE_RULES = List.of(
 			new SupersededValueRule(
 					"pirateChainWalletQdnSignature",
+					"5D94EoVU8wN1kuHYuvtA2E5xkFXo69dDugoG26GVaaWaD2v781HNLtFLmMrmiBzFByyRArS1x8Z7J6p1y4EnYQri",
 					"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv",
 					"24hysb2o6HwXY6U7DmfdcZEpu4JtC5pF9WGftHhkeQPXeoNyatd8EfbUD6G2DptfhKKv9r7o865UEfXYFCCK2M6j",
 					"bEd5dM3wcbYWyG9hUHQQQsrYrYQ2rnYMDPahbqACpxCojjND5hwyUwiQQZNsTqRXu5awnsSurSwHnKkVeh24q7a"

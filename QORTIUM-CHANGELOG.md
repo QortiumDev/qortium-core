@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-09-29 - chore(arrr): pin the official Stashi v1.2.5 native bundle
+
+Updates the Pirate native wallet to the signed upstream Stashi 1.2.5 bundle,
+including transport-selection race fixes and the Windows Tor time-limit fix.
+Pins its version-specific QDN publication consistently in Core and the
+participant profile. Known 1.2.4, 1.2.3 and 1.2.1 pins migrate forward; custom
+operator and local test pins are preserved. Both seed profiles retain all four
+publications, with no deletion or early retirement and with ARRR still disabled
+on seeds. The Linux native contract passed 27 checks; disposable encrypted
+wallets created by both 1.2.4 and 1.2.1 preserved identity, keys, balance and
+history through upgrade and reopen. This update does not enable ARRR sending.
+
 ### 2026-09-28 - fix(arrr): serve the new owner a loading status during a wallet switch
 
 Fixes a false "busy with another ARRR wallet" error that appeared right after a
