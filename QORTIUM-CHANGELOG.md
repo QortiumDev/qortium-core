@@ -34,6 +34,63 @@ own chain.
 
 ## Change Entries
 
+### Verify unknown spendable balance keeps sends blocked
+
+- Preserve the total-balance display regression while asserting that missing spendable balance prevents sending.
+
+### Add durable ARRR sends with wallet-scoped recovery
+
+ARRR protocol v2 records each payment before execution, returns an operation to track, and recovers lost replies without sending again. Unknown outcomes block that wallet's sends and trade funding; other wallets remain usable once the native worker is healthy. Fixed 0.0001 ARRR fees, selected-key-group funds checks, network pinning, strict inputs and interrupt-safe transaction-ID persistence protect the custody boundary. No send is replayed after restart.
+
+
+### 2026-09-29 - fix(arrr): preserve uncertain send outcomes and reject malformed memo bytes
+
+A native send error or late reply can follow a successful broadcast. Treat every
+reply without a valid transaction ID and every caller failure after send starts
+as outcome unknown, with no automatic retry. Preserve total balance reads when
+spendable funds are unknown while still refusing verified reads and sends.
+Reject malformed UTF-8 instead of silently changing memo text. Exercise the
+production JSON provider configuration and isolated native lanes, including a
+deterministic timeout followed by a late successful native response.
+
+### 2026-09-28 - feat(arrr): validated JSON send contract with typed errors (send protocol v1)
+
+Turns the Pirate Chain (ARRR) send endpoint into a documented JSON contract
+that checks everything before touching the wallet and reports one clear,
+stable reason for each refusal. The request now carries the amount as exact
+decimal text (at most eight decimals; exponents, rounding, zero and amounts
+above the ARRR supply are refused instead of being silently rounded or
+wrapped), a required client idempotency key, and an optional memo that is
+checked for size and malformed text but never trimmed or truncated. Only
+canonical lowercase Sapling recipients are accepted; Ironwood, unified and
+transparent addresses are refused with a distinct reason. The old per-byte fee
+field is rejected outright because the fee has always been fixed; the fixed
+fee, protocol version and limits are published by a new read-only
+`/crosschain/arrr/sendcontract` endpoint. The request body is read by a strict
+reader that refuses arrays, nested values, duplicate or unknown fields and
+keeps a numeric amount exactly as written, so a malformed body can no longer
+be quietly turned into a plausible amount or a shortened memo. Inside the
+wallet lane the native wallet first confirms the recipient is a real Sapling
+address (a well-formed encoding is not enough), then the send is refused
+unless the wallet's verified (spendable) balance is known and covers the
+amount plus fee, so the native wallet is never asked to spend funds Core
+cannot see; a Unified balance reply without a spendable figure now reports
+"not ready" rather than a generic failure. A disabled wallet or a legacy
+(non-Unified) backend returns a typed error instead of crashing, and native
+failure text is reduced to a stable reason so the recipient, memo and key
+never appear in responses or logs. When the native send has started and Core
+cannot prove it did not go out (a timeout, a crash, or a reply with no
+transaction id), the response says so explicitly and tells the client not to
+retry until the wallet history has been checked, because this version does
+not yet deduplicate retries. Adds API error codes 1205 (wallet not ready), 1206, 1207 and 1208
+(reserved for the upcoming durable send operations) with messages in every
+language. Also tightens the general ARRR address check used by the trade
+paths to the same canonical lowercase Sapling rule, so uppercase or
+Bech32m-encoded addresses that no wallet produces are no longer treated as
+valid. The send itself is still synchronous (HTTP 200 with the transaction
+id); the durable operation journal and readiness changes follow in later
+pull requests.
+
 ### 2026-09-29 - chore(arrr): pin the official Stashi v1.2.5 native bundle
 
 Updates the Pirate native wallet to the signed upstream Stashi 1.2.5 bundle,

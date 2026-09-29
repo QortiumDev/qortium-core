@@ -5,12 +5,16 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.ApiException;
+import org.qortium.api.ApiError;
 import org.qortium.api.model.crosschain.PirateChainBalance;
+import org.qortium.api.model.crosschain.PirateChainSendContract;
+import org.qortium.api.model.crosschain.PirateChainSendRequest;
 import org.qortium.api.model.crosschain.PirateChainSyncStatus;
 import org.qortium.api.model.crosschain.PirateChainVerifiedRecoveryRequest;
 import org.qortium.api.model.crosschain.PirateChainWalletInitializationRequest;
 import org.qortium.controller.PirateChainWalletController;
 import org.qortium.controller.ZcashFamilyWalletController;
+import org.bitcoinj.base.Bech32;
 import org.qortium.crosschain.ForeignBlockchainException;
 import org.qortium.crosschain.PirateChain;
 import org.qortium.settings.Settings;
@@ -22,6 +26,7 @@ import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -29,16 +34,25 @@ import static org.junit.Assert.assertTrue;
 
 public class CrossChainPirateChainResourceTests extends ApiCommon {
 	private CrossChainPirateChainResource resource;
+    @org.junit.Rule public org.junit.rules.TemporaryFolder sendTemp = new org.junit.rules.TemporaryFolder();
+    private String originalWalletsPath;
+
 
 	@Before
-	public void buildResource() {
+	public void buildResource() throws Exception {
+        originalWalletsPath = Settings.getInstance().getWalletsPath();
+        FieldUtils.writeField(Settings.getInstance(), "walletsPath", sendTemp.getRoot().getAbsolutePath(), true);
 		ApiCommon.installTestApiKey();
 		this.resource = (CrossChainPirateChainResource) ApiCommon.buildResource(
 				CrossChainPirateChainResource.class, ApiCommon.TEST_API_KEY);
 	}
 
 	@After
-	public void cleanup() {
+	public void cleanup() throws Exception {
+        var service = (org.qortium.crosschain.PirateChainSendService) FieldUtils.readStaticField(org.qortium.crosschain.PirateChainSendRuntime.class, "service", true);
+        if (service != null) service.close();
+        FieldUtils.writeStaticField(org.qortium.crosschain.PirateChainSendRuntime.class, "service", null, true);
+        FieldUtils.writeField(Settings.getInstance(), "walletsPath", originalWalletsPath, true);
 		Settings.getInstance().enableWallet(PirateChain.CURRENCY_CODE);
 		PirateChain.resetForTesting();
 		ApiCommon.clearTestApiKey();
@@ -425,6 +439,285 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 					() -> this.resource.importVerifiedRecoveryKey(ApiCommon.TEST_API_KEY,
 							buildValidRecoveryRequest()));
 			assertTrue(String.valueOf(exception.getMessage()).contains("disabled"));
+		} finally {
+			setUnifiedWalletEnabled(false);
+		}
+	}
+
+	// ---------------------------------------------------------------- send contract (protocol v1)
+
+	private static final String VALID_SAPLING;
+	static {
+		byte[] payload = new byte[43];
+		for (int i = 0; i < payload.length; i++)
+			payload[i] = (byte) (i * 11 + 5);
+		VALID_SAPLING = Bech32.encodeBytes(Bech32.Encoding.BECH32, "zs", payload);
+	}
+
+	private static PirateChainSendRequest buildValidSendRequest() {
+		PirateChainSendRequest sendRequest = new PirateChainSendRequest();
+		sendRequest.entropy58 = "5oSXF53qENtdUyKhqSxYzP57m6RhVFP9BJKRr9E5kRGV";
+		sendRequest.receivingAddress = VALID_SAPLING;
+		sendRequest.arrrAmount = "1.5";
+		sendRequest.memo = "thanks";
+		sendRequest.idempotencyKey = "123e4567-e89b-12d3-a456-426614174000";
+		return sendRequest;
+	}
+
+	private static void assertRejected(PirateChainSendRequest sendRequest, ApiError expectedError, String expectedReason) {
+		CrossChainPirateChainResource.SendRequestRejection rejection =
+				CrossChainPirateChainResource.validateSendRequest(sendRequest);
+		assertNotNull("expected rejection " + expectedReason, rejection);
+		assertEquals(expectedError, rejection.error);
+		assertEquals(expectedReason, rejection.reason);
+		assertTrue(rejection.message().startsWith(expectedReason + ": "));
+	}
+
+	@Test
+	public void testSendContractAdvertisesProtocolVersionTwoAndFixedFee() {
+		PirateChainSendContract contract = this.resource.getPirateChainSendContract(ApiCommon.TEST_API_KEY);
+		assertEquals(2, contract.sendProtocolVersion);
+        assertEquals(Settings.getInstance().getPirateChainNet().name(), contract.network);
+		assertEquals("FIXED", contract.feePolicy);
+		assertEquals("10000", contract.feeAtomic);
+		assertEquals(8, contract.amountDecimals);
+		assertEquals(512, contract.maxMemoBytes);
+		assertEquals(java.util.List.of("sapling"), contract.recipientAddressTypes);
+	}
+
+	@Test
+	public void testSendContractRequiresApiKey() {
+		CrossChainPirateChainResource unauthenticated = (CrossChainPirateChainResource) ApiCommon.buildResource(
+				CrossChainPirateChainResource.class, ApiCommon.buildRequest("127.0.0.1", "wrong-key"));
+		ApiException exception = assertThrows(ApiException.class,
+				() -> unauthenticated.getPirateChainSendContract("wrong-key"));
+		assertEquals(403, exception.getResponse().getStatus());
+		assertEquals(ApiError.UNAUTHORIZED.getCode(), exception.error);
+	}
+
+	@Test
+	public void testSendValidationMatrixInDocumentedOrder() {
+		assertNull(CrossChainPirateChainResource.validateSendRequest(buildValidSendRequest()));
+
+		// 1. body
+		assertRejected(null, ApiError.INVALID_DATA, "MISSING_BODY");
+
+		// 2. entropy (128) - checked before everything else even when later fields are bad too
+		PirateChainSendRequest sendRequest = buildValidSendRequest();
+		sendRequest.entropy58 = null;
+		sendRequest.arrrAmount = "bad";
+		sendRequest.receivingAddress = "bad";
+		assertRejected(sendRequest, ApiError.INVALID_PRIVATE_KEY, "ENTROPY_INVALID");
+		sendRequest = buildValidSendRequest();
+		sendRequest.entropy58 = "not-base58-!!";
+		assertRejected(sendRequest, ApiError.INVALID_PRIVATE_KEY, "ENTROPY_INVALID");
+		sendRequest = buildValidSendRequest();
+		sendRequest.entropy58 = Base58.encode(new byte[16]);
+		assertRejected(sendRequest, ApiError.INVALID_PRIVATE_KEY, "ENTROPY_INVALID");
+
+		// 3. feePerByte (125): any non-null value, including "0", "", or a former default
+		sendRequest = buildValidSendRequest();
+		sendRequest.feePerByte = "0.00000100";
+		sendRequest.idempotencyKey = "bad";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "FEE_PER_BYTE_UNSUPPORTED");
+		sendRequest = buildValidSendRequest();
+		sendRequest.feePerByte = "";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "FEE_PER_BYTE_UNSUPPORTED");
+		sendRequest = buildValidSendRequest();
+		sendRequest.feePerByte = "0";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "FEE_PER_BYTE_UNSUPPORTED");
+
+		// 4. idempotencyKey (125): canonical lowercase UUID only
+		sendRequest = buildValidSendRequest();
+		sendRequest.idempotencyKey = null;
+		sendRequest.arrrAmount = "bad";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "IDEMPOTENCY_KEY_INVALID");
+		for (String badKey : new String[] { "", "123E4567-E89B-12D3-A456-426614174000",
+				"{123e4567-e89b-12d3-a456-426614174000}", "urn:uuid:123e4567-e89b-12d3-a456-426614174000",
+				"123e4567e89b12d3a456426614174000", "123e4567-e89b-12d3-a456-42661417400", " 123e4567-e89b-12d3-a456-426614174000" }) {
+			sendRequest = buildValidSendRequest();
+			sendRequest.idempotencyKey = badKey;
+			assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "IDEMPOTENCY_KEY_INVALID");
+		}
+
+		// 5. amount (125): reason token comes from the ARRR parser
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = null;
+		sendRequest.receivingAddress = "bad";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_MISSING");
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "0";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_ZERO");
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "1e8";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_NOT_PLAIN_DECIMAL");
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "1.000000001";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_NOT_PLAIN_DECIMAL");
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "-1";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_NOT_PLAIN_DECIMAL");
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "200000001";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_TOO_LARGE");
+		sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "99999999999999999999";
+		assertRejected(sendRequest, ApiError.INVALID_CRITERIA, "AMOUNT_TOO_LARGE");
+
+		// 6. address (102): unsupported prefixes get their own token, everything else is invalid
+		sendRequest = buildValidSendRequest();
+		sendRequest.receivingAddress = null;
+		sendRequest.memo = "\u0000";
+		assertRejected(sendRequest, ApiError.INVALID_ADDRESS, "RECIPIENT_INVALID");
+		sendRequest = buildValidSendRequest();
+		sendRequest.receivingAddress = "";
+		assertRejected(sendRequest, ApiError.INVALID_ADDRESS, "RECIPIENT_INVALID");
+		for (String unsupported : new String[] {
+				Bech32.encodeBytes(Bech32.Encoding.BECH32M, "pirate", new byte[43]),
+				Bech32.encodeBytes(Bech32.Encoding.BECH32M, "u", new byte[43]),
+				"t1KhEjLJv3nMxUQcPqHi3xYjXwbNdq3UzC3",
+				"RSbvYmSgn6rnNe8yPgFyrqK8BwWM6hVU7X",
+				Bech32.encodeBytes(Bech32.Encoding.BECH32, "ztestsapling", new byte[43]) }) {
+			sendRequest = buildValidSendRequest();
+			sendRequest.receivingAddress = unsupported;
+			assertRejected(sendRequest, ApiError.INVALID_ADDRESS, "RECIPIENT_UNSUPPORTED");
+		}
+		for (String invalid : new String[] { VALID_SAPLING.toUpperCase(), "Zs" + VALID_SAPLING.substring(2),
+				VALID_SAPLING.substring(0, 77) + (VALID_SAPLING.endsWith("q") ? "p" : "q"),
+				Bech32.encodeBytes(Bech32.Encoding.BECH32M, "zs", new byte[43]),
+				Bech32.encodeBytes(Bech32.Encoding.BECH32, "zs", new byte[42]),
+				Bech32.encodeBytes(Bech32.Encoding.BECH32, "zs", new byte[44]),
+				" " + VALID_SAPLING, VALID_SAPLING + "\n", "zs1" }) {
+			sendRequest = buildValidSendRequest();
+			sendRequest.receivingAddress = invalid;
+			assertRejected(sendRequest, ApiError.INVALID_ADDRESS, "RECIPIENT_INVALID");
+		}
+
+		// 7. memo (115)
+		sendRequest = buildValidSendRequest();
+		sendRequest.memo = "x".repeat(513);
+		assertRejected(sendRequest, ApiError.INVALID_DATA, "MEMO_TOO_LONG");
+		sendRequest = buildValidSendRequest();
+		sendRequest.memo = "a\u0000b";
+		assertRejected(sendRequest, ApiError.INVALID_DATA, "MEMO_CONTROL_CHARACTER");
+		sendRequest = buildValidSendRequest();
+		sendRequest.memo = "\uD83D";
+		assertRejected(sendRequest, ApiError.INVALID_DATA, "MEMO_LONE_SURROGATE");
+		sendRequest = buildValidSendRequest();
+		sendRequest.memo = null;
+		assertNull(CrossChainPirateChainResource.validateSendRequest(sendRequest));
+		sendRequest = buildValidSendRequest();
+		sendRequest.memo = "";
+		assertNull(CrossChainPirateChainResource.validateSendRequest(sendRequest));
+	}
+
+	@Test
+	public void testSendRejectionMessagesNeverEchoTheRequestFields() {
+		PirateChainSendRequest sendRequest = buildValidSendRequest();
+		sendRequest.receivingAddress = VALID_SAPLING.toUpperCase();
+		String message = CrossChainPirateChainResource.validateSendRequest(sendRequest).message();
+		assertFalse(message.contains(VALID_SAPLING.toUpperCase()));
+		assertFalse(message.contains(sendRequest.entropy58));
+
+		sendRequest = buildValidSendRequest();
+		sendRequest.memo = "private\u0000memo";
+		message = CrossChainPirateChainResource.validateSendRequest(sendRequest).message();
+		assertFalse(message.contains("private"));
+
+		sendRequest = buildValidSendRequest();
+		sendRequest.entropy58 = "not-base58-!!";
+		message = CrossChainPirateChainResource.validateSendRequest(sendRequest).message();
+		assertFalse(message.contains("not-base58"));
+	}
+
+	@Test
+	public void testSendNullBodyIsBadRequestNotNullPointer() {
+		ApiException exception = assertThrows(ApiException.class,
+				() -> this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, null));
+		assertEquals(400, exception.getResponse().getStatus());
+		assertEquals(ApiError.INVALID_DATA.getCode(), exception.error);
+		assertTrue(String.valueOf(exception.getMessage()).startsWith("MISSING_BODY"));
+	}
+
+	@Test
+	public void testSendValidationRunsBeforeAnyWalletOrModeCheck() throws Exception {
+		// Legacy backend + disabled wallet: a malformed request is still reported as such (400),
+		// not as an unsupported mode or a not-ready wallet.
+		Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
+		PirateChainSendRequest sendRequest = buildValidSendRequest();
+		sendRequest.arrrAmount = "1e8";
+		ApiException exception = assertThrows(ApiException.class,
+				() -> this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, sendRequest));
+		assertEquals(400, exception.getResponse().getStatus());
+		assertEquals(ApiError.INVALID_CRITERIA.getCode(), exception.error);
+		assertTrue(String.valueOf(exception.getMessage()).startsWith("AMOUNT_NOT_PLAIN_DECIMAL"));
+	}
+
+	@Test
+	public void testSendRejectsLegacyBackendWithInvalidCriteria() {
+		// Default test settings run the legacy (non-Unified) backend.
+		assertFalse(Settings.getInstance().isPirateChainWalletUnified());
+		ApiException exception = assertThrows(ApiException.class,
+				() -> this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, buildValidSendRequest()));
+		assertEquals(400, exception.getResponse().getStatus());
+		assertEquals(ApiError.INVALID_CRITERIA.getCode(), exception.error);
+		assertTrue(String.valueOf(exception.getMessage()).startsWith(PirateChain.WALLET_MODE_UNSUPPORTED_REASON));
+	}
+
+    @Test public void expectedNetworkMismatchIsRejectedWithoutAdmission() throws Exception {
+        setUnifiedWalletEnabled(true);
+        try {
+            var input = buildValidSendRequest(); input.expectedNetwork = "wrong-network";
+            ApiException failure = assertThrows(ApiException.class, () -> resource.sendPirateChain(ApiCommon.TEST_API_KEY, input));
+            assertEquals(ApiError.INVALID_CRITERIA.getCode(), failure.error);
+            assertEquals("ARRR_SEND_NETWORK_MISMATCH", failure.getMessage());
+            assertNull(FieldUtils.readStaticField(org.qortium.crosschain.PirateChainSendRuntime.class, "service", true));
+        } finally { setUnifiedWalletEnabled(false); }
+    }
+
+	@Test
+	public void testSendReportsDisabledWalletAsNotReadyNotNullPointer() throws Exception {
+		setUnifiedWalletEnabled(true);
+		Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
+		try {
+			ApiException exception = assertThrows(ApiException.class,
+					() -> this.resource.sendPirateChain(ApiCommon.TEST_API_KEY, buildValidSendRequest()));
+			assertEquals(503, exception.getResponse().getStatus());
+			assertEquals(ApiError.FOREIGN_WALLET_NOT_READY.getCode(), exception.error);
+			assertEquals(1205, exception.error);
+			assertEquals(PirateChain.WALLET_DISABLED_REASON, exception.getMessage());
+		} finally {
+			setUnifiedWalletEnabled(false);
+		}
+	}
+
+	@Test
+	public void testSendCoinsGuardsDisabledAndLegacyWalletsWithoutNullPointer() throws Exception {
+		Settings.getInstance().enableWallet(PirateChain.CURRENCY_CODE);
+		PirateChain pirateChain = PirateChain.getInstance();
+		assertNotNull(pirateChain);
+
+		// isValidAddress now delegates to the canonical Sapling check (trade paths use it too).
+		assertTrue(pirateChain.isValidAddress(VALID_SAPLING));
+		assertFalse(pirateChain.isValidAddress(VALID_SAPLING.toUpperCase()));
+		assertFalse(pirateChain.isValidAddress(Bech32.encodeBytes(Bech32.Encoding.BECH32M, "zs", new byte[43])));
+
+		// Legacy backend: refused before any controller/native work.
+		assertFalse(Settings.getInstance().isPirateChainWalletUnified());
+		ForeignBlockchainException.WalletNotReadyException legacy = assertThrows(
+				ForeignBlockchainException.WalletNotReadyException.class,
+				() -> org.qortium.crosschain.PirateSendTestEntry.send(buildValidSendRequest().entropy58, VALID_SAPLING, 150_000_000L, null));
+		assertEquals(PirateChain.WALLET_MODE_UNSUPPORTED_REASON, legacy.getMessage());
+
+		// Unified backend but wallet disabled: the controller singleton is null, which used to NPE.
+		setUnifiedWalletEnabled(true);
+		Settings.getInstance().disableWallet(PirateChain.CURRENCY_CODE);
+		try {
+			assertNull(PirateChainWalletController.getInstance());
+			ForeignBlockchainException.WalletNotReadyException disabled = assertThrows(
+					ForeignBlockchainException.WalletNotReadyException.class,
+					() -> org.qortium.crosschain.PirateSendTestEntry.send(buildValidSendRequest().entropy58, VALID_SAPLING, 150_000_000L, null));
+			assertEquals(PirateChain.WALLET_DISABLED_REASON, disabled.getMessage());
 		} finally {
 			setUnifiedWalletEnabled(false);
 		}

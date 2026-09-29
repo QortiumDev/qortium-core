@@ -735,8 +735,15 @@ public class PirateWallet extends ZcashFamilyWallet {
 		if (result == null)
 			throw new ForeignBlockchainException("Unable to determine balance");
 
-		return new PirateChainBalance(requireAmount(result, "total"), requireAmount(result, "spendable"));
+		long total = requireAmount(result, "total");
+		// Preserve truthful total reads while keeping verified reads and sends fail-closed.
+		if (!result.has("spendable") || result.isNull("spendable"))
+			return new PirateChainBalance(total, total, false);
+		return new PirateChainBalance(total, requireAmount(result, "spendable"));
 	}
+
+	/** Stable reason carried when the Unified balance reply has no spendable figure. */
+	static final String VERIFIED_BALANCE_UNAVAILABLE_REASON = "ARRR_VERIFIED_BALANCE_UNAVAILABLE";
 
 	/**
 	 * Unified amounts serialize as decimal strings so large values survive JSON

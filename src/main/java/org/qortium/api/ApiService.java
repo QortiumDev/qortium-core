@@ -73,7 +73,7 @@ public class ApiService {
 	 * Jersey locks (immutabilizes) a ResourceConfig when used by a ServletContainer,
 	 * so we must not reuse the same instance across restarts.
 	 */
-	private static ResourceConfig createResourceConfig() {
+	static ResourceConfig createResourceConfig() {
 		ResourceConfig config = new ResourceConfig();
 		config.packages(API_RESOURCE_PACKAGES.toArray(String[]::new));
 		config.register(org.glassfish.jersey.media.multipart.MultiPartFeature.class);

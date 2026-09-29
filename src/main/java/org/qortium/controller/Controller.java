@@ -1379,6 +1379,7 @@ public class Controller extends Thread {
 				LOGGER.info("Shutting down API");
 				ApiService.getInstance().stop();
 
+				org.qortium.crosschain.PirateChainSendRuntime.shutdown();
 				LOGGER.info("Shutting down wallets");
 				PirateChainWalletController pirateWalletController = PirateChainWalletController.getInstance();
 				if (pirateWalletController != null) {
