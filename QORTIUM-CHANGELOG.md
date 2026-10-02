@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### release: prepare core 1.8.1
+
+Prepare Core 1.8.1 with durable ARRR sends and wallet-scoped recovery, Stashi 1.2.5, clearer wallet ownership and sync status, and the accumulated network and dependency fixes since 1.8.0.
+
 ### Verify unknown spendable balance keeps sends blocked
 
 - Preserve the total-balance display regression while asserting that missing spendable balance prevents sending.
