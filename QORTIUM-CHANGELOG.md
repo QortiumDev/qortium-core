@@ -38,6 +38,16 @@ own chain.
 
 Prepare Core 1.8.1 with durable ARRR sends and wallet-scoped recovery, Stashi 1.2.5, clearer wallet ownership and sync status, and the accumulated network and dependency fixes since 1.8.0.
 
+This release also includes previously merged fixes that were missing from the change log:
+
+- Refresh rotated Electrum TLS pins to restore DigiByte connections, retain reachable servers, and provide TLS LBRY endpoints (#326).
+- Serialize spend-context previous transactions as a plain JSON object so clients can prepare DOGE and DGB sends correctly (#327).
+- Report structured ARRR sync progress, distinguish verified spendable funds from total balance, and reject reads belonging to another active wallet (#328).
+- Keep BouncyCastle at 1.85 after the 1.86 BCJSSE regression, preserve gateway/lightwalletd TLS negotiation, and guard startup against thread failures (#329).
+- Dismiss the startup splash on the Swing event thread with a bounded fallback, identify the pinned Pirate bundle in provenance errors, and accept supported P2WSH recipients (#334).
+
+Both chain configuration files remain byte-identical to 1.8.0; this release introduces no chain reset or consensus activation change.
+
 ### Verify unknown spendable balance keeps sends blocked
 
 - Preserve the total-balance display regression while asserting that missing spendable balance prevents sending.
