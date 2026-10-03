@@ -2,10 +2,23 @@ package org.qortium.crosschain.monero;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.function.LongSupplier;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.util.concurrent.*;
 
 /** One native wallet at a time, immutable owner-scoped snapshots, at most one lifecycle transition. */
 public final class MoneroWalletService implements AutoCloseable {
+    private static final Logger LOGGER = LogManager.getLogger(MoneroWalletService.class);
+    enum Phase { IDLE, LIFECYCLE, SCAN, SEND }
+    enum FailureReason { DEADLINE, LIFECYCLE_FAILURE, NATIVE_LINKAGE, JOURNAL_FAILURE }
+    record Failure(FailureReason reason, Phase phase, long elapsedMillis, long progressAgeMillis, long advances) { }
+    private Phase phase = Phase.IDLE;
+    private Failure failure;
+    private long lastAdvanceAt, readHighWater, advances;
+    private final LongSupplier monotonic;
+    synchronized Failure failure() { return failure; } // internal diagnostic, never wallet authority
+
     public static final class Rejected extends RuntimeException {
         public final int status;
         public final String code;
@@ -47,6 +60,10 @@ public final class MoneroWalletService implements AutoCloseable {
         this(factory, Duration.ofSeconds(90), Duration.ofSeconds(2));
     }
     MoneroWalletService(MoneroWalletBackend.Factory factory, Duration deadline, Duration poll) {
+        this(factory, deadline, poll, System::nanoTime);
+    }
+    MoneroWalletService(MoneroWalletBackend.Factory factory, Duration deadline, Duration poll, LongSupplier monotonic) {
+        this.monotonic = monotonic;
         this.factory = factory;
         this.deadlineNanos = deadline.toNanos();
         worker = new ScheduledThreadPoolExecutor(1, runnable -> {
@@ -73,14 +90,14 @@ public final class MoneroWalletService implements AutoCloseable {
         if (transition) { keys.close(); throw new Rejected(409, "XMR_SWITCH_IN_PROGRESS"); }
         String nextSession = UUID.randomUUID().toString();
         try { if (sends != null) sends.machine.changeSession(nextSession); }
-        catch (RuntimeException e) { keys.close(); fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        catch (RuntimeException e) { keys.close(); fail(FailureReason.JOURNAL_FAILURE); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
         sessionId = nextSession;
         walletId = keys.walletId;
         restoreHeight = height;
         state = "OPENING"; errorCode = null; snapshot = null; updatedAt = 0;
         progress = null; activeRead = null; scanId = UUID.randomUUID().toString();
         transition = true;
-        startedAt = System.nanoTime();
+        begin(Phase.LIFECYCLE);
         worker.execute(() -> switchWallet(keys, height));
         return session();
     }
@@ -90,11 +107,11 @@ public final class MoneroWalletService implements AutoCloseable {
         if (transition) throw new Rejected(409, "XMR_SWITCH_IN_PROGRESS");
         String nextSession = UUID.randomUUID().toString();
         try { if (sends != null) sends.machine.changeSession(nextSession); }
-        catch (RuntimeException e) { fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        catch (RuntimeException e) { fail(FailureReason.JOURNAL_FAILURE); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
         sessionId = nextSession; walletId = null;
         state = "CLOSING"; errorCode = null; snapshot = null; updatedAt = 0;
         progress = null; activeRead = null; scanId = null;
-        transition = true; startedAt = System.nanoTime();
+        transition = true; begin(Phase.LIFECYCLE);
         worker.execute(() -> switchWallet(null, 0));
         return session();
     }
@@ -103,7 +120,7 @@ public final class MoneroWalletService implements AutoCloseable {
         requireSession(expectedSession);
         if (sessionId == null || walletId == null) throw new Rejected(409, "XMR_NO_ACTIVE_WALLET");
         checkDeadline();
-        boolean stale = updatedAt != 0 && System.nanoTime() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
+        boolean stale = updatedAt != 0 && monotonic.getAsLong() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
         return new Status(sessionId, walletId, stale && !failed ? "STALE" : state, false,
                 updatedAt == 0 ? null : updatedAt, progress, stale || failed ? null : snapshot);
     }
@@ -119,19 +136,19 @@ public final class MoneroWalletService implements AutoCloseable {
                 if (closed || failed) return;
                 sends = backend instanceof MoneroSendBackend sendBackend ? new MoneroSendCoordinator(sendBackend, sessionId) : null;
                 state = keys == null ? "IDLE" : "SCANNING";
-                startedAt = 0;
+                end();
             }
         } catch (MoneroWalletBackend.AdmissionRejected e) {
             admissionError = e.code;
         } catch (Exception | LinkageError e) {
             // Native exception text can contain wallet data. Never publish or log it.
-            fail();
+            fail(FailureReason.LIFECYCLE_FAILURE);
         } finally {
             if (keys != null) keys.close();
             synchronized (this) {
                 checkDeadline();
                 if (admissionError != null && !closed && !failed) {
-                    walletId = null; state = "ACTIVATION_REJECTED"; errorCode = admissionError; startedAt = 0;
+                    walletId = null; state = "ACTIVATION_REJECTED"; errorCode = admissionError; end();
                 }
                 // Release exactly once, after cleanup: a second activation may now acquire this slot.
                 transition = false;
@@ -146,7 +163,9 @@ public final class MoneroWalletService implements AutoCloseable {
         Object read = new Object();
         synchronized (this) {
             if (closed || failed || transition || backend == null) return;
-            owner = sessionId; startedAt = System.nanoTime(); activeRead = read;
+            owner = sessionId; begin(Phase.SCAN); activeRead = read;
+            lastAdvanceAt = startedAt; advances = 0;
+            readHighWater = progress == null ? restoreHeight : Math.max(restoreHeight, progress.height());
         }
         try {
             MoneroWalletBackend.Snapshot next = backend.read(counts -> publishProgress(owner, read, counts));
@@ -154,7 +173,7 @@ public final class MoneroWalletService implements AutoCloseable {
                 checkDeadline();
                 if (closed || failed || !owner.equals(sessionId)) return;
                 publishProgress(owner, read, new MoneroWalletBackend.ScanProgress(next.height(), next.targetHeight()));
-                snapshot = next; updatedAt = System.currentTimeMillis(); updatedNanos = System.nanoTime();
+                snapshot = next; updatedAt = System.currentTimeMillis(); updatedNanos = monotonic.getAsLong();
                 state = next.synced() ? "READY" : "SCANNING";
             }
         } catch (Exception e) {
@@ -162,11 +181,11 @@ public final class MoneroWalletService implements AutoCloseable {
                 checkDeadline();
                 if (!closed && !failed && owner.equals(sessionId)) { snapshot = null; progress = null; state = "UNAVAILABLE"; }
             }
-        } catch (LinkageError e) { fail(); }
+        } catch (LinkageError e) { fail(FailureReason.NATIVE_LINKAGE); }
         finally {
             synchronized (this) {
                 // An activation queued during a read has its own deadline and neutral state.
-                if (owner.equals(sessionId)) startedAt = 0;
+                if (owner.equals(sessionId)) end();
                 if (activeRead == read) activeRead = null;
             }
             cleanupIfStopped();
@@ -179,6 +198,11 @@ public final class MoneroWalletService implements AutoCloseable {
         if (closed || failed || transition || activeRead != read || !owner.equals(sessionId)) return;
         if (counts == null || counts.height() < restoreHeight || counts.targetHeight() <= 0
                 || counts.height() > counts.targetHeight() || counts.targetHeight() > 500_000_000L) return;
+        // Only forward movement in this read extends scan inactivity. Target-only changes,
+        // duplicate/backward counts and callbacks from a previous owner/read grant no time.
+        if (counts.height() > readHighWater) {
+            readHighWater = counts.height(); lastAdvanceAt = monotonic.getAsLong(); advances++;
+        }
         // Polls and duplicate callbacks must not manufacture forward progress or a fresh ETA.
         if (progress != null && progress.height() == counts.height() && progress.targetHeight() == counts.targetHeight()) return;
         progress = new Progress(scanId, restoreHeight, counts.height(), counts.targetHeight(), System.currentTimeMillis());
@@ -194,14 +218,14 @@ public final class MoneroWalletService implements AutoCloseable {
         checkAvailable(); requireSession(expected);
         if (transition || sends == null) throw new Rejected(409, "XMR_NO_ACTIVE_WALLET");
         try { return sends.machine.cancel(id, expected); }
-        catch (MoneroSendJournal.Failure e) { fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        catch (MoneroSendJournal.Failure e) { fail(FailureReason.JOURNAL_FAILURE); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
         catch (MoneroSendMachine.Rejected e) { throw new Rejected(409, "XMR_SEND_NOT_READY"); }
     }
     synchronized MoneroSendContracts.View sendStatus(String id, String expected) {
         checkAvailable(); requireSession(expected);
         if (transition || sends == null) throw new Rejected(409, "XMR_NO_ACTIVE_WALLET");
         try { return sends.machine.status(id, expected); }
-        catch (MoneroSendJournal.Failure e) { fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        catch (MoneroSendJournal.Failure e) { fail(FailureReason.JOURNAL_FAILURE); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
         catch (MoneroSendMachine.Rejected e) { throw new Rejected(409, "XMR_SEND_NOT_READY"); }
     }
     synchronized CompletableFuture<Void> reconcileSends(String expected) {
@@ -217,7 +241,7 @@ public final class MoneroWalletService implements AutoCloseable {
             MoneroSendContracts.View value = null;
             Rejected failure = null;
             try {
-                synchronized (this) { checkAvailable(); requireSession(expected); startedAt = System.nanoTime(); }
+                synchronized (this) { checkAvailable(); requireSession(expected); begin(Phase.SEND); }
                 context.reconcile(expected);
                 if (id != null) context.validateCommit(id, expected);
                 MoneroSendMachine.Admission admission;
@@ -231,13 +255,13 @@ public final class MoneroWalletService implements AutoCloseable {
                 value = admission == null ? null
                         : request != null ? context.finishPreparation(admission, request, beforePublish) : context.finishRelay(admission, beforePublish);
             } catch (MoneroSendJournal.Failure | LinkageError e) {
-                synchronized (this) { fail(); }
+                synchronized (this) { fail(e instanceof LinkageError ? FailureReason.NATIVE_LINKAGE : FailureReason.JOURNAL_FAILURE); }
                 failure = new Rejected(503, "XMR_RESTART_REQUIRED");
             } catch (Exception e) {
                 failure = new Rejected(409, "XMR_SEND_NOT_READY"); // never leak native/parser messages
             } finally {
                 synchronized (this) {
-                    if (java.util.Objects.equals(expected, sessionId)) startedAt = 0;
+                    if (java.util.Objects.equals(expected, sessionId)) end();
                     sendQueued = false; sendWork = null; workContext = null;
                 }
                 cleanupIfStopped();
@@ -265,7 +289,19 @@ public final class MoneroWalletService implements AutoCloseable {
         try { closeBackend(); } catch (Exception | LinkageError ignored) { }
     }
 
-    private synchronized void fail() {
+    private void end() { startedAt = 0; phase = Phase.IDLE; }
+
+    private void begin(Phase next) { phase = next; startedAt = monotonic.getAsLong(); }
+
+    private synchronized void fail(FailureReason reason) {
+        if (failed) return; // retain the first cause, even after native cleanup fails
+        long now = monotonic.getAsLong();
+        failure = new Failure(reason, phase, startedAt == 0 ? 0 : TimeUnit.NANOSECONDS.toMillis(now - startedAt),
+                phase == Phase.SCAN ? TimeUnit.NANOSECONDS.toMillis(now - lastAdvanceAt) : 0,
+                phase == Phase.SCAN ? advances : 0);
+        // Fixed enums and durations/counts only: never log native exceptions, wallet/session identifiers or keys.
+        LOGGER.warn("XMR worker failed: reason={} phase={} elapsedMs={} progressAgeMs={} advances={}",
+                failure.reason(), failure.phase(), failure.elapsedMillis(), failure.progressAgeMillis(), failure.advances());
         progress = null; activeRead = null;
         failed = true; state = "RESTART_REQUIRED"; errorCode = "XMR_RESTART_REQUIRED"; snapshot = null;
         if (workContext != null && sendWork != null) {
@@ -274,7 +310,9 @@ public final class MoneroWalletService implements AutoCloseable {
         }
     }
     private void checkDeadline() {
-        if (!failed && startedAt != 0 && System.nanoTime() - startedAt > deadlineNanos) fail();
+        long activity = phase == Phase.SCAN && activeRead != null && !transition ? lastAdvanceAt : startedAt;
+        if (!failed && startedAt != 0 && monotonic.getAsLong() - activity > deadlineNanos)
+            fail(FailureReason.DEADLINE);
     }
     private void checkAvailable() {
         checkDeadline();
@@ -290,7 +328,7 @@ public final class MoneroWalletService implements AutoCloseable {
             if (closed) return;
             if (sends != null) {
                 try { sends.machine.changeSession(UUID.randomUUID().toString()); }
-                catch (RuntimeException e) { failed = true; }
+                catch (RuntimeException e) { fail(FailureReason.JOURNAL_FAILURE); }
             }
             closed = true; snapshot = null; progress = null; activeRead = null; state = "STOPPED";
         }

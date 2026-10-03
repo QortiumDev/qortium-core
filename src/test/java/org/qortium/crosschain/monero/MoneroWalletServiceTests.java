@@ -106,6 +106,82 @@ public class MoneroWalletServiceTests {
         } finally { hung.releaseRead.countDown(); }
     }
 
+    static class ScanFixture implements AutoCloseable {
+        final java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1);
+        final java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>> callback = new java.util.concurrent.atomic.AtomicReference<>();
+        final CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        final Fake backend = new Fake("synthetic") {
+            @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb) throws Exception {
+                callback.set(cb); entered.countDown(); release.await(); return super.read();
+            }
+        };
+        final MoneroWalletService service = new MoneroWalletService((keys,height)->backend,
+                Duration.ofSeconds(90), Duration.ofHours(1), clock::get);
+        final String session;
+        ScanFixture() throws Exception {
+            session = service.activate(seed(1), 0, null).sessionId();
+            assertTrue(entered.await(3, TimeUnit.SECONDS));
+        }
+        void advance(long seconds, long height, long target) {
+            clock.addAndGet(TimeUnit.SECONDS.toNanos(seconds));
+            callback.get().accept(new MoneroWalletBackend.ScanProgress(height,target));
+        }
+        public void close() { release.countDown(); service.close(); }
+    }
+
+    @Test public void forwardScanProgressOutlivesTotalDeadlineButStillExpiresWhenStalled() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(60,10,100); f.advance(60,20,100); f.advance(60,30,100);
+            assertEquals("SCANNING",f.service.status(f.session).state());
+            assertNull(f.service.failure());
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
+            assertEquals("RESTART_REQUIRED",f.service.status(f.session).state());
+            var failure = f.service.failure();
+            assertEquals(MoneroWalletService.FailureReason.DEADLINE,failure.reason());
+            assertEquals(MoneroWalletService.Phase.SCAN,failure.phase());
+            assertEquals(271000,failure.elapsedMillis()); assertEquals(91000,failure.progressAgeMillis());
+            assertEquals(3,failure.advances());
+            f.advance(1,40,100);
+            assertSame(failure,f.service.failure()); assertNull(f.service.status(f.session).progress());
+        }
+    }
+
+    @Test public void duplicateBackwardInvalidAndTargetOnlyCallbacksCannotExtendInactivity() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(20,10,100);
+            f.advance(20,10,100); // duplicate
+            f.advance(20,9,100); // backward
+            f.advance(20,10,110); // changed target and return to former high water
+            f.advance(20,200,100); // invalid
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(11));
+            assertEquals("RESTART_REQUIRED",f.service.status(f.session).state());
+            assertEquals(1,f.service.failure().advances());
+        }
+    }
+
+    @Test public void queuedSwitchKeepsItsAbsoluteDeadlineDespiteOldReadProgress() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(60,10,100); f.advance(60,20,100);
+            var next = f.service.activate(seed(2),0,f.session);
+            f.advance(60,30,100);
+            assertEquals("OPENING",f.service.status(next.sessionId()).state());
+            f.advance(31,40,100);
+            assertEquals("RESTART_REQUIRED",f.service.status(next.sessionId()).state());
+            assertEquals(MoneroWalletService.Phase.LIFECYCLE,f.service.failure().phase());
+            assertEquals(91000,f.service.failure().elapsedMillis());
+            assertEquals(0,f.service.failure().advances());
+        }
+    }
+
+    @Test public void lifecycleFailureHasSafeDistinctDiagnostic() throws Exception {
+        try (var service = service((keys,height)->{ throw new IllegalStateException("SENSITIVE native diagnostic"); })) {
+            service.activate(seed(1),0,null);
+            await(()->"RESTART_REQUIRED".equals(service.session().state()));
+            assertEquals(MoneroWalletService.FailureReason.LIFECYCLE_FAILURE,service.failure().reason());
+            assertFalse(service.failure().toString().contains("SENSITIVE"));
+        }
+    }
+
     @Test public void safePreAdmissionRejectionPermitsCorrectedExplicitActivation() throws Exception {
         try (var service = service((keys, height) -> {
             if (height > 100) throw new MoneroWalletBackend.AdmissionRejected("XMR_RESTORE_HEIGHT_ABOVE_TIP");

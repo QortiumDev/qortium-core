@@ -20,6 +20,13 @@ public class MoneroSendServiceTests {
         final MoneroSendJournal journal;
         final AtomicInteger preparations = new AtomicInteger(), relays = new AtomicInteger();
         volatile CountDownLatch prepareEntered, prepareRelease, relayEntered, relayRelease, observeEntered, observeRelease;
+        volatile CountDownLatch readEntered, readRelease;
+        volatile java.util.function.Consumer<ScanProgress> readCallback;
+        public Snapshot read(java.util.function.Consumer<ScanProgress> callback) throws Exception {
+            readCallback = callback;
+            if (readEntered != null) { readEntered.countDown(); readRelease.await(); }
+            return read();
+        }
         volatile boolean lostResponse, daemonDown, closed;
         volatile Map<String, MoneroSendMachine.Observation> observations = Map.of();
         Native(MoneroSendJournal journal) { this.journal = journal; }
@@ -53,7 +60,8 @@ public class MoneroSendServiceTests {
         final AtomicInteger opened = new AtomicInteger(), factoryClosed = new AtomicInteger();
         volatile Native nativeWallet;
         final MoneroWalletService service;
-        Fixture(long timeout) {
+        Fixture(long timeout) { this(timeout, Duration.ofHours(1), System::nanoTime); }
+        Fixture(long timeout, Duration poll, java.util.function.LongSupplier clock) {
             service = new MoneroWalletService(new MoneroWalletBackend.Factory() {
                 public MoneroWalletBackend open(MoneroKeys keys, long height) {
                     root.check(); opened.incrementAndGet();
@@ -62,7 +70,7 @@ public class MoneroSendServiceTests {
                     finally { Arrays.fill(key, (byte) 0); }
                 }
                 public void close() { root.close(); factoryClosed.incrementAndGet(); }
-            }, Duration.ofMillis(timeout), Duration.ofHours(1));
+            }, Duration.ofMillis(timeout), poll, clock);
         }
         String activate(int n, String previous) throws Exception {
             String session = service.activate(seed(n), 0, previous).sessionId();
@@ -72,6 +80,30 @@ public class MoneroSendServiceTests {
         View commit(Request r, View q, String s) throws Exception { return service.commitSend(r.operationId(), q.quoteDigest(), s).get(3, TimeUnit.SECONDS); }
         public void close() { service.close(); root.close(); }
     }
+    @Test public void queuedCommitBehindAdvancingScanCannotRelayAfterOwnerSwitch() throws Exception {
+        var clock = new AtomicLong(1);
+        try (var f = new Fixture(90000, Duration.ofMillis(50), clock::get)) {
+            String a = f.activate(1,null); Request r = request(); View q = f.prepare(r,a);
+            Native old = f.nativeWallet;
+            old.readRelease = new CountDownLatch(1); old.readEntered = new CountDownLatch(1);
+            try {
+                assertTrue(old.readEntered.await(3,TimeUnit.SECONDS));
+                var commit = f.service.commitSend(r.operationId(),q.quoteDigest(),a);
+                for (int height=2;height<=5;height++) {
+                    clock.addAndGet(TimeUnit.SECONDS.toNanos(60));
+                    old.readCallback.accept(new MoneroWalletBackend.ScanProgress(height,100));
+                    assertNotEquals("RESTART_REQUIRED",f.service.status(a).state());
+                    assertFalse(commit.isDone()); assertEquals(0,old.relays.get());
+                }
+                var b = f.service.activate(seed(2),0,a);
+                old.readRelease.countDown();
+                assertThrows(ExecutionException.class,()->commit.get(3,TimeUnit.SECONDS));
+                await(()->"READY".equals(f.service.status(b.sessionId()).state()));
+                assertEquals(0,old.relays.get());
+            } finally { old.readRelease.countDown(); }
+        }
+    }
+
     @Test public void exactQuoteDuplicateCommitAndUnknownRecoveryAcrossWalletSwitch() throws Exception {
         try (var f = new Fixture(3000)) {
             String a = f.activate(1, null); Request r = request(); View quote = f.prepare(r, a);
