@@ -188,3 +188,22 @@ mainnet scans; add Home consent/derivation and lock/account-switch lifecycle;
 add Wallet receive/history UI; independently review sends and durable wallet-
 scoped recovery. There is no funded/mainnet acceptance or production rollout
 claim for this read-only prototype.
+
+
+## Scan progress and snapshot freshness
+
+The wallet response optionally includes `progress: {scanId, startHeight, height,
+targetHeight, updatedAt}` independently of `wallet` and its `updatedAt`.
+`scanId` is a display-only random identifier, separate from and never accepted as
+session authority. It changes on activation of a new session. Counts come from
+native callbacks on the existing serialized worker, with no extra JNI getters.
+`startHeight` is the session restore height, not each native batch's start.
+
+Financial snapshots still become STALE after 30 seconds and disappear from the
+API until a complete read finishes. Progress can remain available during that
+interval; it does not establish readiness or authorize spending. Identical
+counts and status polls do not advance its timestamp. Clients should continue
+passive reads for STALE/UNAVAILABLE, expire stalled ETA, and reset rate samples
+on scan identity changes, backwards progress or long observation gaps.
+Callbacks do not extend the 90-second native deadline, and late callbacks from
+completed reads or replaced owners cannot publish progress.

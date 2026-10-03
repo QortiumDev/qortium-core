@@ -35,6 +35,77 @@ public class MoneroWalletServiceTests {
     static MoneroWalletService service(MoneroWalletBackend.Factory factory) {
         return new MoneroWalletService(factory, Duration.ofSeconds(3), Duration.ofHours(1));
     }
+    @Test public void progressSurvivesStaleBalancesButNeverSwitchesOwnersOrRefreshesOnPoll() throws Exception {
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        var callbacks = new java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>>();
+        var reads = new AtomicInteger(); var opens = new AtomicInteger();
+        Fake old = new Fake("old") {
+            @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb) throws Exception {
+                callbacks.set(cb);
+                cb.accept(new ScanProgress(40, 100));
+                if (reads.incrementAndGet() > 1) { entered.countDown(); release.await(); }
+                return new Snapshot("old", 40, 100, false, "0", "0", List.of());
+            }
+        };
+        try (var service = new MoneroWalletService((keys, height) -> opens.incrementAndGet() == 1 ? old : new Fake("new"),
+                Duration.ofSeconds(3), Duration.ofMillis(50))) {
+            var a = service.activate(seed(1), 10, null);
+            assertTrue(entered.await(3, TimeUnit.SECONDS));
+            var before = service.status(a.sessionId()).progress();
+            assertNotNull(before); assertEquals(10, before.startHeight());
+            assertNotEquals(a.sessionId(), before.scanId());
+            // Age only the completed financial snapshot, while the native read remains in flight.
+            var age = MoneroWalletService.class.getDeclaredField("updatedNanos"); age.setAccessible(true);
+            synchronized (service) { age.setLong(service, System.nanoTime() - TimeUnit.SECONDS.toNanos(31)); }
+            callbacks.get().accept(new MoneroWalletBackend.ScanProgress(50, 100));
+            var stale = service.status(a.sessionId());
+            assertEquals("STALE", stale.state()); assertNull(stale.wallet()); assertEquals(50, stale.progress().height());
+            Thread.sleep(10);
+            callbacks.get().accept(new MoneroWalletBackend.ScanProgress(50, 100));
+            assertEquals(stale.progress(), service.status(a.sessionId()).progress());
+            var b = service.activate(seed(2), 0, a.sessionId());
+            callbacks.get().accept(new MoneroWalletBackend.ScanProgress(90, 100));
+            assertNull(service.status(b.sessionId()).progress());
+            release.countDown();
+            await(() -> "READY".equals(service.status(b.sessionId()).state()));
+            callbacks.get().accept(new MoneroWalletBackend.ScanProgress(95, 100));
+            assertEquals(99, service.status(b.sessionId()).progress().height());
+            assertNotEquals(before.scanId(), service.status(b.sessionId()).progress().scanId());
+        } finally { release.countDown(); }
+    }
+
+    @Test public void callbackCannotExtendDeadlineOrPublishAfterReadFinished() throws Exception {
+        var callback = new java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>>();
+        Fake backend = new Fake("old") {
+            @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb) throws Exception {
+                callback.set(cb); return super.read();
+            }
+        };
+        Fake completed = backend;
+        try (var service = service((keys, height) -> completed)) {
+            var a = service.activate(seed(1), 0, null);
+            await(() -> "READY".equals(service.status(a.sessionId()).state()));
+            callback.get().accept(new MoneroWalletBackend.ScanProgress(5, 100));
+            assertEquals(99, service.status(a.sessionId()).progress().height());
+        }
+        backend = new Fake("hung") {
+            @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb) throws Exception {
+                callback.set(cb); cb.accept(new ScanProgress(1, 100)); return super.read();
+            }
+        };
+        backend.readEntered = new CountDownLatch(1); backend.releaseRead = new CountDownLatch(1);
+        Fake hung = backend;
+        try (var service = new MoneroWalletService((keys, height) -> hung, Duration.ofMillis(80), Duration.ofHours(1))) {
+            var a = service.activate(seed(1), 0, null);
+            assertTrue(hung.readEntered.await(3, TimeUnit.SECONDS));
+            Thread.sleep(120);
+            callback.get().accept(new MoneroWalletBackend.ScanProgress(2, 100));
+            assertEquals("RESTART_REQUIRED", service.status(a.sessionId()).state());
+            assertNull(service.status(a.sessionId()).progress());
+            hung.releaseRead.countDown();
+        } finally { hung.releaseRead.countDown(); }
+    }
+
     @Test public void safePreAdmissionRejectionPermitsCorrectedExplicitActivation() throws Exception {
         try (var service = service((keys, height) -> {
             if (height > 100) throw new MoneroWalletBackend.AdmissionRejected("XMR_RESTORE_HEIGHT_ABOVE_TIP");

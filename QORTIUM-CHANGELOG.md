@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Report Monero scan progress independently of wallet snapshots
+
+- Keep reporting owner-scoped block progress while a native scan batch is still running, so Home and Wallet can estimate syncing time without mistaking old balances for fresh ones. Account switches, worker deadlines and late callbacks retain their existing safety boundaries.
+
 ### Clarify current Monero send implementation and opt-in settings
 
 - Update the wallet guide and send design overview to distinguish the implemented opt-in API from earlier design milestones and the installed read-only deployment.
