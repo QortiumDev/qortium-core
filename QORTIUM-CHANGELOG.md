@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Clarify current Monero send implementation and opt-in settings
+
+- Update the wallet guide and send design overview to distinguish the implemented opt-in API from earlier design milestones and the installed read-only deployment.
+
 ### Gate Monero sending and cancel queued preparation durably
 
 - Keep experimental sending disabled unless `moneroWalletSendEnabled` is explicitly enabled. Advertise the send protocol and native fee policy to compatible Home clients.

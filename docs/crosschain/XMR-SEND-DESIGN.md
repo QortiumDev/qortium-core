@@ -1,9 +1,17 @@
 # XMR send and recovery design
 
-Status: reviewed implementation target with an internal journal/state-machine
-foundation and internal native integration; **not an implemented send API**.
-Baseline: receive/read protocol v1, Core `fa8817f71`, Home `f75c14c3`,
-Wallet `bd0c8d5b`. Date: 2026-10-03. Sending remains unavailable.
+Status (2026-10-03): implemented experimental send API, encrypted journal and
+serialized native custody, with companion Home exact-quote approvals and
+QuickMythril Wallet recovery UI in review. Sending defaults off; enablement
+requires both `moneroWalletEnabled` and `moneroWalletSendEnabled`. The installed
+read-only stack is not upgraded by this implementation.
+
+The design began from receive/read protocol v1 (Core `fa8817f71`, Home
+`f75c14c3`, Wallet `bd0c8d5b`). The foundation and native-integration milestones
+below retain their historical scope; the final API section and current status
+supersede earlier statements that there is no send API or advertised sending.
+Offline JNI/API tests and packaged synthetic Home/Wallet acceptance passed;
+these are not owner-funded mainnet or full cross-platform acceptance.
 
 ## User-visible flow
 
