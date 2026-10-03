@@ -903,6 +903,15 @@
 			<version>${hamcrest-library.version}</version>
 		</dependency>
 		-->
+		<!-- XMR JNI: exact native bytes are separately pinned by MoneroNativeLoader. -->
+		<dependency>
+			<groupId>io.github.woodser</groupId>
+			<artifactId>monero-java</artifactId>
+			<version>0.8.58</version>
+			<exclusions>
+				<exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk15on</artifactId></exclusion>
+			</exclusions>
+		</dependency>
 		<!-- BouncyCastle for crypto, including TLS secure networking -->
 		<dependency>
 			<groupId>org.bouncycastle</groupId>

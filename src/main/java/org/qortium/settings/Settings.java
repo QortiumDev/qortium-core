@@ -464,6 +464,10 @@ public class Settings {
 	/** Wallets path - used for storing encrypted wallet caches for coins that require them */
 	private String walletsPath = "wallets";
 
+	/** Experimental XMR custody: opt-in, loopback API only, Linux x86_64 initially. */
+	private boolean moneroWalletEnabled = false;
+	private String moneroDaemonUri = null;
+
 	private int arrrDefaultBirthday = 2000000;
 	/**
 	 * Opt-in gate for the persistent Pirate Unified wallet implementation.
@@ -2844,6 +2848,10 @@ public class Settings {
 	public int getMaxTradeOfferAttempts() {
 		return this.maxTradeOfferAttempts;
 	}
+
+	public boolean isMoneroWalletEnabled() { return this.moneroWalletEnabled; }
+
+	public String getMoneroDaemonUri() { return this.moneroDaemonUri; }
 
 	public String getWalletsPath() {
 		return this.walletsPath;
