@@ -33,4 +33,20 @@ public class CrossChainMoneroResourceTests {
         assertEquals(503, resource.activate(ApiCommon.TEST_API_KEY, mustNotRead).getStatus());
         assertNull(FieldUtils.readStaticField(org.qortium.crosschain.monero.MoneroWalletRuntime.class, "instance", true));
     }
+    @Test public void sendCommandsRejectUnauthorizedAndDisabledBodiesBeforeConsumption() {
+        InputStream mustNotRead = new InputStream() { @Override public int read() { throw new AssertionError("Body consumed"); } };
+        for (String command : java.util.List.of("prepare", "commit", "cancel", "reconcile")) {
+            assertThrows(ApiException.class, () -> send(resource("127.0.0.1", null), command, null, mustNotRead));
+            assertThrows(ApiException.class, () -> send(resource("192.0.2.1", ApiCommon.TEST_API_KEY), command, ApiCommon.TEST_API_KEY, mustNotRead));
+            assertEquals(503, send(resource("127.0.0.1", ApiCommon.TEST_API_KEY), command, ApiCommon.TEST_API_KEY, mustNotRead).getStatus());
+        }
+    }
+    private javax.ws.rs.core.Response send(CrossChainMoneroResource resource, String command, String key, InputStream body) {
+        return switch (command) {
+            case "prepare" -> resource.prepareSend(key, null, body);
+            case "commit" -> resource.commitSend(key, null, body);
+            case "cancel" -> resource.cancelSend(key, null, body);
+            default -> resource.reconcileSend(key, null, body);
+        };
+    }
 }

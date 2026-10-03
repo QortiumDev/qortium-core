@@ -385,3 +385,57 @@ Wallet UI and packaged end-to-end acceptance. Keep send=false until the complete
 route passes security review and offline acceptance. Full Controller/mainnet
 scan, additional platforms, release and owner-operated funded acceptance remain
 separate gates.
+
+
+## Core API checkpoint (2026-10-03)
+
+The local operator API now wraps the existing journal/native worker. It does
+not change protocol-v1 discovery or `send=false`; Home/Wallet support and
+reviewed activation of advertised send capability are a later tranche.
+All routes require the API key, numeric loopback transport, enabled XMR
+runtime, and the active `X-XMR-SESSION` token. An operation belongs to the
+wallet, not the current UI session; reopening the same wallet can read its
+retained operation, while another wallet cannot. Home must keep its own
+app/account/tab-bound operation handles and must not expose Core identifiers
+or authority to arbitrary apps.
+
+| Method and suffix under `/crosschain/xmr` | Strict request |
+| --- | --- |
+| POST `/send/prepare` | `operationId`, `address`, `amountAtomic` |
+| POST `/send/commit` | `operationId`, `quoteDigest` |
+| POST `/send/cancel` | `operationId` |
+| POST `/send/reconcile` | `operationId` |
+| GET `/send/status/{operationId}` | No body |
+
+Every request field is a string. IDs are canonical UUIDs; digests lowercase
+64-character hex; amounts canonical positive uint64 atomic strings (12 XMR
+decimals); address syntax is 95-character Base58, then native checksum/network
+validation before preparation. Unknown/duplicate fields, null/coercion, trailing
+JSON, malformed UTF-8 and bodies above 2048 bytes are rejected after auth and
+ownership checks. Only preparation accepts recipient/amount; commit binds the
+stored exact quote. Native NORMAL priority determines the fee, not ARRR's fee.
+
+A 200 response contains only operationId, state, quoteDigest, address,
+amountAtomic, feeAtomic, txid, walletHeld, expiresAt (Unix milliseconds),
+confirmations and unlocked. Signed bytes, native metadata, key images, private
+keys and journal internals are never response fields. Quotes expire under both
+wall and monotonic clocks; state, rather than expiry alone, determines validity.
+`walletHeld` aggregates retained unresolved operations including reorg holds.
+
+The request waits at most two seconds for worker completion; it never cancels
+native work on timeout or client disconnect. After timeout, 202
+`XMR_SEND_PENDING` with `durable:true` means the operation already exists in the
+journal. A prepare still queued or reconciling before journal admission instead
+returns 503 `XMR_SEND_ADMISSION_PENDING` with `durable:false`. Both include the
+operationId and `statusRequired:true`: keep that ID, query status and do not
+resubmit automatically. Before admission, status/cancel can return 409
+`XMR_SEND_NOT_READY`; no durable cancellation or acceptance is promised, and a
+process loss can leave no record. A client can revoke the custody session to
+prevent still-queued preparation from being admitted. Preparing never relays.
+
+409 errors are redacted owner/admission errors, not retry authorization. 503
+`XMR_RESTART_REQUIRED` retains the existing fail-closed lifecycle semantics.
+Unexpected worker failure yields `XMR_SEND_STATUS_REQUIRED`, never native text.
+UNKNOWN remains a durable wallet hold: no automatic rebuild/rebroadcast/new ID.
+GET status reads the journal only; POST reconcile performs ordinary serialized
+sync and exact local-hash observation. Neither route grants relay authority.

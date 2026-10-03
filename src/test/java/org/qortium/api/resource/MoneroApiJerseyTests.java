@@ -63,17 +63,17 @@ public class MoneroApiJerseyTests {
         assertTrue(response, response.startsWith("HTTP/1.1 200"));
         return JSON.readTree(response.substring(response.indexOf("\r\n\r\n") + 4));
     }
-    static class TestServer implements AutoCloseable {
+    public static class TestServer implements AutoCloseable {
         private final Server server = new Server();
         private final ServerConnector connector = new ServerConnector(server);
-        TestServer() throws Exception {
+        public TestServer() throws Exception {
             var config = ApiServiceTestConfig.create();
             var context = new ServletContextHandler(); context.setContextPath("/");
             context.addServlet(new ServletHolder(new ServletContainer(config)), "/*");
             connector.setHost("127.0.0.1"); connector.setPort(0);
             server.addConnector(connector); server.setHandler(context); server.start();
         }
-        String call(String method, String suffix, String body, String extra, boolean auth) throws Exception {
+        public String call(String method, String suffix, String body, String extra, boolean auth) throws Exception {
             String request = method + " /crosschain/xmr" + suffix + " HTTP/1.1\r\nHost: localhost\r\n"
                     + "Content-Type: application/json\r\nContent-Length: " + body.length() + "\r\nConnection: close\r\n"
                     + (auth ? "X-API-KEY: " + ApiCommon.TEST_API_KEY + "\r\n" : "") + extra + "\r\n" + body;

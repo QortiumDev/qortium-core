@@ -19,7 +19,7 @@ public class MoneroSendServiceTests {
     static class Native implements MoneroSendBackend {
         final MoneroSendJournal journal;
         final AtomicInteger preparations = new AtomicInteger(), relays = new AtomicInteger();
-        volatile CountDownLatch prepareEntered, prepareRelease, relayEntered, relayRelease;
+        volatile CountDownLatch prepareEntered, prepareRelease, relayEntered, relayRelease, observeEntered, observeRelease;
         volatile boolean lostResponse, daemonDown, closed;
         volatile Map<String, MoneroSendMachine.Observation> observations = Map.of();
         Native(MoneroSendJournal journal) { this.journal = journal; }
@@ -39,7 +39,8 @@ public class MoneroSendServiceTests {
             if (lostResponse) throw new IllegalStateException("SENSITIVE native response");
             return HASH;
         }
-        public Map<String, MoneroSendMachine.Observation> observe(Map<String, String> hashes) {
+        public Map<String, MoneroSendMachine.Observation> observe(Map<String, String> hashes) throws Exception {
+            if (observeEntered != null) { observeEntered.countDown(); observeRelease.await(); }
             assertFalse(closed);
             if (daemonDown) throw new IllegalStateException("SENSITIVE daemon diagnostic");
             return observations;

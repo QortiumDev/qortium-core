@@ -108,7 +108,8 @@ final class MoneroSendContracts {
         @Override public String toString() { return "XMR encrypted ledger [redacted]"; }
     }
     record View(String operationId, State state, String quoteDigest, String address,
-                String amountAtomic, String feeAtomic, String txid, boolean walletHeld) {
+                String amountAtomic, String feeAtomic, String txid, boolean walletHeld,
+                long expiresAt, long confirmations, boolean unlocked) {
         @Override public String toString() { return "XMR send view [redacted]"; }
     }
 }

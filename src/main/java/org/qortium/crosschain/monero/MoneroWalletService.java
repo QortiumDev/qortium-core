@@ -173,12 +173,14 @@ public final class MoneroWalletService implements AutoCloseable {
         if (transition || sends == null) throw new Rejected(409, "XMR_NO_ACTIVE_WALLET");
         try { return sends.machine.cancel(id, expected); }
         catch (MoneroSendJournal.Failure e) { fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        catch (MoneroSendMachine.Rejected e) { throw new Rejected(409, "XMR_SEND_NOT_READY"); }
     }
     synchronized MoneroSendContracts.View sendStatus(String id, String expected) {
         checkAvailable(); requireSession(expected);
         if (transition || sends == null) throw new Rejected(409, "XMR_NO_ACTIVE_WALLET");
         try { return sends.machine.status(id, expected); }
         catch (MoneroSendJournal.Failure e) { fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        catch (MoneroSendMachine.Rejected e) { throw new Rejected(409, "XMR_SEND_NOT_READY"); }
     }
     synchronized CompletableFuture<Void> reconcileSends(String expected) {
         return submitSend(null, null, null, expected).thenApply(ignored -> null);

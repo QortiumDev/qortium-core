@@ -34,6 +34,11 @@ own chain.
 
 ## Change Entries
 
+### Add owner-scoped Monero send API contracts
+
+Add authenticated local prepare, exact-quote commit, cancellation and recovery endpoints around the encrypted Monero send journal. Strict requests and redacted replies keep native signing material private; bounded waits distinguish queued work from durable operations without authorizing retries. Home and Wallet still advertise sending as unavailable pending their separate approval flow and end-to-end testing.
+
+
 ### Integrate Monero send journal with serialized native custody
 
 Connect the internal Monero send protocol to the same native worker used for

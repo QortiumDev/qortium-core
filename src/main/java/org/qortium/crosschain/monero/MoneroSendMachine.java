@@ -80,7 +80,8 @@ final class MoneroSendMachine {
         Request request = entry.request(); Candidate candidate = entry.candidate();
         return new View(entry.operationId(), entry.state(), entry.state() == State.PREPARED ? entry.quoteDigest() : null,
                 request == null ? null : request.address(), request == null ? null : request.amountAtomic(),
-                candidate == null ? null : candidate.feeAtomic(), candidate == null ? null : candidate.txid(), held());
+                candidate == null ? null : candidate.feeAtomic(), candidate == null ? null : candidate.txid(), held(),
+                entry.expiresAt(), entry.confirmations(), entry.unlocked());
     }
     synchronized View status(String id, String expectedSession) { owner(expectedSession); expire(); return view(get(id)); }
     synchronized boolean walletHeld(String expectedSession) { owner(expectedSession); expire(); return held(); }
