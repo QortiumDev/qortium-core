@@ -1,6 +1,7 @@
 # XMR send and recovery design
 
-Status: reviewed implementation target, **not an implemented send API**.
+Status: reviewed implementation target with an internal journal/state-machine
+foundation; **not an implemented send API**.
 Baseline: receive/read protocol v1, Core `fa8817f71`, Home `f75c14c3`,
 Wallet `bd0c8d5b`. Date: 2026-10-03. Sending remains unavailable.
 
@@ -267,3 +268,55 @@ before and after every journal/native boundary; transaction outside UI history;
 reorg after confirmation; another wallet spending after the worker returns;
 and every unsupported capability/version failing closed. No real-wallet test
 or mainnet broadcast is part of these automated gates.
+
+## Journal/state-machine implementation checkpoint (2026-10-03)
+
+Package-private `MoneroSendContracts`, `MoneroSendJournal` and
+`MoneroSendMachine` implement tranche 1, without any runtime/native/API caller.
+The key helper derives an independent domain-separated journal key from the
+existing XMR spend material; it does not change address derivation.
+
+The Linux-only storage foundation uses a private root, a retained process lock,
+per-wallet AES-GCM snapshots with wallet/network/schema/sequence binding,
+strict bounded JSON, new nonces, same-directory temporary files, file fsync,
+atomic replacement and directory fsync. A failed mutation poisons that journal
+instance until reopen. An existing wallet directory without a valid ledger is
+never treated as a new empty wallet. Valid pre-rename leftovers are discarded
+only after authenticating the durable main ledger. No rollback protection is
+claimed against an administrator restoring an older valid encrypted snapshot,
+nor against a malicious process with the same user's filesystem authority.
+
+A durable PREPARING or RELAYING transition precedes the corresponding opaque
+worker receipt. Relay extraction is one-use. Cancellation/expiry preserves its
+first reason and the hold until preparation completes. Startup expires
+pre-relay work, marks interrupted relays uncertain, and requires reconciliation
+of retained confirmations before another admission. Pre-relay terminal records
+omit request and signed artifact material. All IDs/tombstones are retained;
+4096 records and a 16 MiB snapshot bound fail closed instead of evicting history.
+This is a bounded experimental store, not an indefinite production archive.
+
+Reconciliation has a separate opaque one-use receipt, minted immediately before
+ordinary sync. Preparation/relay and sync cannot be admitted concurrently by
+one machine. Session changes invalidate sync receipts. A completed reconciliation
+permits one admission within two monotonic seconds; prepare and commit require
+separate fresh checks when confirmed history exists. The future trusted adapter
+must build the observation map from that receipt's actual sync and exact local
+wallet lookup. Receipt identity fences stale callbacks; this pure protocol
+cannot prove that a caller supplied truthful chain observations.
+
+Still required in tranche 2: root lock acquisition before *all* native wallet
+access including reads; a global worker/lifecycle gate held even after a timeout;
+actual native validation of address checksum/network, balance and selected
+inputs; non-relay preparation and exact stored-artifact relay; current local
+observation production; and safe shutdown/reopen. Request address validation in
+this foundation is syntax only and is not a send-acceptance gate. The caller
+must stop/join native work before closing a journal/root. Same-JVM per-wallet
+reopen must likewise never race a native worker.
+
+Tests use synthetic contracts and fake completion events, injected storage
+exceptions, process-lock contention and actual JVM termination at each commit
+write barrier. They demonstrate software ordering and process recovery on the
+local filesystem, not hardware power-loss durability, a real full disk, JNI hang
+containment, chain acceptance, other platforms or mainnet sends. Java-owned key
+and serialization byte buffers are wiped and closed ledgers are dereferenced;
+immutable Java/Jackson strings cannot be reliably erased from memory.

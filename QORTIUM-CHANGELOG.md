@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### Add encrypted Monero send journal and recovery state machine
+
+Add the internal foundation for recording a Monero send before any native work
+can begin. Encrypted wallet records retain uncertain outcomes across restarts,
+prevent duplicate admission and keep cancellation from releasing a running
+operation. Confirmation and rollback checks protect later spends. Failure and
+process-crash tests exercise recovery without funds; native sending and the
+user-facing send interface remain disabled pending integration and acceptance.
+
 ### Document Monero send preparation and durable recovery
 
 Define the next experimental Monero send stages around an exact native fee
