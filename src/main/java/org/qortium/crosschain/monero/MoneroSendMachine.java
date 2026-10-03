@@ -5,8 +5,8 @@ import java.util.function.LongSupplier;
 import static org.qortium.crosschain.monero.MoneroSendContracts.*;
 
 /**
- * Durable admission/completion protocol for a future single-worker adapter.
- * No JNI calls, executor, REST resource or runtime wiring. Work objects are private
+ * Durable admission/completion protocol for the single-worker native adapter.
+ * This class performs no JNI calls and exposes no REST resource. Work objects are private
  * in-process receipts, not reusable client tokens. The adapter must report worker
  * completion even after cancellation and must never relay without takeRelay().
  */
@@ -186,6 +186,11 @@ final class MoneroSendMachine {
         save(next); work.remove(entry.operationId()); return view(next);
     }
     /** A timeout revokes future completion, but does not claim the native worker is idle. Adapter must still join it. */
+    synchronized void interruptWork(Work receipt) {
+        if (receipt == null) return;
+        if (receipt.relay) uncertainRelay(receipt);
+        else cancel(receipt(receipt, false), State.CANCELLED);
+    }
     synchronized void uncertainRelay(Work receipt) {
         Entry entry = receipt(receipt, true); save(entry.state(State.UNKNOWN)); work.remove(entry.operationId());
     }

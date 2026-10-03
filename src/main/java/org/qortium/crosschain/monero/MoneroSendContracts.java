@@ -89,7 +89,8 @@ final class MoneroSendContracts {
         String quoteDigest() { return candidate == null ? null : digest(requestDigest, artifactDigest, session, Long.toString(expiresAt)); }
         @Override public String toString() { return "XMR operation " + state; }
     }
-    record Ledger(int version, long sequence, Map<String, Entry> entries) {
+    record Ledger(int version, long sequence, Map<String, Entry> entries, boolean nativePaired) {
+        Ledger(int version, long sequence, Map<String, Entry> entries) { this(version, sequence, entries, false); }
         Ledger {
             require(version == 1 && sequence >= 0 && entries != null && entries.size() <= MAX_ENTRIES);
             entries = Collections.unmodifiableMap(new LinkedHashMap<>(entries));

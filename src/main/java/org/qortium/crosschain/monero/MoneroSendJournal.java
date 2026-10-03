@@ -14,7 +14,7 @@ import java.security.SecureRandom;
 import java.util.*;
 import static org.qortium.crosschain.monero.MoneroSendContracts.*;
 
-/** Encrypted atomic snapshots. Not wired to the read runtime or any native send operation. */
+/** Encrypted atomic snapshots for serialized native custody; never exposed through app/API payloads. */
 final class MoneroSendJournal implements AutoCloseable {
     static final int MAX_FILE = 16 * 1024 * 1024;
     private static final int MAGIC = 0x584d5231;
@@ -38,17 +38,20 @@ final class MoneroSendJournal implements AutoCloseable {
     /** A cooperating process must hold this before ANY wallet/cache/journal access in the future send runtime. */
     static final class Root implements AutoCloseable {
         final Path path;
+        final String network;
         final Map<String, MoneroSendJournal> journals = new HashMap<>();
         private final FileChannel channel;
         private final FileLock lock;
         private boolean closed, failed;
         private final Object lockIdentity;
-        private Root(Path path, FileChannel channel, FileLock lock) throws IOException {
-            this.path = path; this.channel = channel; this.lock = lock;
+        private Root(Path path, FileChannel channel, FileLock lock, String network) throws IOException {
+            this.path = path; this.channel = channel; this.lock = lock; this.network = network;
             lockIdentity = Files.readAttributes(path.resolve(".send.lock"), java.nio.file.attribute.BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).fileKey();
             if (lockIdentity == null) throw new IOException();
         }
-        static Root open(Path path) {
+        static Root open(Path path) { return open(path, "mainnet"); }
+        static Root open(Path path, String network) {
+            require("mainnet".equals(network) || "regtest".equals(network));
             FileChannel channel = null;
             try {
                 path = path.toAbsolutePath().normalize();
@@ -65,7 +68,7 @@ final class MoneroSendJournal implements AutoCloseable {
                 FileLock lock = channel.tryLock();
                 if (lock == null) throw new IOException();
                 syncDirectory(path);
-                return new Root(path, channel, lock);
+                return new Root(path, channel, lock, network);
             } catch (Exception e) {
                 if (channel != null) try { channel.close(); } catch (IOException ignored) { }
                 throw new Failure();
@@ -148,7 +151,7 @@ final class MoneroSendJournal implements AutoCloseable {
     private static void syncDirectory(Path path) throws IOException {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) { channel.force(true); }
     }
-    private byte[] aad(long sequence) { return ("Qortium/XMR/mainnet/derivation-v1/send-journal/v1\n" + walletId + "\n" + sequence).getBytes(java.nio.charset.StandardCharsets.UTF_8); }
+    private byte[] aad(long sequence) { return ("Qortium/XMR/" + root.network + "/derivation-v1/send-journal/v1\n" + walletId + "\n" + sequence).getBytes(java.nio.charset.StandardCharsets.UTF_8); }
     private byte[] encrypt(Ledger ledger) throws Exception {
         byte[] plain = JSON.writeValueAsBytes(ledger);
         try {
@@ -195,7 +198,16 @@ final class MoneroSendJournal implements AutoCloseable {
     synchronized void replace(Map<String, Entry> entries) {
         check();
         try {
-            Ledger next = new Ledger(1, Math.addExact(current.sequence(), 1), entries);
+            Ledger next = new Ledger(1, Math.addExact(current.sequence(), 1), entries, current.nativePaired());
+            persist(next); current = next;
+        } catch (Exception e) { failed = true; throw new Failure(); }
+    }
+    synchronized void markNativePaired() {
+        check();
+        if (current.nativePaired()) return;
+        try {
+            require(current.entries().isEmpty());
+            Ledger next = new Ledger(1, Math.addExact(current.sequence(), 1), current.entries(), true);
             persist(next); current = next;
         } catch (Exception e) { failed = true; throw new Failure(); }
     }

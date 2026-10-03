@@ -1,7 +1,7 @@
 # XMR send and recovery design
 
 Status: reviewed implementation target with an internal journal/state-machine
-foundation; **not an implemented send API**.
+foundation and internal native integration; **not an implemented send API**.
 Baseline: receive/read protocol v1, Core `fa8817f71`, Home `f75c14c3`,
 Wallet `bd0c8d5b`. Date: 2026-10-03. Sending remains unavailable.
 
@@ -272,7 +272,8 @@ or mainnet broadcast is part of these automated gates.
 ## Journal/state-machine implementation checkpoint (2026-10-03)
 
 Package-private `MoneroSendContracts`, `MoneroSendJournal` and
-`MoneroSendMachine` implement tranche 1, without any runtime/native/API caller.
+`MoneroSendMachine` implemented tranche 1. The native checkpoint below supersedes
+its original unwired state; there is still no app/API send caller.
 The key helper derives an independent domain-separated journal key from the
 existing XMR spend material; it does not change address derivation.
 
@@ -299,12 +300,12 @@ Reconciliation has a separate opaque one-use receipt, minted immediately before
 ordinary sync. Preparation/relay and sync cannot be admitted concurrently by
 one machine. Session changes invalidate sync receipts. A completed reconciliation
 permits one admission within two monotonic seconds; prepare and commit require
-separate fresh checks when confirmed history exists. The future trusted adapter
+separate fresh checks when confirmed history exists. The trusted adapter
 must build the observation map from that receipt's actual sync and exact local
 wallet lookup. Receipt identity fences stale callbacks; this pure protocol
 cannot prove that a caller supplied truthful chain observations.
 
-Still required in tranche 2: root lock acquisition before *all* native wallet
+At the journal-only checkpoint, tranche 2 still required root lock acquisition before *all* native wallet
 access including reads; a global worker/lifecycle gate held even after a timeout;
 actual native validation of address checksum/network, balance and selected
 inputs; non-relay preparation and exact stored-artifact relay; current local
@@ -320,3 +321,67 @@ local filesystem, not hardware power-loss durability, a real full disk, JNI hang
 containment, chain acceptance, other platforms or mainnet sends. Java-owned key
 and serialization byte buffers are wiped and closed ledgers are dereferenced;
 immutable Java/Jackson strings cannot be reliably erased from memory.
+
+## Internal native integration checkpoint (2026-10-03)
+
+The service now uses a package-private send backend/coordinator on its existing
+single worker. There are no new REST routes, bridge actions or advertised send
+capabilities. Default-off configuration remains unchanged. Package-private
+prepare/commit/reconcile futures are bounded to one queued send operation;
+cancelling a future does not cancel native work or undo relay admission.
+
+The factory acquires and retains `<network namespace>/.coordination/.send.lock`
+before journal or native wallet access. Per-wallet journals live below that
+coordination directory, separate from the existing native cache layout. Journal
+authentication and startup normalization precede native open. Temporary derived
+journal keys are wiped. Wallet switches durably revoke pre-relay work before
+publishing the new session, then serialize native completion, close and open.
+A queued final shutdown closes the factory/root only after native completion;
+the caller's three-second shutdown wait is not proof of worker termination.
+Uncertain native close retains the root until process exit.
+
+Each native cache has a `send-journal-v1` marker paired with an authenticated
+`nativePaired` journal bit. After adoption, either missing side fails closed.
+An unpaired empty journal can adopt a pristine/legacy read-only cache: force
+native cache files and directory, atomically persist and fsync the pair bit,
+then create/fsync the native marker and directory before exposing the backend.
+A crash after the pair bit but before the marker requires operator recovery.
+No send admission is possible before adoption completes. This detects partial
+loss, not restoration/deletion of both storage trees or older binaries that do
+not honor the new process lock. Journals bind the actual mainnet/regtest
+namespace in AEAD associated data; the test-only regtest flag remains inaccessible
+through settings and APIs.
+
+Preparation performs ordinary untrusted sync, validates the mainnet checksum
+and address form, requires readiness/account-zero unlocked balance, then calls
+native createTxs with NORMAL priority, canSplit=false and relay=false. It checks
+the single returned destination, amount, fee, unlock time, relay/confirmation
+flags, hash, metadata, full bytes and input key images. Native outputs must show
+every selected input available and unlocked. Commit repeats readiness/input/
+balance checks after fresh reconciliation, then durably claims relay under the
+service's current-session monitor. Exactly the stored metadata reaches relay.
+
+A missing/mismatched relay result or post-relay save failure is UNKNOWN. No
+rebuild, retry or alternate-daemon relay is attempted. Deadline failure records
+uncertainty before allowing a late result to complete; the native lane remains
+occupied until the call returns. A returned error can permit another wallet
+after cleanup, while the affected wallet retains its journal hold. Local exact
+hash lookups after ordinary sync distinguish pool presence, confirmation depth
+and unlocked status; they do not depend on the capped UI history.
+
+Acceptance uses public fixtures and freshly mined offline regtest rewards through
+the actual Core service/JNI path. It checks prepared quotes, an intentionally
+lost relay response, no duplicate relay, pool/confirmation recovery and exact
+recipient balance. Child JVMs halt immediately before and after native relay,
+then new services reopen UNKNOWN without granting retry. Separate tests cover
+journal loss, missing native files, four adoption write barriers, cross-network
+journal transplant, account switches, cancellation, native timeouts and lock
+retention after shutdown. These are process/fault-injection tests, not hardware
+power-loss qualification, mainnet funded acceptance or a full Controller test.
+
+Next: expose strictly authenticated owner-scoped Core request/response contracts
+and lifecycle/status routes, then Home exact-quote approval and durable handles,
+Wallet UI and packaged end-to-end acceptance. Keep send=false until the complete
+route passes security review and offline acceptance. Full Controller/mainnet
+scan, additional platforms, release and owner-operated funded acceptance remain
+separate gates.

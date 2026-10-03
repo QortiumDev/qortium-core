@@ -334,6 +334,20 @@ public class MoneroSendJournalTests {
             assertThrows(MoneroSendJournal.Failure.class, () -> f.root.openWallet(WALLET, key()));
         }
     }
+    @Test public void networkTransplantIsRejectedAndPairFlagSurvivesMutation() throws Exception {
+        byte[] encrypted;
+        try (var root = MoneroSendJournal.Root.open(path(), "regtest"); var journal = root.openWallet(WALLET, key())) {
+            journal.markNativePaired(); journal.replace(Map.of());
+            assertTrue(journal.read().nativePaired());
+            encrypted = Files.readAllBytes(path().resolve(WALLET).resolve("ledger.aesgcm"));
+        }
+        Path main = temp.getRoot().toPath().resolve("main");
+        try (var root = MoneroSendJournal.Root.open(main); var journal = root.openWallet(WALLET, key())) { }
+        Files.write(main.resolve(WALLET).resolve("ledger.aesgcm"), encrypted);
+        try (var root = MoneroSendJournal.Root.open(main)) {
+            assertThrows(MoneroSendJournal.Failure.class, () -> root.openWallet(WALLET, key()));
+        }
+    }
     @Test public void wrongKeyWalletTamperTruncationAndMissingLedgerFailClosed() throws Exception {
         Path rootPath = path();
         try (var f = new Fixture(rootPath)) {
@@ -363,12 +377,12 @@ public class MoneroSendJournalTests {
     @Test public void authenticatedSchemaViolationsAndOverflowAreRejected() throws Exception {
         try (var f = new Fixture(path())) {
             f.journal.close(); Path file = path().resolve(WALLET).resolve("ledger.aesgcm");
-            for (String bad : List.of("{\"version\":2,\"sequence\":0,\"entries\":{}}", "{\"version\":1,\"sequence\":0,\"entries\":{},\"extra\":1}",
-                    "{\"version\":1,\"version\":1,\"sequence\":0,\"entries\":{}}", "{\"version\":\"1\",\"sequence\":0,\"entries\":{}}",
-                    "{\"version\":1,\"sequence\":0.0,\"entries\":{}}", "{\"version\":1,\"sequence\":0,\"entries\":{}} {}")) {
+            for (String bad : List.of("{\"version\":2,\"sequence\":0,\"nativePaired\":false,\"entries\":{}}", "{\"version\":1,\"sequence\":0,\"nativePaired\":false,\"entries\":{},\"extra\":1}",
+                    "{\"version\":1,\"version\":1,\"sequence\":0,\"nativePaired\":false,\"entries\":{}}", "{\"version\":\"1\",\"sequence\":0,\"nativePaired\":false,\"entries\":{}}",
+                    "{\"version\":1,\"sequence\":0.0,\"nativePaired\":false,\"entries\":{}}", "{\"version\":1,\"sequence\":0,\"nativePaired\":false,\"entries\":{}} {}")) {
                 Files.write(file, envelope(bad, 0)); assertThrows(MoneroSendJournal.Failure.class, () -> f.root.openWallet(WALLET, key()));
             }
-            Files.write(file, envelope("{\"version\":1,\"sequence\":9223372036854775807,\"entries\":{}}", Long.MAX_VALUE));
+            Files.write(file, envelope("{\"version\":1,\"sequence\":9223372036854775807,\"nativePaired\":false,\"entries\":{}}", Long.MAX_VALUE));
             try (var journal = f.root.openWallet(WALLET, key())) { assertThrows(MoneroSendJournal.Failure.class, () -> journal.replace(Map.of())); }
         }
     }

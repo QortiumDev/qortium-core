@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### Integrate Monero send journal with serialized native custody
+
+Connect the internal Monero send protocol to the same native worker used for
+wallet reads. Preparation stores one exact transaction and dynamic fee before
+approval; relay uses that artifact once, and uncertain results recover through
+normal sync and exact transaction lookup. Durable wallet/journal pairing and
+a retained process lock prevent missing recovery records or delayed native
+shutdown from silently reopening spending. Offline synthetic tests cover
+recipient receipt, lost responses and process crashes. App-accessible sending
+remains disabled while authenticated APIs and Home/Wallet approval are built.
+
 ### Add encrypted Monero send journal and recovery state machine
 
 Add the internal foundation for recording a Monero send before any native work
