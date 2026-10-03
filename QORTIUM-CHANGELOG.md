@@ -34,6 +34,48 @@ own chain.
 
 ## Change Entries
 
+### Clarify current Monero send implementation and opt-in settings
+
+- Update the wallet guide and send design overview to distinguish the implemented opt-in API from earlier design milestones and the installed read-only deployment.
+
+### Gate Monero sending and cancel queued preparation durably
+
+- Keep experimental sending disabled unless `moneroWalletSendEnabled` is explicitly enabled. Advertise the send protocol and native fee policy to compatible Home clients.
+- Record cancellation before queued preparation is admitted, so a lost response cannot strand recovery or allow cancelled work to start. Accepted relays remain non-cancellable.
+
+### Add owner-scoped Monero send API contracts
+
+Add authenticated local prepare, exact-quote commit, cancellation and recovery endpoints around the encrypted Monero send journal. Strict requests and redacted replies keep native signing material private; bounded waits distinguish queued work from durable operations without authorizing retries. Home and Wallet still advertise sending as unavailable pending their separate approval flow and end-to-end testing.
+
+
+### Integrate Monero send journal with serialized native custody
+
+Connect the internal Monero send protocol to the same native worker used for
+wallet reads. Preparation stores one exact transaction and dynamic fee before
+approval; relay uses that artifact once, and uncertain results recover through
+normal sync and exact transaction lookup. Durable wallet/journal pairing and
+a retained process lock prevent missing recovery records or delayed native
+shutdown from silently reopening spending. Offline synthetic tests cover
+recipient receipt, lost responses and process crashes. App-accessible sending
+remains disabled while authenticated APIs and Home/Wallet approval are built.
+
+### Add encrypted Monero send journal and recovery state machine
+
+Add the internal foundation for recording a Monero send before any native work
+can begin. Encrypted wallet records retain uncertain outcomes across restarts,
+prevent duplicate admission and keep cancellation from releasing a running
+operation. Confirmation and rollback checks protect later spends. Failure and
+process-crash tests exercise recovery without funds; native sending and the
+user-facing send interface remain disabled pending integration and acceptance.
+
+### Document Monero send preparation and durable recovery
+
+Define the next experimental Monero send stages around an exact native fee
+quote, explicit approval and one stored transaction. The design requires an
+encrypted per-wallet operation record, blocks another spend while its outcome
+is unknown, and separates read-only recovery from broadcasting. Sending stays
+disabled while journal, lifecycle, interface and platform acceptance are built.
+
 ### Add opt-in Monero wallet reads with account-bound native custody
 
 Add a default-off, local-only Monero wallet adapter with pinned native code,

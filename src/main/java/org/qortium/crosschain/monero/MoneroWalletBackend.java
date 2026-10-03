@@ -2,7 +2,7 @@ package org.qortium.crosschain.monero;
 
 import java.util.List;
 
-/** Native boundary is replaceable in lifecycle tests. No send/relay primitive is exposed. */
+/** Native boundary is replaceable in lifecycle tests. Send primitives remain on a package-private seam. */
 public interface MoneroWalletBackend extends AutoCloseable {
     /** Only thrown after a new in-memory wallet has closed, before any durable marker/checkpoint. */
     final class AdmissionRejected extends Exception {
@@ -15,7 +15,10 @@ public interface MoneroWalletBackend extends AutoCloseable {
                     String balanceAtomic, String unlockedAtomic, List<Transaction> transactions) {
         public Snapshot { transactions = List.copyOf(transactions); }
     }
-    interface Factory { MoneroWalletBackend open(MoneroKeys keys, long restoreHeight) throws Exception; }
+    interface Factory extends AutoCloseable {
+        MoneroWalletBackend open(MoneroKeys keys, long restoreHeight) throws Exception;
+        default void close() throws Exception { }
+    }
     Snapshot read() throws Exception;
     void close() throws Exception;
 }

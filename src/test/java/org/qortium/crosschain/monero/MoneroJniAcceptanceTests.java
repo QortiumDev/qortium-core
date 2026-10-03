@@ -98,7 +98,7 @@ public class MoneroJniAcceptanceTests {
                     "deliberately-wrong-public-test-password", monero.daemon.model.MoneroNetworkType.MAINNET,
                     (monero.common.MoneroRpcConnection)null, true));
             Files.delete(dir.resolve("wallet"));
-            assertThrows(IllegalStateException.class, () -> MoneroJniWallet.open(root, daemon, keys, 0, true));
+            assertThrows(MoneroSendJournal.Failure.class, () -> MoneroJniWallet.open(root, daemon, keys, 0, true));
         }
     }
 }

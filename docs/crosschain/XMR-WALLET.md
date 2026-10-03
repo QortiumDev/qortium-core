@@ -1,10 +1,11 @@
 # Experimental Monero wallet reads
 
-This is the first Core integration tranche, not a released XMR feature. It is off
-by default, accepts authenticated **loopback** requests only, and exposes no
-sending, transaction preparation, relay, trading, or QDN bridge. Home consent,
-privileged derivation, account lifecycle integration and Wallet UI are subsequent
-work. Do not enable a public/shared node to receive users' wallet secrets.
+This document describes experimental Core wallet custody and reads. They are
+off by default and accept authenticated **loopback** requests only. Sending is a
+separate default-off opt-in described in [XMR-SEND-DESIGN.md](XMR-SEND-DESIGN.md).
+Home provides consent, privileged derivation and account lifecycle handling;
+the Wallet app accesses Core through Home. Trading is not implemented. Do not
+enable a public/shared node to receive users' wallet secrets.
 
 The adapter holds full wallet keys even though this API only reads. JNI runs
 inside Core: a native crash can terminate the JVM, as with the existing ARRR
@@ -47,7 +48,7 @@ and process inspection remain custody-sensitive.
 
 ## Derivation v1
 
-Home, not Core or the QDN app, will obtain the unlocked account seed. The exact
+Home, not Core or the QDN app, obtains the unlocked account seed. The exact
 coin seed convention is:
 
 1. Account version 1 uses the **whole** account/master seed, with no nonce
@@ -74,7 +75,9 @@ and native address creation must continue to agree before Home exposes addresses
 ## Operator configuration
 
 The local experimental settings are `moneroWalletEnabled` (default false) and
-`moneroDaemonUri` (no default server). The daemon must use HTTPS, except numeric
+`moneroDaemonUri` (no default server). `moneroWalletSendEnabled` separately opts
+into sending and defaults false; enabling wallet reads does not enable sends.
+The daemon must use HTTPS, except numeric
 loopback HTTP is permitted. Credentials, query strings, fragments and custom
 paths are refused. Native daemon trust is explicitly false, including loopback.
 This is wallet2 scanning against a Monero daemon; it does not use ARRR's
@@ -104,7 +107,7 @@ Responses have `Cache-Control: no-store`.
 
 | Method and path under `/crosschain/xmr` | Contract |
 | --- | --- |
-| `GET /capabilities` | Versions, decimals=12, configured enablement, supported platform, mainnet, local custody only, send=false, historyLimit=100. Does not load native code. |
+| `GET /capabilities` | Versions, decimals=12, configured enablement, supported platform, mainnet, local custody only, send enablement, sendProtocolVersion=1, feePolicy=NATIVE_NORMAL, historyLimit=100. Does not load native code. |
 | `GET /session` | Privileged coordination: current sessionId, walletId, state and safe errorCode only. Home can recover the expected revision after its own restart. |
 | `POST /activate` | JSON: lowercase hex 32-byte `coinSeed`, `derivationVersion:1`, integer `restoreHeight`, and current `expectedSession` (null initially). Returns a new session immediately while the worker opens/scans. Never send Home's master seed. |
 | `GET /wallet` | Requires `X-XMR-SESSION`. Returns state and an owner-scoped snapshot containing receive address, scan/target heights, synced flag, balance/unlocked atomic strings and at most 100 newest history entries. |
@@ -146,6 +149,12 @@ body while advancing its cursor; an untrusted daemon can also suppress entries.
 Do not infer send finality from pool absence. History timestamps are seconds,
 atomic values are decimal strings, and unknown amounts/timestamps stay null.
 The current history response is capped; pagination remains future work.
+
+## Send implementation target
+
+[XMR-SEND-DESIGN.md](XMR-SEND-DESIGN.md) specifies the separate exact-fee,
+prepare/approve/relay and durable wallet-scoped recovery stages. It does not add
+send endpoints or change this read-only protocol's capability advertisement.
 
 ## Verification and remaining gates
 

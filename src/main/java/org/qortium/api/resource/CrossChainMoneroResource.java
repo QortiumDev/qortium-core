@@ -10,6 +10,7 @@ import javax.ws.rs.core.*;
 import java.io.InputStream;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 /** Local-operator prototype. Home integration must retain custody/consent and never expose this to QDN. */
@@ -39,9 +40,12 @@ public class CrossChainMoneroResource {
     @GET @Path("/capabilities")
     public Response capabilities(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
         authorize(apiKey);
-        return result(() -> Map.of("protocolVersion", 1, "derivationVersion", 1, "decimals", 12,
-                "enabled", Settings.getInstance().isMoneroWalletEnabled(), "platformSupported", MoneroNativeLoader.supported(),
-                "network", "mainnet", "localCustodyOnly", true, "send", false, "historyLimit", 100));
+        return result(() -> Map.ofEntries(
+                Map.entry("protocolVersion", 1), Map.entry("derivationVersion", 1), Map.entry("decimals", 12),
+                Map.entry("enabled", Settings.getInstance().isMoneroWalletEnabled()), Map.entry("platformSupported", MoneroNativeLoader.supported()),
+                Map.entry("network", "mainnet"), Map.entry("localCustodyOnly", true),
+                Map.entry("send", Settings.getInstance().isMoneroWalletEnabled() && Settings.getInstance().isMoneroWalletSendEnabled()),
+                Map.entry("sendProtocolVersion", 1), Map.entry("feePolicy", "NATIVE_NORMAL"), Map.entry("historyLimit", 100)));
     }
 
     @GET @Path("/session")
@@ -74,5 +78,85 @@ public class CrossChainMoneroResource {
     public Response deactivate(@HeaderParam(Security.API_KEY_HEADER) String apiKey, @HeaderParam(SESSION_HEADER) String session) {
         authorize(apiKey);
         return result(() -> MoneroWalletRuntime.get().deactivate(session));
+    }
+
+    /** Send capability remains false until Home consent and Wallet integration are reviewed. */
+    @POST @Path("/send/prepare") @Consumes(MediaType.APPLICATION_JSON)
+    public Response prepareSend(@HeaderParam(Security.API_KEY_HEADER) String key,
+                                @HeaderParam(SESSION_HEADER) String session, InputStream input) {
+        return sendCommand(key, session, input, MoneroSendReader.Kind.PREPARE, "prepare");
+    }
+    @POST @Path("/send/commit") @Consumes(MediaType.APPLICATION_JSON)
+    public Response commitSend(@HeaderParam(Security.API_KEY_HEADER) String key,
+                               @HeaderParam(SESSION_HEADER) String session, InputStream input) {
+        return sendCommand(key, session, input, MoneroSendReader.Kind.COMMIT, "commit");
+    }
+    @POST @Path("/send/cancel") @Consumes(MediaType.APPLICATION_JSON)
+    public Response cancelSend(@HeaderParam(Security.API_KEY_HEADER) String key,
+                               @HeaderParam(SESSION_HEADER) String session, InputStream input) {
+        return sendCommand(key, session, input, MoneroSendReader.Kind.OPERATION, "cancel");
+    }
+    @POST @Path("/send/reconcile") @Consumes(MediaType.APPLICATION_JSON)
+    public Response reconcileSend(@HeaderParam(Security.API_KEY_HEADER) String key,
+                                  @HeaderParam(SESSION_HEADER) String session, InputStream input) {
+        return sendCommand(key, session, input, MoneroSendReader.Kind.OPERATION, "reconcile");
+    }
+    @GET @Path("/send/status/{operationId}")
+    public Response sendStatus(@HeaderParam(Security.API_KEY_HEADER) String key,
+                               @HeaderParam(SESSION_HEADER) String session, @PathParam("operationId") String id) {
+        authorize(key);
+        return result(() -> {
+            MoneroSendAccess access = new MoneroSendAccess(sendRuntime());
+            access.owner(session);
+            try { MoneroSendAccess.validateId(id); }
+            catch (IllegalArgumentException e) { throw new BadRequestException(error(400, "XMR_INVALID_SEND_REQUEST")); }
+            return access.status(id, session);
+        });
+    }
+    private Response sendCommand(String key, String session, InputStream input, MoneroSendReader.Kind kind, String command) {
+        authorize(key);
+        return result(() -> {
+            MoneroSendAccess access = new MoneroSendAccess(sendRuntime());
+            access.owner(session); // stale/non-owner/disabled calls must not consume a body
+            MoneroSendReader.Body body;
+            try { body = MoneroSendReader.read(input, kind); }
+            catch (IOException | IllegalArgumentException e) { throw new BadRequestException(error(400, "XMR_INVALID_SEND_REQUEST")); }
+            if (command.equals("cancel")) return access.cancel(body.operationId(), session);
+            CompletableFuture<?> work = switch (command) {
+                case "prepare" -> access.prepare(body.operationId(), body.address(), body.amountAtomic(), session);
+                case "commit" -> access.commit(body.operationId(), body.quoteDigest(), session);
+                case "reconcile" -> access.reconcile(body.operationId(), session);
+                default -> throw new IllegalStateException("Unknown XMR command");
+            };
+            try { work.get(2, TimeUnit.SECONDS); }
+            catch (TimeoutException e) { return pending(access, body.operationId(), session); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); return pending(access, body.operationId(), session); }
+            catch (ExecutionException e) {
+                if (e.getCause() instanceof MoneroWalletService.Rejected rejection) throw rejection;
+                throw new WebApplicationException(error(503, "XMR_SEND_STATUS_REQUIRED"));
+            }
+            // Do not serve the future's snapshot: recheck ownership and read current durable state.
+            return access.status(body.operationId(), session);
+        });
+    }
+    private MoneroWalletService sendRuntime() {
+        if (!Settings.getInstance().isMoneroWalletSendEnabled())
+            throw new ServiceUnavailableException(error(503, "XMR_SEND_DISABLED"));
+        return MoneroWalletRuntime.get();
+    }
+    private Object pending(MoneroSendAccess access, String id, String session) {
+        access.owner(session);
+        boolean durable = true;
+        try { access.status(id, session); }
+        catch (MoneroWalletService.Rejected e) {
+            if (e.status != 409 || !e.code.equals("XMR_SEND_NOT_READY")) throw e;
+            durable = false; // still queued/reconciling: no durable operation is promised
+        }
+        // Neither response cancels work or grants resubmission authority. Poll the same ID.
+        String code = durable ? "XMR_SEND_PENDING" : "XMR_SEND_ADMISSION_PENDING";
+        throw new WebApplicationException(Response.status(durable ? 202 : 503).type(MediaType.APPLICATION_JSON)
+                .header("Cache-Control", "no-store")
+                .entity("{\"code\":\"" + code + "\",\"operationId\":\"" + id
+                        + "\",\"durable\":" + durable + ",\"statusRequired\":true}").build());
     }
 }

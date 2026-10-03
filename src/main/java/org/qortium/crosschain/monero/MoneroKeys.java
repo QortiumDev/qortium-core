@@ -12,6 +12,7 @@ import java.util.HexFormat;
 public final class MoneroKeys implements AutoCloseable {
     private static final BigInteger ORDER = BigInteger.ONE.shiftLeft(252)
             .add(new BigInteger("27742317777372353535851937790883648493"));
+    private boolean closed;
     private final byte[] spend;
     private final byte[] view;
     private final byte[] password;
@@ -59,11 +60,15 @@ public final class MoneroKeys implements AutoCloseable {
     }
 
     public static String hex(byte[] value) { return HexFormat.of().formatHex(value); }
+    /** Owned key for the future encrypted send journal; caller must wipe it. No native password reuse. */
+    byte[] sendJournalKey() { if (closed) throw new IllegalStateException("XMR keys closed"); return domainHash("Qortium/XMR/mainnet/derivation-v1/send-journal-key", spend); }
+
     public String spendHex() { return hex(spend); }
     public String viewHex() { return hex(view); }
     String password() { return hex(password); }
 
     @Override public void close() {
+        closed = true;
         Arrays.fill(spend, (byte) 0); Arrays.fill(view, (byte) 0); Arrays.fill(password, (byte) 0);
     }
 }
