@@ -13,7 +13,13 @@ public final class MoneroWalletService implements AutoCloseable {
     }
     public record Session(String sessionId, String walletId, String state, String errorCode) { }
     public record Status(String sessionId, String walletId, String state, boolean send,
-                         Long updatedAt, MoneroWalletBackend.Snapshot wallet) { }
+                         Long updatedAt, Progress progress, MoneroWalletBackend.Snapshot wallet) { }
+
+    /** Display identity is independent of, and never accepted as, session authority. */
+    public record Progress(String scanId, long startHeight, long height, long targetHeight, long updatedAt) { }
+    private String scanId;
+    private Progress progress;
+    private Object activeRead;
 
     private final MoneroWalletBackend.Factory factory;
     private final ScheduledThreadPoolExecutor worker;
@@ -72,6 +78,7 @@ public final class MoneroWalletService implements AutoCloseable {
         walletId = keys.walletId;
         restoreHeight = height;
         state = "OPENING"; errorCode = null; snapshot = null; updatedAt = 0;
+        progress = null; activeRead = null; scanId = UUID.randomUUID().toString();
         transition = true;
         startedAt = System.nanoTime();
         worker.execute(() -> switchWallet(keys, height));
@@ -86,6 +93,7 @@ public final class MoneroWalletService implements AutoCloseable {
         catch (RuntimeException e) { fail(); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
         sessionId = nextSession; walletId = null;
         state = "CLOSING"; errorCode = null; snapshot = null; updatedAt = 0;
+        progress = null; activeRead = null; scanId = null;
         transition = true; startedAt = System.nanoTime();
         worker.execute(() -> switchWallet(null, 0));
         return session();
@@ -97,7 +105,7 @@ public final class MoneroWalletService implements AutoCloseable {
         checkDeadline();
         boolean stale = updatedAt != 0 && System.nanoTime() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
         return new Status(sessionId, walletId, stale && !failed ? "STALE" : state, false,
-                updatedAt == 0 ? null : updatedAt, stale || failed ? null : snapshot);
+                updatedAt == 0 ? null : updatedAt, progress, stale || failed ? null : snapshot);
     }
 
     private void switchWallet(MoneroKeys keys, long height) {
@@ -135,31 +143,45 @@ public final class MoneroWalletService implements AutoCloseable {
 
     private void refresh() {
         String owner;
+        Object read = new Object();
         synchronized (this) {
             if (closed || failed || transition || backend == null) return;
-            owner = sessionId; startedAt = System.nanoTime();
+            owner = sessionId; startedAt = System.nanoTime(); activeRead = read;
         }
         try {
-            MoneroWalletBackend.Snapshot next = backend.read();
+            MoneroWalletBackend.Snapshot next = backend.read(counts -> publishProgress(owner, read, counts));
             synchronized (this) {
                 checkDeadline();
                 if (closed || failed || !owner.equals(sessionId)) return;
+                publishProgress(owner, read, new MoneroWalletBackend.ScanProgress(next.height(), next.targetHeight()));
                 snapshot = next; updatedAt = System.currentTimeMillis(); updatedNanos = System.nanoTime();
                 state = next.synced() ? "READY" : "SCANNING";
             }
         } catch (Exception e) {
             synchronized (this) {
                 checkDeadline();
-                if (!closed && !failed && owner.equals(sessionId)) { snapshot = null; state = "UNAVAILABLE"; }
+                if (!closed && !failed && owner.equals(sessionId)) { snapshot = null; progress = null; state = "UNAVAILABLE"; }
             }
         } catch (LinkageError e) { fail(); }
         finally {
             synchronized (this) {
                 // An activation queued during a read has its own deadline and neutral state.
                 if (owner.equals(sessionId)) startedAt = 0;
+                if (activeRead == read) activeRead = null;
             }
             cleanupIfStopped();
         }
+    }
+
+    private synchronized void publishProgress(String owner, Object read, MoneroWalletBackend.ScanProgress counts) {
+        // A native callback may arrive after a switch, timeout or the read itself. It grants no authority.
+        checkDeadline();
+        if (closed || failed || transition || activeRead != read || !owner.equals(sessionId)) return;
+        if (counts == null || counts.height() < restoreHeight || counts.targetHeight() <= 0
+                || counts.height() > counts.targetHeight() || counts.targetHeight() > 500_000_000L) return;
+        // Polls and duplicate callbacks must not manufacture forward progress or a fresh ETA.
+        if (progress != null && progress.height() == counts.height() && progress.targetHeight() == counts.targetHeight()) return;
+        progress = new Progress(scanId, restoreHeight, counts.height(), counts.targetHeight(), System.currentTimeMillis());
     }
 
     synchronized CompletableFuture<MoneroSendContracts.View> prepareSend(MoneroSendContracts.Request request, String expected) {
@@ -244,6 +266,7 @@ public final class MoneroWalletService implements AutoCloseable {
     }
 
     private synchronized void fail() {
+        progress = null; activeRead = null;
         failed = true; state = "RESTART_REQUIRED"; errorCode = "XMR_RESTART_REQUIRED"; snapshot = null;
         if (workContext != null && sendWork != null) {
             try { workContext.machine.interruptWork(sendWork); }
@@ -269,7 +292,7 @@ public final class MoneroWalletService implements AutoCloseable {
                 try { sends.machine.changeSession(UUID.randomUUID().toString()); }
                 catch (RuntimeException e) { failed = true; }
             }
-            closed = true; snapshot = null; state = "STOPPED";
+            closed = true; snapshot = null; progress = null; activeRead = null; state = "STOPPED";
         }
         // Never race native close against our reader. A stuck JNI call cannot be made safe by interrupting Java.
         worker.execute(() -> {

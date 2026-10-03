@@ -196,13 +196,16 @@ public final class MoneroJniWallet implements MoneroSendBackend {
         return path;
     }
 
-    @Override public Snapshot read() {
+    @Override public Snapshot read() { return read(ignored -> { }); }
+
+    @Override public Snapshot read(java.util.function.Consumer<ScanProgress> progress) {
         root.check();
         // Never run upstream's background sync: several getters are not protected by its sync lock.
         // Cooperatively yield at native chunk boundaries; all sync/getters/save stay on Core's lane.
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
         wallet.sync(new MoneroWalletListener() {
             @Override public void onSyncProgress(long height, long start, long end, double percent, String message) {
+                progress.accept(new ScanProgress(height, end));
                 if (height - start >= 2048 || System.nanoTime() > until) wallet.stopSyncing();
             }
         });

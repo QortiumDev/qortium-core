@@ -19,6 +19,9 @@ public interface MoneroWalletBackend extends AutoCloseable {
         MoneroWalletBackend open(MoneroKeys keys, long restoreHeight) throws Exception;
         default void close() throws Exception { }
     }
+    /** Callback contains counts only; implementations must not perform extra native reads here. */
+    record ScanProgress(long height, long targetHeight) { }
+    default Snapshot read(java.util.function.Consumer<ScanProgress> progress) throws Exception { return read(); }
     Snapshot read() throws Exception;
     void close() throws Exception;
 }
