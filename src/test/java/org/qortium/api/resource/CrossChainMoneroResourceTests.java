@@ -38,7 +38,7 @@ public class CrossChainMoneroResourceTests {
         for (String command : java.util.List.of("prepare", "commit", "cancel", "reconcile")) {
             assertThrows(ApiException.class, () -> send(resource("127.0.0.1", null), command, null, mustNotRead));
             assertThrows(ApiException.class, () -> send(resource("192.0.2.1", ApiCommon.TEST_API_KEY), command, ApiCommon.TEST_API_KEY, mustNotRead));
-            assertEquals(503, send(resource("127.0.0.1", ApiCommon.TEST_API_KEY), command, ApiCommon.TEST_API_KEY, mustNotRead).getStatus());
+            assertEquals(503, assertThrows(javax.ws.rs.ServiceUnavailableException.class, () -> send(resource("127.0.0.1", ApiCommon.TEST_API_KEY), command, ApiCommon.TEST_API_KEY, mustNotRead)).getResponse().getStatus());
         }
     }
     private javax.ws.rs.core.Response send(CrossChainMoneroResource resource, String command, String key, InputStream body) {

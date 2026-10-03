@@ -43,6 +43,21 @@ public class MoneroSendJournalTests {
         }
         public void close() { root.close(); }
     }
+    @Test public void cancellationBeforeAdmissionSurvivesRestartAndNeverMintsWork() {
+        try (var f = new Fixture(path())) {
+            Request request = request();
+            assertEquals(State.CANCELLED, f.machine.cancel(request.operationId(), SESSION).state());
+            assertThrows(MoneroSendMachine.Rejected.class, () -> f.prepare(request));
+            f.reopen();
+            assertEquals(State.CANCELLED, f.machine.status(request.operationId(), SESSION).state());
+            assertThrows(MoneroSendMachine.Rejected.class, () -> f.prepare(request));
+            assertFalse(f.machine.walletHeld(SESSION));
+            Request later = request(); f.broadcast(later); f.reopen();
+            assertThrows(MoneroSendMachine.Rejected.class, () -> f.machine.cancel(later.operationId(), SESSION));
+            assertEquals(State.UNKNOWN, f.machine.status(later.operationId(), SESSION).state());
+            assertTrue(f.machine.walletHeld(SESSION));
+        }
+    }
     @Test public void contractsRejectCoercionAndBounds() {
         for (String amount : List.of("0", "01", "-1", "1.0", "1e4", "18446744073709551616", " 1"))
             assertThrows(IllegalArgumentException.class, () -> new Request(UUID.randomUUID().toString(), ADDRESS, amount));

@@ -466,6 +466,7 @@ public class Settings {
 
 	/** Experimental XMR custody: opt-in, loopback API only, Linux x86_64 initially. */
 	private boolean moneroWalletEnabled = false;
+	private boolean moneroWalletSendEnabled = false;
 	private String moneroDaemonUri = null;
 
 	private int arrrDefaultBirthday = 2000000;
@@ -2850,6 +2851,7 @@ public class Settings {
 	}
 
 	public boolean isMoneroWalletEnabled() { return this.moneroWalletEnabled; }
+	public boolean isMoneroWalletSendEnabled() { return this.moneroWalletSendEnabled; }
 
 	public String getMoneroDaemonUri() { return this.moneroDaemonUri; }
 

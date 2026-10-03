@@ -22,6 +22,7 @@ public class MoneroSendHttpTests {
         Common.useDefaultSettings(); ApiCommon.installTestApiKey(); owner.temp.create();
         fixture = owner.new Fixture(10000);
         FieldUtils.writeField(Settings.getInstance(), "moneroWalletEnabled", true, true);
+        FieldUtils.writeField(Settings.getInstance(), "moneroWalletSendEnabled", true, true);
         FieldUtils.writeStaticField(MoneroWalletRuntime.class, "instance", fixture.service, true);
         session = fixture.activate(1, null); server = new TestServer();
     }
@@ -92,15 +93,16 @@ public class MoneroSendHttpTests {
         JsonNode pending = payload(call("/send/prepare", prepare(id)), 503);
         assertEquals("XMR_SEND_ADMISSION_PENDING", pending.get("code").asText());
         assertFalse(pending.get("durable").asBoolean()); assertTrue(pending.get("statusRequired").asBoolean());
-        payload(call("/send/status/" + id, ""), 409); payload(call("/send/cancel", operation(id)), 409);
+        payload(call("/send/status/" + id, ""), 409);
+        assertEquals("CANCELLED", payload(call("/send/cancel", operation(id)), 200).get("state").asText());
         assertEquals(0, fixture.nativeWallet.preparations.get());
         fixture.nativeWallet.observeRelease.countDown();
         await(() -> {
-            try { return fixture.service.sendStatus(id, session).state() == MoneroSendContracts.State.PREPARED; }
+            try { return fixture.service.sendStatus(id, session).state() == MoneroSendContracts.State.CANCELLED; }
             catch (MoneroWalletService.Rejected e) { return false; }
         });
-        assertEquals("PREPARED", payload(call("/send/status/" + id, ""), 200).get("state").asText());
-        assertEquals(1, fixture.nativeWallet.preparations.get());
+        assertEquals("CANCELLED", payload(call("/send/status/" + id, ""), 200).get("state").asText());
+        assertEquals(0, fixture.nativeWallet.preparations.get());
     }
     @Test public void parserAndAuthFailuresAreRedactedAndHaveNoEffects() throws Exception {
         String secret = "DO_NOT_ECHO_NATIVE_METADATA";

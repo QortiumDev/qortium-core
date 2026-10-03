@@ -34,6 +34,11 @@ own chain.
 
 ## Change Entries
 
+### Gate Monero sending and cancel queued preparation durably
+
+- Keep experimental sending disabled unless `moneroWalletSendEnabled` is explicitly enabled. Advertise the send protocol and native fee policy to compatible Home clients.
+- Record cancellation before queued preparation is admitted, so a lost response cannot strand recovery or allow cancelled work to start. Accepted relays remain non-cancellable.
+
 ### Add owner-scoped Monero send API contracts
 
 Add authenticated local prepare, exact-quote commit, cancellation and recovery endpoints around the encrypted Monero send journal. Strict requests and redacted replies keep native signing material private; bounded waits distinguish queued work from durable operations without authorizing retries. Home and Wallet still advertise sending as unavailable pending their separate approval flow and end-to-end testing.

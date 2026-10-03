@@ -428,10 +428,15 @@ native work on timeout or client disconnect. After timeout, 202
 journal. A prepare still queued or reconciling before journal admission instead
 returns 503 `XMR_SEND_ADMISSION_PENDING` with `durable:false`. Both include the
 operationId and `statusRequired:true`: keep that ID, query status and do not
-resubmit automatically. Before admission, status/cancel can return 409
-`XMR_SEND_NOT_READY`; no durable cancellation or acceptance is promised, and a
-process loss can leave no record. A client can revoke the custody session to
-prevent still-queued preparation from being admitted. Preparing never relays.
+resubmit automatically. Before admission, status can return 409
+`XMR_SEND_NOT_READY`. Cancel durably records a CANCELLED tombstone even when
+the ID has not been admitted; a queued preparation of that ID can never mint
+native work. Cancelling an already accepted relay remains forbidden. Preparing
+never relays.
+
+Send routes additionally require `moneroWalletSendEnabled=true` (default false),
+alongside wallet custody enablement. Capabilities advertise send protocol 1 and
+NATIVE_NORMAL fees; read-only installations return `XMR_SEND_DISABLED` (503).
 
 409 errors are redacted owner/admission errors, not retry authorization. 503
 `XMR_RESTART_REQUIRED` retains the existing fail-closed lifecycle semantics.

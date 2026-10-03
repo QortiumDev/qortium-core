@@ -40,9 +40,12 @@ public class CrossChainMoneroResource {
     @GET @Path("/capabilities")
     public Response capabilities(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
         authorize(apiKey);
-        return result(() -> Map.of("protocolVersion", 1, "derivationVersion", 1, "decimals", 12,
-                "enabled", Settings.getInstance().isMoneroWalletEnabled(), "platformSupported", MoneroNativeLoader.supported(),
-                "network", "mainnet", "localCustodyOnly", true, "send", false, "historyLimit", 100));
+        return result(() -> Map.ofEntries(
+                Map.entry("protocolVersion", 1), Map.entry("derivationVersion", 1), Map.entry("decimals", 12),
+                Map.entry("enabled", Settings.getInstance().isMoneroWalletEnabled()), Map.entry("platformSupported", MoneroNativeLoader.supported()),
+                Map.entry("network", "mainnet"), Map.entry("localCustodyOnly", true),
+                Map.entry("send", Settings.getInstance().isMoneroWalletEnabled() && Settings.getInstance().isMoneroWalletSendEnabled()),
+                Map.entry("sendProtocolVersion", 1), Map.entry("feePolicy", "NATIVE_NORMAL"), Map.entry("historyLimit", 100)));
     }
 
     @GET @Path("/session")
@@ -103,7 +106,7 @@ public class CrossChainMoneroResource {
                                @HeaderParam(SESSION_HEADER) String session, @PathParam("operationId") String id) {
         authorize(key);
         return result(() -> {
-            MoneroSendAccess access = new MoneroSendAccess(MoneroWalletRuntime.get());
+            MoneroSendAccess access = new MoneroSendAccess(sendRuntime());
             access.owner(session);
             try { MoneroSendAccess.validateId(id); }
             catch (IllegalArgumentException e) { throw new BadRequestException(error(400, "XMR_INVALID_SEND_REQUEST")); }
@@ -113,7 +116,7 @@ public class CrossChainMoneroResource {
     private Response sendCommand(String key, String session, InputStream input, MoneroSendReader.Kind kind, String command) {
         authorize(key);
         return result(() -> {
-            MoneroSendAccess access = new MoneroSendAccess(MoneroWalletRuntime.get());
+            MoneroSendAccess access = new MoneroSendAccess(sendRuntime());
             access.owner(session); // stale/non-owner/disabled calls must not consume a body
             MoneroSendReader.Body body;
             try { body = MoneroSendReader.read(input, kind); }
@@ -135,6 +138,11 @@ public class CrossChainMoneroResource {
             // Do not serve the future's snapshot: recheck ownership and read current durable state.
             return access.status(body.operationId(), session);
         });
+    }
+    private MoneroWalletService sendRuntime() {
+        if (!Settings.getInstance().isMoneroWalletSendEnabled())
+            throw new ServiceUnavailableException(error(503, "XMR_SEND_DISABLED"));
+        return MoneroWalletRuntime.get();
     }
     private Object pending(MoneroSendAccess access, String id, String session) {
         access.owner(session);

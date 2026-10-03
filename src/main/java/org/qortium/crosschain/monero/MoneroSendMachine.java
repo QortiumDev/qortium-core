@@ -131,7 +131,17 @@ final class MoneroSendMachine {
         return view(next);
     }
     synchronized View cancel(String id, String expectedSession) {
-        owner(expectedSession); expire(); return cancel(get(id), State.CANCELLED);
+        owner(expectedSession); expire(); uuid(id);
+        Entry existing = journal.read().entries().get(id);
+        if (existing != null) return cancel(existing, State.CANCELLED);
+        // Cancellation before admission is itself durable. A queued prepare of
+        // this ID subsequently fails its digest check and cannot mint work.
+        if (journal.read().entries().size() >= MAX_ENTRIES) throw new Rejected();
+        long now = wall.getAsLong(); require(now >= 0);
+        Entry cancelled = new Entry(id, State.CANCELLED, digest("cancel-before-admission", id),
+                null, null, null, session, now, now, null, 0, false);
+        save(cancelled);
+        return view(cancelled);
     }
     private View cancel(Entry entry, State terminal) {
         if (entry.state() == State.PREPARING) {
