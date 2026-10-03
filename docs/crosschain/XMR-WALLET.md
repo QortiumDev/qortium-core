@@ -147,6 +147,12 @@ Do not infer send finality from pool absence. History timestamps are seconds,
 atomic values are decimal strings, and unknown amounts/timestamps stay null.
 The current history response is capped; pagination remains future work.
 
+## Send implementation target
+
+[XMR-SEND-DESIGN.md](XMR-SEND-DESIGN.md) specifies the separate exact-fee,
+prepare/approve/relay and durable wallet-scoped recovery stages. It does not add
+send endpoints or change this read-only protocol's capability advertisement.
+
 ## Verification and remaining gates
 
 Run focused tests normally (native acceptance skips unless explicitly selected):

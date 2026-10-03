@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### Document Monero send preparation and durable recovery
+
+Define the next experimental Monero send stages around an exact native fee
+quote, explicit approval and one stored transaction. The design requires an
+encrypted per-wallet operation record, blocks another spend while its outcome
+is unknown, and separates read-only recovery from broadcasting. Sending stays
+disabled while journal, lifecycle, interface and platform acceptance are built.
+
 ### Add opt-in Monero wallet reads with account-bound native custody
 
 Add a default-off, local-only Monero wallet adapter with pinned native code,
