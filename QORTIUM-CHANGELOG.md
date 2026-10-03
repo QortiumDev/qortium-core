@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### Add opt-in Monero wallet reads with account-bound native custody
+
+Add a default-off, local-only Monero wallet adapter with pinned native code,
+separate encrypted wallet checkpoints and account-session checks. The first
+stage exposes receive addresses, sync progress, balances and recent history
+without enabling sending. It preserves uppercase XMR seed mixing with the
+correct Monero scalar derivation, keeps native wallet metadata out of Core logs,
+and validates behavior against public fixtures and an offline test chain.
+Home and Wallet integration, other native platforms and production enablement
+remain separate stages.
+
 ### release: prepare core 1.8.1
 
 Prepare Core 1.8.1 with durable ARRR sends and wallet-scoped recovery, Stashi 1.2.5, clearer wallet ownership and sync status, and the accumulated network and dependency fixes since 1.8.0.
