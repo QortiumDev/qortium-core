@@ -34,6 +34,11 @@ own chain.
 
 ## Change Entries
 
+### Keep advancing Monero scans alive and record safe worker failure reasons
+
+Monero scans now time out after 90 seconds without validated forward progress instead of 90 seconds of total scan time. Duplicate, backward, invalid and old-session callbacks cannot extend the timeout; opening, closing and send operations retain fixed deadlines. Core records the first worker failure category, operation phase and timing without wallet identifiers or native exception text, so a restart-required incident can be diagnosed before recovery. Financial snapshots still expire independently.
+
+
 ### Report Monero scan progress independently of wallet snapshots
 
 - Keep reporting owner-scoped block progress while a native scan batch is still running, so Home and Wallet can estimate syncing time without mistaking old balances for fresh ones. Account switches, worker deadlines and late callbacks retain their existing safety boundaries.
