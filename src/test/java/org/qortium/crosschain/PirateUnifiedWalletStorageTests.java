@@ -106,6 +106,19 @@ public class PirateUnifiedWalletStorageTests {
 		assertFalse(wallet.getUnifiedStorage().read().isSyncValidated());
 	}
 
+    @Test public void testExplicitHeightIsDurableAndCannotBePromotedToNewOrChanged() throws Exception {
+        var config = config(); var seed = entropy(49);
+        var wallet = new PirateWallet(config, seed, PirateWallet.InitializationMode.RESTORE_FROM_HEIGHT, 3_000_000, false);
+        assertEquals(3_000_000, wallet.resolveUnifiedBirthday(4_200_000));
+        var resumed = new PirateWallet(config, seed, false, false);
+        assertEquals(3_000_000, resumed.resolveUnifiedBirthday(null));
+        var changed = new PirateWallet(config, seed, PirateWallet.InitializationMode.RESTORE_FROM_HEIGHT, 3_100_000, false);
+        org.junit.Assert.assertThrows(IOException.class, () -> changed.resolveUnifiedBirthday(4_200_000));
+        var newMode = new PirateWallet(config, seed, false, false, PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP);
+        org.junit.Assert.assertThrows(IOException.class, () -> newMode.resolveUnifiedBirthday(4_200_000));
+        assertEquals(Integer.valueOf(3_000_000), resumed.recordedScanHeight());
+    }
+
 	@Test
 	public void testKnownNewInitializationPersistsExactTipBeforeNativeCreation() throws Exception {
 		ZcashFamilyWalletConfig config = this.config();

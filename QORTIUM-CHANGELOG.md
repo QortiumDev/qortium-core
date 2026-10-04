@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Add shared wallet scan-start policies for ARRR and XMR
+
+Wallet initialization can explicitly resume saved progress, restore from a chosen historical block, or start a never-funded address at the current chain tip. Core saves the chosen height before native creation and reuses it on retries and reopening; existing wallets and unresolved sends retain their checkpoints and safety rules. Monero chain preparation is reported separately without extending read deadlines or enabling spending. Wire serialization checks cover the advertised scan protocol and modes.
+
 ### Fail over Monero wallet reads across configured servers
 
 Monero wallets can use an operator-configured server pool while keeping the same local wallet and scan checkpoint. Core keeps a working provider selected, backs off failed reads, tries eligible alternatives on its existing wallet worker, and exposes cached server health through the shared wallet API. Stop and account changes retain their ownership rules, and queued sends recheck read availability before native work; no send is retried automatically.

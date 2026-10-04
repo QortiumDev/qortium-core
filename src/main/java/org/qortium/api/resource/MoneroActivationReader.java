@@ -8,7 +8,8 @@ import java.util.HexFormat;
 
 /** Explicit reader runs after API authorization; rejects coercion, unknown fields and oversized bodies. */
 final class MoneroActivationReader {
-    record Activation(byte[] coinSeed, long restoreHeight, String expectedSession) implements AutoCloseable {
+    record Activation(byte[] coinSeed, org.qortium.crosschain.WalletScanStart scanStart, String expectedSession) implements AutoCloseable {
+        long restoreHeight() { return scanStart.height() == null ? 0 : scanStart.height(); }
         @Override public void close() { Arrays.fill(coinSeed, (byte) 0); }
     }
     static Activation read(InputStream input) throws IOException {
@@ -23,7 +24,7 @@ final class MoneroActivationReader {
             JsonFactory factory = new JsonFactory().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
             try (JsonParser parser = factory.createParser(utf8)) {
                 if (parser.nextToken() != JsonToken.START_OBJECT) throw new IOException("Invalid XMR activation");
-                String seed = null, expected = null;
+                String seed = null, expected = null, mode = null;
                 Long height = null;
                 Integer version = null;
                 while (parser.nextToken() != JsonToken.END_OBJECT) {
@@ -34,6 +35,10 @@ final class MoneroActivationReader {
                         case "coinSeed" -> {
                             if (value != JsonToken.VALUE_STRING) throw new IOException("Invalid XMR seed");
                             seed = parser.getText();
+                        }
+                        case "scanMode" -> {
+                            if (value != JsonToken.VALUE_STRING) throw new IOException("Invalid scan mode");
+                            mode = parser.getText();
                         }
                         case "restoreHeight" -> {
                             if (value != JsonToken.VALUE_NUMBER_INT) throw new IOException("Explicit restore height required");
@@ -53,9 +58,14 @@ final class MoneroActivationReader {
                     }
                 }
                 if (parser.nextToken() != null || seed == null || !seed.matches("[0-9a-f]{64}")
-                        || height == null || height < 0 || height > 500_000_000L || version == null || version != 1)
+                        || version == null || version != 1)
                     throw new IOException("Invalid XMR activation");
-                return new Activation(HexFormat.of().parseHex(seed), height, expected);
+                try {
+                    var selected = mode == null ? org.qortium.crosschain.WalletScanStart.Mode.RESTORE_FROM_HEIGHT
+                            : org.qortium.crosschain.WalletScanStart.Mode.valueOf(mode);
+                    var start = new org.qortium.crosschain.WalletScanStart(selected, height);
+                    return new Activation(HexFormat.of().parseHex(seed), start, expected);
+                } catch (IllegalArgumentException e) { throw new IOException("Invalid scan start"); }
             }
         } finally { Arrays.fill(bytes, (byte) 0); }
     }

@@ -42,6 +42,13 @@ final class MoneroDaemonPool {
         }
         throw new Unavailable(pool.retryDelayMillis());
     }
+    long currentHeight() throws Exception {
+        resetConnection();
+        long[] height = {0};
+        try { connect(endpoint -> height[0] = MoneroDaemonProbe.check(endpoint, 0, regtest)); }
+        finally { resetConnection(); }
+        return height[0];
+    }
     void resetConnection() { connected = null; }
     void succeeded() { if (connected != null) pool.succeeded(connected); }
     Unavailable failed() {

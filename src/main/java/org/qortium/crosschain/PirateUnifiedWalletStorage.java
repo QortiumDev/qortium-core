@@ -236,8 +236,9 @@ final class PirateUnifiedWalletStorage {
 			if (json.has("initializationMode") || json.has("initializationBirthdayHeight")) {
 				initializationMode = PirateWallet.InitializationMode.valueOf(json.getString("initializationMode"));
 				initializationBirthdayHeight = json.getInt("initializationBirthdayHeight");
-				if (initializationMode != PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP
-						|| initializationBirthdayHeight < 1)
+				if ((initializationMode != PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP
+                        && initializationMode != PirateWallet.InitializationMode.RESTORE_FROM_HEIGHT)
+						|| initializationBirthdayHeight < 1 || initializationBirthdayHeight > 500_000_000)
 					throw new JSONException("Invalid wallet initialization intent");
 			}
 
@@ -293,8 +294,9 @@ final class PirateUnifiedWalletStorage {
 		if (this.transientWallet)
 			return;
 		if ((initializationMode == null) != (initializationBirthdayHeight == null)
-				|| (initializationMode != null && (initializationMode != PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP
-				|| initializationBirthdayHeight < 1)))
+				|| (initializationMode != null && ((initializationMode != PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP
+                        && initializationMode != PirateWallet.InitializationMode.RESTORE_FROM_HEIGHT)
+				|| initializationBirthdayHeight < 1 || initializationBirthdayHeight > 500_000_000)))
 			throw new IOException("Invalid wallet initialization intent");
 
 		Files.createDirectories(this.storageDirectory);

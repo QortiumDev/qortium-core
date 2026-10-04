@@ -85,7 +85,9 @@ public class MoneroJniAcceptanceTests {
             assertNotEquals(address, wallet.read().address());
         }
         try (var keys = new MoneroKeys(HexFormat.of().parseHex(first.get("coinSeed").asText()))) {
-            assertThrows(IllegalStateException.class, () -> MoneroJniWallet.open(root, daemon, keys, 1, true));
+            var mismatch = assertThrows(MoneroWalletBackend.AdmissionRejected.class,
+                    () -> MoneroJniWallet.open(root, daemon, keys, 1, true));
+            assertEquals("XMR_RESTORE_HEIGHT_MISMATCH", mismatch.code);
             Path dir = root.resolve("xmr-regtest-v1").resolve(keys.walletId);
             String identity = Files.readString(dir.resolve("identity"));
             Files.writeString(dir.resolve("identity"), identity.replace("derivation=1", "derivation=2"));

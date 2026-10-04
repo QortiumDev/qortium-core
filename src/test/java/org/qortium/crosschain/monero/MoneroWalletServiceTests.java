@@ -437,4 +437,24 @@ public class MoneroWalletServiceTests {
         } finally {release.countDown();}
     }
 
+    @Test public void chainPreparationIsDisplayOnlyAndCannotExtendDeadline() throws Exception {
+        var cb = new java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>>();
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        Fake backend = new Fake("preparing") {
+            public Snapshot read(java.util.function.Consumer<ScanProgress> counts) throws Exception {
+                cb.set(counts); counts.accept(new ScanProgress(10, 200)); entered.countDown(); release.await();
+                return new Snapshot("preparing", 200, 200, true, "0", "0", List.of());
+            }
+        };
+        try (var service = new MoneroWalletService((keys, height) -> backend, Duration.ofMillis(100), Duration.ofHours(1))) {
+            var a = service.activate(seed(1), 100, null); assertTrue(entered.await(3, TimeUnit.SECONDS));
+            var status = service.status(a.sessionId()); assertNull(status.progress()); assertEquals(10, status.preparation().height());
+            Thread.sleep(130); cb.get().accept(new MoneroWalletBackend.ScanProgress(20, 200));
+            assertEquals("UNAVAILABLE", service.status(a.sessionId()).state()); assertNull(service.status(a.sessionId()).wallet());
+            release.countDown(); await(() -> "READY".equals(service.status(a.sessionId()).state()));
+            assertNull(service.status(a.sessionId()).preparation());
+            cb.get().accept(new MoneroWalletBackend.ScanProgress(50, 200)); assertNull(service.status(a.sessionId()).preparation());
+        } finally { release.countDown(); }
+    }
+
 }

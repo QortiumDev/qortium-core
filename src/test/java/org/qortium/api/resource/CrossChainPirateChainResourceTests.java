@@ -320,12 +320,12 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 
 		initializationRequest = buildValidInitializationRequest();
 		initializationRequest.initializationMode = "CONSERVATIVE";
-		assertEquals("Initialization mode must be NEW_AT_CURRENT_TIP",
+		assertEquals("Initialization mode must be NEW_AT_CURRENT_TIP or RESTORE_FROM_HEIGHT",
 				CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
 
 		initializationRequest = buildValidInitializationRequest();
 		initializationRequest.initializationMode = null;
-		assertEquals("Initialization mode must be NEW_AT_CURRENT_TIP",
+		assertEquals("Initialization mode must be NEW_AT_CURRENT_TIP or RESTORE_FROM_HEIGHT",
 				CrossChainPirateChainResource.validateWalletInitializationRequest(initializationRequest));
 	}
 
@@ -348,6 +348,18 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 						buildValidInitializationRequest()));
 		assertTrue(String.valueOf(exception.getMessage()).contains("Unified"));
 	}
+
+    @Test public void testExplicitRestoreRequiresBoundedHeightAndRevision() {
+        var value = buildValidInitializationRequest(); value.initializationMode = "RESTORE_FROM_HEIGHT";
+        assertNotNull(CrossChainPirateChainResource.validateWalletInitializationRequest(value));
+        value.restoreHeight = 1; value.expectedRevision = "00000000-0000-0000-0000-000000000001";
+        assertNull(CrossChainPirateChainResource.validateWalletInitializationRequest(value));
+        for (int bad : new int[]{0, -1, 500_000_001}) {
+            value.restoreHeight = bad; assertNotNull(CrossChainPirateChainResource.validateWalletInitializationRequest(value));
+        }
+        value.initializationMode = "NEW_AT_CURRENT_TIP"; value.restoreHeight = 100;
+        assertNotNull(CrossChainPirateChainResource.validateWalletInitializationRequest(value));
+    }
 
 	@Test
 	public void testKnownNewInitializationRejectsInvalidRequestBeforeWalletWork() throws Exception {
@@ -722,4 +734,14 @@ public class CrossChainPirateChainResourceTests extends ApiCommon {
 			setUnifiedWalletEnabled(false);
 		}
 	}
+    @Test public void directInitializationRejectsCoercedDuplicateAndUnknownFields() throws Exception {
+        for (String height : new String[] {"\"100\"", "1.5", "true", "null", "[]"}) {
+            String json = "{\"entropy58\":\"synthetic\",\"initializationMode\":\"RESTORE_FROM_HEIGHT\",\"restoreHeight\":" + height + "}";
+            assertThrows(javax.ws.rs.BadRequestException.class, () -> resource.initializeWallet(ApiCommon.TEST_API_KEY,
+                    new java.io.ByteArrayInputStream(json.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        }
+        for (String json : new String[] {"{\"restoreHeight\":1,\"restoreHeight\":2}", "{\"unknown\":true}", "{} {}"})
+            assertThrows(javax.ws.rs.BadRequestException.class, () -> resource.initializeWallet(ApiCommon.TEST_API_KEY,
+                    new java.io.ByteArrayInputStream(json.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+    }
 }

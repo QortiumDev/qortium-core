@@ -38,3 +38,31 @@ Other text bodies are bounded and decoded as strict UTF-8. Existing native error
 remain unchanged. Native responses keep their media types: addresses and exact
 atomic balance strings are `text/plain`, structured replies are JSON, and wallet
 replies are `Cache-Control: no-store`. Never parse an atomic balance as a float.
+
+## Scan-start policy (version 1)
+
+ARRR session discovery and XMR capabilities advertise `scanStartProtocolVersion: 1`
+and `scanModes: ["RESUME", "RESTORE_FROM_HEIGHT", "NEW_AT_CURRENT_TIP"]`.
+`RESUME` keeps an existing checkpoint. First-use resume keeps the historical
+conservative defaults (ARRR configured birthday; XMR block 0).
+
+XMR activation accepts `scanMode` and an integer `restoreHeight` only for
+`RESTORE_FROM_HEIGHT` (0–500,000,000). Legacy activation bodies with an explicit
+height remain supported. ARRR `/initialize` (also shared wallet `initialize`)
+accepts `initializationMode`, integer `restoreHeight` for historical restore
+(1–500,000,000), entropy and the observed `expectedRevision`. ARRR resume uses
+ordinary session activation. Both initialization routes strictly reject unknown,
+duplicate, coerced and trailing JSON fields before native work.
+
+Current-tip initialization is an assertion that this address has never received
+funds. Core records the validated selected height before native creation and
+reuses it after a lost reply; retrying never advances the birthday. XMR uses the
+last existing block index (`get_info.height - 1`). Existing caches/identities are
+never reset or promoted to a different birthday, and missing or inconsistent
+paired native/send state remains a recovery error. Legacy XMR checkpoints resume
+at their original height and must agree with the native persisted restore height.
+
+Status exposes the saved public `restoreHeight` and `initializationMode`.
+XMR `preparation` callbacks below the birthday are display-only chain-history
+preparation: they do not advance ordinary scan progress, extend deadlines or make
+spending ready. No restore request clears a send journal or unresolved operation.

@@ -39,7 +39,11 @@ public class PirateRecoveryApiSerializationTests {
         Object model = new CrossChainPirateChainResource.WalletSessionContract();
         MOXyJsonProvider provider = new MOXyJsonProvider();
         assertTrue(provider.isWriteable(model.getClass(), model.getClass(), NO_ANNOTATIONS, JSON));
-        org.junit.Assert.assertEquals("{\"contract\":\"qortium-arrr-wallet-session-v1\"}", marshal(model));
+        // Verify the actual MOXy wire shape, including the capability fields Home negotiates.
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        org.junit.Assert.assertEquals(json.readTree("{\"contract\":\"qortium-arrr-wallet-session-v1\","
+                + "\"scanStartProtocolVersion\":1,\"scanModes\":[\"RESUME\",\"RESTORE_FROM_HEIGHT\",\"NEW_AT_CURRENT_TIP\"]}"),
+                json.readTree(marshal(model)));
     }
 
 	@Test

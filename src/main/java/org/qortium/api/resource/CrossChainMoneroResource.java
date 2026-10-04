@@ -45,6 +45,7 @@ public class CrossChainMoneroResource {
                 Map.entry("enabled", Settings.getInstance().isMoneroWalletEnabled()), Map.entry("platformSupported", MoneroNativeLoader.supported()),
                 Map.entry("network", "mainnet"), Map.entry("localCustodyOnly", true),
                 Map.entry("send", Settings.getInstance().isMoneroWalletEnabled() && Settings.getInstance().isMoneroWalletSendEnabled()),
+                Map.entry("scanStartProtocolVersion", 1), Map.entry("scanModes", java.util.List.of("RESUME", "RESTORE_FROM_HEIGHT", "NEW_AT_CURRENT_TIP")),
                 Map.entry("sendProtocolVersion", 1), Map.entry("feePolicy", "NATIVE_NORMAL"), Map.entry("historyLimit", 100)));
     }
 
@@ -60,7 +61,7 @@ public class CrossChainMoneroResource {
         return result(() -> {
             MoneroWalletService service = MoneroWalletRuntime.get();
             try (var activation = MoneroActivationReader.read(input)) {
-                return service.activate(activation.coinSeed(), activation.restoreHeight(), activation.expectedSession());
+                return service.activate(activation.coinSeed(), activation.scanStart(), activation.expectedSession());
             } catch (IOException | IllegalArgumentException e) {
                 // Never return parser diagnostics: they can quote the secret request body.
                 throw new BadRequestException(error(400, "XMR_INVALID_ACTIVATION"));

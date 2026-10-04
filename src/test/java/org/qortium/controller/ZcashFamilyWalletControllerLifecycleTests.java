@@ -325,9 +325,9 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		String entropy58 = Base58.encode(filledEntropy(10));
 
 		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
-				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+				String.class, boolean.class, org.qortium.crosschain.WalletScanStart.class, ZcashFamilyNativeAdapter.class);
 		initialize.setAccessible(true);
-		assertTrue((Boolean) initialize.invoke(controller, entropy58, false, false, nativeAdapter));
+		assertTrue((Boolean) initialize.invoke(controller, entropy58, false, org.qortium.crosschain.WalletScanStart.resume(), nativeAdapter));
 
 		Field shouldLoadWallet = ZcashFamilyWalletController.class.getDeclaredField("shouldLoadWallet");
 		shouldLoadWallet.setAccessible(true);
@@ -341,25 +341,25 @@ public class ZcashFamilyWalletControllerLifecycleTests {
         String a = Base58.encode(filledEntropy(21));
         String b = Base58.encode(filledEntropy(22));
         Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
-                String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+                String.class, boolean.class, org.qortium.crosschain.WalletScanStart.class, ZcashFamilyNativeAdapter.class);
         initialize.setAccessible(true);
         RecordingNativeAdapter adapter = new RecordingNativeAdapter();
-        assertFalse((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        assertFalse((Boolean) initialize.invoke(controller, a, false, org.qortium.crosschain.WalletScanStart.resume(), adapter));
         controller.explicit = true;
-        assertTrue((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        assertTrue((Boolean) initialize.invoke(controller, a, false, org.qortium.crosschain.WalletScanStart.resume(), adapter));
         controller.explicit = false;
         String revision = controller.owner.snapshot().revision();
-        assertFalse((Boolean) initialize.invoke(controller, b, false, false, adapter));
+        assertFalse((Boolean) initialize.invoke(controller, b, false, org.qortium.crosschain.WalletScanStart.resume(), adapter));
         assertEquals(revision, controller.owner.snapshot().revision());
         assertThrows(ForeignBlockchainException.WalletBusyException.class, () -> controller.getSyncStatusDetails(b));
         assertThrows(ForeignBlockchainException.WalletBusyException.class,
                 () -> controller.withEntropyWallet(b, false, (wallet, nativeAdapter) -> null));
-        assertTrue((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        assertTrue((Boolean) initialize.invoke(controller, a, false, org.qortium.crosschain.WalletScanStart.resume(), adapter));
         controller.explicit = true;
-        assertTrue((Boolean) initialize.invoke(controller, b, false, false, adapter));
+        assertTrue((Boolean) initialize.invoke(controller, b, false, org.qortium.crosschain.WalletScanStart.resume(), adapter));
         controller.explicit = false;
         assertNotEquals(revision, controller.owner.snapshot().revision());
-        assertFalse((Boolean) initialize.invoke(controller, a, false, false, adapter));
+        assertFalse((Boolean) initialize.invoke(controller, a, false, org.qortium.crosschain.WalletScanStart.resume(), adapter));
         assertThrows(ForeignBlockchainException.class, () -> controller.owner.requireRevision(revision));
     }
 
@@ -382,11 +382,11 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	public void testNotReadyWalletInitializationReportsFailure() throws Exception {
 		NotReadyController controller = new NotReadyController();
 		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
-				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+				String.class, boolean.class, org.qortium.crosschain.WalletScanStart.class, ZcashFamilyNativeAdapter.class);
 		initialize.setAccessible(true);
 
 		assertFalse((Boolean) initialize.invoke(controller, Base58.encode(filledEntropy(11)),
-				false, false, new RecordingNativeAdapter()));
+				false, org.qortium.crosschain.WalletScanStart.resume(), new RecordingNativeAdapter()));
 	}
 
 	@Test
@@ -637,9 +637,9 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 	/** Runs the real selection path (A→B switch) and returns the wallet the controller now holds. */
 	private static ZcashFamilyWallet selectWallet(TestController controller, byte[] entropy) throws Exception {
 		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
-				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+				String.class, boolean.class, org.qortium.crosschain.WalletScanStart.class, ZcashFamilyNativeAdapter.class);
 		initialize.setAccessible(true);
-		assertTrue((Boolean) initialize.invoke(controller, Base58.encode(entropy), false, false,
+		assertTrue((Boolean) initialize.invoke(controller, Base58.encode(entropy), false, org.qortium.crosschain.WalletScanStart.resume(),
 				new RecordingNativeAdapter()));
 		// Selection re-arms the background loop; keep it off the (unloaded) shared test lane so its
 		// library-load status writes cannot race the assertions below.
@@ -690,10 +690,10 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		setControllerField(controller, "currentWallet", walletA);
 
 		Method initialize = ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",
-				String.class, boolean.class, boolean.class, ZcashFamilyNativeAdapter.class);
+				String.class, boolean.class, org.qortium.crosschain.WalletScanStart.class, ZcashFamilyNativeAdapter.class);
 		initialize.setAccessible(true);
 
-		assertFalse((Boolean) initialize.invoke(controller, Base58.encode(entropyB), false, false,
+		assertFalse((Boolean) initialize.invoke(controller, Base58.encode(entropyB), false, org.qortium.crosschain.WalletScanStart.resume(),
 				new RecordingNativeAdapter()));
 
 		Field initializationFailure = ZcashFamilyWalletController.class.getDeclaredField("initializationFailure");

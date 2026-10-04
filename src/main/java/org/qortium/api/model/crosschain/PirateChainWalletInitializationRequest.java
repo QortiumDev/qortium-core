@@ -13,8 +13,9 @@ public class PirateChainWalletInitializationRequest {
 	public String entropy58;
 
 	@Schema(description = "Explicit one-time wallet initialization policy",
-			example = "NEW_AT_CURRENT_TIP", allowableValues = { "NEW_AT_CURRENT_TIP" })
+			example = "NEW_AT_CURRENT_TIP", allowableValues = { "NEW_AT_CURRENT_TIP", "RESTORE_FROM_HEIGHT" })
 	public String initializationMode;
+    public Integer restoreHeight;
 
     @Schema(description = "Last observed wallet-session revision; required to replace another active account")
     public String expectedRevision;
