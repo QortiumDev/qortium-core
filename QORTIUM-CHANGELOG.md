@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Add a versioned generic custody wallet API
+
+- Register common wallet operation routes for ARRR and XMR, with authenticated loopback-only protocol discovery and a shared session header. Existing native resources keep their strict body parsing, ownership, scan and spending rules.
+- Preserve exact native response types and amounts, reject unsupported operations before consuming bodies, and retain existing coin endpoints for compatibility. Bitcoiny continues using its existing shared registered-coin API.
+
+
 ### Recover Monero wallet reads after temporary daemon delays
 
 A scan read that goes 90 seconds without forward progress now hides its balances and reports temporary unavailability while the same native worker finishes. A complete successful read for the current account restores availability without requiring a Core restart. Callbacks alone cannot restore wallet data, and opening, closing, send, native-linkage and journal failures keep their strict safety rules. Fixed read-phase labels and timing help diagnose which part of a read stalled without logging wallet data.
