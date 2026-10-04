@@ -28,6 +28,9 @@ public class MoneroApiJerseyTests {
         var service = new MoneroWalletService((keys, height) -> new MoneroWalletBackend() {
             public Snapshot read() { return new Snapshot("synthetic-test-address", 100, 100, true,
                     "9007199254740993", "1", List.of()); }
+            public org.qortium.crosschain.WalletServerPool.Status servers() {
+                return new org.qortium.crosschain.WalletServerPool(java.util.List.of("https://configured.test")).status();
+            }
             public void close() { }
         });
         FieldUtils.writeField(Settings.getInstance(), "moneroWalletEnabled", true, true);
@@ -54,6 +57,12 @@ public class MoneroApiJerseyTests {
             assertEquals("9007199254740993", wallet.get("wallet").get("balanceAtomic").asText());
             assertTrue(wallet.get("wallet").get("transactions").isArray());
             assertTrue(response.toLowerCase().contains("cache-control: no-store"));
+            String providerResponse = server.call("GET", "/servers", "", "X-XMR-SESSION: " + session + "\r\n", true);
+            assertEquals("server-1", payload(providerResponse).get("selectedId").asText());
+            assertTrue(providerResponse.toLowerCase().contains("cache-control: no-store"));
+            String wrongOwner = server.call("GET", "/servers", "", "X-XMR-SESSION: stale\r\n", true);
+            assertTrue(wrongOwner.startsWith("HTTP/1.1 409"));assertFalse(wrongOwner.contains("configured.test"));
+            assertTrue(server.call("GET", "/servers", "", "", false).startsWith("HTTP/1.1 403"));
             String stale = server.call("GET", "/wallet", "", "X-XMR-SESSION: stale\r\n", true);
             assertTrue(stale, stale.startsWith("HTTP/1.1 409"));
             assertFalse(stale.contains("synthetic-test-address"));

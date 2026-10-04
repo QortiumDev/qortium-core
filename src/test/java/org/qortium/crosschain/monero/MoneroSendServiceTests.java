@@ -22,7 +22,7 @@ public class MoneroSendServiceTests {
         @Override public MoneroSendMachine sendMachine(String session) {
             return new MoneroSendMachine(journal, session, System::currentTimeMillis, quoteClock);
         }
-        final AtomicInteger preparations = new AtomicInteger(), relays = new AtomicInteger();
+        final AtomicInteger preparations = new AtomicInteger(), relays = new AtomicInteger(), observes = new AtomicInteger();
         volatile CountDownLatch prepareEntered, prepareRelease, relayEntered, relayRelease, observeEntered, observeRelease;
         volatile CountDownLatch readEntered, readRelease;
         volatile java.util.function.Consumer<ScanProgress> readCallback;
@@ -52,6 +52,7 @@ public class MoneroSendServiceTests {
             return HASH;
         }
         public Map<String, MoneroSendMachine.Observation> observe(Map<String, String> hashes) throws Exception {
+            observes.incrementAndGet();
             if (observeEntered != null) { observeEntered.countDown(); observeRelease.await(); }
             assertFalse(closed);
             if (daemonDown) throw new IllegalStateException("SENSITIVE daemon diagnostic");
@@ -312,4 +313,36 @@ public class MoneroSendServiceTests {
             assertEquals(1, f.nativeWallet.relays.get());
         }
     }
+    @Test public void queuedPrepareCannotTouchNativeOrJournalAfterReadFailure() throws Exception {
+        try (var f = new Fixture(90000,Duration.ofMillis(50),System::nanoTime)) {
+            String session=f.activate(1,null);
+            var nativeWallet=f.nativeWallet;
+            nativeWallet.readEntered=new CountDownLatch(1);nativeWallet.readRelease=new CountDownLatch(1);nativeWallet.readThrows=true;
+            try {
+                assertTrue(nativeWallet.readEntered.await(3,TimeUnit.SECONDS));
+                var queued=f.service.prepareSend(request(),session);
+                nativeWallet.readRelease.countDown();
+                var error=assertThrows(ExecutionException.class,()->queued.get(3,TimeUnit.SECONDS));
+                assertEquals("XMR_WORK_IN_PROGRESS",((MoneroWalletService.Rejected)error.getCause()).code);
+                assertEquals(0,nativeWallet.preparations.get());assertEquals(0,nativeWallet.relays.get());assertEquals(0,nativeWallet.observes.get());
+                assertTrue(nativeWallet.journal.read().entries().isEmpty());
+                assertNotNull(f.service.status(session).readRetryAt());
+            } finally {nativeWallet.readRelease.countDown();}
+        }
+    }
+    @Test public void queuedCommitLeavesPreparedQuoteUnclaimedAfterReadFailure() throws Exception {
+        try (var f = new Fixture(90000,Duration.ofMillis(50),System::nanoTime)) {
+            String session=f.activate(1,null);Request request=request();View quote=f.prepare(request,session);
+            var nativeWallet=f.nativeWallet;int beforeObserves=nativeWallet.observes.get();
+            nativeWallet.readEntered=new CountDownLatch(1);nativeWallet.readRelease=new CountDownLatch(1);nativeWallet.readThrows=true;
+            try {
+                assertTrue(nativeWallet.readEntered.await(3,TimeUnit.SECONDS));
+                var queued=f.service.commitSend(request.operationId(),quote.quoteDigest(),session);
+                nativeWallet.readRelease.countDown();assertThrows(ExecutionException.class,()->queued.get(3,TimeUnit.SECONDS));
+                assertEquals(0,nativeWallet.relays.get());assertEquals(beforeObserves,nativeWallet.observes.get());
+                assertEquals(State.PREPARED,f.service.sendStatus(request.operationId(),session).state());
+            } finally {nativeWallet.readRelease.countDown();}
+        }
+    }
+
 }

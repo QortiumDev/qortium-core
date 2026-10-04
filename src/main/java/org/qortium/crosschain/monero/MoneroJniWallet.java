@@ -22,6 +22,7 @@ public final class MoneroJniWallet implements MoneroSendBackend {
     private static final Set<MoneroSendJournal.Root> UNCERTAIN_ROOTS = java.util.concurrent.ConcurrentHashMap.newKeySet();
     enum PairingBarrier { CACHE_SYNCED, JOURNAL_PAIRED, MARKER_WRITTEN, MARKER_SYNCED }
     private final MoneroWalletFull wallet;
+    private MoneroDaemonPool daemons;
     private final MoneroSendJournal journal;
     private final MoneroSendJournal.Root root;
     private final boolean ownsRoot;
@@ -36,14 +37,22 @@ public final class MoneroJniWallet implements MoneroSendBackend {
     static Factory factory(Path configuredRoot, String daemon, boolean regtest) {
         return factory(configuredRoot, daemon, regtest, barrier -> { });
     }
+    public static Factory factory(Path root, List<String> daemons) {
+        return factory(root, daemons, false, barrier -> { });
+    }
     static Factory factory(Path configuredRoot, String daemon, boolean regtest, java.util.function.Consumer<PairingBarrier> pairingFault) {
         validateDaemon(daemon);
+        return factory(configuredRoot, List.of(daemon), regtest, pairingFault);
+    }
+    static Factory factory(Path configuredRoot, List<String> endpoints, boolean regtest, java.util.function.Consumer<PairingBarrier> pairingFault) {
+        // Validate once before acquiring storage/native resources; health is shared across account switches.
+        var daemons = new MoneroDaemonPool(endpoints, regtest);
         return new Factory() {
             private MoneroSendJournal.Root lock;
             public MoneroWalletBackend open(MoneroKeys keys, long height) throws Exception {
                 if (lock == null) lock = lockRoot(configuredRoot, regtest);
                 lock.check();
-                return openLocked(daemon, keys, height, regtest, lock, false, pairingFault);
+                return openLocked(daemons, keys, height, regtest, lock, false, pairingFault);
             }
             public void close() { if (lock != null && !UNCERTAIN_ROOTS.contains(lock)) lock.close(); }
         };
@@ -70,14 +79,13 @@ public final class MoneroJniWallet implements MoneroSendBackend {
     // regtest is package-private for isolated acceptance; never controlled by API or Settings.
     static MoneroJniWallet open(Path configuredRoot, String daemon, MoneroKeys keys, long restoreHeight, boolean regtest) throws Exception {
         var lock = lockRoot(configuredRoot, regtest);
-        try { return openLocked(daemon, keys, restoreHeight, regtest, lock, true, barrier -> { }); }
+        try { return openLocked(new MoneroDaemonPool(List.of(daemon), regtest), keys, restoreHeight, regtest, lock, true, barrier -> { }); }
         catch (Exception | LinkageError e) { if (!UNCERTAIN_ROOTS.contains(lock)) lock.close(); throw e; }
     }
     private static void checkPair(boolean valid) { if (!valid) throw new MoneroSendJournal.Failure(); }
-    private static MoneroJniWallet openLocked(String daemon, MoneroKeys keys, long restoreHeight,
+    private static MoneroJniWallet openLocked(MoneroDaemonPool daemons, MoneroKeys keys, long restoreHeight,
                                               boolean regtest, MoneroSendJournal.Root lock, boolean ownsRoot, java.util.function.Consumer<PairingBarrier> pairingFault) throws Exception {
         lock.check();
-        validateDaemon(daemon);
         if (restoreHeight < 0) throw new IllegalArgumentException("Explicit restore height required");
         Path paired = lock.path.getParent().resolve(keys.walletId).resolve("send-journal-v1");
         if (Files.exists(paired, LinkOption.NOFOLLOW_LINKS)) {
@@ -98,10 +106,10 @@ public final class MoneroJniWallet implements MoneroSendBackend {
                     checkPair(Files.isRegularFile(nativeDirectory.resolve(name), LinkOption.NOFOLLOW_LINKS));
             } else checkPair(journal.read().entries().isEmpty()); // only pristine first-use/legacy-read adoption
             MoneroSendMachine machine = new MoneroSendMachine(journal, UUID.randomUUID().toString(), System::currentTimeMillis, System::nanoTime);
-            return openNative(daemon, keys, restoreHeight, regtest, lock, ownsRoot, journal, machine, pairingFault);
+            return openNative(daemons, keys, restoreHeight, regtest, lock, ownsRoot, journal, machine, pairingFault);
         } catch (Exception | LinkageError e) { journal.close(); throw e; }
     }
-    private static MoneroJniWallet openNative(String daemon, MoneroKeys keys, long restoreHeight, boolean regtest,
+    private static MoneroJniWallet openNative(MoneroDaemonPool daemons, MoneroKeys keys, long restoreHeight, boolean regtest,
                                              MoneroSendJournal.Root lock, boolean ownsRoot, MoneroSendJournal journal,
                                              MoneroSendMachine machine, java.util.function.Consumer<PairingBarrier> pairingFault) throws Exception {
         MoneroNativeLoader.load();
@@ -141,12 +149,17 @@ public final class MoneroJniWallet implements MoneroSendBackend {
             }
             if (!keys.spendHex().equals(wallet.getPrivateSpendKey()) || !keys.viewHex().equals(wallet.getPrivateViewKey()))
                 throw new IllegalStateException("XMR native identity mismatch");
-            wallet.setDaemonConnection(new MoneroRpcConnection(daemon), false); // never auto-trust a local daemon
+            // Reopened checkpoints can wait for provider recovery without resetting their native handle.
+            daemons.resetConnection();
+            if (!existing) {
+                try { daemons.connect(wallet, 0); }
+                catch (MoneroDaemonPool.Unavailable e) { throw new AdmissionRejected("XMR_DAEMON_UNAVAILABLE"); }
+            }
             if (!existing) {
                 long tip;
                 try { tip = wallet.getDaemonHeight(); }
-                catch (Exception e) { throw new AdmissionRejected("XMR_DAEMON_UNAVAILABLE"); }
-                if (tip <= 0) throw new AdmissionRejected("XMR_DAEMON_UNAVAILABLE");
+                catch (Exception e) { daemons.failed(); throw new AdmissionRejected("XMR_DAEMON_UNAVAILABLE"); }
+                if (tip <= 0) { daemons.failed(); throw new AdmissionRejected("XMR_DAEMON_UNAVAILABLE"); }
                 if (restoreHeight > tip) throw new AdmissionRejected("XMR_RESTORE_HEIGHT_ABOVE_TIP");
                 // Validate the restore bound on an in-memory wallet before any durable identity/checkpoint.
                 Files.writeString(marker, identity, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
@@ -178,7 +191,9 @@ public final class MoneroJniWallet implements MoneroSendBackend {
                         Files.setPosixFilePermissions(child, PosixFilePermissions.fromString("rw-------"));
                 }
             }
-            return new MoneroJniWallet(wallet, journal, lock, ownsRoot, machine);
+            var backend = new MoneroJniWallet(wallet, journal, lock, ownsRoot, machine);
+            backend.daemons = daemons;
+            return backend;
         } catch (Exception | LinkageError e) {
             if (wallet != null) {
                 try { wallet.close(false); }
@@ -196,19 +211,35 @@ public final class MoneroJniWallet implements MoneroSendBackend {
         return path;
     }
 
-    @Override public Snapshot read() { return read(ignored -> { }); }
+    @Override public Snapshot read() throws Exception { return read(ignored -> { }); }
 
-    @Override public Snapshot read(java.util.function.Consumer<ScanProgress> progress) {
+    @Override public Snapshot read(java.util.function.Consumer<ScanProgress> progress) throws Exception {
         return read(progress, ignored -> { });
     }
 
     @Override public Snapshot read(java.util.function.Consumer<ScanProgress> progress,
-                                   java.util.function.Consumer<ReadPhase> phase) {
+                                   java.util.function.Consumer<ReadPhase> phase) throws Exception {
+        ReadPhase[] current = { ReadPhase.CHECK };
+        try {
+            var result = readConnected(progress, step -> { current[0] = step; phase.accept(step); });
+            daemons.succeeded(); return result;
+        } catch (MoneroDaemonPool.Unavailable e) { throw e;
+        } catch (MoneroSendJournal.Failure e) { throw e;
+        } catch (Exception e) {
+            if (current[0] == ReadPhase.SYNC || current[0] == ReadPhase.DAEMON) throw daemons.failed();
+            throw e;
+        }
+    }
+    @Override public org.qortium.crosschain.WalletServerPool.Status servers() { return daemons.pool.status(); }
+    private Snapshot readConnected(java.util.function.Consumer<ScanProgress> progress,
+                                   java.util.function.Consumer<ReadPhase> phase) throws Exception {
         phase.accept(ReadPhase.CHECK);
         root.check();
         // Never run upstream's background sync: several getters are not protected by its sync lock.
         // Cooperatively yield at native chunk boundaries; all sync/getters/save stay on Core's lane.
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        phase.accept(ReadPhase.DAEMON);
+        daemons.connect(wallet, wallet.getHeight());
         phase.accept(ReadPhase.SYNC);
         wallet.sync(new MoneroWalletListener() {
             @Override public void onSyncProgress(long height, long start, long end, double percent, String message) {

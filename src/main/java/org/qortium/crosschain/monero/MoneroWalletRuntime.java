@@ -15,7 +15,7 @@ public final class MoneroWalletRuntime {
         if (!MoneroNativeLoader.supported()) throw new MoneroWalletService.Rejected(503, "XMR_UNSUPPORTED_PLATFORM");
         if (instance == null) {
             try {
-                instance = new MoneroWalletService(MoneroJniWallet.factory(Path.of(settings.getWalletsPath()), settings.getMoneroDaemonUri()));
+                instance = new MoneroWalletService(MoneroJniWallet.factory(Path.of(settings.getWalletsPath()), settings.getMoneroDaemonUris()));
             } catch (IllegalArgumentException e) { throw new MoneroWalletService.Rejected(503, "XMR_INVALID_DAEMON_CONFIG"); }
         }
         return instance;

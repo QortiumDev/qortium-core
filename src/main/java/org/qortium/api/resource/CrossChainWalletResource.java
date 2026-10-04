@@ -137,13 +137,14 @@ public class CrossChainWalletResource {
     private Adapter monero() {
         var resource = new CrossChainMoneroResource(); resource.request = request;
         return new Adapter() {
-            public Set<String> reads() { return Set.of("capabilities", "session", "status", "send/status"); }
+            public Set<String> reads() { return Set.of("capabilities", "session", "status", "servers", "send/status"); }
             public Set<String> writes() { return Set.of("activate", "stop", "send/prepare", "send/commit", "send/cancel", "send/reconcile"); }
             public Object read(String op, String key, String session, String id) {
                 return switch (op) {
                     case "capabilities" -> resource.capabilities(key);
                     case "session" -> resource.session(key);
                     case "status" -> resource.wallet(key, session);
+                    case "servers" -> resource.servers(key, session);
                     case "send/status" -> resource.sendStatus(key, session, id);
                     default -> throw new NotFoundException();
                 };

@@ -382,4 +382,59 @@ public class MoneroWalletServiceTests {
         } finally { service.close(); }
         assertThrows(MoneroWalletService.Rejected.class, () -> service.activate(seed(2), 0, service.session().sessionId()));
     }
+    @Test public void failedReadsBackOffPollingCannotRenewRetryAndFullSuccessRecovers() throws Exception {
+        var clock = new java.util.concurrent.atomic.AtomicLong(1);
+        var failRead = new java.util.concurrent.atomic.AtomicBoolean(true);
+        Fake fake = new Fake("retry") {
+            @Override public Snapshot read() throws Exception {
+                if (failRead.get()) { reads.incrementAndGet(); throw new IllegalStateException("SENSITIVE native text"); }
+                return super.read();
+            }
+        };
+        try (var service = new MoneroWalletService((keys,height)->fake,Duration.ofSeconds(90),Duration.ofMillis(10),clock::get)) {
+            var a = service.activate(seed(1),0,null);
+            await(()->"UNAVAILABLE".equals(service.status(a.sessionId()).state()));
+            var retry = service.status(a.sessionId()).readRetryAt(); assertNotNull(retry);
+            assertEquals("XMR_WALLET_READ_UNAVAILABLE",service.session().errorCode());
+            for (int i=0;i<20;i++) {
+                assertNull(service.status(a.sessionId()).wallet());
+                assertEquals(retry,service.status(a.sessionId()).readRetryAt());
+                service.activate(seed(1),0,a.sessionId());
+            }
+            Thread.sleep(50); assertEquals(1,fake.reads.get());
+            failRead.set(false); clock.addAndGet(TimeUnit.SECONDS.toNanos(10));
+            await(()->"READY".equals(service.status(a.sessionId()).state()));
+            assertNull(service.status(a.sessionId()).readRetryAt());assertNull(service.session().errorCode());
+            assertNotNull(service.status(a.sessionId()).wallet());
+        }
+    }
+    @Test public void stopCancelsRetryAndNextOwnerHasNoInheritedReadCooldown() throws Exception {
+        var opened = new AtomicInteger(); Fake failed = new Fake("failed") {
+            @Override public Snapshot read() { reads.incrementAndGet(); throw new IllegalStateException("SENSITIVE"); }
+        };
+        try (var service = new MoneroWalletService((keys,height)->opened.incrementAndGet()==1?failed:new Fake("next"),
+                Duration.ofSeconds(90),Duration.ofMillis(10))) {
+            var a=service.activate(seed(1),0,null);
+            await(()->"UNAVAILABLE".equals(service.status(a.sessionId()).state()));
+            var stopped=service.deactivate(a.sessionId());await(()->"IDLE".equals(service.session().state()));
+            Thread.sleep(50);assertEquals(1,failed.reads.get());assertTrue(failed.closed);
+            var b=service.activate(seed(2),0,stopped.sessionId());
+            await(()->"READY".equals(service.status(b.sessionId()).state()));
+            assertNull(service.status(b.sessionId()).readRetryAt());
+            assertThrows(MoneroWalletService.Rejected.class,()->service.status(a.sessionId()));
+        }
+    }
+    @Test public void failedOldReadCannotAttachCooldownOrErrorToNewOwner() throws Exception {
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var opened=new AtomicInteger();
+        Fake old=new Fake("old") {
+            @Override public Snapshot read() throws Exception { entered.countDown();release.await();throw new IllegalStateException("SENSITIVE"); }
+        };
+        try(var service=service((keys,height)->opened.incrementAndGet()==1?old:new Fake("new"))) {
+            var a=service.activate(seed(1),0,null);assertTrue(entered.await(3,TimeUnit.SECONDS));
+            var b=service.activate(seed(2),0,a.sessionId());release.countDown();
+            await(()->"READY".equals(service.status(b.sessionId()).state()));
+            assertNull(service.status(b.sessionId()).readRetryAt());assertNull(service.session().errorCode());
+        } finally {release.countDown();}
+    }
+
 }
