@@ -100,9 +100,11 @@ public class MoneroWalletServiceTests {
             assertTrue(hung.readEntered.await(3, TimeUnit.SECONDS));
             Thread.sleep(120);
             callback.get().accept(new MoneroWalletBackend.ScanProgress(2, 100));
-            assertEquals("RESTART_REQUIRED", service.status(a.sessionId()).state());
+            assertEquals("UNAVAILABLE", service.status(a.sessionId()).state());
             assertNull(service.status(a.sessionId()).progress());
+            assertNull(service.failure());
             hung.releaseRead.countDown();
+            await(() -> "READY".equals(service.status(a.sessionId()).state()));
         } finally { hung.releaseRead.countDown(); }
     }
 
@@ -110,9 +112,19 @@ public class MoneroWalletServiceTests {
         final java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1);
         final java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>> callback = new java.util.concurrent.atomic.AtomicReference<>();
         final CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        volatile boolean readThrows, journalFails, nativeFails;
+        final java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ReadPhase>> phases = new java.util.concurrent.atomic.AtomicReference<>();
         final Fake backend = new Fake("synthetic") {
+            @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb,
+                                           java.util.function.Consumer<ReadPhase> phase) throws Exception {
+                phases.set(phase); return read(cb);
+            }
             @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb) throws Exception {
-                callback.set(cb); entered.countDown(); release.await(); return super.read();
+                callback.set(cb); entered.countDown(); release.await();
+                if (journalFails) throw new MoneroSendJournal.Failure();
+                if (nativeFails) throw new UnsatisfiedLinkError("SENSITIVE");
+                if (readThrows) throw new IllegalStateException("SENSITIVE");
+                return super.read();
             }
         };
         final MoneroWalletService service = new MoneroWalletService((keys,height)->backend,
@@ -135,14 +147,14 @@ public class MoneroWalletServiceTests {
             assertEquals("SCANNING",f.service.status(f.session).state());
             assertNull(f.service.failure());
             f.clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
-            assertEquals("RESTART_REQUIRED",f.service.status(f.session).state());
-            var failure = f.service.failure();
+            assertEquals("UNAVAILABLE",f.service.status(f.session).state());
+            var failure = f.service.overdueRead();
             assertEquals(MoneroWalletService.FailureReason.DEADLINE,failure.reason());
             assertEquals(MoneroWalletService.Phase.SCAN,failure.phase());
             assertEquals(271000,failure.elapsedMillis()); assertEquals(91000,failure.progressAgeMillis());
             assertEquals(3,failure.advances());
             f.advance(1,40,100);
-            assertSame(failure,f.service.failure()); assertNull(f.service.status(f.session).progress());
+            assertSame(failure,f.service.overdueRead()); assertNull(f.service.failure()); assertNull(f.service.status(f.session).progress());
         }
     }
 
@@ -154,8 +166,8 @@ public class MoneroWalletServiceTests {
             f.advance(20,10,110); // changed target and return to former high water
             f.advance(20,200,100); // invalid
             f.clock.addAndGet(TimeUnit.SECONDS.toNanos(11));
-            assertEquals("RESTART_REQUIRED",f.service.status(f.session).state());
-            assertEquals(1,f.service.failure().advances());
+            assertEquals("UNAVAILABLE",f.service.status(f.session).state());
+            assertEquals(1,f.service.overdueRead().advances());
         }
     }
 
@@ -170,6 +182,88 @@ public class MoneroWalletServiceTests {
             assertEquals(MoneroWalletService.Phase.LIFECYCLE,f.service.failure().phase());
             assertEquals(91000,f.service.failure().elapsedMillis());
             assertEquals(0,f.service.failure().advances());
+        }
+    }
+
+    @Test public void phaseChangesNeverRenewReadDeadlineAndRecordStalledSubphase() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.phases.get().accept(MoneroWalletBackend.ReadPhase.SYNC);
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(60));
+            f.phases.get().accept(MoneroWalletBackend.ReadPhase.SAVE);
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(31));
+            assertEquals("UNAVAILABLE", f.service.status(f.session).state());
+            assertEquals(MoneroWalletBackend.ReadPhase.SAVE, f.service.overdueRead().readPhase());
+            assertEquals(31000, f.service.overdueRead().readPhaseAgeMillis());
+            var incident = f.service.overdueRead();
+            f.phases.get().accept(MoneroWalletBackend.ReadPhase.BALANCE);
+            f.advance(1, 99, 99);
+            assertSame(incident, f.service.overdueRead());
+            assertNull(f.service.status(f.session).wallet()); assertNull(f.service.status(f.session).progress());
+            f.release.countDown();
+            await(() -> "READY".equals(f.service.status(f.session).state()));
+            assertNotNull(f.service.status(f.session).wallet()); assertNull(f.service.failure());
+        }
+    }
+
+    @Test public void lateReadExceptionNeverPublishesFinancialData() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.readThrows = true; f.advance(91, 10, 100);
+            assertEquals("UNAVAILABLE", f.service.status(f.session).state());
+            f.release.countDown();
+            await(() -> f.service.overdueRead() == null);
+            assertEquals("UNAVAILABLE", f.service.status(f.session).state());
+            assertNull(f.service.status(f.session).wallet()); assertNull(f.service.failure());
+        }
+    }
+
+    @Test public void overdueReadCannotRecoverAfterQueuedLifecycleExpiresWithoutAPoll() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(91, 10, 100);
+            var next = f.service.activate(seed(2), 0, f.session);
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
+            f.release.countDown();
+            await(() -> f.backend.closed);
+            assertEquals("RESTART_REQUIRED", f.service.session().state());
+            assertEquals(MoneroWalletService.Phase.LIFECYCLE, f.service.failure().phase());
+            assertNull(f.service.status(next.sessionId()).wallet());
+        }
+    }
+
+    @Test public void overdueReadDeactivationWaitsForNativeReturnAndNeverRepublishes() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(91, 10, 100);
+            f.service.deactivate(f.session);
+            assertFalse(f.backend.closed);
+            f.release.countDown();
+            await(() -> "IDLE".equals(f.service.session().state()));
+            assertTrue(f.backend.closed); assertNull(f.service.failure());
+        }
+    }
+
+    @Test public void overdueReadShutdownCannotReviveOrCloseAlongsideNativeWork() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(91, 10, 100);
+            f.service.close();
+            assertEquals("STOPPED", f.service.session().state()); assertFalse(f.backend.closed);
+            f.advance(91, 20, 100);
+            assertEquals("STOPPED", f.service.session().state());
+            f.release.countDown(); await(() -> f.backend.closed);
+            assertEquals("STOPPED", f.service.session().state());
+            assertNull(f.service.status(f.session).wallet());
+        }
+    }
+
+    @Test public void journalAndNativeFailuresAfterOverdueReadRemainFatal() throws Exception {
+        for (boolean journal : new boolean[] {true, false}) {
+            try (var f = new ScanFixture()) {
+                f.advance(91, 10, 100);
+                f.journalFails = journal; f.nativeFails = !journal;
+                f.release.countDown(); await(() -> f.backend.closed);
+                assertEquals("RESTART_REQUIRED", f.service.session().state());
+                assertEquals(journal ? MoneroWalletService.FailureReason.JOURNAL_FAILURE
+                        : MoneroWalletService.FailureReason.NATIVE_LINKAGE, f.service.failure().reason());
+                assertNull(f.service.status(f.session).wallet());
+            }
         }
     }
 
@@ -243,17 +337,19 @@ public class MoneroWalletServiceTests {
                     () -> service.activate(seed(3), 0, b.sessionId())).code);
         }
     }
-    @Test public void hungNativeReadPoisonsLaneAndLateResultDoesNotReviveIt() throws Exception {
+    @Test public void hungReadStaysUnavailableWithoutClosingAndFullSuccessRecoversSameHandle() throws Exception {
         Fake backend = new Fake("old"); backend.readEntered = new CountDownLatch(1); backend.releaseRead = new CountDownLatch(1);
         try (var service = new MoneroWalletService((keys, height) -> backend, Duration.ofMillis(80), Duration.ofHours(1))) {
             var a = service.activate(seed(1), 0, null);
             assertTrue(backend.readEntered.await(3, TimeUnit.SECONDS));
             Thread.sleep(120);
-            assertEquals("RESTART_REQUIRED", service.status(a.sessionId()).state());
+            assertEquals("UNAVAILABLE", service.status(a.sessionId()).state());
             assertNull(service.status(a.sessionId()).wallet());
+            assertFalse(backend.closed); assertNull(service.failure());
             backend.releaseRead.countDown();
-            assertThrows(MoneroWalletService.Rejected.class, () -> service.activate(seed(2), 0, a.sessionId()));
-            await(() -> backend.closed);
+            await(() -> "READY".equals(service.status(a.sessionId()).state()));
+            assertFalse(backend.closed); assertNull(service.overdueRead());
+            assertEquals("old", service.status(a.sessionId()).wallet().address());
         } finally { backend.releaseRead.countDown(); }
     }
     @Test public void openingThatFinishesAfterDeadlineClosesHandleAndCannotPublish() throws Exception {

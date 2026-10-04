@@ -18,6 +18,10 @@ public class MoneroSendServiceTests {
     static Candidate candidate() { return new Candidate(ADDRESS, "1000", "100", HASH, "aa", "bb", List.of("d".repeat(64))); }
     static class Native implements MoneroSendBackend {
         final MoneroSendJournal journal;
+        java.util.function.LongSupplier quoteClock = System::nanoTime;
+        @Override public MoneroSendMachine sendMachine(String session) {
+            return new MoneroSendMachine(journal, session, System::currentTimeMillis, quoteClock);
+        }
         final AtomicInteger preparations = new AtomicInteger(), relays = new AtomicInteger();
         volatile CountDownLatch prepareEntered, prepareRelease, relayEntered, relayRelease, observeEntered, observeRelease;
         volatile CountDownLatch readEntered, readRelease;
@@ -25,9 +29,10 @@ public class MoneroSendServiceTests {
         public Snapshot read(java.util.function.Consumer<ScanProgress> callback) throws Exception {
             readCallback = callback;
             if (readEntered != null) { readEntered.countDown(); readRelease.await(); }
+            if (readThrows) throw new IllegalStateException("SENSITIVE native response");
             return read();
         }
-        volatile boolean lostResponse, daemonDown, closed;
+        volatile boolean lostResponse, daemonDown, closed, readThrows;
         volatile Map<String, MoneroSendMachine.Observation> observations = Map.of();
         Native(MoneroSendJournal journal) { this.journal = journal; }
         public MoneroSendJournal journal() { return journal; }
@@ -66,7 +71,11 @@ public class MoneroSendServiceTests {
                 public MoneroWalletBackend open(MoneroKeys keys, long height) {
                     root.check(); opened.incrementAndGet();
                     byte[] key = keys.sendJournalKey();
-                    try { return nativeWallet = new Native(root.openWallet(keys.walletId, key)); }
+                    try {
+                        nativeWallet = new Native(root.openWallet(keys.walletId, key));
+                        nativeWallet.quoteClock = clock;
+                        return nativeWallet;
+                    }
                     finally { Arrays.fill(key, (byte) 0); }
                 }
                 public void close() { root.close(); factoryClosed.incrementAndGet(); }
@@ -100,6 +109,75 @@ public class MoneroSendServiceTests {
                 assertThrows(ExecutionException.class,()->commit.get(3,TimeUnit.SECONDS));
                 await(()->"READY".equals(f.service.status(b.sessionId()).state()));
                 assertEquals(0,old.relays.get());
+            } finally { old.readRelease.countDown(); }
+        }
+    }
+
+    @Test public void overdueReadRejectsNewSendsAndQueuedQuoteStillExpiresAfterRecovery() throws Exception {
+        var clock = new AtomicLong(1);
+        try (var f = new Fixture(90000, Duration.ofMillis(50), clock::get)) {
+            String a = f.activate(1, null); Request r = request(); View q = f.prepare(r, a);
+            Native old = f.nativeWallet;
+            old.readRelease = new CountDownLatch(1); old.readEntered = new CountDownLatch(1);
+            try {
+                assertTrue(old.readEntered.await(3, TimeUnit.SECONDS));
+                var pending = f.service.commitSend(r.operationId(), q.quoteDigest(), a);
+                clock.addAndGet(TimeUnit.SECONDS.toNanos(121));
+                assertEquals("UNAVAILABLE", f.service.status(a).state());
+                assertNull(f.service.status(a).wallet()); assertFalse(old.closed);
+                assertThrows(MoneroWalletService.Rejected.class, () -> f.service.prepareSend(request(), a));
+                // Do not poll send status: queued execution itself must enforce quote expiry.
+                old.readRelease.countDown();
+                assertThrows(ExecutionException.class, () -> pending.get(3, TimeUnit.SECONDS));
+                await(() -> "READY".equals(f.service.status(a).state()));
+                assertEquals(State.EXPIRED, f.service.sendStatus(r.operationId(), a).state());
+                assertEquals(0, old.relays.get()); assertEquals(1, f.opened.get()); assertFalse(old.closed);
+            } finally { old.readRelease.countDown(); }
+        }
+    }
+
+    @Test public void cancelledQueuedCommitCannotRelayAfterOverdueReadThrows() throws Exception {
+        var clock = new AtomicLong(1);
+        try (var f = new Fixture(90000, Duration.ofMillis(50), clock::get)) {
+            String a = f.activate(1, null); Request r = request(); View q = f.prepare(r, a);
+            Native old = f.nativeWallet;
+            old.readRelease = new CountDownLatch(1); old.readEntered = new CountDownLatch(1);
+            try {
+                assertTrue(old.readEntered.await(3, TimeUnit.SECONDS));
+                var pending = f.service.commitSend(r.operationId(), q.quoteDigest(), a);
+                clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
+                assertEquals("UNAVAILABLE", f.service.status(a).state());
+                assertEquals(State.CANCELLED, f.service.cancelSend(r.operationId(), a).state());
+                old.readThrows = true; old.readRelease.countDown();
+                assertThrows(ExecutionException.class, () -> pending.get(3, TimeUnit.SECONDS));
+                assertEquals(0, old.relays.get()); assertNull(f.service.status(a).wallet());
+                assertNull(f.service.failure()); assertFalse(old.closed);
+            } finally { old.readRelease.countDown(); }
+        }
+    }
+
+    @Test public void successfulLateReadCannotClearJournalFailureLatchedWhileBlocked() throws Exception {
+        var clock = new AtomicLong(1);
+        try (var f = new Fixture(90000, Duration.ofMillis(50), clock::get)) {
+            String a = f.activate(1, null); Request r = request(); f.prepare(r, a);
+            Native old = f.nativeWallet;
+            old.readRelease = new CountDownLatch(1); old.readEntered = new CountDownLatch(1);
+            try {
+                assertTrue(old.readEntered.await(3, TimeUnit.SECONDS));
+                clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
+                assertEquals("UNAVAILABLE", f.service.status(a).state());
+                old.journal.close(); // synthetic journal failure while native read still owns the lane
+                assertEquals("XMR_RESTART_REQUIRED", assertThrows(MoneroWalletService.Rejected.class,
+                        () -> f.service.sendStatus(r.operationId(), a)).code);
+                var failure = f.service.failure();
+                assertEquals(MoneroWalletService.FailureReason.JOURNAL_FAILURE, failure.reason());
+                assertFalse(old.closed);
+                old.readRelease.countDown(); // read returns a normal Snapshot; fatal latch must win
+                await(() -> old.closed);
+                assertSame(failure, f.service.failure());
+                assertEquals("RESTART_REQUIRED", f.service.session().state());
+                assertNull(f.service.status(a).wallet()); assertEquals(1, f.opened.get());
+                assertEquals(0, old.relays.get());
             } finally { old.readRelease.countDown(); }
         }
     }

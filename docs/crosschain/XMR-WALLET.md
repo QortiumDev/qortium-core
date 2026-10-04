@@ -117,7 +117,7 @@ The activation reader rejects duplicate/unknown fields, trailing values, invalid
 UTF-8, type coercion and bodies over 2048 bytes. A stale session gets HTTP 409
 `XMR_SESSION_CHANGED`, never a previous owner's balance or history. Most
 operational failures use HTTP 503 and a stable `code`. An uncertain opening/closing failure
-or an overdue native operation requires restarting this experimental runtime.
+or an overdue lifecycle/send operation requires restarting this experimental runtime.
 A rejected new-wallet tip check closes its in-memory handle and publishes
 ACTIVATION_REJECTED with a safe error code through `/session`; an explicit
 corrected activation may then retry using that current session. Existing wallets
@@ -131,8 +131,9 @@ returns cannot trigger competing balance/history loads. State is one of IDLE,
 OPENING, CLOSING, ACTIVATION_REJECTED, SCANNING, READY, UNAVAILABLE, STALE,
 RESTART_REQUIRED or STOPPED.
 READY requires both daemon and wallet caught up. Snapshot values older than 30
-seconds are withheld; timeouts poison the native lane and late results cannot
-revive it. No response advertises send support.
+seconds are withheld. Lifecycle/send timeouts latch a fatal failure; overdue
+reads temporarily report UNAVAILABLE and can recover after full successful
+completion, as described below. No wallet status response advertises send support.
 
 The service has one native worker. Sync runs synchronously, cooperatively asking
 for a yield after 2048 blocks or two seconds of progress, then reads and saves
@@ -205,5 +206,35 @@ interval; it does not establish readiness or authorize spending. Identical
 counts and status polls do not advance its timestamp. Clients should continue
 passive reads for STALE/UNAVAILABLE, expire stalled ETA, and reset rate samples
 on scan identity changes, backwards progress or long observation gaps.
-Callbacks do not extend the 90-second native deadline, and late callbacks from
-completed reads or replaced owners cannot publish progress.
+Only validated forward height advances extend the 90-second read inactivity
+budget; duplicate, backward, target-only, malformed and old-read/owner callbacks
+do not. Once a read is overdue, Core reports UNAVAILABLE and clears balances and
+progress while retaining the same serialized native worker. Callbacks alone
+cannot restore availability. A full successful read for the matching current
+owner/read can restore READY/SCANNING; a failed read leaves financial data absent
+and a later scheduled read may retry. New send work is refused while the read is
+overdue; already queued work still checks session, cancellation, quote expiry
+and native readiness before relay.
+
+Lifecycle and send deadlines remain absolute and fatal. Native linkage, journal
+and uncertain-close failures cannot be cleared by a later successful read.
+A genuinely stuck JNI call stays unavailable and may still need an explicit Core
+restart; Core never starts a replacement worker or closes a handle alongside it.
+Logs distinguish temporary read overruns from fatal failures and record fixed
+CHECK/SYNC/DAEMON/HISTORY/SAVE/BALANCE labels with elapsed phase time. Labels do
+not renew the activity budget and contain no wallet/session identifiers or native
+exception text. SYNC covers upstream chunk processing and its daemon requests;
+it is not a per-request network trace.
+
+
+The packaged slow-read regression uses the same pinned offline daemon and a
+loopback proxy that delays one `/getblocks.bin` response beyond an injectable
+1.5-second test deadline. It verifies temporary unavailability, no premature
+native close, full-read recovery on the same worker/handle, phase diagnostics,
+and serialized shutdown. It uses fresh synthetic state and never the running
+Core or owner wallet:
+
+```
+mvn -Dmaven.gitcommitid.nativegit=true -DskipTests package
+python3 tools/xmr/run-slow-read-acceptance.py --monerod /path/to/verified/monerod
+```

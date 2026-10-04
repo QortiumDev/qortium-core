@@ -12,9 +12,14 @@ public final class MoneroWalletService implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger(MoneroWalletService.class);
     enum Phase { IDLE, LIFECYCLE, SCAN, SEND }
     enum FailureReason { DEADLINE, LIFECYCLE_FAILURE, NATIVE_LINKAGE, JOURNAL_FAILURE }
-    record Failure(FailureReason reason, Phase phase, long elapsedMillis, long progressAgeMillis, long advances) { }
+    record Failure(FailureReason reason, Phase phase, long elapsedMillis, long progressAgeMillis, long advances,
+                   MoneroWalletBackend.ReadPhase readPhase, long readPhaseAgeMillis) { }
     private Phase phase = Phase.IDLE;
     private Failure failure;
+    private Failure overdueRead; // temporary unavailability, never a fatal-latch reset
+    private MoneroWalletBackend.ReadPhase readPhase;
+    private long readPhaseAt;
+    synchronized Failure overdueRead() { return overdueRead; }
     private long lastAdvanceAt, readHighWater, advances;
     private final LongSupplier monotonic;
     synchronized Failure failure() { return failure; } // internal diagnostic, never wallet authority
@@ -120,8 +125,8 @@ public final class MoneroWalletService implements AutoCloseable {
         requireSession(expectedSession);
         if (sessionId == null || walletId == null) throw new Rejected(409, "XMR_NO_ACTIVE_WALLET");
         checkDeadline();
-        boolean stale = updatedAt != 0 && monotonic.getAsLong() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
-        return new Status(sessionId, walletId, stale && !failed ? "STALE" : state, false,
+        boolean stale = snapshot != null && updatedAt != 0 && monotonic.getAsLong() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
+        return new Status(sessionId, walletId, stale && !failed && overdueRead == null ? "STALE" : state, false,
                 updatedAt == 0 ? null : updatedAt, progress, stale || failed ? null : snapshot);
     }
 
@@ -165,17 +170,26 @@ public final class MoneroWalletService implements AutoCloseable {
             if (closed || failed || transition || backend == null) return;
             owner = sessionId; begin(Phase.SCAN); activeRead = read;
             lastAdvanceAt = startedAt; advances = 0;
+            readPhase = MoneroWalletBackend.ReadPhase.CHECK; readPhaseAt = startedAt;
             readHighWater = progress == null ? restoreHeight : Math.max(restoreHeight, progress.height());
         }
         try {
-            MoneroWalletBackend.Snapshot next = backend.read(counts -> publishProgress(owner, read, counts));
+            MoneroWalletBackend.Snapshot next = backend.read(counts -> publishProgress(owner, read, counts), step -> publishReadPhase(owner, read, step));
             synchronized (this) {
                 checkDeadline();
-                if (closed || failed || !owner.equals(sessionId)) return;
+                if (closed || failed || transition || activeRead != read || !owner.equals(sessionId)) return;
+                // Only the entire read returning successfully can restore financial availability.
+                if (overdueRead != null) {
+                    LOGGER.info("XMR overdue read completed: elapsedMs={}",
+                            TimeUnit.NANOSECONDS.toMillis(monotonic.getAsLong() - startedAt));
+                    overdueRead = null;
+                }
+                lastAdvanceAt = monotonic.getAsLong();
                 publishProgress(owner, read, new MoneroWalletBackend.ScanProgress(next.height(), next.targetHeight()));
                 snapshot = next; updatedAt = System.currentTimeMillis(); updatedNanos = monotonic.getAsLong();
                 state = next.synced() ? "READY" : "SCANNING";
             }
+        } catch (MoneroSendJournal.Failure e) { fail(FailureReason.JOURNAL_FAILURE);
         } catch (Exception e) {
             synchronized (this) {
                 checkDeadline();
@@ -184,6 +198,7 @@ public final class MoneroWalletService implements AutoCloseable {
         } catch (LinkageError e) { fail(FailureReason.NATIVE_LINKAGE); }
         finally {
             synchronized (this) {
+                checkDeadline();
                 // An activation queued during a read has its own deadline and neutral state.
                 if (owner.equals(sessionId)) end();
                 if (activeRead == read) activeRead = null;
@@ -195,7 +210,7 @@ public final class MoneroWalletService implements AutoCloseable {
     private synchronized void publishProgress(String owner, Object read, MoneroWalletBackend.ScanProgress counts) {
         // A native callback may arrive after a switch, timeout or the read itself. It grants no authority.
         checkDeadline();
-        if (closed || failed || transition || activeRead != read || !owner.equals(sessionId)) return;
+        if (closed || failed || transition || overdueRead != null || activeRead != read || !owner.equals(sessionId)) return;
         if (counts == null || counts.height() < restoreHeight || counts.targetHeight() <= 0
                 || counts.height() > counts.targetHeight() || counts.targetHeight() > 500_000_000L) return;
         // Only forward movement in this read extends scan inactivity. Target-only changes,
@@ -206,6 +221,12 @@ public final class MoneroWalletService implements AutoCloseable {
         // Polls and duplicate callbacks must not manufacture forward progress or a fresh ETA.
         if (progress != null && progress.height() == counts.height() && progress.targetHeight() == counts.targetHeight()) return;
         progress = new Progress(scanId, restoreHeight, counts.height(), counts.targetHeight(), System.currentTimeMillis());
+    }
+
+    private synchronized void publishReadPhase(String owner, Object read, MoneroWalletBackend.ReadPhase step) {
+        checkDeadline();
+        if (closed || failed || transition || activeRead != read || !owner.equals(sessionId) || step == null) return;
+        if (readPhase != step) { readPhase = step; readPhaseAt = monotonic.getAsLong(); }
     }
 
     synchronized CompletableFuture<MoneroSendContracts.View> prepareSend(MoneroSendContracts.Request request, String expected) {
@@ -233,7 +254,7 @@ public final class MoneroWalletService implements AutoCloseable {
     }
     private CompletableFuture<MoneroSendContracts.View> submitSend(MoneroSendContracts.Request request, String id, String digest, String expected) {
         checkAvailable(); requireSession(expected);
-        if (transition || sendQueued || sends == null) throw new Rejected(409, "XMR_WORK_IN_PROGRESS");
+        if (transition || overdueRead != null || sendQueued || sends == null) throw new Rejected(409, "XMR_WORK_IN_PROGRESS");
         MoneroSendCoordinator context = sends;
         CompletableFuture<MoneroSendContracts.View> result = new CompletableFuture<>();
         sendQueued = true;
@@ -289,19 +310,17 @@ public final class MoneroWalletService implements AutoCloseable {
         try { closeBackend(); } catch (Exception | LinkageError ignored) { }
     }
 
-    private void end() { startedAt = 0; phase = Phase.IDLE; }
+    private void end() { startedAt = 0; phase = Phase.IDLE; overdueRead = null; readPhase = null; }
 
-    private void begin(Phase next) { phase = next; startedAt = monotonic.getAsLong(); }
+    private void begin(Phase next) { phase = next; startedAt = monotonic.getAsLong(); overdueRead = null; readPhase = null; }
 
     private synchronized void fail(FailureReason reason) {
         if (failed) return; // retain the first cause, even after native cleanup fails
-        long now = monotonic.getAsLong();
-        failure = new Failure(reason, phase, startedAt == 0 ? 0 : TimeUnit.NANOSECONDS.toMillis(now - startedAt),
-                phase == Phase.SCAN ? TimeUnit.NANOSECONDS.toMillis(now - lastAdvanceAt) : 0,
-                phase == Phase.SCAN ? advances : 0);
+        failure = diagnostic(reason);
         // Fixed enums and durations/counts only: never log native exceptions, wallet/session identifiers or keys.
-        LOGGER.warn("XMR worker failed: reason={} phase={} elapsedMs={} progressAgeMs={} advances={}",
-                failure.reason(), failure.phase(), failure.elapsedMillis(), failure.progressAgeMillis(), failure.advances());
+        LOGGER.warn("XMR worker failed: reason={} phase={} elapsedMs={} progressAgeMs={} advances={} readPhase={} readPhaseAgeMs={}",
+                failure.reason(), failure.phase(), failure.elapsedMillis(), failure.progressAgeMillis(), failure.advances(),
+                failure.readPhase(), failure.readPhaseAgeMillis());
         progress = null; activeRead = null;
         failed = true; state = "RESTART_REQUIRED"; errorCode = "XMR_RESTART_REQUIRED"; snapshot = null;
         if (workContext != null && sendWork != null) {
@@ -309,10 +328,26 @@ public final class MoneroWalletService implements AutoCloseable {
             catch (RuntimeException ignored) { /* failed journal already holds; startup normalization remains mandatory */ }
         }
     }
+    private Failure diagnostic(FailureReason reason) {
+        long now = monotonic.getAsLong();
+        return new Failure(reason, phase, startedAt == 0 ? 0 : TimeUnit.NANOSECONDS.toMillis(now - startedAt),
+                phase == Phase.SCAN ? TimeUnit.NANOSECONDS.toMillis(now - lastAdvanceAt) : 0,
+                phase == Phase.SCAN ? advances : 0,
+                phase == Phase.SCAN ? readPhase : null,
+                phase == Phase.SCAN ? TimeUnit.NANOSECONDS.toMillis(now - readPhaseAt) : 0);
+    }
     private void checkDeadline() {
-        long activity = phase == Phase.SCAN && activeRead != null && !transition ? lastAdvanceAt : startedAt;
-        if (!failed && startedAt != 0 && monotonic.getAsLong() - activity > deadlineNanos)
-            fail(FailureReason.DEADLINE);
+        boolean scanning = phase == Phase.SCAN && activeRead != null && !transition;
+        long activity = scanning ? lastAdvanceAt : startedAt;
+        if (closed || failed || startedAt == 0 || monotonic.getAsLong() - activity <= deadlineNanos) return;
+        if (!scanning) { fail(FailureReason.DEADLINE); return; }
+        if (overdueRead != null) return;
+        overdueRead = diagnostic(FailureReason.DEADLINE);
+        // Keep the single worker/handle in place. Do not interrupt JNI or close alongside the read.
+        snapshot = null; progress = null; state = "UNAVAILABLE"; errorCode = null;
+        LOGGER.warn("XMR read overdue: elapsedMs={} progressAgeMs={} advances={} readPhase={} readPhaseAgeMs={}",
+                overdueRead.elapsedMillis(), overdueRead.progressAgeMillis(), overdueRead.advances(),
+                overdueRead.readPhase(), overdueRead.readPhaseAgeMillis());
     }
     private void checkAvailable() {
         checkDeadline();
