@@ -468,6 +468,8 @@ public class Settings {
 	private boolean moneroWalletEnabled = false;
 	private boolean moneroWalletSendEnabled = false;
 	private String moneroDaemonUri = null;
+	/** Explicit opt-in fallback endpoints; the legacy single URI remains the primary. */
+	private List<String> moneroDaemonUris = List.of();
 
 	private int arrrDefaultBirthday = 2000000;
 	/**
@@ -2854,6 +2856,14 @@ public class Settings {
 	public boolean isMoneroWalletSendEnabled() { return this.moneroWalletSendEnabled; }
 
 	public String getMoneroDaemonUri() { return this.moneroDaemonUri; }
+    public List<String> getMoneroDaemonUris() {
+        var endpoints = new java.util.LinkedHashSet<String>();
+        if (this.moneroDaemonUri != null) endpoints.add(this.moneroDaemonUri);
+        if (this.moneroDaemonUris == null || this.moneroDaemonUris.size() > 8) throw new IllegalArgumentException("Invalid XMR daemon pool");
+        endpoints.addAll(this.moneroDaemonUris);
+        if (endpoints.contains(null)) throw new IllegalArgumentException("Invalid XMR daemon pool");
+        return List.copyOf(endpoints);
+    }
 
 	public String getWalletsPath() {
 		return this.walletsPath;

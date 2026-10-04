@@ -74,6 +74,13 @@ public class CrossChainMoneroResource {
         return result(() -> MoneroWalletRuntime.get().status(session));
     }
 
+    /** Configured endpoint health only; owner-session fenced and no native calls or arbitrary URL input. */
+    @GET @Path("/servers")
+    public Response servers(@HeaderParam(Security.API_KEY_HEADER) String apiKey, @HeaderParam(SESSION_HEADER) String session) {
+        authorize(apiKey);
+        return result(() -> MoneroWalletRuntime.get().status(session).servers());
+    }
+
     @POST @Path("/deactivate")
     public Response deactivate(@HeaderParam(Security.API_KEY_HEADER) String apiKey, @HeaderParam(SESSION_HEADER) String session) {
         authorize(apiKey);

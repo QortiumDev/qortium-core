@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Fail over Monero wallet reads across configured servers
+
+Monero wallets can use an operator-configured server pool while keeping the same local wallet and scan checkpoint. Core keeps a working provider selected, backs off failed reads, tries eligible alternatives on its existing wallet worker, and exposes cached server health through the shared wallet API. Stop and account changes retain their ownership rules, and queued sends recheck read availability before native work; no send is retried automatically.
+
 ### Add a versioned generic custody wallet API
 
 - Register common wallet operation routes for ARRR and XMR, with authenticated loopback-only protocol discovery and a shared session header. Existing native resources keep their strict body parsing, ownership, scan and spending rules.

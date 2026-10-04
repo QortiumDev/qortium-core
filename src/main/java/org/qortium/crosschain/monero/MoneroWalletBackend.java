@@ -27,5 +27,7 @@ public interface MoneroWalletBackend extends AutoCloseable {
                           java.util.function.Consumer<ReadPhase> phase) throws Exception { return read(progress); }
     default Snapshot read(java.util.function.Consumer<ScanProgress> progress) throws Exception { return read(); }
     Snapshot read() throws Exception;
+    /** Key-free cached provider metadata only, safe to read without entering JNI. */
+    default org.qortium.crosschain.WalletServerPool.Status servers() { return null; }
     void close() throws Exception;
 }
