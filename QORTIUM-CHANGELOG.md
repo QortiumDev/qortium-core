@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Recover Monero wallet reads after temporary daemon delays
+
+A scan read that goes 90 seconds without forward progress now hides its balances and reports temporary unavailability while the same native worker finishes. A complete successful read for the current account restores availability without requiring a Core restart. Callbacks alone cannot restore wallet data, and opening, closing, send, native-linkage and journal failures keep their strict safety rules. Fixed read-phase labels and timing help diagnose which part of a read stalled without logging wallet data.
+
 ### Keep advancing Monero scans alive and record safe worker failure reasons
 
 Monero scans now time out after 90 seconds without validated forward progress instead of 90 seconds of total scan time. Duplicate, backward, invalid and old-session callbacks cannot extend the timeout; opening, closing and send operations retain fixed deadlines. Core records the first worker failure category, operation phase and timing without wallet identifiers or native exception text, so a restart-required incident can be diagnosed before recovery. Financial snapshots still expire independently.

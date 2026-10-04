@@ -199,19 +199,28 @@ public final class MoneroJniWallet implements MoneroSendBackend {
     @Override public Snapshot read() { return read(ignored -> { }); }
 
     @Override public Snapshot read(java.util.function.Consumer<ScanProgress> progress) {
+        return read(progress, ignored -> { });
+    }
+
+    @Override public Snapshot read(java.util.function.Consumer<ScanProgress> progress,
+                                   java.util.function.Consumer<ReadPhase> phase) {
+        phase.accept(ReadPhase.CHECK);
         root.check();
         // Never run upstream's background sync: several getters are not protected by its sync lock.
         // Cooperatively yield at native chunk boundaries; all sync/getters/save stay on Core's lane.
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        phase.accept(ReadPhase.SYNC);
         wallet.sync(new MoneroWalletListener() {
             @Override public void onSyncProgress(long height, long start, long end, double percent, String message) {
                 progress.accept(new ScanProgress(height, end));
                 if (height - start >= 2048 || System.nanoTime() > until) wallet.stopSyncing();
             }
         });
+        phase.accept(ReadPhase.DAEMON);
         long height = wallet.getHeight();
         long target = wallet.getDaemonHeight();
         boolean synced = wallet.isConnectedToDaemon() && wallet.isDaemonSynced() && wallet.isSynced() && target > 0 && height >= target;
+        phase.accept(ReadPhase.HISTORY);
         var history = new ArrayList<Transaction>();
         for (var tx : wallet.getTxs()) {
             Long timestamp = tx.getBlock() == null ? tx.getReceivedTimestamp() : tx.getBlock().getTimestamp();
@@ -220,7 +229,9 @@ public final class MoneroJniWallet implements MoneroSendBackend {
         }
         history.sort(Comparator.comparing(Transaction::timestamp, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(Transaction::txid));
+        phase.accept(ReadPhase.SAVE);
         wallet.save();
+        phase.accept(ReadPhase.BALANCE);
         return new Snapshot(wallet.getPrimaryAddress(), height, target, synced,
                 atomic(wallet.getBalance()), atomic(wallet.getUnlockedBalance()), history.stream().limit(100).toList());
     }

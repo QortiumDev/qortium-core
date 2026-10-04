@@ -21,6 +21,10 @@ public interface MoneroWalletBackend extends AutoCloseable {
     }
     /** Callback contains counts only; implementations must not perform extra native reads here. */
     record ScanProgress(long height, long targetHeight) { }
+    /** Fixed diagnostic labels only. Phase reports never extend the scan inactivity deadline. */
+    enum ReadPhase { CHECK, SYNC, DAEMON, HISTORY, SAVE, BALANCE }
+    default Snapshot read(java.util.function.Consumer<ScanProgress> progress,
+                          java.util.function.Consumer<ReadPhase> phase) throws Exception { return read(progress); }
     default Snapshot read(java.util.function.Consumer<ScanProgress> progress) throws Exception { return read(); }
     Snapshot read() throws Exception;
     void close() throws Exception;
