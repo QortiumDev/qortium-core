@@ -804,11 +804,13 @@ public class CrossChainPirateChainResource {
 		PirateChainSyncStatus.LastError lastError = status.getLastErrorCode() == null ? null
 				: new PirateChainSyncStatus.LastError(status.getLastErrorCode(), status.getLastErrorMessage());
 
-		return new PirateChainSyncStatus(PirateChainSyncStatus.State.valueOf(status.getState().name()),
+		PirateChainSyncStatus projected = new PirateChainSyncStatus(PirateChainSyncStatus.State.valueOf(status.getState().name()),
 				status.getMessage(), status.getSyncedBlocks(), status.getTotalBlocks(), status.isRestartRequired(),
 				status.getRecoveryState(), status.getScannedHeight(), status.getTipHeight(),
 				status.getTotalBalanceAtomic(), status.getVerifiedBalanceAtomic(), status.getObservedAt(),
 				status.isStale(), backendMode, status.getWalletIdentityHash(), lastError);
+        projected.scanHistory = status.getScanHistory();
+        return projected;
 	}
 
 	@POST

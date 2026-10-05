@@ -73,6 +73,9 @@ public class PirateChainSyncStatus {
 			+ "paths, no entropy, no stack trace. OMITTED when there is no recent error.", nullable = true)
 	public LastError lastError;
 
+    @Schema(description = "Bounded backend scan observations for display estimates only", nullable = true)
+    public org.qortium.crosschain.WalletScanHistory scanHistory;
+
 	public PirateChainSyncStatus() {
 	}
 

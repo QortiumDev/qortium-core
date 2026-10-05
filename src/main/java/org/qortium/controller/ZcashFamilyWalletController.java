@@ -86,11 +86,12 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		private final String walletIdentityHash;
 		private final String lastErrorCode;
 		private final String lastErrorMessage;
+		private final org.qortium.crosschain.WalletScanHistory scanHistory;
 
 		private WalletSyncStatus(WalletSyncState state, String message, Long syncedBlocks, Long totalBlocks,
 				boolean restartRequired, String recoveryState, Long scannedHeight, Long tipHeight,
 				String totalBalanceAtomic, String verifiedBalanceAtomic, long observedAt, boolean stale,
-				String walletIdentityHash, String lastErrorCode, String lastErrorMessage) {
+				String walletIdentityHash, String lastErrorCode, String lastErrorMessage, org.qortium.crosschain.WalletScanHistory scanHistory) {
 			this.state = state;
 			this.message = message;
 			this.syncedBlocks = syncedBlocks;
@@ -106,12 +107,13 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			this.walletIdentityHash = walletIdentityHash;
 			this.lastErrorCode = lastErrorCode;
 			this.lastErrorMessage = lastErrorMessage;
+			this.scanHistory = scanHistory;
 		}
 
 		private static WalletSyncStatus base(WalletSyncState state, String message, Long syncedBlocks,
 				Long totalBlocks, boolean restartRequired, String recoveryState) {
 			return new WalletSyncStatus(state, message, syncedBlocks, totalBlocks, restartRequired, recoveryState,
-					null, null, null, null, System.currentTimeMillis(), false, null, null, null);
+					null, null, null, null, System.currentTimeMillis(), false, null, null, null, null);
 		}
 
 		public static WalletSyncStatus disabled(String message) {
@@ -154,7 +156,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			return new WalletSyncStatus(effectiveState, this.message, this.syncedBlocks, this.totalBlocks,
 					this.restartRequired, recoveryState, this.scannedHeight, this.tipHeight,
 					this.totalBalanceAtomic, this.verifiedBalanceAtomic, this.observedAt, this.stale,
-					this.walletIdentityHash, this.lastErrorCode, this.lastErrorMessage);
+					this.walletIdentityHash, this.lastErrorCode, this.lastErrorMessage, null);
 		}
 
 		/**
@@ -172,7 +174,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			return new WalletSyncStatus(effectiveState, this.message, this.syncedBlocks, this.totalBlocks,
 					this.restartRequired, this.recoveryState, scannedHeight, tipHeight, totalBalanceAtomic,
 					verifiedBalanceAtomic, this.observedAt, this.stale, walletIdentityHash,
-					this.lastErrorCode, this.lastErrorMessage);
+					this.lastErrorCode, this.lastErrorMessage, this.scanHistory);
 		}
 
 		/** Sanitized last-error detail (no paths, no entropy, no stack trace) for a degraded/failed lane. */
@@ -180,7 +182,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			return new WalletSyncStatus(this.state, this.message, this.syncedBlocks, this.totalBlocks,
 					this.restartRequired, this.recoveryState, this.scannedHeight, this.tipHeight,
 					this.totalBalanceAtomic, this.verifiedBalanceAtomic, this.observedAt, this.stale,
-					this.walletIdentityHash, code, message);
+					this.walletIdentityHash, code, message, this.scanHistory);
 		}
 
 		/**
@@ -197,8 +199,16 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 			return new WalletSyncStatus(effectiveState, this.message, this.syncedBlocks, this.totalBlocks,
 					this.restartRequired, this.recoveryState, this.scannedHeight, this.tipHeight,
 					this.totalBalanceAtomic, this.verifiedBalanceAtomic, this.observedAt, true,
-					this.walletIdentityHash, this.lastErrorCode, this.lastErrorMessage);
+					this.walletIdentityHash, this.lastErrorCode, this.lastErrorMessage, this.scanHistory);
 		}
+
+		public org.qortium.crosschain.WalletScanHistory getScanHistory() { return this.scanHistory; }
+
+        private WalletSyncStatus withScanHistory(org.qortium.crosschain.WalletScanHistory history) {
+            return new WalletSyncStatus(state, message, syncedBlocks, totalBlocks, restartRequired, recoveryState,
+                    scannedHeight, tipHeight, totalBalanceAtomic, verifiedBalanceAtomic, observedAt, stale,
+                    walletIdentityHash, lastErrorCode, lastErrorMessage, history);
+        }
 
 		public WalletSyncState getState() {
 			return this.state;
@@ -283,6 +293,8 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	private long lastSaveTime = 0L;
 	private volatile boolean running;
 	private volatile W currentWallet = null;
+    private ZcashFamilyWallet scanHistoryWallet;
+    private final org.qortium.crosschain.WalletScanHistory.Tracker scanHistory = new org.qortium.crosschain.WalletScanHistory.Tracker();
 	private volatile boolean shouldLoadWallet = false;
 	private volatile String loadStatus = null;
 	private volatile String initializationFailure = null;
@@ -1332,6 +1344,17 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	WalletSyncStatus cacheCurrentWalletStatus(WalletSyncStatus status) {
+        boolean bound = this.currentWallet != null && Objects.equals(status.getWalletIdentityHash(), this.currentWallet.getWalletIdentityHash());
+        if (scanHistoryWallet != this.currentWallet || status.isRestartRequired() || status.getState() == WalletSyncState.READY
+                || !Objects.equals(status.getRecoveryState(), this.cachedStatus.status.getRecoveryState())) {
+            scanHistory.clear(); scanHistoryWallet = this.currentWallet;
+        }
+        // Relative native sync counters are a work range, never absolute wallet height.
+        if (status.getState() == WalletSyncState.SYNCHRONIZING && bound
+                && status.getSyncedBlocks() != null && status.getTotalBlocks() != null)
+            scanHistory.record(status.getWalletIdentityHash(), status.getObservedAt(), status.getSyncedBlocks(), status.getTotalBlocks());
+        if (bound && !status.isRestartRequired())
+            status = status.withScanHistory(scanHistory.snapshot());
 		this.cachedStatus = new CachedWalletSyncStatus(status, this.currentWallet);
 		return status;
 	}
