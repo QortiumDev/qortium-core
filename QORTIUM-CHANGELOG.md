@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### Document wallet read phases and queued-stop behavior
+
+The shared wallet API documents optional cached read diagnostics, their distinction from spending readiness, and why an accepted Stop can wait for an existing scan before closing. This keeps future coin adapters and client messages consistent without changing transport or custody permissions.
+
+### Finish queued Monero stops without timing out behind scans
+
+Stopping a wallet immediately revokes its active authority and waits for any current native scan to finish on the same worker. The close deadline begins when that queued close actually starts, preventing a slow scan from needlessly requiring a Core restart. Native-close, account-switch, send and journal failure protections remain in place.
+
+### Distinguish ongoing wallet reads from scheduled retries
+
+Wallet status reports cached, coin-neutral read phases and separates a slow operation still running from a scheduled retry. Display diagnostics remain account-scoped and cannot enable spending or change native deadlines.
+
 ### Add shared wallet scan-start policies for ARRR and XMR
 
 Wallet initialization can explicitly resume saved progress, restore from a chosen historical block, or start a never-funded address at the current chain tip. Core saves the chosen height before native creation and reuses it on retries and reopening; existing wallets and unresolved sends retain their checkpoints and safety rules. Monero chain preparation is reported separately without extending read deadlines or enabling spending. Wire serialization checks cover the advertised scan protocol and modes.

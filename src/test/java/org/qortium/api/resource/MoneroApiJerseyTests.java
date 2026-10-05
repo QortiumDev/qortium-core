@@ -56,6 +56,9 @@ public class MoneroApiJerseyTests {
             assertTrue(wallet.get("wallet").get("balanceAtomic").isTextual());
             assertEquals("9007199254740993", wallet.get("wallet").get("balanceAtomic").asText());
             assertTrue(wallet.get("wallet").get("transactions").isArray());
+            assertTrue(wallet.get("read").isObject());
+            assertTrue(java.util.Set.of("IDLE", "IN_FLIGHT").contains(wallet.get("read").get("state").asText()));
+            assertTrue(wallet.get("read").get("retryAt").isNull());
             assertTrue(response.toLowerCase().contains("cache-control: no-store"));
             String providerResponse = server.call("GET", "/servers", "", "X-XMR-SESSION: " + session + "\r\n", true);
             assertEquals("server-1", payload(providerResponse).get("selectedId").asText());

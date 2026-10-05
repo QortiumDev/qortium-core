@@ -17,6 +17,7 @@ public final class MoneroWalletService implements AutoCloseable {
     private Phase phase = Phase.IDLE;
     private Failure failure;
     private Failure overdueRead; // temporary unavailability, never a fatal-latch reset
+    private boolean queuedScanStop; // authority revoked, waiting behind the current serialized read
     private MoneroWalletBackend.ReadPhase readPhase;
     private long readPhaseAt;
     synchronized Failure overdueRead() { return overdueRead; }
@@ -32,7 +33,8 @@ public final class MoneroWalletService implements AutoCloseable {
     public record Session(String sessionId, String walletId, String state, String errorCode, Long restoreHeight, String initializationMode) { }
     public record Status(String sessionId, String walletId, String state, boolean send,
                          Long updatedAt, Progress progress, MoneroWalletBackend.Snapshot wallet,
-                         Long readRetryAt, org.qortium.crosschain.WalletServerPool.Status servers, Long restoreHeight, String initializationMode, Progress preparation) { }
+                         Long readRetryAt, org.qortium.crosschain.WalletServerPool.Status servers, Long restoreHeight, String initializationMode, Progress preparation,
+                         org.qortium.crosschain.WalletReadStatus read) { }
 
     /** Display identity is independent of, and never accepted as, session authority. */
     public record Progress(String scanId, long startHeight, long height, long targetHeight, long updatedAt) { }
@@ -131,6 +133,7 @@ public final class MoneroWalletService implements AutoCloseable {
         String nextSession = UUID.randomUUID().toString();
         try { if (sends != null) sends.machine.changeSession(nextSession); }
         catch (RuntimeException e) { fail(FailureReason.JOURNAL_FAILURE); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
+        queuedScanStop = phase == Phase.SCAN && activeRead != null;
         sessionId = nextSession; walletId = null;
         state = "CLOSING"; errorCode = null; snapshot = null; updatedAt = 0;
         progress = null; preparation = null; activeRead = null; scanId = null;
@@ -147,10 +150,32 @@ public final class MoneroWalletService implements AutoCloseable {
         boolean stale = snapshot != null && updatedAt != 0 && monotonic.getAsLong() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
         return new Status(sessionId, walletId, stale && !failed && overdueRead == null ? "STALE" : state, false,
                 updatedAt == 0 ? null : updatedAt, progress, stale || failed ? null : snapshot,
-                readRetryAt, servers, transition ? null : restoreHeight, initializationMode, preparation);
+                readRetryAt, servers, transition ? null : restoreHeight, initializationMode, preparation, readStatus());
+    }
+
+    private org.qortium.crosschain.WalletReadStatus readStatus() {
+        var idle = org.qortium.crosschain.WalletReadStatus.State.IDLE;
+        if (closed || failed || transition)
+            return new org.qortium.crosschain.WalletReadStatus(idle, null, null);
+        if (phase == Phase.SCAN && activeRead != null) {
+            var current = overdueRead == null ? org.qortium.crosschain.WalletReadStatus.State.IN_FLIGHT
+                    : org.qortium.crosschain.WalletReadStatus.State.OVERDUE;
+            var step = readPhase == null ? null : org.qortium.crosschain.WalletReadStatus.Phase.valueOf(readPhase.name());
+            return new org.qortium.crosschain.WalletReadStatus(current, step, null);
+        }
+        return readRetryAt == null ? new org.qortium.crosschain.WalletReadStatus(idle, null, null)
+                : new org.qortium.crosschain.WalletReadStatus(org.qortium.crosschain.WalletReadStatus.State.RETRY_SCHEDULED, null, readRetryAt);
     }
 
     private void switchWallet(MoneroKeys keys, org.qortium.crosschain.WalletScanStart start) {
+        synchronized (this) {
+            if (keys == null && queuedScanStop) {
+                // A queued Stop does not close JNI alongside a scan. Start the
+                // lifecycle deadline when its serialized close actually begins.
+                queuedScanStop = false;
+                begin(Phase.LIFECYCLE);
+            }
+        }
         String admissionError = null;
         try {
             closeBackend();
@@ -391,6 +416,7 @@ public final class MoneroWalletService implements AutoCloseable {
                 phase == Phase.SCAN ? TimeUnit.NANOSECONDS.toMillis(now - readPhaseAt) : 0);
     }
     private void checkDeadline() {
+        if (queuedScanStop && phase == Phase.LIFECYCLE) return;
         boolean scanning = phase == Phase.SCAN && activeRead != null && !transition;
         long activity = scanning ? lastAdvanceAt : startedAt;
         if (closed || failed || startedAt == 0 || monotonic.getAsLong() - activity <= deadlineNanos) return;
