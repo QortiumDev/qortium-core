@@ -41,7 +41,7 @@
 		<commons-text.version>1.15.0</commons-text.version>
 		<commons-io.version>2.22.0</commons-io.version>
 		<commons-compress.version>1.28.0</commons-compress.version>
-		<commons-lang3.version>3.20.0</commons-lang3.version>
+		<commons-lang3.version>3.21.0</commons-lang3.version>
 		<dagger.version>1.2.2</dagger.version>
 		<dbus-java.version>4.3.2</dbus-java.version>
 		<extendedset.version>0.12.3</extendedset.version>
