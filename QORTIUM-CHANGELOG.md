@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Distinguish ongoing wallet reads from scheduled retries
+
+Wallet status reports cached, coin-neutral read phases and separates a slow operation still running from a scheduled retry. Display diagnostics remain account-scoped and cannot enable spending or change native deadlines.
+
 ### Add shared wallet scan-start policies for ARRR and XMR
 
 Wallet initialization can explicitly resume saved progress, restore from a chosen historical block, or start a never-funded address at the current chain tip. Core saves the chosen height before native creation and reuses it on retries and reopening; existing wallets and unresolved sends retain their checkpoints and safety rules. Monero chain preparation is reported separately without extending read deadlines or enabling spending. Wire serialization checks cover the advertised scan protocol and modes.

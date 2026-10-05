@@ -188,20 +188,39 @@ public class MoneroWalletServiceTests {
     @Test public void phaseChangesNeverRenewReadDeadlineAndRecordStalledSubphase() throws Exception {
         try (var f = new ScanFixture()) {
             f.phases.get().accept(MoneroWalletBackend.ReadPhase.SYNC);
+            assertEquals(org.qortium.crosschain.WalletReadStatus.State.IN_FLIGHT, f.service.status(f.session).read().state());
+            assertEquals(org.qortium.crosschain.WalletReadStatus.Phase.SYNC, f.service.status(f.session).read().phase());
+            assertNull(f.service.status(f.session).read().retryAt());
             f.clock.addAndGet(TimeUnit.SECONDS.toNanos(60));
             f.phases.get().accept(MoneroWalletBackend.ReadPhase.SAVE);
             f.clock.addAndGet(TimeUnit.SECONDS.toNanos(31));
             assertEquals("UNAVAILABLE", f.service.status(f.session).state());
+            assertEquals(org.qortium.crosschain.WalletReadStatus.State.OVERDUE, f.service.status(f.session).read().state());
             assertEquals(MoneroWalletBackend.ReadPhase.SAVE, f.service.overdueRead().readPhase());
             assertEquals(31000, f.service.overdueRead().readPhaseAgeMillis());
             var incident = f.service.overdueRead();
             f.phases.get().accept(MoneroWalletBackend.ReadPhase.BALANCE);
+            assertEquals(org.qortium.crosschain.WalletReadStatus.Phase.BALANCE, f.service.status(f.session).read().phase());
             f.advance(1, 99, 99);
             assertSame(incident, f.service.overdueRead());
             assertNull(f.service.status(f.session).wallet()); assertNull(f.service.status(f.session).progress());
             f.release.countDown();
             await(() -> "READY".equals(f.service.status(f.session).state()));
             assertNotNull(f.service.status(f.session).wallet()); assertNull(f.service.failure());
+            await(() -> f.service.status(f.session).read().state() == org.qortium.crosschain.WalletReadStatus.State.IDLE);
+        }
+    }
+
+    @Test public void readDisplayCannotFollowAnOldOwnerIntoAQueuedSwitch() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.phases.get().accept(MoneroWalletBackend.ReadPhase.SYNC);
+            f.advance(91, 10, 100);
+            var next = f.service.activate(seed(2), 0, f.session);
+            f.phases.get().accept(MoneroWalletBackend.ReadPhase.SAVE);
+            assertThrows(MoneroWalletService.Rejected.class, () -> f.service.status(f.session));
+            var display = f.service.status(next.sessionId()).read();
+            assertEquals(org.qortium.crosschain.WalletReadStatus.State.IDLE, display.state());
+            assertNull(display.phase()); assertNull(display.retryAt());
         }
     }
 
@@ -395,6 +414,9 @@ public class MoneroWalletServiceTests {
             var a = service.activate(seed(1),0,null);
             await(()->"UNAVAILABLE".equals(service.status(a.sessionId()).state()));
             var retry = service.status(a.sessionId()).readRetryAt(); assertNotNull(retry);
+            await(() -> service.status(a.sessionId()).read().state() == org.qortium.crosschain.WalletReadStatus.State.RETRY_SCHEDULED);
+            assertEquals(retry, service.status(a.sessionId()).read().retryAt());
+            assertNull(service.status(a.sessionId()).read().phase());
             assertEquals("XMR_WALLET_READ_UNAVAILABLE",service.session().errorCode());
             for (int i=0;i<20;i++) {
                 assertNull(service.status(a.sessionId()).wallet());

@@ -32,7 +32,8 @@ public final class MoneroWalletService implements AutoCloseable {
     public record Session(String sessionId, String walletId, String state, String errorCode, Long restoreHeight, String initializationMode) { }
     public record Status(String sessionId, String walletId, String state, boolean send,
                          Long updatedAt, Progress progress, MoneroWalletBackend.Snapshot wallet,
-                         Long readRetryAt, org.qortium.crosschain.WalletServerPool.Status servers, Long restoreHeight, String initializationMode, Progress preparation) { }
+                         Long readRetryAt, org.qortium.crosschain.WalletServerPool.Status servers, Long restoreHeight, String initializationMode, Progress preparation,
+                         org.qortium.crosschain.WalletReadStatus read) { }
 
     /** Display identity is independent of, and never accepted as, session authority. */
     public record Progress(String scanId, long startHeight, long height, long targetHeight, long updatedAt) { }
@@ -147,7 +148,21 @@ public final class MoneroWalletService implements AutoCloseable {
         boolean stale = snapshot != null && updatedAt != 0 && monotonic.getAsLong() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
         return new Status(sessionId, walletId, stale && !failed && overdueRead == null ? "STALE" : state, false,
                 updatedAt == 0 ? null : updatedAt, progress, stale || failed ? null : snapshot,
-                readRetryAt, servers, transition ? null : restoreHeight, initializationMode, preparation);
+                readRetryAt, servers, transition ? null : restoreHeight, initializationMode, preparation, readStatus());
+    }
+
+    private org.qortium.crosschain.WalletReadStatus readStatus() {
+        var idle = org.qortium.crosschain.WalletReadStatus.State.IDLE;
+        if (closed || failed || transition)
+            return new org.qortium.crosschain.WalletReadStatus(idle, null, null);
+        if (phase == Phase.SCAN && activeRead != null) {
+            var current = overdueRead == null ? org.qortium.crosschain.WalletReadStatus.State.IN_FLIGHT
+                    : org.qortium.crosschain.WalletReadStatus.State.OVERDUE;
+            var step = readPhase == null ? null : org.qortium.crosschain.WalletReadStatus.Phase.valueOf(readPhase.name());
+            return new org.qortium.crosschain.WalletReadStatus(current, step, null);
+        }
+        return readRetryAt == null ? new org.qortium.crosschain.WalletReadStatus(idle, null, null)
+                : new org.qortium.crosschain.WalletReadStatus(org.qortium.crosschain.WalletReadStatus.State.RETRY_SCHEDULED, null, readRetryAt);
     }
 
     private void switchWallet(MoneroKeys keys, org.qortium.crosschain.WalletScanStart start) {
