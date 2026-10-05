@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Finish queued Monero stops without timing out behind scans
+
+Stopping a wallet immediately revokes its active authority and waits for any current native scan to finish on the same worker. The close deadline begins when that queued close actually starts, preventing a slow scan from needlessly requiring a Core restart. Native-close, account-switch, send and journal failure protections remain in place.
+
 ### Distinguish ongoing wallet reads from scheduled retries
 
 Wallet status reports cached, coin-neutral read phases and separates a slow operation still running from a scheduled retry. Display diagnostics remain account-scoped and cannot enable spending or change native deadlines.

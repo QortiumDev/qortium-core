@@ -113,6 +113,8 @@ public class MoneroWalletServiceTests {
         final java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>> callback = new java.util.concurrent.atomic.AtomicReference<>();
         final CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
         volatile boolean readThrows, journalFails, nativeFails;
+        volatile boolean blockClose;
+        final CountDownLatch closeEntered = new CountDownLatch(1), releaseClose = new CountDownLatch(1);
         final java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ReadPhase>> phases = new java.util.concurrent.atomic.AtomicReference<>();
         final Fake backend = new Fake("synthetic") {
             @Override public Snapshot read(java.util.function.Consumer<ScanProgress> cb,
@@ -126,6 +128,14 @@ public class MoneroWalletServiceTests {
                 if (readThrows) throw new IllegalStateException("SENSITIVE");
                 return super.read();
             }
+            @Override public void close() {
+                closeEntered.countDown();
+                if (blockClose) {
+                    try { releaseClose.await(); }
+                    catch (InterruptedException e) { throw new IllegalStateException(e); }
+                }
+                super.close();
+            }
         };
         final MoneroWalletService service = new MoneroWalletService((keys,height)->backend,
                 Duration.ofSeconds(90), Duration.ofHours(1), clock::get);
@@ -138,7 +148,7 @@ public class MoneroWalletServiceTests {
             clock.addAndGet(TimeUnit.SECONDS.toNanos(seconds));
             callback.get().accept(new MoneroWalletBackend.ScanProgress(height,target));
         }
-        public void close() { release.countDown(); service.close(); }
+        public void close() { release.countDown(); releaseClose.countDown(); service.close(); }
     }
 
     @Test public void forwardScanProgressOutlivesTotalDeadlineButStillExpiresWhenStalled() throws Exception {
@@ -256,6 +266,36 @@ public class MoneroWalletServiceTests {
             f.release.countDown();
             await(() -> "IDLE".equals(f.service.session().state()));
             assertTrue(f.backend.closed); assertNull(f.service.failure());
+        }
+    }
+
+    @Test public void queuedScanStopWaitsBeyondLifecycleDeadlineWithoutReactivatingOrClosingAlongsideRead() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.advance(91, 10, 100);
+            var stopped = f.service.deactivate(f.session);
+            f.advance(120, 20, 100);
+            assertEquals("CLOSING", f.service.session().state());
+            assertNull(f.service.session().walletId()); assertNull(f.service.failure());
+            assertFalse(f.backend.closed);
+            assertThrows(MoneroWalletService.Rejected.class, () -> f.service.activate(seed(2), 0, stopped.sessionId()));
+            f.release.countDown();
+            await(() -> "IDLE".equals(f.service.session().state()));
+            assertTrue(f.backend.closed); assertNull(f.service.failure());
+        }
+    }
+
+    @Test public void queuedScanStopStillTimesOutIfItsActualNativeCloseStalls() throws Exception {
+        try (var f = new ScanFixture()) {
+            f.blockClose = true;
+            f.service.deactivate(f.session);
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(120));
+            assertEquals("CLOSING", f.service.session().state());
+            f.release.countDown();
+            assertTrue(f.closeEntered.await(3, TimeUnit.SECONDS));
+            f.clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
+            assertEquals("RESTART_REQUIRED", f.service.session().state());
+            assertEquals(MoneroWalletService.Phase.LIFECYCLE, f.service.failure().phase());
+            assertEquals(91000, f.service.failure().elapsedMillis());
         }
     }
 
