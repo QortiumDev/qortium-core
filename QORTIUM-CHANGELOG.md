@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Document wallet read phases and queued-stop behavior
+
+The shared wallet API documents optional cached read diagnostics, their distinction from spending readiness, and why an accepted Stop can wait for an existing scan before closing. This keeps future coin adapters and client messages consistent without changing transport or custody permissions.
+
 ### Finish queued Monero stops without timing out behind scans
 
 Stopping a wallet immediately revokes its active authority and waits for any current native scan to finish on the same worker. The close deadline begins when that queued close actually starts, preventing a slow scan from needlessly requiring a Core restart. Native-close, account-switch, send and journal failure protections remain in place.

@@ -66,3 +66,29 @@ Status exposes the saved public `restoreHeight` and `initializationMode`.
 XMR `preparation` callbacks below the birthday are display-only chain-history
 preparation: they do not advance ordinary scan progress, extend deadlines or make
 spending ready. No restore request clears a send journal or unresolved operation.
+
+## Cached read diagnostics
+
+Adapters can add optional, coin-neutral `read` display metadata to status replies.
+XMR currently returns `{state, phase, retryAt}` through both its original route
+and the generic wallet status route. Older replies can omit it.
+
+- `IDLE`: no current read; phase and retryAt are null.
+- `IN_FLIGHT`: the serialized read is running; retryAt is null.
+- `OVERDUE`: that same read is still running after its inactivity deadline;
+  no concurrent retry starts and retryAt is null.
+- `RETRY_SCHEDULED`: a failed read has returned and retryAt gives its wall-clock
+  retry time in milliseconds; phase is null.
+
+Working phases are fixed labels: CHECK, DAEMON, SYNC, HISTORY, SAVE and BALANCE.
+SYNC includes native downloading, chain preparation and transaction processing;
+it does not identify which sub-operation is slow. These are cached diagnostics,
+never native getters, error text, session authority or spending readiness.
+An old financial snapshot does not establish the current read phase.
+
+An owner-scoped XMR Stop immediately revokes the wallet session and queues close
+behind the current read. If Stop waits behind a scan, its close deadline starts
+when the serialized close begins. A genuinely stuck read can remain CLOSING;
+clients must describe the wait honestly. Actual close, account-switch and send
+deadlines, and fatal native/journal protections still apply. Display phase updates
+never extend a deadline or restore financial availability.
