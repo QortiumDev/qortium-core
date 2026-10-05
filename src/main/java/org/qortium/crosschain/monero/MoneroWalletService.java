@@ -34,7 +34,8 @@ public final class MoneroWalletService implements AutoCloseable {
     public record Status(String sessionId, String walletId, String state, boolean send,
                          Long updatedAt, Progress progress, MoneroWalletBackend.Snapshot wallet,
                          Long readRetryAt, org.qortium.crosschain.WalletServerPool.Status servers, Long restoreHeight, String initializationMode, Progress preparation,
-                         org.qortium.crosschain.WalletReadStatus read) { }
+                         org.qortium.crosschain.WalletReadStatus read,
+                         org.qortium.crosschain.WalletDisplaySnapshot<MoneroWalletBackend.Snapshot> display) { }
 
     /** Display identity is independent of, and never accepted as, session authority. */
     public record Progress(String scanId, long startHeight, long height, long targetHeight, long updatedAt) { }
@@ -70,6 +71,7 @@ public final class MoneroWalletService implements AutoCloseable {
     private boolean failed;
     private boolean closed;
     private MoneroWalletBackend.Snapshot snapshot;
+    private org.qortium.crosschain.WalletDisplaySnapshot<MoneroWalletBackend.Snapshot> display;
 
     public MoneroWalletService(MoneroWalletBackend.Factory factory) {
         this(factory, Duration.ofSeconds(90), Duration.ofSeconds(2));
@@ -118,7 +120,7 @@ public final class MoneroWalletService implements AutoCloseable {
         sessionId = nextSession;
         walletId = keys.walletId;
         restoreHeight = height; requestedStart = start; initializationMode = null;
-        state = "OPENING"; errorCode = null; snapshot = null; updatedAt = 0;
+        state = "OPENING"; errorCode = null; snapshot = null; display = null; updatedAt = 0;
         progress = null; preparation = null; activeRead = null; scanId = UUID.randomUUID().toString();
         clearReadRetry(); servers = null;
         transition = true;
@@ -135,7 +137,7 @@ public final class MoneroWalletService implements AutoCloseable {
         catch (RuntimeException e) { fail(FailureReason.JOURNAL_FAILURE); throw new Rejected(503, "XMR_RESTART_REQUIRED"); }
         queuedScanStop = phase == Phase.SCAN && activeRead != null;
         sessionId = nextSession; walletId = null;
-        state = "CLOSING"; errorCode = null; snapshot = null; updatedAt = 0;
+        state = "CLOSING"; errorCode = null; snapshot = null; display = null; updatedAt = 0;
         progress = null; preparation = null; activeRead = null; scanId = null;
         clearReadRetry(); servers = null;
         transition = true; begin(Phase.LIFECYCLE);
@@ -150,7 +152,7 @@ public final class MoneroWalletService implements AutoCloseable {
         boolean stale = snapshot != null && updatedAt != 0 && monotonic.getAsLong() - updatedNanos > TimeUnit.SECONDS.toNanos(30);
         return new Status(sessionId, walletId, stale && !failed && overdueRead == null ? "STALE" : state, false,
                 updatedAt == 0 ? null : updatedAt, progress, stale || failed ? null : snapshot,
-                readRetryAt, servers, transition ? null : restoreHeight, initializationMode, preparation, readStatus());
+                readRetryAt, servers, transition ? null : restoreHeight, initializationMode, preparation, readStatus(), failed || transition || closed ? null : display);
     }
 
     private org.qortium.crosschain.WalletReadStatus readStatus() {
@@ -238,6 +240,7 @@ public final class MoneroWalletService implements AutoCloseable {
                 lastAdvanceAt = monotonic.getAsLong();
                 publishProgress(owner, read, new MoneroWalletBackend.ScanProgress(next.height(), next.targetHeight()));
                 snapshot = next; updatedAt = System.currentTimeMillis(); updatedNanos = monotonic.getAsLong();
+                display = new org.qortium.crosschain.WalletDisplaySnapshot<>(next, updatedAt);
                 state = next.synced() ? "READY" : "SCANNING";
                 errorCode = null; clearReadRetry();
             }
@@ -246,7 +249,7 @@ public final class MoneroWalletService implements AutoCloseable {
             synchronized (this) {
                 checkDeadline();
                 if (!closed && !failed && !transition && activeRead == read && owner.equals(sessionId)) {
-                    snapshot = null; progress = null; preparation = null; state = "UNAVAILABLE";
+                    snapshot = null; state = "UNAVAILABLE";
                     errorCode = e instanceof MoneroDaemonPool.Unavailable ? "XMR_DAEMON_UNAVAILABLE" : "XMR_WALLET_READ_UNAVAILABLE";
                     readFailures = Math.min(readFailures + 1, 30);
                     long delayMillis = e instanceof MoneroDaemonPool.Unavailable unavailable ? Math.max(2000, unavailable.delayMillis)
@@ -424,7 +427,7 @@ public final class MoneroWalletService implements AutoCloseable {
         if (overdueRead != null) return;
         overdueRead = diagnostic(FailureReason.DEADLINE);
         // Keep the single worker/handle in place. Do not interrupt JNI or close alongside the read.
-        snapshot = null; progress = null; preparation = null; state = "UNAVAILABLE"; errorCode = null;
+        snapshot = null; state = "UNAVAILABLE"; errorCode = null;
         LOGGER.warn("XMR read overdue: elapsedMs={} progressAgeMs={} advances={} readPhase={} readPhaseAgeMs={}",
                 overdueRead.elapsedMillis(), overdueRead.progressAgeMillis(), overdueRead.advances(),
                 overdueRead.readPhase(), overdueRead.readPhaseAgeMillis());

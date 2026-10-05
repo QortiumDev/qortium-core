@@ -35,6 +35,29 @@ public class MoneroWalletServiceTests {
     static MoneroWalletService service(MoneroWalletBackend.Factory factory) {
         return new MoneroWalletService(factory, Duration.ofSeconds(3), Duration.ofHours(1));
     }
+    @Test public void lastDisplaySurvivesOverdueAndFailedReadWithoutGrantingLiveReadiness() throws Exception {
+        var clock = new java.util.concurrent.atomic.AtomicLong(1);
+        Fake backend = new Fake("display") {
+            @Override public Snapshot read() throws Exception {
+                if (reads.incrementAndGet() == 1) return new Snapshot("display", 20, 100, false, "0", "0", List.of());
+                readEntered.countDown(); releaseRead.await(); throw new java.io.IOException();
+            }
+        };
+        backend.readEntered = new CountDownLatch(1); backend.releaseRead = new CountDownLatch(1);
+        try (var service = new MoneroWalletService((keys, height) -> backend, Duration.ofSeconds(90), Duration.ofMillis(10), clock::get)) {
+            var owner = service.activate(seed(1), 0, null);
+            assertTrue(backend.readEntered.await(3, TimeUnit.SECONDS));
+            var observed = service.status(owner.sessionId()).display(); assertNotNull(observed);
+            clock.addAndGet(TimeUnit.SECONDS.toNanos(91));
+            var overdue = service.status(owner.sessionId()); assertNull(overdue.wallet()); assertEquals("UNAVAILABLE", overdue.state());
+            assertSame(observed, overdue.display()); assertEquals(20, overdue.progress().height());
+            backend.releaseRead.countDown(); await(() -> service.status(owner.sessionId()).readRetryAt() != null);
+            assertSame(observed, service.status(owner.sessionId()).display()); assertNull(service.status(owner.sessionId()).wallet());
+            service.deactivate(owner.sessionId());
+            try { service.status(owner.sessionId()); fail(); } catch (MoneroWalletService.Rejected expected) { assertEquals(409, expected.status); }
+        } finally { backend.releaseRead.countDown(); }
+    }
+
     @Test public void progressSurvivesStaleBalancesButNeverSwitchesOwnersOrRefreshesOnPoll() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         var callbacks = new java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<MoneroWalletBackend.ScanProgress>>();
@@ -60,12 +83,15 @@ public class MoneroWalletServiceTests {
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(50, 100));
             var stale = service.status(a.sessionId());
             assertEquals("STALE", stale.state()); assertNull(stale.wallet()); assertEquals(50, stale.progress().height());
+            assertNotNull(stale.display()); assertEquals("old", stale.display().data().address());
+            assertEquals(stale.updatedAt().longValue(), stale.display().updatedAt());
             Thread.sleep(10);
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(50, 100));
             assertEquals(stale.progress(), service.status(a.sessionId()).progress());
             var b = service.activate(seed(2), 0, a.sessionId());
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(90, 100));
             assertNull(service.status(b.sessionId()).progress());
+            assertNull(service.status(b.sessionId()).display());
             release.countDown();
             await(() -> "READY".equals(service.status(b.sessionId()).state()));
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(95, 100));
@@ -101,7 +127,7 @@ public class MoneroWalletServiceTests {
             Thread.sleep(120);
             callback.get().accept(new MoneroWalletBackend.ScanProgress(2, 100));
             assertEquals("UNAVAILABLE", service.status(a.sessionId()).state());
-            assertNull(service.status(a.sessionId()).progress());
+            assertEquals(1, service.status(a.sessionId()).progress().height());
             assertNull(service.failure());
             hung.releaseRead.countDown();
             await(() -> "READY".equals(service.status(a.sessionId()).state()));
@@ -164,7 +190,7 @@ public class MoneroWalletServiceTests {
             assertEquals(271000,failure.elapsedMillis()); assertEquals(91000,failure.progressAgeMillis());
             assertEquals(3,failure.advances());
             f.advance(1,40,100);
-            assertSame(failure,f.service.overdueRead()); assertNull(f.service.failure()); assertNull(f.service.status(f.session).progress());
+            assertSame(failure,f.service.overdueRead()); assertNull(f.service.failure()); assertNotNull(f.service.status(f.session).progress());
         }
     }
 

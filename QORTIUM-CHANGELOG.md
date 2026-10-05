@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Preserve last observed wallet data during slow reads
+
+Keep owner-fenced, timestamped display data and scan counts through recoverable XMR read delays while live balances and send readiness remain unavailable. Clear display on wallet changes and Stop; no native getters or watchdog extensions are added.
+
 ### Document wallet read phases and queued-stop behavior
 
 The shared wallet API documents optional cached read diagnostics, their distinction from spending readiness, and why an accepted Stop can wait for an existing scan before closing. This keeps future coin adapters and client messages consistent without changing transport or custody permissions.
