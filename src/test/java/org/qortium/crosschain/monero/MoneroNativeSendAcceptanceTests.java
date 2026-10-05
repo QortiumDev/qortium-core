@@ -44,6 +44,14 @@ public class MoneroNativeSendAcceptanceTests {
         }
         return session;
     }
+    static void awaitReady(MoneroWalletService service, String session) throws Exception {
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+        while (!"READY".equals(service.status(session).state())) {
+            if (System.nanoTime() > until || "RESTART_REQUIRED".equals(service.status(session).state()))
+                throw new AssertionError("native scan-start activation: " + service.status(session).state());
+            Thread.sleep(100);
+        }
+    }
     static class FaultFactory implements MoneroWalletBackend.Factory {
         final MoneroWalletBackend.Factory delegate;
         final String fault;
@@ -74,6 +82,45 @@ public class MoneroNativeSendAcceptanceTests {
     static MoneroWalletService service(MoneroWalletBackend.Factory factory) {
         return new MoneroWalletService(factory, Duration.ofSeconds(60), Duration.ofMillis(200));
     }
+    @Test public void knownNewAtTipSeesFutureReceiptsAndResumeRetainsSelectedBoundary() throws Exception {
+        Path root = temp.getRoot().toPath(); long count = rpc(daemon, "get_info", Map.of()).get("height").asLong();
+        String session;
+        long chosen;
+        try (var service = service(MoneroJniWallet.factory(root, daemon, true))) {
+            session = service.activate(seed(1), org.qortium.crosschain.WalletScanStart.newAtTip(), null).sessionId();
+            awaitReady(service, session);
+            chosen = service.status(session).restoreHeight(); assertEquals(count - 1, chosen);
+            assertEquals(address(1), service.status(session).wallet().address());
+            rpc(daemon, "generateblocks", Map.of("wallet_address", address(1), "amount_of_blocks", 65));
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            while (new java.math.BigInteger(service.status(session).wallet().balanceAtomic()).signum() == 0) {
+                if (System.nanoTime() > until) fail("Future receipt not scanned"); Thread.sleep(100);
+            }
+        }
+        try (var service = service(MoneroJniWallet.factory(root, daemon, true))) {
+            String next = service.activate(seed(1), org.qortium.crosschain.WalletScanStart.resume(), null).sessionId();
+            awaitReady(service, next);
+            assertEquals(chosen, service.status(next).restoreHeight().longValue());
+            assertTrue(new java.math.BigInteger(service.status(next).wallet().balanceAtomic()).signum() > 0);
+            assertEquals(address(1), service.status(next).wallet().address());
+        }
+    }
+    @Test public void legacyMarkerCannotLieAboutNativeRestoreHeightOnResume() throws Exception {
+        Path root = temp.getRoot().toPath();
+        rpc(daemon, "generateblocks", Map.of("wallet_address", address(0), "amount_of_blocks", 20));
+        String id;
+        try (var keys = new MoneroKeys(seed(1)); var factory = MoneroJniWallet.factory(root, daemon, true)) {
+            id = keys.walletId;
+            try (var wallet = factory.open(keys, 10)) { assertEquals(10, wallet.restoreHeight()); }
+        }
+        Path dir = root.resolve("xmr-regtest-v1").resolve(id);
+        Files.delete(dir.resolve("scan-start-v1"));
+        Path identity = dir.resolve("identity"); Files.writeString(identity, Files.readString(identity).replace("restoreHeight=10", "restoreHeight=0"));
+        try (var keys = new MoneroKeys(seed(1)); var factory = MoneroJniWallet.factory(root, daemon, true)) {
+            assertThrows(IllegalStateException.class, () -> factory.open(keys, org.qortium.crosschain.WalletScanStart.resume()));
+        }
+    }
+
     @Test public void exactNativePreparationLostResponseRecoveryConfirmationAndRecipientBalance() throws Exception {
         rpc(daemon, "generateblocks", Map.of("wallet_address", address(0), "amount_of_blocks", 160));
         Path root = temp.getRoot().toPath(); FaultFactory factory = new FaultFactory(root, daemon, "lost");

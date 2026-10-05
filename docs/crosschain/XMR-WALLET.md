@@ -238,3 +238,6 @@ Core or owner wallet:
 mvn -Dmaven.gitcommitid.nativegit=true -DskipTests package
 python3 tools/xmr/run-slow-read-acceptance.py --monerod /path/to/verified/monerod
 ```
+
+Scan-start choices and preserved legacy restore heights are specified in
+[`../custody-wallet-api.md`](../custody-wallet-api.md#scan-start-policy-version-1).

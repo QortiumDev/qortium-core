@@ -33,7 +33,8 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 	public enum InitializationMode {
 		CONSERVATIVE,
-		NEW_AT_CURRENT_TIP
+		NEW_AT_CURRENT_TIP,
+		RESTORE_FROM_HEIGHT
 	}
 
 	enum EndpointSelectionOutcome {
@@ -59,6 +60,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 	private final boolean unifiedWallet;
 	private final PirateUnifiedWalletStorage unifiedStorage;
 	private final InitializationMode requestedInitializationMode;
+	private Integer requestedRestoreHeight;
 	private volatile String initializationFailureMessage;
 	private ZcashFamilyLightClient.ValidatedServerSelection appliedServerSelection;
 	private volatile boolean freshSynchronizationRequired;
@@ -106,6 +108,31 @@ public class PirateWallet extends ZcashFamilyWallet {
 		if (initializeImmediately)
 			this.setReady(this.initializeWallet());
 	}
+
+	public PirateWallet(byte[] entropyBytes, InitializationMode mode, Integer height) throws IOException {
+        this(PirateChain.WALLET_CONFIG, entropyBytes, mode, height, true);
+    }
+    PirateWallet(ZcashFamilyWalletConfig config, byte[] entropyBytes, InitializationMode mode, Integer height, boolean initialize) throws IOException {
+        this(config, entropyBytes, false, false, mode);
+        if (mode != InitializationMode.RESTORE_FROM_HEIGHT || height == null || height < 1 || height > 500_000_000)
+            throw new IllegalArgumentException("Invalid ARRR restore height");
+        this.requestedRestoreHeight = height;
+        if (initialize) this.setReady(this.initializeWallet());
+    }
+
+    public Integer recordedScanHeight() {
+        var saved = this.unifiedStorage.read();
+        return saved.isCorrupt() ? null : saved.getInitializationBirthdayHeight();
+    }
+    public String recordedScanMode() {
+        var saved = this.unifiedStorage.read();
+        return saved.isCorrupt() || saved.getInitializationMode() == null ? null : saved.getInitializationMode().name();
+    }
+    public boolean isRestoredAtHeight(int height) {
+        var saved = this.unifiedStorage.read();
+        return !saved.isCorrupt() && saved.getInitializationMode() == InitializationMode.RESTORE_FROM_HEIGHT
+                && java.util.Objects.equals(saved.getInitializationBirthdayHeight(), height);
+    }
 
 	@Override
 	protected boolean initialize(ZcashFamilyNativeAdapter nativeAdapter) {
@@ -261,7 +288,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 	}
 
 	private boolean requiresCurrentTipForInitialization() {
-		if (this.requestedInitializationMode != InitializationMode.NEW_AT_CURRENT_TIP
+		if (this.requestedInitializationMode == InitializationMode.CONSERVATIVE
 				|| this.unifiedStorage == null || this.unifiedStorage.isTransientWallet())
 			return false;
 		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
@@ -276,14 +303,20 @@ public class PirateWallet extends ZcashFamilyWallet {
 		if (snapshot.isCorrupt())
 			throw new IOException("Pirate wallet initialization state is corrupt");
 
-		if (snapshot.getInitializationMode() == InitializationMode.NEW_AT_CURRENT_TIP) {
+		if (snapshot.getInitializationMode() != null) {
+            if (this.requestedInitializationMode == InitializationMode.NEW_AT_CURRENT_TIP
+                    && snapshot.getInitializationMode() != InitializationMode.NEW_AT_CURRENT_TIP)
+                throw new IOException("Known-new initialization requires an unused wallet namespace");
+            if (this.requestedInitializationMode == InitializationMode.RESTORE_FROM_HEIGHT
+                    && !this.isRestoredAtHeight(this.requestedRestoreHeight))
+                throw new IOException("ARRR restore height does not match saved initialization");
 			Integer birthday = snapshot.getInitializationBirthdayHeight();
 			if (birthday == null || birthday < 1)
 				throw new IOException("Pirate wallet initialization birthday is missing");
 			return birthday;
 		}
 
-		if (this.requestedInitializationMode != InitializationMode.NEW_AT_CURRENT_TIP)
+		if (this.requestedInitializationMode == InitializationMode.CONSERVATIVE)
 			return this.config.getDefaultBirthday();
 
 		if (this.unifiedStorage.hasNativeRegistry() || this.unifiedStorage.hasLegacyWallet()
@@ -292,9 +325,12 @@ public class PirateWallet extends ZcashFamilyWallet {
 		if (currentHeight == null || currentHeight < 1)
 			throw new IOException("A validated Pirate Chain tip is required for known-new initialization");
 
-		this.unifiedStorage.write(PirateUnifiedWalletStorage.State.MIGRATING, false, null, null, null,
-				InitializationMode.NEW_AT_CURRENT_TIP, currentHeight);
-		return currentHeight;
+        int selected = this.requestedInitializationMode == InitializationMode.RESTORE_FROM_HEIGHT
+                ? this.requestedRestoreHeight : currentHeight;
+        if (selected < 1 || selected > currentHeight) throw new IOException("ARRR restore height exceeds chain tip");
+        this.unifiedStorage.write(PirateUnifiedWalletStorage.State.MIGRATING, false, null, null, null,
+                this.requestedInitializationMode, selected);
+        return selected;
 	}
 
 	public boolean isKnownNewInitialization() {
@@ -304,7 +340,7 @@ public class PirateWallet extends ZcashFamilyWallet {
 
 	public int getInitializationBirthdayHeight() throws IOException {
 		PirateUnifiedWalletStorage.Snapshot snapshot = this.unifiedStorage.read();
-		if (snapshot.isCorrupt() || snapshot.getInitializationMode() != InitializationMode.NEW_AT_CURRENT_TIP
+		if (snapshot.isCorrupt() || snapshot.getInitializationMode() == null
 				|| snapshot.getInitializationBirthdayHeight() == null)
 			throw new IOException("Known-new wallet initialization is not recorded");
 		return snapshot.getInitializationBirthdayHeight();

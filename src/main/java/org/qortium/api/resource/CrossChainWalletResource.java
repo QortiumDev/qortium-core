@@ -167,7 +167,7 @@ public class CrossChainWalletResource {
         var resource = new CrossChainPirateChainResource(); resource.request = request;
         return new Adapter() {
             public Set<String> reads() { return Set.of("session", "send-capabilities", "send/status"); }
-            public Set<String> writes() { return Set.of("session", "activate", "start", "stop", "status", "address", "balance", "transactions", "send", "send/readiness", "send/lookup"); }
+            public Set<String> writes() { return Set.of("session", "activate", "initialize", "start", "stop", "status", "address", "balance", "transactions", "send", "send/readiness", "send/lookup"); }
             public Object read(String op, String key, String session, String id) {
                 return switch (op) {
                     case "session" -> resource.walletSessionContract(key);
@@ -178,6 +178,7 @@ public class CrossChainWalletResource {
             }
             public Object write(String op, String key, String session, String id, InputStream body) throws IOException {
                 return switch (op) {
+                    case "initialize" -> resource.initializeKnownNewWallet(key, initializationBody(body));
                     case "start" -> resource.startPirateChainSingleton(key);
                     case "stop" -> resource.stopPirateChainSingleton(key);
                     case "session", "activate" -> {
@@ -213,6 +214,30 @@ public class CrossChainWalletResource {
             return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
         } catch (java.nio.charset.CharacterCodingException e) { throw malformed(); }
+        finally { java.util.Arrays.fill(bytes, (byte) 0); }
+    }
+    static org.qortium.api.model.crosschain.PirateChainWalletInitializationRequest initializationBody(InputStream input) throws IOException {
+        byte[] bytes = bounded(input);
+        try {
+            var node = JSON.readTree(bytes);
+            if (node == null || !node.isObject()) throw malformed();
+            var value = new org.qortium.api.model.crosschain.PirateChainWalletInitializationRequest();
+            for (var fields = node.fields(); fields.hasNext();) {
+                var f = fields.next();
+                if (f.getKey().equals("restoreHeight")) {
+                    if (!f.getValue().isIntegralNumber() || !f.getValue().canConvertToInt()) throw malformed();
+                    value.restoreHeight = f.getValue().intValue(); continue;
+                }
+                if (!f.getValue().isTextual()) throw malformed();
+                switch (f.getKey()) {
+                    case "entropy58" -> value.entropy58 = f.getValue().textValue();
+                    case "initializationMode" -> value.initializationMode = f.getValue().textValue();
+                    case "expectedRevision" -> value.expectedRevision = f.getValue().textValue();
+                    default -> throw malformed();
+                }
+            }
+            return value;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) { throw malformed(); }
         finally { java.util.Arrays.fill(bytes, (byte) 0); }
     }
     private static CrossChainPirateChainResource.WalletSessionRequest sessionBody(InputStream input) throws IOException {

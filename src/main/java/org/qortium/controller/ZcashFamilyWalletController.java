@@ -320,6 +320,16 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	}
 
 	/** Optional safe, coin-specific detail for a failed wallet initialization. */
+    protected W createWallet(byte[] entropy, boolean nullSeed, org.qortium.crosschain.WalletScanStart start) throws IOException {
+        if (start.mode() == org.qortium.crosschain.WalletScanStart.Mode.RESTORE_FROM_HEIGHT)
+            throw new IOException("Explicit restore height unsupported");
+        return createWallet(entropy, nullSeed, start.mode() == org.qortium.crosschain.WalletScanStart.Mode.NEW_AT_CURRENT_TIP);
+    }
+    protected boolean matchesInitialization(W wallet, org.qortium.crosschain.WalletScanStart start) {
+        return start.mode() == org.qortium.crosschain.WalletScanStart.Mode.RESUME
+                || (start.mode() == org.qortium.crosschain.WalletScanStart.Mode.NEW_AT_CURRENT_TIP && isCurrentTipInitializedWallet(wallet));
+    }
+
 	protected String getWalletInitializationFailure(W wallet) {
 		return null;
 	}
@@ -777,11 +787,11 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 
 	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
 			ZcashFamilyNativeAdapter nativeAdapter) {
-		return this.initWithEntropy58(entropy58, isNullSeedWallet, false, nativeAdapter);
+		return this.initWithEntropy58(entropy58, isNullSeedWallet, org.qortium.crosschain.WalletScanStart.resume(), nativeAdapter);
 	}
 
 	private boolean initWithEntropy58(String entropy58, boolean isNullSeedWallet,
-			boolean initializeAtCurrentTip, ZcashFamilyNativeAdapter nativeAdapter) {
+			org.qortium.crosschain.WalletScanStart scanStart, ZcashFamilyNativeAdapter nativeAdapter) {
 		this.initializationFailure = null;
 		if (!explicitWalletSelection()) {
 			try { requireWalletOwner(entropy58, isNullSeedWallet); }
@@ -803,7 +813,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		W previousWallet = null;
 		if (this.currentWallet != null) {
 			if (this.currentWallet.matchesWallet(entropyBytes, isNullSeedWallet)) {
-				if (initializeAtCurrentTip && !this.isCurrentTipInitializedWallet(this.currentWallet)) {
+				if (!matchesInitialization(this.currentWallet, scanStart)) {
 					this.initializationFailure = "Known-new initialization requires an unused wallet namespace";
 					return false;
 				}
@@ -827,7 +837,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 		}
 
 		try {
-			this.currentWallet = this.createWallet(entropyBytes, isNullSeedWallet, initializeAtCurrentTip);
+			this.currentWallet = this.createWallet(entropyBytes, isNullSeedWallet, scanStart);
 			if (!this.currentWallet.isReady()) {
 				this.initializationFailure = this.getWalletInitializationFailure(this.currentWallet);
 				this.currentWallet = null;
@@ -856,6 +866,9 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 	 * The coin implementation owns durable intent and exact-retry semantics.
 	 */
 	protected final W initializeWalletAtCurrentTip(String entropy58, Runnable checkRevision) throws ForeignBlockchainException {
+        return initializeWalletScanStart(entropy58, org.qortium.crosschain.WalletScanStart.newAtTip(), checkRevision);
+    }
+    protected final W initializeWalletScanStart(String entropy58, org.qortium.crosschain.WalletScanStart start, Runnable checkRevision) throws ForeignBlockchainException {
 		if (!acceptsWalletOperations(this.lifecycleState))
 			throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
 		if (!isValidEntropy(entropy58))
@@ -867,7 +880,7 @@ public abstract class ZcashFamilyWalletController<W extends ZcashFamilyWallet> e
 				throw new ForeignBlockchainException(this.config.getDisplayName() + " wallet controller isn't running");
 			boolean initialized;
 			this.selectingExplicitly = true;
-			try { initialized = this.initWithEntropy58(entropy58, false, true, nativeAdapter); }
+			try { initialized = this.initWithEntropy58(entropy58, false, start, nativeAdapter); }
 			finally { this.selectingExplicitly = false; }
 			if (!initialized) {
 				if (WALLET_BUSY_REASON.equals(this.initializationFailure))

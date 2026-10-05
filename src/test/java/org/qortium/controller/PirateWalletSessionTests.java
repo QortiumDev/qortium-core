@@ -61,12 +61,12 @@ public class PirateWalletSessionTests {
 
     @Test public void transientNullWalletDoesNotTakeCustodyOwnership() throws Exception {
         String a=entropy(7); var active=PirateChainWalletController.activateWallet(a,PirateChainWalletController.walletSession(a).revision);
-        Method init=ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",String.class,boolean.class,boolean.class,ZcashFamilyNativeAdapter.class);
+        Method init=ZcashFamilyWalletController.class.getDeclaredMethod("initWithEntropy58",String.class,boolean.class,org.qortium.crosschain.WalletScanStart.class,ZcashFamilyNativeAdapter.class);
         init.setAccessible(true);
-        assertTrue((Boolean)init.invoke(controller,entropy(0),true,false,controller.adapter));
+        assertTrue((Boolean)init.invoke(controller,entropy(0),true,org.qortium.crosschain.WalletScanStart.resume(),controller.adapter));
         assertEquals("SELF",PirateChainWalletController.walletSession(a).relation);
         assertEquals(active.revision,PirateChainWalletController.walletSession(a).revision);
-        assertTrue((Boolean)init.invoke(controller,a,false,false,controller.adapter));
+        assertTrue((Boolean)init.invoke(controller,a,false,org.qortium.crosschain.WalletScanStart.resume(),controller.adapter));
         assertEquals(active.revision,PirateChainWalletController.walletSession(a).revision);
     }
 

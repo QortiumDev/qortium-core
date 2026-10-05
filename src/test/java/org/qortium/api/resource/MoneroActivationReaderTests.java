@@ -29,4 +29,15 @@ public class MoneroActivationReaderTests {
                 "[]", "null", "{}", " ".repeat(2049) + VALID, VALID.substring(0, VALID.length()-1)
         }) assertThrows(IOException.class, () -> read(bad));
     }
+    @Test public void explicitPoliciesHaveStrictExclusiveHeights() throws Exception {
+        String noHeight = VALID.replace(",\"restoreHeight\":0", "");
+        for (String mode : new String[]{"RESUME", "NEW_AT_CURRENT_TIP"}) {
+            try (var a = read(noHeight.replace("}", ",\"scanMode\":\"" + mode + "\"}"))) {
+                assertEquals(mode, a.scanStart().mode().name()); assertNull(a.scanStart().height());
+            }
+            assertThrows(IOException.class, () -> read(VALID.replace("}", ",\"scanMode\":\"" + mode + "\"}")));
+        }
+        assertThrows(IOException.class, () -> read(noHeight.replace("}", ",\"scanMode\":\"RESTORE_FROM_HEIGHT\"}")));
+    }
+
 }

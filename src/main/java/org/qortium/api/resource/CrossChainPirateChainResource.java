@@ -139,6 +139,8 @@ public class CrossChainPirateChainResource {
     @javax.xml.bind.annotation.XmlAccessorType(javax.xml.bind.annotation.XmlAccessType.FIELD)
     public static class WalletSessionContract {
         public String contract = PirateChainWalletController.SESSION_CONTRACT;
+        public int scanStartProtocolVersion = 1;
+        public java.util.List<String> scanModes = java.util.List.of("RESUME", "RESTORE_FROM_HEIGHT", "NEW_AT_CURRENT_TIP");
     }
 
     @GET
@@ -177,7 +179,7 @@ public class CrossChainPirateChainResource {
 	@POST
 	@Path("/initialize")
 	@Operation(
-			summary = "Initialize an explicitly known-new Pirate Chain wallet at the current tip",
+			summary = "Initialize Pirate Chain wallet scanning at an explicit height or current tip",
 			description = "Local-operator endpoint: requires the API key, a loopback remote address, and the "
 					+ "Unified Pirate wallet. NEW_AT_CURRENT_TIP is a deliberate assertion that the deterministic "
 					+ "wallet has no historical receipts. Core persists the exact validated tip before native wallet "
@@ -200,9 +202,15 @@ public class CrossChainPirateChainResource {
 	@SecurityRequirement(name = "apiKey")
 	@javax.ws.rs.Consumes(MediaType.APPLICATION_JSON)
 	@javax.ws.rs.Produces(MediaType.APPLICATION_JSON)
-	public PirateChainWalletInitializationResult initializeKnownNewWallet(
-			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
-			PirateChainWalletInitializationRequest initializationRequest) {
+	public PirateChainWalletInitializationResult initializeWallet(
+            @HeaderParam(Security.API_KEY_HEADER) String apiKey, java.io.InputStream body) throws java.io.IOException {
+        Security.checkApiCallAllowed(request);
+        Security.requireLoopbackRequest(request);
+        return initializeKnownNewWallet(apiKey, CrossChainWalletResource.initializationBody(body));
+    }
+
+    public PirateChainWalletInitializationResult initializeKnownNewWallet(
+            String apiKey, PirateChainWalletInitializationRequest initializationRequest) {
 		Security.checkApiCallAllowed(request);
 		Security.requireLoopbackRequest(request);
 
@@ -217,14 +225,11 @@ public class CrossChainPirateChainResource {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
 					"Known-new initialization requires the Unified Pirate wallet");
 
-		PirateChainWalletController controller = PirateChainWalletController.getInstance();
-		if (controller == null)
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
-					"Pirate Chain wallet is disabled");
-
 		try {
 			PirateChainWalletController.KnownNewInitialization result =
-					PirateChainWalletController.initializeKnownNewWallet(initializationRequest.entropy58, initializationRequest.expectedRevision);
+					"RESTORE_FROM_HEIGHT".equals(initializationRequest.initializationMode)
+                            ? PirateChainWalletController.initializeWalletFromHeight(initializationRequest.entropy58, initializationRequest.expectedRevision, initializationRequest.restoreHeight)
+                            : PirateChainWalletController.initializeKnownNewWallet(initializationRequest.entropy58, initializationRequest.expectedRevision);
 			return new PirateChainWalletInitializationResult(initializationRequest.initializationMode,
 					result.birthdayHeight());
 		} catch (ForeignBlockchainException e) {
@@ -246,9 +251,12 @@ public class CrossChainPirateChainResource {
 		}
 		if (entropyBytes == null || entropyBytes.length != 32)
 			return "Invalid entropy bytes";
-		if (!PirateWallet.InitializationMode.NEW_AT_CURRENT_TIP.name()
-				.equals(initializationRequest.initializationMode))
-			return "Initialization mode must be NEW_AT_CURRENT_TIP";
+		if ("RESTORE_FROM_HEIGHT".equals(initializationRequest.initializationMode)) {
+            if (initializationRequest.restoreHeight == null || initializationRequest.restoreHeight < 1
+                    || initializationRequest.restoreHeight > 500_000_000 || initializationRequest.expectedRevision == null)
+                return "Restore requires a height and wallet revision";
+        } else if (!"NEW_AT_CURRENT_TIP".equals(initializationRequest.initializationMode)
+                || initializationRequest.restoreHeight != null) return "Initialization mode must be NEW_AT_CURRENT_TIP or RESTORE_FROM_HEIGHT";
 
 		return null;
 	}

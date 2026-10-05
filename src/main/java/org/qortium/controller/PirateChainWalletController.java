@@ -16,11 +16,15 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
 
 	private static volatile PirateChainWalletController instance;
     public static final String SESSION_CONTRACT = "qortium-arrr-wallet-session-v1";
+    private record ScanStartSnapshot(String identity, Integer height, String mode) { }
+    private volatile ScanStartSnapshot scanStart;
     private static ArrrWalletOwnership ownership = new ArrrWalletOwnership();
     @javax.xml.bind.annotation.XmlAccessorType(javax.xml.bind.annotation.XmlAccessType.FIELD)
     public static class WalletSession {
         public String contract, revision, relation, lifecycle, address;
         public boolean enabled;
+        public Integer restoreHeight;
+        public String initializationMode;
         public WalletSession() { }
         public WalletSession(String contract, String revision, boolean enabled, String relation, String lifecycle, String address) {
             this.contract = contract; this.revision = revision; this.enabled = enabled;
@@ -53,6 +57,7 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
     protected void walletSelected(PirateWallet wallet) {
         if (wallet.isNullSeedWallet()) return;
         ownership.selected(wallet.getWalletIdentityHash(), null);
+        scanStart = new ScanStartSnapshot(wallet.getWalletIdentityHash(), wallet.recordedScanHeight(), wallet.recordedScanMode());
         try { ownership.selected(wallet.getWalletIdentityHash(), wallet.getWalletAddress()); }
         catch (RuntimeException e) { /* Address failure must not undo established ownership. */ }
     }
@@ -61,12 +66,17 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
         String requested = identity(entropy58);
         ArrrWalletOwnership.State state = ownership.snapshot();
         PirateChainWalletController current = instance;
-        return new WalletSession(SESSION_CONTRACT, state.revision(),
+        WalletSession result = new WalletSession(SESSION_CONTRACT, state.revision(),
                 Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE),
                 state.identity() == null ? "NONE" : state.identity().equals(requested) ? "SELF" : "OTHER",
                 org.qortium.crosschain.ZcashFamilyNativeCoordinator.getInstance().isDegraded() || (current != null && current.requiresCoreRestart())
                         ? "DEGRADED" : current == null ? "NEW" : current.getLifecycleState().name(),
                 ownership.address(requested));
+        var start = current == null ? null : current.scanStart;
+        if (start != null && requested.equals(state.identity()) && requested.equals(start.identity())) {
+            result.restoreHeight = start.height(); result.initializationMode = start.mode();
+        }
+        return result;
     }
 
     public static synchronized boolean stopWallet() {
@@ -137,6 +147,17 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
 		return new PirateWallet(entropyBytes, isNullSeedWallet, initializationMode);
 	}
 
+    @Override protected PirateWallet createWallet(byte[] entropy, boolean nullSeed, org.qortium.crosschain.WalletScanStart start) throws IOException {
+        if (start.mode() == org.qortium.crosschain.WalletScanStart.Mode.RESTORE_FROM_HEIGHT)
+            return new PirateWallet(entropy, PirateWallet.InitializationMode.RESTORE_FROM_HEIGHT, Math.toIntExact(start.height()));
+        return super.createWallet(entropy, nullSeed, start);
+    }
+    @Override protected boolean matchesInitialization(PirateWallet wallet, org.qortium.crosschain.WalletScanStart start) {
+        if (start.mode() == org.qortium.crosschain.WalletScanStart.Mode.RESTORE_FROM_HEIGHT)
+            return wallet.isRestoredAtHeight(Math.toIntExact(start.height()));
+        return super.matchesInitialization(wallet, start);
+    }
+
 	@Override
 	protected boolean isCurrentTipInitializedWallet(PirateWallet wallet) {
 		return wallet.isKnownNewInitialization();
@@ -159,22 +180,31 @@ public class PirateChainWalletController extends ZcashFamilyWalletController<Pir
 		}
 	}
 
+    public static synchronized KnownNewInitialization initializeWalletFromHeight(String entropy58, String expectedRevision, int height) throws ForeignBlockchainException {
+        if (height < 1 || height > 500_000_000) throw new ForeignBlockchainException("Invalid ARRR restore height");
+        ownership.requireRevision(expectedRevision);
+        if (!startInstance()) throw new ForeignBlockchainException("ARRR controller could not start");
+        var current = getInstance();
+        return current.initializeKnownNewWalletChecked(entropy58, ownership.snapshot().revision(), height);
+    }
+
     public static synchronized KnownNewInitialization initializeKnownNewWallet(String entropy58, String expectedRevision) throws ForeignBlockchainException {
         String requested = identity(entropy58);
         ArrrWalletOwnership.State before = ownership.snapshot();
         if (expectedRevision != null) ownership.requireRevision(expectedRevision);
         else if (before.identity() != null && !before.identity().equals(requested))
             throw new ForeignBlockchainException("ARRR_SESSION_CHANGED: explicit revision required to replace another wallet");
+        if (!startInstance()) throw new ForeignBlockchainException("ARRR controller could not start");
         PirateChainWalletController current = getInstance();
-        if (current == null) throw new ForeignBlockchainException("Pirate Chain wallet is disabled");
-        return current.initializeKnownNewWalletChecked(entropy58, before.revision());
+        return current.initializeKnownNewWalletChecked(entropy58, ownership.snapshot().revision(), null);
     }
 
-    private KnownNewInitialization initializeKnownNewWalletChecked(String entropy58, String revision) throws ForeignBlockchainException {
+    private KnownNewInitialization initializeKnownNewWalletChecked(String entropy58, String revision, Integer height) throws ForeignBlockchainException {
 		if (!this.config.isUnifiedWalletEnabled())
 			throw new ForeignBlockchainException("Known-new initialization requires the Unified Pirate wallet");
 
-		PirateWallet wallet = this.initializeWalletAtCurrentTip(entropy58, () -> {
+        final var policy = height == null ? org.qortium.crosschain.WalletScanStart.newAtTip() : org.qortium.crosschain.WalletScanStart.restore(height);
+        PirateWallet wallet = this.initializeWalletScanStart(entropy58, policy, () -> {
             try { ownership.requireRevision(revision); }
             catch (ForeignBlockchainException e) { throw new IllegalStateException(e.getMessage(), e); }
         });

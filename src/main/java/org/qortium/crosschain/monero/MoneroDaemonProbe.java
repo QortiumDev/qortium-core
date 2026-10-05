@@ -15,7 +15,7 @@ final class MoneroDaemonProbe {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3))
             .followRedirects(HttpClient.Redirect.NEVER).build();
-    static void check(String endpoint, long minimumHeight, boolean regtest) throws Exception {
+    static long check(String endpoint, long minimumHeight, boolean regtest) throws Exception {
         MoneroJniWallet.validateDaemon(endpoint);
         var request = HttpRequest.newBuilder(URI.create(endpoint.replaceAll("/$", "") + "/json_rpc"))
                 .timeout(Duration.ofSeconds(5)).header("Content-Type", "application/json")
@@ -41,6 +41,7 @@ final class MoneroDaemonProbe {
                 || info.path("height").asLong() <= 0 || info.path("height").asLong() > 500_000_000L
                 || info.path("height").asLong() < minimumHeight)
             throw new IllegalStateException("XMR daemon unavailable");
+        return info.path("height").asLong();
     }
     private static final class LimitedBody implements HttpResponse.BodySubscriber<byte[]> {
         private final CompletableFuture<byte[]> result = new CompletableFuture<>();
