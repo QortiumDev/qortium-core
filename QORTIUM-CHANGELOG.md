@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### Retain wallet scan timing across page reloads
+
+Keep a bounded history of backend scan observations for ARRR and XMR so Wallet can recover a rough estimate after reloading. Cached reads do not create observations or extend native deadlines. The history is display-only, belongs to the current wallet and work range, and is cleared on owner, recovery, Stop and fatal failure boundaries.
+
 ### Preserve last observed wallet data during slow reads
 
 Keep owner-fenced, timestamped display data and scan counts through recoverable XMR read delays while live balances and send readiness remain unavailable. Clear display on wallet changes and Stop; no native getters or watchdog extensions are added.

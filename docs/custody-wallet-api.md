@@ -107,3 +107,20 @@ read diagnostics alongside it. Changing owners or stopping Core custody clears
 the Core display snapshot; a client may keep previously approved selected-account
 data in memory for a stopped page, but must clear it on lock, account/node change
 or revoked read permission. No native getter is called by these status reads.
+
+### Optional scan timing history
+
+ARRR structured status and XMR cached status can include `scanHistory` with
+`identity` and an ordered `samples` array of `{ at, blocks, total }`. `at` is the
+backend observation time in epoch milliseconds; counts describe the current
+restore-relative XMR scan or native ARRR synchronization range, not a reinterpretation
+of absolute chain height. This metadata is optional and provides display estimates
+only. It cannot establish financial freshness, wallet ownership or send readiness.
+
+Core retains at most 92 observations in a rolling 30-minute window, using
+20-second anchors plus the latest tail. Ordinary cached reads do not add samples.
+History resets on owner/range/clock changes and observation gaps above 15 minutes;
+Stop, fatal failure and recovery boundaries omit old history. Consumers must verify the
+existing wallet owner first, validate the bounded history against current progress,
+and treat a retained estimate as approximate rather than a running countdown.
+Older versions that omit this field remain compatible.

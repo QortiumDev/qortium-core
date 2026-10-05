@@ -48,6 +48,26 @@ public class ZcashFamilyWalletControllerLifecycleTests {
 		PirateChainWalletController.resetForTesting();
 	}
 
+    @Test public void scanHistoryIsWalletBoundAndNeverUpdatedByCachedQueries() throws Exception {
+        TestController controller = new TestController();
+        TestWallet a = new TestWallet(filledEntropy(1));
+        setControllerField(controller, "currentWallet", a);
+        var observed = controller.cacheCurrentWalletStatus(ZcashFamilyWalletController.WalletSyncStatus.synchronizing("scan", 10L, 100L)
+                .withSnapshot(10L, 100L, "0", "0", a.getWalletIdentityHash()));
+        assertTrue(observed.getScanHistory() != null);
+        assertEquals(a.getWalletIdentityHash(), observed.getScanHistory().identity());
+        assertSame(observed.getScanHistory(), observed.asStale().getScanHistory());
+        assertSame(observed.getScanHistory(), observed.withRecoveryMarker(null).getScanHistory());
+        assertNull(observed.withRecoveryMarker("RECOVERING").getScanHistory());
+        TestWallet b = new TestWallet(filledEntropy(2));
+        setControllerField(controller, "currentWallet", b);
+        var changed = controller.cacheCurrentWalletStatus(ZcashFamilyWalletController.WalletSyncStatus.loading("Opening")
+                .withSnapshot(null, null, null, null, b.getWalletIdentityHash()));
+        assertNull(changed.getScanHistory());
+        var degraded = controller.cacheCurrentWalletStatus(ZcashFamilyWalletController.WalletSyncStatus.degraded("restart"));
+        assertNull(degraded.getScanHistory());
+    }
+
 	@Test
 	public void testControllerStartsOnceAndTerminatesCleanly() throws Exception {
 		TestController controller = new TestController();

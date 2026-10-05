@@ -76,6 +76,7 @@ public class MoneroWalletServiceTests {
             assertTrue(entered.await(3, TimeUnit.SECONDS));
             var before = service.status(a.sessionId()).progress();
             assertNotNull(before); assertEquals(10, before.startHeight());
+            assertEquals(before.scanId(), service.status(a.sessionId()).scanHistory().identity());
             assertNotEquals(a.sessionId(), before.scanId());
             // Age only the completed financial snapshot, while the native read remains in flight.
             var age = MoneroWalletService.class.getDeclaredField("updatedNanos"); age.setAccessible(true);
@@ -88,10 +89,14 @@ public class MoneroWalletServiceTests {
             Thread.sleep(10);
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(50, 100));
             assertEquals(stale.progress(), service.status(a.sessionId()).progress());
+            var history = service.status(a.sessionId()).scanHistory();
+            assertEquals(history.samples().get(history.samples().size()-1).at(), service.status(a.sessionId()).scanHistory().samples().get(history.samples().size()-1).at());
+            assertFalse(service.status(a.sessionId()).send());
             var b = service.activate(seed(2), 0, a.sessionId());
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(90, 100));
             assertNull(service.status(b.sessionId()).progress());
             assertNull(service.status(b.sessionId()).display());
+            assertNull(service.status(b.sessionId()).scanHistory());
             release.countDown();
             await(() -> "READY".equals(service.status(b.sessionId()).state()));
             callbacks.get().accept(new MoneroWalletBackend.ScanProgress(95, 100));
