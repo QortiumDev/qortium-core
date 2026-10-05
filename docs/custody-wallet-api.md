@@ -92,3 +92,18 @@ when the serialized close begins. A genuinely stuck read can remain CLOSING;
 clients must describe the wait honestly. Actual close, account-switch and send
 deadlines, and fatal native/journal protections still apply. Display phase updates
 never extend a deadline or restore financial availability.
+
+## Last observed display data
+
+XMR status can include optional `display: { data, updatedAt }`. `data` has the
+same wallet fields as the ordinary snapshot, but is the last successfully
+completed observation. It remains owner/session fenced and can be present
+while the live `wallet` is null. Scan progress is likewise retained through
+recoverable errors and overdue reads without refreshing its timestamp.
+
+Display data never establishes spendability, financial freshness, custody or
+send/trade readiness. Consumers label its observation time and keep current
+read diagnostics alongside it. Changing owners or stopping Core custody clears
+the Core display snapshot; a client may keep previously approved selected-account
+data in memory for a stopped page, but must clear it on lock, account/node change
+or revoked read permission. No native getter is called by these status reads.
