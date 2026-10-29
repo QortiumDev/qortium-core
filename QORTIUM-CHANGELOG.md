@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### Update Monero JNI with verified 0.8.62 native library
+
+2026-10-29
+
+Update the experimental Monero wallet library and its approved Linux native hash
+together for the current TLS, restore-height and wallet recovery fixes. Record
+the evaluated artifact and source revisions, and check the bundled native hash
+in ordinary CI so future dependency updates cannot silently break wallet loading.
+Align the offline slow-read check and its documentation with the existing behavior
+that retains display progress while hiding live balances during an overdue read.
+Keep the existing wallet consent, send controls and supported-platform boundary.
+
 ### build(deps): bump grpc.version from 1.84.0 to 1.85.1
 
 2026-10-29
