@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump com.google.guava:guava from 33.7.1-jre to 33.7.2-jre
+
+2026-10-29
+
+Update Guava to 33.7.2-jre to avoid excessive memory allocation when reading certain serialized collections. Keep the rest of the dependency set unchanged.
+
 ### Retire the removed Regxa Previewnet seed
 
 2026-10-29
