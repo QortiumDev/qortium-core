@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump google/osv-scanner-action from 2.6.0 to 2.7.0
+
+2026-10-29
+
+Update the vulnerability scanner and its report generator together to version 2.7.0 in both pull-request and scheduled scans.
+
 ### build(deps): bump com.google.guava:guava from 33.7.1-jre to 33.7.2-jre
 
 2026-10-29
