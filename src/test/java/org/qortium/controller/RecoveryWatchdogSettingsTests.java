@@ -54,7 +54,6 @@ public class RecoveryWatchdogSettingsTests extends Common {
 	public void testShippedProfilesDeclareSafePolicy() throws Exception {
 		for (String profile : new String[] {
 				"preview/settings-preview.json",
-				"preview/settings-preview-seed.json",
 				"preview/settings-preview-seed-netcup.json"
 		}) {
 			Map<String, Object> settings = readSettings(Path.of(profile));

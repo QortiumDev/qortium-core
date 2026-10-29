@@ -83,7 +83,7 @@ reset instructions, generated runtime files, and multi-node testnet notes.
 ## Preview Network
 
 The shared Qortium preview network ("Previewnet") is a live public alpha/demo
-network with seed nodes at `146.103.42.59` and `185.207.104.78`. It is separate
+network with the managed Netcup seed at `185.207.104.78` and other configured peers. It is separate
 from the local single-node testnet and uses normal multi-node rules. Consensus
 features activate at scheduled block heights, so testers must run the latest
 release to stay on the network - an older build will fork off at the next

@@ -6,12 +6,10 @@ $HeadlessMode = "auto"
 $RuntimeDirOption = ""
 
 function Show-Usage {
-    Write-Host "Usage: preview\start.bat [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui] [--runtime-dir=PATH]"
+    Write-Host "Usage: preview\start.bat [--seed-netcup|--participant] [--headless|--gui] [--runtime-dir=PATH]"
     Write-Host ""
     Write-Host "Starts a Qortium preview-network node."
-    Write-Host "  --participant  connect to the preview seeds at 146.103.42.59 and 185.207.104.78 (default)"
-    Write-Host "  --seed         use the Regxa seed settings"
-    Write-Host "  --seed-regxa   advertise the Regxa seed IP 146.103.42.59"
+    Write-Host "  --participant  connect to the configured Previewnet peers (default)"
     Write-Host "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
     Write-Host "  --headless     force Java headless mode"
     Write-Host "  --gui          force Java GUI mode"
@@ -22,8 +20,8 @@ function Show-Usage {
 
 foreach ($Arg in $args) {
     switch ($Arg) {
-        "--seed" { $Mode = "seed-regxa"; continue }
-        "--seed-regxa" { $Mode = "seed-regxa"; continue }
+        "--seed" { Write-Host "The Regxa seed profile is retired. Use --participant, or --seed-netcup only on Netcup."; exit 2 }
+        "--seed-regxa" { Write-Host "The Regxa seed profile is retired. Use --participant, or --seed-netcup only on Netcup."; exit 2 }
         "--seed-netcup" { $Mode = "seed-netcup"; continue }
         "--participant" { $Mode = "participant"; continue }
         "--headless" { $HeadlessMode = "true"; continue }
@@ -215,10 +213,7 @@ $RunPid = Join-Path $RuntimeDir "run.pid"
 $AppLog = Join-Path $RuntimeDir "qortium.log"
 $Log4jConfig = Join-Path $ScriptDir "log4j2.properties"
 
-if ($Mode -eq "seed-regxa") {
-    $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed.json"
-    $SettingsLocal = Join-Path $RuntimeDir "settings-preview-seed-local.json"
-} elseif ($Mode -eq "seed-netcup") {
+if ($Mode -eq "seed-netcup") {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed-netcup.json"
     $SettingsLocal = Join-Path $RuntimeDir "settings-preview-seed-netcup-local.json"
 } else {

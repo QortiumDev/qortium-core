@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump google/osv-scanner-action from 2.6.0 to 2.7.0
+
+2026-10-29
+
+Update the vulnerability scanner and its report generator together to version 2.7.0 in both pull-request and scheduled scans.
+
+### build(deps): bump com.google.guava:guava from 33.7.1-jre to 33.7.2-jre
+
+2026-10-29
+
+Update Guava to 33.7.2-jre to avoid excessive memory allocation when reading certain serialized collections. Keep the rest of the dependency set unchanged.
+
+### Retire the removed Regxa Previewnet seed
+
+2026-10-29
+
+Remove the deleted Regxa VPS from shipped chain and data bootstrap lists, retire its seed profile and launcher flags, and stop packaging it. Existing customized peer lists remain operator-owned; untouched defaults follow the updated profiles. Netcup and the other configured peers remain available, while historical release fixtures retain the old values for upgrade coverage.
+
 ### Retain wallet scan timing across page reloads
 
 Keep a bounded history of backend scan observations for ARRR and XMR so Wallet can recover a rough estimate after reloading. Cached reads do not create observations or extend native deadlines. The history is display-only, belongs to the current wallet and work range, and is cleared on owner, recovery, Stop and fatal failure boundaries.

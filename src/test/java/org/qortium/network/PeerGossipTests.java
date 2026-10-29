@@ -26,7 +26,7 @@ public class PeerGossipTests {
 		PeerData peerData = new PeerData(PeerAddress.fromString("80.241.221.139:24892"), 100L, "test");
 
 		assertFalse(Network.markRecentlyConnectedPeerData(peerData, 200L,
-				Collections.singletonList(PeerAddress.fromString("146.103.42.59:24892"))));
+				Collections.singletonList(PeerAddress.fromString("198.51.100.20:24892"))));
 		assertEquals(null, peerData.getLastAttempted());
 		assertEquals(null, peerData.getLastConnected());
 	}

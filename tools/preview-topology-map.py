@@ -2,13 +2,12 @@
 """
 Collect Previewnet peer topology from the operator nodes and render an SVG map.
 
-The default map queries the five operator nodes:
+The default map queries the four operator nodes:
 
   L local desktop
   Q Qubes/Kicksecure VM
   M Mac mini
   N Netcup seed
-  R Regxa seed
 
 It writes a JSON snapshot plus an SVG diagram. If ImageMagick is available, it
 also exports a PNG unless --no-png is supplied.
@@ -92,14 +91,6 @@ NODE_CONFIGS = [
         "seed",
         public_host="185.207.104.78",
         ssh=("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "qortium-netcup"),
-    ),
-    NodeConfig(
-        "regxa",
-        "R",
-        "Regxa",
-        "seed",
-        public_host="146.103.42.59",
-        ssh=("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "qortium-regxa"),
     ),
 ]
 

@@ -12,12 +12,10 @@ HEADLESS_MODE="auto"
 RUNTIME_DIR_OPTION=""
 
 usage() {
-	echo "Usage: ./preview/start.sh [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui] [--runtime-dir=PATH]"
+	echo "Usage: ./preview/start.sh [--seed-netcup|--participant] [--headless|--gui] [--runtime-dir=PATH]"
 	echo
 	echo "Starts a Qortium preview-network node."
-	echo "  --participant  connect to the preview seeds at 146.103.42.59 and 185.207.104.78 (default)"
-	echo "  --seed         use the Regxa seed settings"
-	echo "  --seed-regxa   advertise the Regxa seed IP 146.103.42.59"
+	echo "  --participant  connect to the configured Previewnet peers (default)"
 	echo "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
 	echo "  --headless     force Java headless mode"
 	echo "  --gui          force Java GUI mode"
@@ -34,7 +32,8 @@ usage() {
 for arg in "$@"; do
 	case "${arg}" in
 		--seed|--seed-regxa)
-			MODE="seed-regxa"
+			echo "The Regxa seed profile is retired. Use --participant, or --seed-netcup only on Netcup." >&2
+			exit 2
 			;;
 		--seed-netcup)
 			MODE="seed-netcup"
@@ -257,10 +256,6 @@ APP_LOG="${RUNTIME_DIR}/qortium.log"
 LOG4J_CONFIG="${SCRIPT_DIR}/log4j2.properties"
 
 case "${MODE}" in
-	seed-regxa)
-		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed.json"
-		SETTINGS_LOCAL="${RUNTIME_DIR}/settings-preview-seed-local.json"
-		;;
 	seed-netcup)
 		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed-netcup.json"
 		SETTINGS_LOCAL="${RUNTIME_DIR}/settings-preview-seed-netcup-local.json"
