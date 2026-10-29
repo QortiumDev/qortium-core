@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump org.apache.commons:commons-lang3 from 3.20.0 to 3.21.0
+
+2026-10-29
+
+Update Commons Lang to 3.21.0 while preserving the existing application interfaces and other dependency versions.
+
 ### build(deps): bump github/codeql-action from 4.38.2 to 4.39.1
 
 2026-10-29
