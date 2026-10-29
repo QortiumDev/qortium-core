@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump github/codeql-action from 4.38.2 to 4.39.1
+
+2026-10-29
+
+Update the CodeQL report uploader to 4.39.1 in both vulnerability scan workflows. This maintains build reporting without changing Core runtime behavior.
+
 ### build(deps): bump google/osv-scanner-action from 2.6.0 to 2.7.0
 
 2026-10-29
