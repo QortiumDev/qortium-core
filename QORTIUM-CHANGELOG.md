@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump jetty.version from 12.1.13 to 12.1.14
+
+2026-10-29
+
+Update the Jetty server, client and related modules together to 12.1.14 for the latest fixes in the current HTTP server series.
+
 ### build(deps): bump org.apache.commons:commons-lang3 from 3.20.0 to 3.21.0
 
 2026-10-29
