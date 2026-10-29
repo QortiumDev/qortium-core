@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### build(deps): bump grpc.version from 1.84.0 to 1.85.1
+
+2026-10-29
+
+Update the gRPC modules together to 1.85.1 for transport and deserialization fixes, preserving the existing Netty, protobuf, Guava and TLS provider pins.
+
 ### build(deps): bump jetty.version from 12.1.13 to 12.1.14
 
 2026-10-29
