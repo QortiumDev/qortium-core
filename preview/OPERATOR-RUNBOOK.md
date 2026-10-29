@@ -6,7 +6,7 @@ clear recovery, not long-term chain permanence.
 
 ## Seed Hosts
 
-- Regxa seed: `146.103.42.59`
+- Regxa was retired in October 2026; its old profile/launcher flags are disabled.
 - Netcup seed: `185.207.104.78`
 
 Both seeds use the preview port range:
@@ -53,12 +53,6 @@ Stop the current preview node:
 
 ```sh
 ./preview/stop.sh
-```
-
-Start the Regxa seed:
-
-```sh
-./preview/start.sh --seed-regxa
 ```
 
 Start the Netcup seed:
@@ -159,8 +153,8 @@ comes from the local API whitelist and supplies any required API key.
 Verify both seeds from outside the VPS network:
 
 ```sh
-curl -fsS http://146.103.42.59:24891/admin/status
-curl -fsS http://146.103.42.59:24891/peers/known
+curl -fsS http://185.207.104.78:24891/admin/status
+curl -fsS http://185.207.104.78:24891/peers/known
 curl -fsS http://185.207.104.78:24891/admin/status
 curl -fsS http://185.207.104.78:24891/peers/known
 ```
@@ -168,7 +162,7 @@ curl -fsS http://185.207.104.78:24891/peers/known
 Verify a normal restricted endpoint stays blocked:
 
 ```sh
-curl -o /dev/null -sS -w "%{http_code}\n" http://146.103.42.59:24891/admin/settings
+curl -o /dev/null -sS -w "%{http_code}\n" http://185.207.104.78:24891/admin/settings
 curl -o /dev/null -sS -w "%{http_code}\n" http://185.207.104.78:24891/admin/settings
 ```
 
@@ -213,7 +207,7 @@ curl -X PATCH \
   --data '{"autoUpdateMode":"INSTALL"}' \
   http://127.0.0.1:24891/admin/settings
 ./preview/stop.sh
-./preview/start.sh --seed-regxa
+./preview/start.sh --seed-netcup
 ```
 
 The preview launcher merges the local settings file with the tracked seed
@@ -316,10 +310,9 @@ restarted.
 2. Confirm the current repository commit and preview genesis/settings are the
    intended public reset version.
 3. Run `./preview/reset.sh` on each seed.
-4. Start Regxa with `./preview/start.sh --seed-regxa`.
-5. Start Netcup with `./preview/start.sh --seed-netcup`.
-6. Install the correct minting key on each seed.
-7. Verify both seeds report the same block height and can see each other.
+4. Start Netcup with `./preview/start.sh --seed-netcup`; other hosts use participant mode.
+5. Install the correct minting key on each intended minting node.
+6. Verify the remaining nodes agree on block height and have working peers.
 
 For normal jar updates that do not change consensus or genesis files, do not
 reset the chain.

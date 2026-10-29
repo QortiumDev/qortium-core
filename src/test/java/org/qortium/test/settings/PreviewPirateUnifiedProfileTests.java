@@ -63,7 +63,6 @@ public class PreviewPirateUnifiedProfileTests {
 	@Test
 	public void testSeedProfilesKeepPirateWalletDisabled() throws Exception {
 		for (String profile : new String[] {
-				"preview/settings-preview-seed.json",
 				"preview/settings-preview-seed-netcup.json"
 		}) {
 			Map<String, Object> settings = readSettings(Path.of(profile));
@@ -88,7 +87,6 @@ public class PreviewPirateUnifiedProfileTests {
 
 		for (String profile : new String[] {
 				"preview/settings-preview.json",
-				"preview/settings-preview-seed.json",
 				"preview/settings-preview-seed-netcup.json"
 		}) {
 			Map<String, Object> rawSettings = readSettings(Path.of(profile));
@@ -109,7 +107,7 @@ public class PreviewPirateUnifiedProfileTests {
 	public void testSeedProfilesRetainCurrentAndSupportedPreviousBundle() throws Exception {
 		// Current v1.2.5 first, followed by retained v1.2.4/v1.2.3 interim pins and
 		// the v1.2.1 pin shipped in Core v1.8.0. No retention window has expired.
-		for (String profile : new String[] {"preview/settings-preview-seed.json", "preview/settings-preview-seed-netcup.json"}) {
+		for (String profile : new String[] {"preview/settings-preview-seed-netcup.json"}) {
 			Map<String, Object> settings = readSettings(Path.of(profile));
 			assertEquals(profile, List.of(PIRATE_UNIFIED_V1_2_5_QDN_SIGNATURE,
 					"3KpqyUPGvNkR6AbRJNTihobK1pA8LJJVJWA9jMMPPDCbgTf8FdV4QT6xYMAYFVByrX7itb8YGZEML8FLxkXJD4Cv",

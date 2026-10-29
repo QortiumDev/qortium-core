@@ -5,7 +5,7 @@ separate from the disposable local `testnet/` profile:
 
 - `testnet/` is a single-node local lab that can mint blocks by itself.
 - `preview/` is a normal multi-node preview network that connects to the
-  public seeds at `146.103.42.59` and `185.207.104.78`.
+  managed Netcup seed at `185.207.104.78` plus the other configured peers.
 
 The preview network intentionally does not use `singleNodeTestnet`. That keeps
 preview behavior closer to the normal node rules while Qortium is still changing
@@ -109,13 +109,9 @@ the preview commands.
 Seed operators should also read [OPERATOR-RUNBOOK.md](OPERATOR-RUNBOOK.md)
 before updating, restarting, or resetting public seed nodes.
 
-On the Regxa seed VPS, use the Regxa seed profile:
-
-```sh
-./preview/start.sh --seed-regxa
-```
-
-The shorter `--seed` option is kept as an alias for `--seed-regxa`.
+Regxa was retired in October 2026. Its profile and the old `--seed` /
+`--seed-regxa` launcher options are retired; these options fail before touching
+runtime state. Use the default participant mode on ordinary hosts.
 
 On the Netcup seed VPS, use the Netcup seed profile:
 
@@ -123,9 +119,9 @@ On the Netcup seed VPS, use the Netcup seed profile:
 ./preview/start.sh --seed-netcup
 ```
 
-Each seed profile advertises its own public IP and lists the other seed as an
-initial peer. They use the same fixed preview genesis and ports as participant
-nodes.
+The Netcup profile advertises Netcup's own public IP and lists the remaining
+configured peers. Use it only on that host. It uses the same fixed preview
+genesis and ports as participant nodes.
 
 ## Ports
 
@@ -266,7 +262,6 @@ Preview genesis authorizes these initial minting accounts:
 
 | Role | Account Address | Account Public Key | Minting Public Key | Initial Native Balance |
 | --- | --- | --- | --- | --- |
-| seed-regxa | `QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3` | `HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq` | `6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov` | `0` |
 | seed-netcup | `QeMe15hDFKkyubnjYYB6FSkSojNpjub5Bq` | `EAv9tuEizRrTwYZtXobfo49sgRDrHvieRrmnGq1PwzQ7` | `7cJcjBD9Vpmwugf8jMhnYJB8yFHhrBZGBzJDV8WnSYNz` | `0` |
 | local | `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` | `BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY` | `6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV` | `0` |
 
