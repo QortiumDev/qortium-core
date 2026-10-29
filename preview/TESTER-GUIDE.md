@@ -203,14 +203,14 @@ matching preview port.
 The public seed status endpoints are:
 
 ```text
-http://146.103.42.59:24891/admin/status
+http://185.207.104.78:24891/admin/status
 http://185.207.104.78:24891/admin/status
 ```
 
 The public seed known-peer endpoints are:
 
 ```text
-http://146.103.42.59:24891/peers/known
+http://185.207.104.78:24891/peers/known
 http://185.207.104.78:24891/peers/known
 ```
 

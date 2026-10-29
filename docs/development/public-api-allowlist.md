@@ -125,7 +125,6 @@ MemoryPoW endpoints remain excluded.
 
 | Config file | Used by | GET reads | Chat send | Poll builders | QDN publish |
 |---|---|---|---|---|---|
-| `settings-preview-seed.json` | seed VPS (apiRestricted) | ✅ | ✅ | ✅ | ✅ unsigned builders only |
 | `settings-preview-seed-netcup.json` | seed VPS (netcup) | ✅ | ✅ | ✅ | ✅ unsigned builders only |
 | `settings-preview.json` | **default user node** (Home desktop launches this — `qortium-home/electron/core-manager.ts:465`) | ✅ | ✅ | ✅ | ✅ unsigned builders only |
 | `settings-preview-local.template.json` | ignored runtime snapshot for local preview nodes | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-07-15** | ✅ **locally repaired 2026-06-29** |

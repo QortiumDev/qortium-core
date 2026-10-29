@@ -104,7 +104,6 @@ preview_files=(
 	"OPERATOR-RUNBOOK.md"
 	"log4j2.properties"
 	"settings-preview.json"
-	"settings-preview-seed.json"
 	"settings-preview-seed-netcup.json"
 	"start.sh"
 	"status.sh"

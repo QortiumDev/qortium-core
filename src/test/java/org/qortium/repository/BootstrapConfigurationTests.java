@@ -77,7 +77,6 @@ public class BootstrapConfigurationTests {
 	public void testManagedProfilesExplicitlyRetireHostedBootstrap() throws Exception {
 		for (String profile : List.of(
 				"preview/settings-preview.json",
-				"preview/settings-preview-seed.json",
 				"preview/settings-preview-seed-netcup.json",
 				"testnet/settings-test.json")) {
 			Map<String, Object> settings = MAPPER.readValue(Files.readAllBytes(Path.of(profile)), MAP_TYPE);

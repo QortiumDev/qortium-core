@@ -494,13 +494,13 @@ public class NetworkDataI2PTests extends Common {
 	public void testSeedInitialDataPeersSeedsClearnetWhenIPAllowed() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
 		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers",
-				new String[] { "185.207.104.78:24894", "146.103.42.59:24894" }, true);
+				new String[] { "185.207.104.78:24894", "198.51.100.20:24894" }, true);
 
 		NetworkData.getInstance().seedInitialDataPeers();
 
 		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
 		assertTrue(containsAddress(knownPeers, "185.207.104.78:24894"));
-		assertTrue(containsAddress(knownPeers, "146.103.42.59:24894"));
+		assertTrue(containsAddress(knownPeers, "198.51.100.20:24894"));
 	}
 
 	@Test

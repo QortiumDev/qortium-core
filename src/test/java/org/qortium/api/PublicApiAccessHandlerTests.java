@@ -199,14 +199,12 @@ public class PublicApiAccessHandlerTests extends Common {
 	@Test
 	public void testPreviewSettingsExposePublicReadsAndKeylessBuildsOnly() throws Exception {
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview.json"));
-		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed.json"));
 		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed-netcup.json"));
 	}
 
 	@Test
 	public void testPreviewSettingsUseMainnetChainPeerRotationContract() throws Exception {
 		assertPreviewChainPeerRotationContract(Path.of("preview/settings-preview.json"));
-		assertPreviewChainPeerRotationContract(Path.of("preview/settings-preview-seed.json"));
 		assertPreviewChainPeerRotationContract(Path.of("preview/settings-preview-seed-netcup.json"));
 	}
 
@@ -216,14 +214,14 @@ public class PublicApiAccessHandlerTests extends Common {
 		JSONArray initialPeers = settingsJson.getJSONArray("initialPeers");
 		JSONArray initialDataPeers = settingsJson.getJSONArray("initialDataPeers");
 
-		assertTrue(jsonArrayContains(initialPeers, "146.103.42.59:24892"));
+		assertFalse(jsonArrayContains(initialPeers, "146.103.42.59:24892"));
 		assertTrue(jsonArrayContains(initialPeers, "185.207.104.78:24892"));
-		assertTrue(jsonArrayContains(initialPeers, "3u25ana5e5hvriqqiuh6fcetxezsqm7la276ljtjxaoxt767n4hq.b32.i2p"));
+		assertFalse(jsonArrayContains(initialPeers, "3u25ana5e5hvriqqiuh6fcetxezsqm7la276ljtjxaoxt767n4hq.b32.i2p"));
 		assertTrue(jsonArrayContains(initialPeers, "zqcackxkhjzfbbc6daigc73zqhzdpgwua3mjc7xgn3hwjed5z3ca.b32.i2p"));
 		assertTrue(jsonArrayContains(initialPeers, "q25q6gbn2x67x5sos5fgcr5td2xzazzkibovavthha6dpjg3cc6a.b32.i2p"));
-		assertTrue(jsonArrayContains(initialDataPeers, "146.103.42.59:24894"));
+		assertFalse(jsonArrayContains(initialDataPeers, "146.103.42.59:24894"));
 		assertTrue(jsonArrayContains(initialDataPeers, "185.207.104.78:24894"));
-		assertTrue(jsonArrayContains(initialDataPeers, "hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p"));
+		assertFalse(jsonArrayContains(initialDataPeers, "hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p"));
 		assertTrue(jsonArrayContains(initialDataPeers, "qhk6g5hl7vqf5fmlgj6knbajtiszotaf2w26fwjapsr75kbz7fma.b32.i2p"));
 		assertTrue(jsonArrayContains(initialDataPeers, "ksbtmej35uvkhhedslrk6zekvjijxaegwnueavcm4ws5zzsadhrq.b32.i2p"));
 	}

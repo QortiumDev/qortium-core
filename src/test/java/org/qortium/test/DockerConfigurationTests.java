@@ -22,7 +22,6 @@ public class DockerConfigurationTests {
 	private static final Path PREVIEW_SETTINGS = Path.of("preview/settings-preview.json");
 	private static final Path[] PREVIEW_PROFILES = new Path[] {
 			PREVIEW_SETTINGS,
-			Path.of("preview/settings-preview-seed.json"),
 			Path.of("preview/settings-preview-seed-netcup.json")
 	};
 

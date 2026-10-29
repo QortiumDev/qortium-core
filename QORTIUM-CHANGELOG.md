@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### Retire the removed Regxa Previewnet seed
+
+2026-10-29
+
+Remove the deleted Regxa VPS from shipped chain and data bootstrap lists, retire its seed profile and launcher flags, and stop packaging it. Existing customized peer lists remain operator-owned; untouched defaults follow the updated profiles. Netcup and the other configured peers remain available, while historical release fixtures retain the old values for upgrade coverage.
+
 ### Retain wallet scan timing across page reloads
 
 Keep a bounded history of backend scan observations for ARRR and XMR so Wallet can recover a rough estimate after reloading. Cached reads do not create observations or extend native deadlines. The history is display-only, belongs to the current wallet and work range, and is cleared on owner, recovery, Stop and fatal failure boundaries.
