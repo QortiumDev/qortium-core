@@ -176,7 +176,7 @@ After packaging, exercise the shaded dependency/native combination without a
 daemon or wallet files:
 
 ```
-java --class-path target/qortium-1.8.1.jar tools/xmr/PackagedSmoke.java
+java --class-path target/qortium-1.8.2.jar tools/xmr/PackagedSmoke.java
 ```
 
 The isolated acceptance driver validates the official daemon's SHA256, launches
