@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### Prepare Core 1.8.2 release
+
+2026-10-29
+
+Prepare the next prerelease with the retired Regxa bootstrap defaults removed,
+the reviewed dependency updates, and the verified Monero native library. Make
+the offline Monero acceptance helper select the JAR for the current project
+version so release checks cannot accidentally use a leftover older build.
+
 ### Update Monero JNI with verified 0.8.62 native library
 
 2026-10-29

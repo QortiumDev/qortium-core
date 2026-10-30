@@ -2,6 +2,7 @@
 """Isolated offline daemon/JNI slow-read recovery acceptance. Never connects to owner Core or wallet."""
 from pathlib import Path
 import tempfile,subprocess,hashlib,json,urllib.request,socket,time,threading,http.server,os
+from xml.etree import ElementTree
 os.umask(0o077)
 repo=Path(__file__).resolve().parents[2]
 out=Path(__file__).resolve().parent
@@ -9,7 +10,9 @@ import argparse
 parser=argparse.ArgumentParser()
 parser.add_argument('--monerod',type=Path,required=True)
 args=parser.parse_args()
-jar=repo/'target/qortium-1.8.1.jar'
+version=ElementTree.parse(repo/'pom.xml').findtext('{http://maven.apache.org/POM/4.0.0}version')
+if not version: raise RuntimeError('Core project version is missing')
+jar=repo/'target'/f'qortium-{version}.jar'
 if not jar.is_file(): raise RuntimeError('Package Core before running this acceptance')
 daemon=args.monerod.resolve()
 if hashlib.sha256(daemon.read_bytes()).hexdigest()!='9b3b2676ea7868c1a7186feea9569c2cf7683ae79d2fcc769c846a91c810a1f5':
