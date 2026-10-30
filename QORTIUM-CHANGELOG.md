@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### Keep reward bundle identity tests away from epoch deadlines
+
+2026-10-30
+
+Run the online-account bundle tests near the middle of an epoch so real nonce
+computation has time to finish even when CI starts at a ten-minute boundary.
+Restore the test clock offset afterward and retain the identity migration,
+signature, nonce and membership assertions without changing production timing.
+
+### Expand Previewnet bootstrap peers with verified I2P participants
+
+2026-10-30
+
+Add three chain and two data I2P participants to the participant and Netcup
+profiles so new nodes have more starting points beyond the existing IP seeds.
+Select them from topology history and verify outbound handshakes and block
+downloads with a fresh isolated node. Preserve the existing peers and operator
+topology choices, and cover untouched-list upgrades alongside custom data lists.
+
 ### Prepare Core 1.8.2 release
 
 2026-10-29
