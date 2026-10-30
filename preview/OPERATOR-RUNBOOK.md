@@ -9,7 +9,7 @@ clear recovery, not long-term chain permanence.
 - Regxa was retired in October 2026; its old profile/launcher flags are disabled.
 - Netcup seed: `185.207.104.78`
 
-Both seeds use the preview port range:
+The Previewnet port range is:
 
 - API: `24891`
 - P2P: `24892`
@@ -21,6 +21,29 @@ I2P fallback uses a local SAM bridge, not an exposed public port:
 - i2pd console, when enabled locally: `http://127.0.0.1:7070`
 
 Do not expose SAM publicly.
+
+## Bootstrap Peer Diversity
+
+The participant and Netcup profiles retain the established IP peers and add
+three chain I2P destinations (`clorygc...`, `bzrkoya...`, `4h4nbjr...`) and two
+separate data destinations (`ht6i2xm...`, `jcearip...`). The full addresses are
+in `settings-preview.json` and `settings-preview-seed-netcup.json`.
+
+These participants were selected from published `DATABASE/Network/Network`
+topology history spanning June through October 2026, separating completed
+connections from advertised gossip. A disposable Core 1.8.2 with an empty
+database, fresh I2P identities, disabled wallets and only these initial peers
+completed all five outbound handshakes and downloaded blocks from genesis on
+2026-10-30. No additional long-lived IP candidate passed the standard-port
+reachability checks from Netcup.
+
+These are bootstrap participants, not additional managed VPS hosts or uptime
+guarantees. Chain and data destinations are separate identities; address counts
+do not establish distinct operators. Gossip can introduce additional peers
+after startup. Keep generic settings free of network-specific seeds and preserve
+operator-customized peer arrays during upgrades; an untouched profile list
+advances with the new template. Home also injects the added participants into
+its managed installation template while retaining custom entries.
 
 ## Update And Build
 

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### Expand Previewnet bootstrap peers with verified I2P participants
+
+2026-10-30
+
+Add three chain and two data I2P participants to the participant and Netcup
+profiles so new nodes have more starting points beyond the existing IP seeds.
+Select them from topology history and verify outbound handshakes and block
+downloads with a fresh isolated node. Preserve the existing peers and operator
+topology choices, and cover untouched-list upgrades alongside custom data lists.
+
 ### Prepare Core 1.8.2 release
 
 2026-10-29

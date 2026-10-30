@@ -338,6 +338,27 @@ public class MergeSettingsTests {
 		assertEquals(MAPPER.readValue("{\"BTC\": true}", Object.class), merged.get("wallets"));
 	}
 
+	@Test
+	public void testPeerExpansionUpdatesUntouchedListAndPreservesOperatorTopology() throws Exception {
+		String previous = "{\"initialPeers\":[\"seed.example:24892\"],\"initialDataPeers\":[\"seed.example:24894\"]}";
+		writeJson(snapshotPath, previous);
+		writeJson(settingsPath,
+				"{\"initialPeers\":[\"seed.example:24892\"],\"initialDataPeers\":[\"private.example:24894\"]}");
+		writeJson(templatePath,
+				"{\"initialPeers\":[\"seed.example:24892\",\"new.example:24892\"],"
+				+ "\"initialDataPeers\":[\"seed.example:24894\",\"new.example:24894\"]}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		assertEquals(List.of("seed.example:24892", "new.example:24892"), readJson(settingsPath).get("initialPeers"));
+		assertEquals(List.of("private.example:24894"), readJson(settingsPath).get("initialDataPeers"));
+		assertTrue(result.preserved.contains("initialDataPeers"));
+		assertFalse(result.preserved.contains("initialPeers"));
+		assertEquals(readJson(templatePath), readJson(snapshotPath));
+		MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+		assertEquals(List.of("private.example:24894"), readJson(settingsPath).get("initialDataPeers"));
+	}
+
 	// --- Superseded-value rule (P-CORE-59): pirateChainWalletQdnSignature ---
 
 	private static final String CURRENT_PIRATE_PIN =
