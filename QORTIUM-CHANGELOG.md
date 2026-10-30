@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### Keep reward bundle identity tests away from epoch deadlines
+
+2026-10-30
+
+Run the online-account bundle tests near the middle of an epoch so real nonce
+computation has time to finish even when CI starts at a ten-minute boundary.
+Restore the test clock offset afterward and retain the identity migration,
+signature, nonce and membership assertions without changing production timing.
+
 ### Expand Previewnet bootstrap peers with verified I2P participants
 
 2026-10-30

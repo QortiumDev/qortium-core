@@ -27,6 +27,7 @@ import org.qortium.test.common.Common;
 import org.qortium.test.common.TestChainBootstrapUtils;
 import org.qortium.transform.OnlineAccountBundleTransformer;
 import org.qortium.settings.Settings;
+import org.qortium.utils.NTP;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -58,6 +59,12 @@ public class OnlineAccountBundleManagerTests extends Common {
 	@Before
 	public void beforeTest() throws Exception {
 		Common.useDefaultSettings();
+		// Identity/bundle assertions need time to compute real nonces. The production
+		// deadline is the next ten-minute epoch; a wall-clock boundary can leave
+		// legacy accounts ready but the third bundle member unfinished.
+		long epoch = OnlineAccountsManager.getCurrentOnlineAccountTimestamp();
+		long epochMiddle = epoch + OnlineAccountsManager.getOnlineTimestampModulus() / 2;
+		NTP.setFixedOffset(epochMiddle - System.currentTimeMillis());
 		this.manager = OnlineAccountsManager.getInstance();
 		this.manager.removeAllOnlineAccounts();
 		this.testRoot = Files.createTempDirectory("online-account-bundle-manager");
@@ -103,6 +110,7 @@ public class OnlineAccountBundleManagerTests extends Common {
 
 	@After
 	public void afterTest() throws Exception {
+		NTP.setFixedOffset(Settings.getInstance().getTestNtpOffset());
 		if (this.manager != null)
 			this.manager.removeAllOnlineAccounts();
 		if (this.testRoot != null)
