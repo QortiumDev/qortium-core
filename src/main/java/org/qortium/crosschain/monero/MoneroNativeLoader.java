@@ -10,7 +10,7 @@ import java.util.logging.Logger;
 
 /** Load only the evaluated native artifact, before MoneroWalletFull's permissive static loader. */
 public final class MoneroNativeLoader {
-    public static final String SHA256 = "d971fda9d8ff04cdc1d1afa2084b35991cd7bfdc78edd2ffd0c38f1f1ef11715";
+    public static final String SHA256 = "ed75b469c739ea8a869ab7a9dc5e81e8d5c0f4a98e347e3f2d01b0897dc86bcb";
     private static boolean loaded;
     private static final Logger WALLET_LOGGER = Logger.getLogger("monero.wallet.MoneroWalletFull");
     private MoneroNativeLoader() { }

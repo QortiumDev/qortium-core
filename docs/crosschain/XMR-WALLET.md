@@ -13,20 +13,25 @@ binding. Java queues cannot isolate a fatal native fault.
 
 ## Artifact and platform boundary
 
-Evaluated dependency: `io.github.woodser:monero-java:0.8.58`.
+Evaluated dependency: `io.github.woodser:monero-java:0.8.62`.
 
-- JAR SHA256: `3ce3768fb108938ff7d9b8b2146abf2af937763e35f30bed708de6bf5d1cd370`.
-- Linux x86_64 native SHA256: `d971fda9d8ff04cdc1d1afa2084b35991cd7bfdc78edd2ffd0c38f1f1ef11715`.
-- monero-java source: `d7a7427e0965606d855c0496f8027c411a69e275`.
-- monero-cpp source: `5ac0d137b6c6052eb5fdd633849180b17cf8fbe3`.
-- woodser/monero source: `c76165e5407a27881eb223bb689c5b8d3b0d076d`.
-- Official Monero 0.18.5.1 base: `4f92268d7c16741cfb41e5bbe2aa46cc260a9ea5`.
+- JAR SHA256: `cc754bfc9b7dc40924e678d0de73277b04594d5b0ffb56d74e4e9d76c131f89c`.
+- Linux x86_64 native SHA256: `ed75b469c739ea8a869ab7a9dc5e81e8d5c0f4a98e347e3f2d01b0897dc86bcb`.
+- monero-java source: `1f0a6e513a140cb50b7183c0bf06d756ea9b8e8a`.
+- monero-cpp source: `750fe7022aa55dd74e105c2cecaede0c85c0b78b`.
+- woodser/monero source: `09e1b2b7b03f550ccb25f07a916c2f3beb7ac0c1`.
+- Official Monero 0.18.5.3 base: `22578c3f7d7b4b6dd85ff7daa42a827d97cc53d0`.
 
-The native fork is 17 commits / 23 files ahead of that official base. The bounded
-source review covered the delta's scan, pool, shutdown, TLS and locking changes;
+The native fork is two commits / five files ahead of that official base. The
+bounded upgrade review covered Java/JNI TLS propagation and restore-height
+persistence, the C++ wrapper changes, and the fork's archive-signature bounds,
+outgoing totals and pool refresh recovery changes;
 it is not an audit of the entire Monero stack or a reproducible-build proof.
 Maven artifact signature verification established the publisher fingerprint
 `52FD7C01877CA968C97118D055A10DD48ADEE5EF`; a signature does not establish safety.
+The published SHA512 also matches. Ordinary CI hashes the dependency's native
+resource without loading it, so a version-only upgrade with different bytes
+fails until its pin and acceptance evidence are reviewed together.
 Core retains its Jackson BOM and Bouncy Castle jdk18on 1.85; the dependency's old
 jdk15on provider is excluded. monero-java is MIT/Apache-2.0; upstream Monero is
 BSD-3-Clause. Existing upstream license obligations still apply to distribution.
@@ -208,8 +213,9 @@ passive reads for STALE/UNAVAILABLE, expire stalled ETA, and reset rate samples
 on scan identity changes, backwards progress or long observation gaps.
 Only validated forward height advances extend the 90-second read inactivity
 budget; duplicate, backward, target-only, malformed and old-read/owner callbacks
-do not. Once a read is overdue, Core reports UNAVAILABLE and clears balances and
-progress while retaining the same serialized native worker. Callbacks alone
+do not. Once a read is overdue, Core reports UNAVAILABLE and hides live balances
+while retaining the last display progress and the same serialized native worker.
+Retained progress does not establish current availability. Callbacks alone
 cannot restore availability. A full successful read for the matching current
 owner/read can restore READY/SCANNING; a failed read leaves financial data absent
 and a later scheduled read may retry. New send work is refused while the read is

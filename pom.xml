@@ -907,7 +907,7 @@
 		<dependency>
 			<groupId>io.github.woodser</groupId>
 			<artifactId>monero-java</artifactId>
-			<version>0.8.58</version>
+			<version>0.8.62</version>
 			<exclusions>
 				<exclusion><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk15on</artifactId></exclusion>
 			</exclusions>

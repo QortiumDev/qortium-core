@@ -39,9 +39,12 @@ public final class SlowReadRecovery {
                 Thread.sleep(10);
             }
             incident = service.overdueRead();
-            if (!"UNAVAILABLE".equals(service.status(session.sessionId()).state())
-                    || service.status(session.sessionId()).wallet() != null
-                    || service.status(session.sessionId()).progress() != null || closed.get()
+            var overdue = service.status(session.sessionId());
+            // Display progress survives an overdue read; it does not grant a
+            // live financial snapshot or make the serialized worker ready.
+            if (!"UNAVAILABLE".equals(overdue.state()) || overdue.wallet() != null
+                    || overdue.progress() == null || overdue.send() || closed.get()
+                    || overdue.read().state() != org.qortium.crosschain.WalletReadStatus.State.OVERDUE
                     || incident.phase() != MoneroWalletService.Phase.SCAN || incident.advances() != 0
                     || incident.readPhase() != MoneroWalletBackend.ReadPhase.SYNC)
                 throw new AssertionError("Unexpected overdue state");
@@ -57,6 +60,7 @@ public final class SlowReadRecovery {
         System.out.println("{\"productionJni\":true,\"offlineRegtest\":true,\"reads\":" + reads.get()
                 + ",\"deadlineMillis\":1500,\"readPhase\":\"" + incident.readPhase()
                 + "\",\"overdueState\":\"UNAVAILABLE\",\"recoveredState\":\"READY\",\"opens\":" + opens.get()
+                + ",\"retainedDisplayProgress\":true,\"overdueFinancialSnapshotHidden\":true"
                 + ",\"nativeReadSucceeded\":true,\"serializedShutdownClosed\":true}");
     }
 }
