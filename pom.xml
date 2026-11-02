@@ -52,7 +52,7 @@
 		<homoglyph.version>1.2.1</homoglyph.version>
 		<hsqldb.version>2.7.4</hsqldb.version>
 		<icu4j.version>78.3</icu4j.version>
-		<java-diff-utils.version>4.17</java-diff-utils.version>
+		<java-diff-utils.version>4.18</java-diff-utils.version>
 		<jackson.version>2.22.3</jackson.version>
 		<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
 		<jacoco.minimum.branch.coverage>0.35</jacoco.minimum.branch.coverage>
